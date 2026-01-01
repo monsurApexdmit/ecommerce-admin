@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":["file:///home/monsur/Documents/kachabazar/app/dashboard/store/page.tsx"],"sourcesContent":["export default function OnlineStorePage() {\n  return (\n    <div>\n      <div className=\"mb-6\">\n        <h1 className=\"text-2xl font-bold text-gray-900\">Online Store</h1>\n        <p className=\"text-gray-600 mt-1\">Manage your online store settings</p>\n      </div>\n      <div className=\"bg-white rounded-lg border p-8 text-center\">\n        <p className=\"text-gray-500\">Online store settings page coming soon...</p>\n      </div>\n    </div>\n  )\n}\n"],"names":[],"mappings":";;;;;;AAAe,SAAS;IACtB,qBACE,8OAAC;;0BACC,8OAAC;gBAAI,WAAU;;kCACb,8OAAC;wBAAG,WAAU;kCAAmC;;;;;;kCACjD,8OAAC;wBAAE,WAAU;kCAAqB;;;;;;;;;;;;0BAEpC,8OAAC;gBAAI,WAAU;0BACb,cAAA,8OAAC;oBAAE,WAAU;8BAAgB;;;;;;;;;;;;;;;;;AAIrC"}}]
+}

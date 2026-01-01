@@ -1,0 +1,17 @@
+{
+  "/dashboard/attributes/[id]/page": "app/dashboard/attributes/[id]/page.js",
+  "/dashboard/attributes/page": "app/dashboard/attributes/page.js",
+  "/dashboard/categories/page": "app/dashboard/categories/page.js",
+  "/dashboard/coupons/page": "app/dashboard/coupons/page.js",
+  "/dashboard/customers/page": "app/dashboard/customers/page.js",
+  "/dashboard/international/page": "app/dashboard/international/page.js",
+  "/dashboard/orders/page": "app/dashboard/orders/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/pages/page": "app/dashboard/pages/page.js",
+  "/dashboard/products/page": "app/dashboard/products/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
+  "/dashboard/staff/page": "app/dashboard/staff/page.js",
+  "/dashboard/store/page": "app/dashboard/store/page.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js"
+}
