@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Printer, Eye, Download, Mail, ShoppingBag } from "lucide-react"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 interface Order {
   invoiceNo: string
@@ -159,6 +162,20 @@ export default function OrdersPage() {
 
     return matchesSearch && matchesStatus && matchesMethod && matchesDateRange
   })
+
+  const {
+    currentItems: currentOrders,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredOrders, 10)
+
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
 
   const handleStatusChange = (invoiceNo: string, newStatus: Order["status"]) => {
     setOrders(orders.map((order) => (order.invoiceNo === invoiceNo ? { ...order, status: newStatus } : order)))
@@ -441,6 +458,7 @@ export default function OrdersPage() {
     setMethodFilter("all")
     setStartDate("")
     setEndDate("")
+    handleFilterChange()
   }
 
   const handleViewDetails = (order: Order) => {
@@ -448,18 +466,7 @@ export default function OrdersPage() {
     setIsDetailsOpen(true)
   }
 
-  const getStatusBadgeClass = (status: Order["status"]) => {
-    switch (status) {
-      case "Delivered":
-        return "bg-emerald-500 text-white px-3 py-1 rounded text-sm font-medium"
-      case "Processing":
-        return "bg-pink-500 text-white px-3 py-1 rounded text-sm font-medium"
-      case "Pending":
-        return "bg-orange-500 text-white px-3 py-1 rounded text-sm font-medium"
-      default:
-        return "bg-gray-500 text-white px-3 py-1 rounded text-sm font-medium"
-    }
-  }
+
 
   return (
     <div className="space-y-6">
@@ -475,11 +482,20 @@ export default function OrdersPage() {
                 type="text"
                 placeholder="Search by Customer Name"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  handleFilterChange()
+                }}
               />
             </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value)
+                handleFilterChange()
+              }}
+            >
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -503,7 +519,13 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
 
-            <Select value={methodFilter} onValueChange={setMethodFilter}>
+            <Select
+              value={methodFilter}
+              onValueChange={(value) => {
+                setMethodFilter(value)
+                handleFilterChange()
+              }}
+            >
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="Method" />
               </SelectTrigger>
@@ -524,16 +546,30 @@ export default function OrdersPage() {
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value)
+                  handleFilterChange()
+                }}
+              />
             </div>
 
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value)
+                  handleFilterChange()
+                }}
+              />
             </div>
 
             <div className="flex items-end gap-2">
-              <Button onClick={() => {}} className="bg-emerald-600 hover:bg-emerald-700">
+              <Button onClick={() => { }} className="bg-emerald-600 hover:bg-emerald-700">
                 Filter
               </Button>
               <Button onClick={handleReset} variant="outline">
@@ -547,35 +583,35 @@ export default function OrdersPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Invoice No</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Order Time</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Customer Name</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Method</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Amount</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Status</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Action</th>
-                <th className="text-left py-4 px-4 text-sm font-semibold text-gray-900 uppercase">Invoice</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice No</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Order Time</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer Name</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Method</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Amount</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Action</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order) => (
+              {currentOrders.map((order) => (
                 <tr key={order.invoiceNo} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="py-4 px-4">
+                  <td className="py-3 px-4">
                     <span className="font-semibold text-gray-900">{order.invoiceNo}</span>
                   </td>
-                  <td className="py-4 px-4 text-sm text-gray-600">{order.orderTime}</td>
-                  <td className="py-4 px-4 text-sm text-gray-900">{order.customerName}</td>
-                  <td className="py-4 px-4 text-sm text-gray-900">{order.method}</td>
-                  <td className="py-4 px-4 text-sm font-semibold text-gray-900">${order.amount.toFixed(2)}</td>
-                  <td className="py-4 px-4">
-                    <span className={getStatusBadgeClass(order.status)}>{order.status}</span>
+                  <td className="py-3 px-4 text-sm text-gray-600">{order.orderTime}</td>
+                  <td className="py-3 px-4 text-sm text-gray-900">{order.customerName}</td>
+                  <td className="py-3 px-4 text-sm text-gray-900">{order.method}</td>
+                  <td className="py-3 px-4 text-sm font-semibold text-gray-900">${order.amount.toFixed(2)}</td>
+                  <td className="py-3 px-4">
+                    <StatusBadge status={order.status} />
                   </td>
-                  <td className="py-4 px-4">
+                  <td className="py-3 px-4">
                     <Select
                       value={order.status}
                       onValueChange={(value) => handleStatusChange(order.invoiceNo, value as Order["status"])}
                     >
-                      <SelectTrigger className="w-32 h-9">
+                      <SelectTrigger className="w-32 h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -585,13 +621,13 @@ export default function OrdersPage() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="py-4 px-4">
+                  <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handlePrintInvoice(order)} className="p-2">
-                        <Printer className="w-4 h-4 text-gray-600" />
+                      <Button variant="ghost" size="sm" onClick={() => handlePrintInvoice(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600">
+                        <Printer className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleViewDetails(order)} className="p-2">
-                        <Eye className="w-4 h-4 text-gray-600" />
+                      <Button variant="ghost" size="sm" onClick={() => handleViewDetails(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600">
+                        <Eye className="w-4 h-4" />
                       </Button>
                     </div>
                   </td>
@@ -608,8 +644,17 @@ export default function OrdersPage() {
         )}
       </Card>
 
+      <PaginationControl
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        totalItems={filteredOrders.length}
+      />
+
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">Invoice</DialogTitle>
           </DialogHeader>
@@ -617,12 +662,12 @@ export default function OrdersPage() {
           {selectedOrder && (
             <div className="space-y-8 py-4">
               {/* Header Section */}
-              <div className="flex justify-between items-start">
+              <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div>
                   <h1 className="text-4xl font-bold mb-3">INVOICE</h1>
                   <div className="flex items-center gap-3">
                     <span className="font-semibold text-gray-700">STATUS</span>
-                    <span className={getStatusBadgeClass(selectedOrder.status)}>{selectedOrder.status}</span>
+                    <StatusBadge status={selectedOrder.status} />
                   </div>
                 </div>
                 <div className="text-right">
@@ -640,7 +685,7 @@ export default function OrdersPage() {
               </div>
 
               {/* Invoice Meta */}
-              <div className="grid grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                 <div>
                   <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Date</h3>
                   <p className="text-sm text-gray-900">
@@ -652,7 +697,7 @@ export default function OrdersPage() {
                   <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice No</h3>
                   <p className="text-sm text-gray-900">#{selectedOrder.invoiceNo}</p>
                 </div>
-                <div className="text-right">
+                <div className="sm:text-right">
                   <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice To</h3>
                   <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
                   <p className="text-xs text-gray-600">hram8251@gmail.com</p>
@@ -662,8 +707,8 @@ export default function OrdersPage() {
               </div>
 
               {/* Products Table */}
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
+              <div className="border rounded-lg overflow-x-auto">
+                <table className="w-full min-w-[600px]">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">SR.</th>
@@ -693,7 +738,7 @@ export default function OrdersPage() {
 
               {/* Summary Section */}
               <div className="bg-gray-50 p-6 rounded-lg">
-                <div className="grid grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Payment Method</h3>
                     <p className="text-base font-semibold text-gray-900">{selectedOrder.method}</p>
@@ -714,7 +759,7 @@ export default function OrdersPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <Button
                   onClick={() => handleDownloadInvoice(selectedOrder)}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"

@@ -788,6 +788,10 @@ function AttributesPage() {
         }
     ]);
     const filteredAttributes = attributes.filter((attr)=>attr.name.toLowerCase().includes(searchTerm.toLowerCase()) || attr.displayName.toLowerCase().includes(searchTerm.toLowerCase()));
+    const { currentItems: currentAttributes, currentPage, totalPages, goToPage, setCurrentPage } = usePagination(filteredAttributes, 10);
+    const handleFilterChange = ()=>{
+        setCurrentPage(1);
+    };
     const handleSelectAll = (checked)=>{
         if (checked) {
             setSelectedAttributes(filteredAttributes.map((a)=>a.id));
@@ -900,7 +904,7 @@ function AttributesPage() {
                         children: "Attributes"
                     }, void 0, false, {
                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                        lineNumber: 156,
+                        lineNumber: 168,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -916,14 +920,14 @@ function AttributesPage() {
                                         className: "w-4 h-4"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 159,
+                                        lineNumber: 171,
                                         columnNumber: 13
                                     }, this),
                                     "Export"
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 158,
+                                lineNumber: 170,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -936,14 +940,14 @@ function AttributesPage() {
                                         className: "w-4 h-4"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 168,
+                                        lineNumber: 180,
                                         columnNumber: 13
                                     }, this),
                                     "Import"
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 162,
+                                lineNumber: 174,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -957,14 +961,14 @@ function AttributesPage() {
                                         className: "w-4 h-4"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 178,
+                                        lineNumber: 190,
                                         columnNumber: 13
                                     }, this),
                                     "Bulk Action"
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 171,
+                                lineNumber: 183,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -978,14 +982,14 @@ function AttributesPage() {
                                         className: "w-4 h-4"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 188,
+                                        lineNumber: 200,
                                         columnNumber: 13
                                     }, this),
                                     "Delete"
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 181,
+                                lineNumber: 193,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -996,26 +1000,26 @@ function AttributesPage() {
                                         className: "w-4 h-4"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 192,
+                                        lineNumber: 204,
                                         columnNumber: 13
                                     }, this),
                                     "Add Attribute"
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 191,
+                                lineNumber: 203,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                        lineNumber: 157,
+                        lineNumber: 169,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                lineNumber: 155,
+                lineNumber: 167,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1033,7 +1037,7 @@ function AttributesPage() {
                                             className: "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
                                         }, void 0, false, {
                                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                            lineNumber: 202,
+                                            lineNumber: 214,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1043,13 +1047,13 @@ function AttributesPage() {
                                             className: "pl-10"
                                         }, void 0, false, {
                                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                            lineNumber: 203,
+                                            lineNumber: 215,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 201,
+                                    lineNumber: 213,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -1057,26 +1061,30 @@ function AttributesPage() {
                                     children: "Filter"
                                 }, void 0, false, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 210,
+                                    lineNumber: 222,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
                                     variant: "outline",
+                                    onClick: ()=>{
+                                        setSearchTerm("");
+                                        handleFilterChange();
+                                    },
                                     children: "Reset"
                                 }, void 0, false, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 211,
+                                    lineNumber: 223,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 200,
+                            lineNumber: 212,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                        lineNumber: 199,
+                        lineNumber: 211,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1095,12 +1103,12 @@ function AttributesPage() {
                                                     onCheckedChange: handleSelectAll
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 220,
+                                                    lineNumber: 235,
                                                     columnNumber: 19
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 219,
+                                                lineNumber: 234,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1108,7 +1116,7 @@ function AttributesPage() {
                                                 children: "ID"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 222,
+                                                lineNumber: 237,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1116,7 +1124,7 @@ function AttributesPage() {
                                                 children: "NAME"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 223,
+                                                lineNumber: 238,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1124,7 +1132,7 @@ function AttributesPage() {
                                                 children: "DISPLAY NAME"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 224,
+                                                lineNumber: 239,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1132,7 +1140,7 @@ function AttributesPage() {
                                                 children: "OPTION"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 225,
+                                                lineNumber: 240,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1140,7 +1148,7 @@ function AttributesPage() {
                                                 children: "PUBLISHED"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 226,
+                                                lineNumber: 241,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1148,7 +1156,7 @@ function AttributesPage() {
                                                 children: "VALUES"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 227,
+                                                lineNumber: 242,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
@@ -1156,18 +1164,18 @@ function AttributesPage() {
                                                 children: "ACTION"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 228,
+                                                lineNumber: 243,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 218,
+                                        lineNumber: 233,
                                         columnNumber: 15
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 217,
+                                    lineNumber: 232,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tbody", {
@@ -1181,12 +1189,12 @@ function AttributesPage() {
                                                         onCheckedChange: (checked)=>handleSelectAttribute(attribute.id, checked)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 235,
+                                                        lineNumber: 250,
                                                         columnNumber: 21
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 234,
+                                                    lineNumber: 249,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1194,7 +1202,7 @@ function AttributesPage() {
                                                     children: attribute.id
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 240,
+                                                    lineNumber: 255,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1202,7 +1210,7 @@ function AttributesPage() {
                                                     children: attribute.name
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 241,
+                                                    lineNumber: 256,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1210,7 +1218,7 @@ function AttributesPage() {
                                                     children: attribute.displayName
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 242,
+                                                    lineNumber: 257,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1218,7 +1226,7 @@ function AttributesPage() {
                                                     children: attribute.option
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 243,
+                                                    lineNumber: 258,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1230,17 +1238,17 @@ function AttributesPage() {
                                                             className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${attribute.published ? "translate-x-6" : "translate-x-1"}`
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                            lineNumber: 251,
+                                                            lineNumber: 265,
                                                             columnNumber: 23
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 245,
+                                                        lineNumber: 260,
                                                         columnNumber: 21
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 244,
+                                                    lineNumber: 259,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1252,17 +1260,17 @@ function AttributesPage() {
                                                             className: "w-4 h-4 text-gray-600"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                            lineNumber: 263,
+                                                            lineNumber: 276,
                                                             columnNumber: 23
                                                         }, this)
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 259,
+                                                        lineNumber: 272,
                                                         columnNumber: 21
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 258,
+                                                    lineNumber: 271,
                                                     columnNumber: 19
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("td", {
@@ -1277,12 +1285,12 @@ function AttributesPage() {
                                                                     className: "w-4 h-4 text-gray-600"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                                    lineNumber: 272,
+                                                                    lineNumber: 285,
                                                                     columnNumber: 25
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                                lineNumber: 268,
+                                                                lineNumber: 281,
                                                                 columnNumber: 23
                                                             }, this),
                                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1292,51 +1300,51 @@ function AttributesPage() {
                                                                     className: "w-4 h-4 text-gray-600"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                                    lineNumber: 275,
+                                                                    lineNumber: 288,
                                                                     columnNumber: 25
                                                                 }, this)
                                                             }, void 0, false, {
                                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                                lineNumber: 274,
+                                                                lineNumber: 287,
                                                                 columnNumber: 23
                                                             }, this)
                                                         ]
                                                     }, void 0, true, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 267,
+                                                        lineNumber: 280,
                                                         columnNumber: 21
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 266,
+                                                    lineNumber: 279,
                                                     columnNumber: 19
                                                 }, this)
                                             ]
                                         }, attribute.id, true, {
                                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                            lineNumber: 233,
+                                            lineNumber: 248,
                                             columnNumber: 17
                                         }, this))
                                 }, void 0, false, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 231,
+                                    lineNumber: 246,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 216,
+                            lineNumber: 231,
                             columnNumber: 11
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                        lineNumber: 215,
+                        lineNumber: 230,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                lineNumber: 198,
+                lineNumber: 210,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -1350,12 +1358,12 @@ function AttributesPage() {
                                 children: "Import Attributes"
                             }, void 0, false, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 290,
+                                lineNumber: 303,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 289,
+                            lineNumber: 302,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1367,7 +1375,7 @@ function AttributesPage() {
                                         children: "CSV File"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 294,
+                                        lineNumber: 307,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$input$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Input"], {
@@ -1376,7 +1384,7 @@ function AttributesPage() {
                                         onChange: handleImport
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 295,
+                                        lineNumber: 308,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1384,18 +1392,18 @@ function AttributesPage() {
                                         children: "Upload a CSV file with columns: ID, Name, Display Name, Option, Published, Values (semicolon-separated)"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 296,
+                                        lineNumber: 309,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 293,
+                                lineNumber: 306,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 292,
+                            lineNumber: 305,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -1405,23 +1413,23 @@ function AttributesPage() {
                                 children: "Cancel"
                             }, void 0, false, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 302,
+                                lineNumber: 315,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 301,
+                            lineNumber: 314,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                    lineNumber: 288,
+                    lineNumber: 301,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                lineNumber: 287,
+                lineNumber: 300,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Dialog"], {
@@ -1435,12 +1443,12 @@ function AttributesPage() {
                                 children: "Bulk Actions"
                             }, void 0, false, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 313,
+                                lineNumber: 326,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 312,
+                            lineNumber: 325,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1452,7 +1460,7 @@ function AttributesPage() {
                                         children: "Action Type"
                                     }, void 0, false, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 317,
+                                        lineNumber: 330,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Select"], {
@@ -1464,12 +1472,12 @@ function AttributesPage() {
                                                     placeholder: "Select action"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                    lineNumber: 320,
+                                                    lineNumber: 333,
                                                     columnNumber: 19
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 319,
+                                                lineNumber: 332,
                                                 columnNumber: 17
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectContent"], {
@@ -1479,7 +1487,7 @@ function AttributesPage() {
                                                         children: "Publish"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 323,
+                                                        lineNumber: 336,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -1487,7 +1495,7 @@ function AttributesPage() {
                                                         children: "Unpublish"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 324,
+                                                        lineNumber: 337,
                                                         columnNumber: 19
                                                     }, this),
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$select$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["SelectItem"], {
@@ -1495,30 +1503,30 @@ function AttributesPage() {
                                                         children: "Delete"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                        lineNumber: 325,
+                                                        lineNumber: 338,
                                                         columnNumber: 19
                                                     }, this)
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                                lineNumber: 322,
+                                                lineNumber: 335,
                                                 columnNumber: 17
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                        lineNumber: 318,
+                                        lineNumber: 331,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                lineNumber: 316,
+                                lineNumber: 329,
                                 columnNumber: 13
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 315,
+                            lineNumber: 328,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$dialog$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["DialogFooter"], {
@@ -1529,7 +1537,7 @@ function AttributesPage() {
                                     children: "Cancel"
                                 }, void 0, false, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 331,
+                                    lineNumber: 344,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$ui$2f$button$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Button"], {
@@ -1539,34 +1547,34 @@ function AttributesPage() {
                                     children: "Apply Action"
                                 }, void 0, false, {
                                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                                    lineNumber: 334,
+                                    lineNumber: 347,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/dashboard/attributes/page.tsx",
-                            lineNumber: 330,
+                            lineNumber: 343,
                             columnNumber: 11
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/dashboard/attributes/page.tsx",
-                    lineNumber: 311,
+                    lineNumber: 324,
                     columnNumber: 9
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/dashboard/attributes/page.tsx",
-                lineNumber: 310,
+                lineNumber: 323,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/dashboard/attributes/page.tsx",
-        lineNumber: 154,
+        lineNumber: 166,
         columnNumber: 5
     }, this);
 }
-_s(AttributesPage, "L216PipepOyvfBLUKV16p+nJh50=");
+_s(AttributesPage, "oNp1B9ZcljsUzWTR21LghGJuexQ=", true);
 _c = AttributesPage;
 var _c;
 __turbopack_context__.k.register(_c, "AttributesPage");

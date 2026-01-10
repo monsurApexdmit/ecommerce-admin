@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
 import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
 
 interface Attribute {
   id: string
@@ -53,6 +55,20 @@ export default function AttributesPage() {
       attr.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       attr.displayName.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  const {
+    currentItems: currentAttributes,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredAttributes, 10)
+
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -203,12 +219,18 @@ export default function AttributesPage() {
               <Input
                 placeholder="Search by attribute name"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  handleFilterChange()
+                }}
                 className="pl-10"
               />
             </div>
             <Button className="bg-emerald-500 hover:bg-emerald-600">Filter</Button>
-            <Button variant="outline">Reset</Button>
+            <Button variant="outline" onClick={() => {
+              setSearchTerm("")
+              handleFilterChange()
+            }}>Reset</Button>
           </div>
         </div>
 
@@ -216,46 +238,44 @@ export default function AttributesPage() {
           <table className="w-full">
             <thead className="border-b bg-gray-50">
               <tr>
-                <th className="text-left p-4 font-medium text-gray-700 w-12">
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider w-12">
                   <Checkbox checked={allSelected} onCheckedChange={handleSelectAll} />
                 </th>
-                <th className="text-left p-4 font-medium text-gray-700">ID</th>
-                <th className="text-left p-4 font-medium text-gray-700">NAME</th>
-                <th className="text-left p-4 font-medium text-gray-700">DISPLAY NAME</th>
-                <th className="text-left p-4 font-medium text-gray-700">OPTION</th>
-                <th className="text-left p-4 font-medium text-gray-700">PUBLISHED</th>
-                <th className="text-left p-4 font-medium text-gray-700">VALUES</th>
-                <th className="text-left p-4 font-medium text-gray-700">ACTION</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">DISPLAY NAME</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">OPTION</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PUBLISHED</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">VALUES</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTION</th>
               </tr>
             </thead>
             <tbody>
-              {filteredAttributes.map((attribute) => (
+              {currentAttributes.map((attribute) => (
                 <tr key={attribute.id} className="border-b hover:bg-gray-50">
-                  <td className="p-4">
+                  <td className="py-3 px-4">
                     <Checkbox
                       checked={selectedAttributes.includes(attribute.id)}
                       onCheckedChange={(checked) => handleSelectAttribute(attribute.id, checked as boolean)}
                     />
                   </td>
-                  <td className="p-4 text-gray-900 font-medium">{attribute.id}</td>
-                  <td className="p-4 text-gray-900">{attribute.name}</td>
-                  <td className="p-4 text-gray-900">{attribute.displayName}</td>
-                  <td className="p-4 text-gray-600">{attribute.option}</td>
-                  <td className="p-4">
+                  <td className="py-3 px-4 text-gray-900 font-medium">{attribute.id}</td>
+                  <td className="py-3 px-4 text-gray-900">{attribute.name}</td>
+                  <td className="py-3 px-4 text-gray-900">{attribute.displayName}</td>
+                  <td className="py-3 px-4 text-gray-600">{attribute.option}</td>
+                  <td className="py-3 px-4">
                     <button
                       onClick={() => handleTogglePublished(attribute.id)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        attribute.published ? "bg-emerald-500" : "bg-gray-300"
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${attribute.published ? "bg-emerald-500" : "bg-gray-300"
+                        }`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          attribute.published ? "translate-x-6" : "translate-x-1"
-                        }`}
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${attribute.published ? "translate-x-6" : "translate-x-1"
+                          }`}
                       />
                     </button>
                   </td>
-                  <td className="p-4">
+                  <td className="py-3 px-4">
                     <Link
                       href={`/dashboard/attributes/${attribute.id}`}
                       className="p-2 hover:bg-gray-100 rounded inline-block"
@@ -263,7 +283,7 @@ export default function AttributesPage() {
                       <Edit2 className="w-4 h-4 text-gray-600" />
                     </Link>
                   </td>
-                  <td className="p-4">
+                  <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/dashboard/attributes/${attribute.id}`}
@@ -280,6 +300,16 @@ export default function AttributesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="mx-4 pb-4">
+          <PaginationControl
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            totalItems={filteredAttributes.length}
+          />
         </div>
       </div>
 

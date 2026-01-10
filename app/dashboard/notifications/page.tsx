@@ -5,6 +5,8 @@ import { Mail, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
 
 interface Notification {
   id: number
@@ -60,6 +62,16 @@ export default function NotificationsPage() {
   ])
 
   const [selectedNotifications, setSelectedNotifications] = useState<number[]>([])
+
+  const {
+    currentItems: currentNotifications,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(notifications, 10)
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
@@ -134,7 +146,7 @@ export default function NotificationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {notifications.map((notification) => (
+                {currentNotifications.map((notification) => (
                   <tr key={notification.id} className="hover:bg-gray-50">
                     <td className="px-4 py-4">
                       <Checkbox
@@ -179,6 +191,16 @@ export default function NotificationsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="mt-4">
+            <PaginationControl
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              onItemsPerPageChange={handleItemsPerPageChange}
+              totalItems={notifications.length}
+            />
           </div>
         </div>
       </div>

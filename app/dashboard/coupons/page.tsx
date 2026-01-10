@@ -10,6 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 type Coupon = {
   id: string
@@ -95,6 +98,20 @@ export default function CouponsPage() {
       coupon.campaignName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       coupon.code.toLowerCase().includes(searchQuery.toLowerCase()),
   )
+
+  const {
+    currentItems: currentCoupons,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredCoupons, 10)
+
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -187,14 +204,14 @@ export default function CouponsPage() {
       coupons.map((c) =>
         c.id === currentCoupon.id
           ? {
-              ...c,
-              campaignName: formData.campaignName,
-              code: formData.code.toUpperCase(),
-              discount,
-              published: formData.published,
-              startDate: formData.startDate,
-              endDate: formData.endDate,
-            }
+            ...c,
+            campaignName: formData.campaignName,
+            code: formData.code.toUpperCase(),
+            discount,
+            published: formData.published,
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+          }
           : c,
       ),
     )
@@ -308,12 +325,18 @@ export default function CouponsPage() {
               <Input
                 placeholder="Search by coupon code/name"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  handleFilterChange()
+                }}
                 className="pl-10"
               />
             </div>
             <Button className="bg-emerald-500 hover:bg-emerald-600">Filter</Button>
-            <Button variant="outline">Reset</Button>
+            <Button variant="outline" onClick={() => {
+              setSearchQuery("")
+              handleFilterChange()
+            }}>Reset</Button>
           </div>
         </div>
 
@@ -329,18 +352,18 @@ export default function CouponsPage() {
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Campaign Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Code</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Discount</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Published</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Start Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">End Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Campaign Name</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Code</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Discount</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Published</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Start Date</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">End Date</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredCoupons.map((coupon) => (
+              {currentCoupons.map((coupon) => (
                 <tr key={coupon.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <input
@@ -376,13 +399,7 @@ export default function CouponsPage() {
                   <td className="px-4 py-3 text-gray-700">{coupon.startDate}</td>
                   <td className="px-4 py-3 text-gray-700">{coupon.endDate}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                        coupon.status === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {coupon.status}
-                    </span>
+                    <StatusBadge status={coupon.status} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -398,6 +415,16 @@ export default function CouponsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="mx-4 pb-4">
+          <PaginationControl
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            totalItems={filteredCoupons.length}
+          />
         </div>
       </div>
 

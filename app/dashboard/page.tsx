@@ -1,7 +1,10 @@
 "use client"
 
 import { Card } from "@/components/ui/card"
-import { ArrowUpRight, ArrowDownRight, DollarSign, ShoppingBag, Users, Package } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
+import { useVendor } from "@/contexts/vendor-context"
+import { useProduct } from "@/contexts/product-context"
+import { useStaff } from "@/contexts/staff-context"
 import { Line, Bar } from "react-chartjs-2"
 import {
   Chart as ChartJS,
@@ -125,6 +128,36 @@ export default function DashboardPage() {
     },
   }
 
+  // Vendor statistics
+  const { vendors } = useVendor()
+  const { products } = useProduct()
+  const { staff, salaryPayments } = useStaff()
+
+  const totalVendors = vendors.length
+  const totalPaid = vendors.reduce((sum, vendor) => sum + vendor.totalPaid, 0)
+
+  // Calculate total inventory value across all vendors
+  const totalInventoryValue = products.reduce((sum, product) => {
+    if (product.vendorId) {
+      return sum + (product.salePrice * product.stock)
+    }
+    return sum
+  }, 0)
+
+  const totalDue = totalInventoryValue - totalPaid
+
+  // Staff salary statistics
+  const now = new Date()
+  const currentMonth = `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
+  const totalSalaryBudget = staff.reduce((sum, s) => sum + s.salary, 0)
+  const monthSalaryPayments = salaryPayments.filter(p => p.month === currentMonth)
+  const totalSalaryPaid = monthSalaryPayments
+    .filter(p => p.status === "Paid")
+    .reduce((sum, p) => sum + p.paidAmount, 0)
+  const totalSalaryPending = staff
+    .filter(s => !monthSalaryPayments.find(p => p.staffId === s.id && p.status === "Paid"))
+    .reduce((sum, s) => sum + s.salary, 0)
+
   return (
     <div className="space-y-6">
       <div>
@@ -161,6 +194,60 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Vendor Statistics Card */}
+      <Card className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Vendor Overview</h2>
+            <p className="text-sm text-gray-600 mt-1">Summary of vendor payments and obligations</p>
+          </div>
+          <div className="p-3 rounded-lg bg-indigo-50">
+            <Truck className="w-6 h-6 text-indigo-600" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Total Vendors</p>
+            <p className="text-2xl font-bold text-gray-900">{totalVendors}</p>
+          </div>
+          <div className="p-4 bg-emerald-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Total Paid</p>
+            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+          <div className="p-4 bg-orange-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Total Due</p>
+            <p className="text-2xl font-bold text-orange-600">${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Staff Salary Overview Card */}
+      <Card className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Staff Salary Overview</h2>
+            <p className="text-sm text-gray-600 mt-1">Current month salary status ({currentMonth})</p>
+          </div>
+          <div className="p-3 rounded-lg bg-purple-50">
+            <Users className="w-6 h-6 text-purple-600" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Monthly Budget</p>
+            <p className="text-2xl font-bold text-gray-900">${totalSalaryBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+          <div className="p-4 bg-emerald-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Paid This Month</p>
+            <p className="text-2xl font-bold text-emerald-600">${totalSalaryPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+          <div className="p-4 bg-orange-50 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Pending</p>
+            <p className="text-2xl font-bold text-orange-600">${totalSalaryPending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -201,15 +288,14 @@ export default function DashboardPage() {
                     <td className="py-3 px-2 text-sm font-medium">{order.amount}</td>
                     <td className="py-3 px-2">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          order.status === "Completed"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : order.status === "Processing"
-                              ? "bg-blue-50 text-blue-700"
-                              : order.status === "Pending"
-                                ? "bg-yellow-50 text-yellow-700"
-                                : "bg-red-50 text-red-700"
-                        }`}
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${order.status === "Completed"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : order.status === "Processing"
+                            ? "bg-blue-50 text-blue-700"
+                            : order.status === "Pending"
+                              ? "bg-yellow-50 text-yellow-700"
+                              : "bg-red-50 text-red-700"
+                          }`}
                       >
                         {order.status}
                       </span>
