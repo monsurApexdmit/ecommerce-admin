@@ -10,6 +10,9 @@ import { Search, Eye, Mail, Phone, MapPin, Calendar, ShoppingBag } from "lucide-
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 interface Customer {
   id: string
@@ -128,6 +131,20 @@ export default function CustomersPage() {
       customer.phone.includes(searchQuery),
   )
 
+  const {
+    currentItems: currentCustomers,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredCustomers, 10)
+
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
+
   const handleViewDetails = (customer: Customer) => {
     setSelectedCustomer(customer)
     setIsDetailsOpen(true)
@@ -156,7 +173,10 @@ export default function CustomersPage() {
               type="text"
               placeholder="Search customers..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                handleFilterChange()
+              }}
               className="pl-10"
             />
           </div>
@@ -166,18 +186,18 @@ export default function CustomersPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-4 px-2 text-sm font-semibold text-gray-900">Customer</th>
-                <th className="text-left py-4 px-2 text-sm font-semibold text-gray-900">Contact</th>
-                <th className="text-left py-4 px-2 text-sm font-semibold text-gray-900">Orders</th>
-                <th className="text-left py-4 px-2 text-sm font-semibold text-gray-900">Total Spent</th>
-                <th className="text-left py-4 px-2 text-sm font-semibold text-gray-900">Status</th>
-                <th className="text-right py-4 px-2 text-sm font-semibold text-gray-900">Actions</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Orders</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Total Spent</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.map((customer) => (
+              {currentCustomers.map((customer) => (
                 <tr key={customer.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="py-4 px-2">
+                  <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
                       <Avatar>
                         <AvatarFallback className="bg-emerald-100 text-emerald-700 font-medium">
@@ -190,7 +210,7 @@ export default function CustomersPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-4 px-2">
+                  <td className="py-3 px-4">
                     <div className="space-y-1">
                       <p className="text-sm text-gray-600 flex items-center gap-2">
                         <Mail className="w-4 h-4" />
@@ -202,7 +222,7 @@ export default function CustomersPage() {
                       </p>
                     </div>
                   </td>
-                  <td className="py-4 px-2">
+                  <td className="py-3 px-4">
                     <Link
                       href={`/dashboard/orders?customer=${encodeURIComponent(customer.name)}`}
                       className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
@@ -210,21 +230,13 @@ export default function CustomersPage() {
                       {customer.totalOrders}
                     </Link>
                   </td>
-                  <td className="py-4 px-2">
+                  <td className="py-3 px-4">
                     <p className="font-semibold text-gray-900">${customer.totalSpent.toFixed(2)}</p>
                   </td>
-                  <td className="py-4 px-2">
-                    <Badge
-                      className={
-                        customer.status === "Active"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-50 text-gray-700 border-gray-200"
-                      }
-                    >
-                      {customer.status}
-                    </Badge>
+                  <td className="py-3 px-4">
+                    <StatusBadge status={customer.status} />
                   </td>
-                  <td className="py-4 px-2 text-right">
+                  <td className="py-3 px-4 text-right">
                     <Button variant="ghost" size="sm" onClick={() => handleViewDetails(customer)}>
                       <Eye className="w-4 h-4 mr-2" />
                       View
@@ -243,8 +255,17 @@ export default function CustomersPage() {
         )}
       </Card>
 
+      <PaginationControl
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        totalItems={filteredCustomers.length}
+      />
+
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
             <DialogDescription>Complete customer information and order history</DialogDescription>
@@ -260,15 +281,7 @@ export default function CustomersPage() {
                 </Avatar>
                 <div className="flex-1">
                   <h3 className="text-xl font-semibold">{selectedCustomer.name}</h3>
-                  <Badge
-                    className={
-                      selectedCustomer.status === "Active"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 mt-2"
-                        : "bg-gray-50 text-gray-700 border-gray-200 mt-2"
-                    }
-                  >
-                    {selectedCustomer.status}
-                  </Badge>
+                  <StatusBadge status={selectedCustomer.status} className="mt-2" />
                 </div>
               </div>
 
@@ -357,19 +370,7 @@ export default function CustomersPage() {
                         </div>
                         <div className="text-right">
                           <p className="font-semibold">${order.amount.toFixed(2)}</p>
-                          <Badge
-                            className={`text-xs ${
-                              order.status === "Completed"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : order.status === "Processing"
-                                  ? "bg-blue-50 text-blue-700"
-                                  : order.status === "Pending"
-                                    ? "bg-yellow-50 text-yellow-700"
-                                    : "bg-red-50 text-red-700"
-                            }`}
-                          >
-                            {order.status}
-                          </Badge>
+                          <StatusBadge status={order.status} className="text-xs" />
                         </div>
                       </div>
                     ))}

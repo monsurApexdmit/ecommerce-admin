@@ -12,6 +12,8 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Download, Upload, Edit, Trash2, Eye, Plus, FilePen } from "lucide-react"
 import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
 
 interface Category {
   id: string
@@ -122,6 +124,20 @@ export default function CategoriesPage() {
     category.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
+  const {
+    currentItems: currentCategories,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredCategories, 10)
+
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(filteredCategories.map((c) => c.id))
@@ -174,12 +190,12 @@ export default function CategoriesPage() {
     const updatedCategories = categories.map((c) =>
       c.id === editingCategory.id
         ? {
-            ...c,
-            icon: formData.icon,
-            name: formData.name,
-            description: formData.description,
-            published: formData.published,
-          }
+          ...c,
+          icon: formData.icon,
+          name: formData.name,
+          description: formData.description,
+          published: formData.published,
+        }
         : c,
     )
 
@@ -309,16 +325,26 @@ export default function CategoriesPage() {
               type="text"
               placeholder="Search by Category name"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                handleFilterChange()
+              }}
               className="pl-10"
             />
           </div>
           <Button className="bg-emerald-500 hover:bg-emerald-600">Filter</Button>
-          <Button variant="outline">Reset</Button>
+          <Button variant="outline" onClick={() => {
+            setSearchQuery("")
+            setParentsOnly(false)
+            handleFilterChange()
+          }}>Reset</Button>
           <div className="flex items-center gap-2">
             <Switch
               checked={parentsOnly}
-              onCheckedChange={setParentsOnly}
+              onCheckedChange={(checked) => {
+                setParentsOnly(checked)
+                handleFilterChange()
+              }}
               className="data-[state=checked]:bg-emerald-500"
             />
             <span className="text-sm font-medium">Parents Only</span>
@@ -329,7 +355,7 @@ export default function CategoriesPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b">
-                <th className="text-left p-3 font-semibold text-gray-700">
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   <input
                     type="checkbox"
                     checked={selectedIds.length === filteredCategories.length && filteredCategories.length > 0}
@@ -337,18 +363,18 @@ export default function CategoriesPage() {
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="text-left p-3 font-semibold text-gray-700">ID</th>
-                <th className="text-left p-3 font-semibold text-gray-700">ICON</th>
-                <th className="text-left p-3 font-semibold text-gray-700">NAME</th>
-                <th className="text-left p-3 font-semibold text-gray-700">DESCRIPTION</th>
-                <th className="text-left p-3 font-semibold text-gray-700">PUBLISHED</th>
-                <th className="text-left p-3 font-semibold text-gray-700">ACTIONS</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ICON</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">DESCRIPTION</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PUBLISHED</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCategories.map((category) => (
+              {currentCategories.map((category) => (
                 <tr key={category.id} className="border-b hover:bg-gray-50">
-                  <td className="p-3">
+                  <td className="py-3 px-4">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(category.id)}
@@ -356,20 +382,20 @@ export default function CategoriesPage() {
                       className="rounded border-gray-300"
                     />
                   </td>
-                  <td className="p-3 text-gray-600">{category.id}</td>
-                  <td className="p-3">
+                  <td className="py-3 px-4 text-gray-600">{category.id}</td>
+                  <td className="py-3 px-4">
                     <div className="w-10 h-10 flex items-center justify-center text-2xl">{category.icon}</div>
                   </td>
-                  <td className="p-3 text-gray-900">{category.name}</td>
-                  <td className="p-3 text-gray-600">{category.description}</td>
-                  <td className="p-3">
+                  <td className="py-3 px-4 text-gray-900">{category.name}</td>
+                  <td className="py-3 px-4 text-gray-600">{category.description}</td>
+                  <td className="py-3 px-4">
                     <Switch
                       checked={category.published}
                       onCheckedChange={() => togglePublished(category.id)}
                       className="data-[state=checked]:bg-emerald-500"
                     />
                   </td>
-                  <td className="p-3">
+                  <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <button className="text-gray-500 hover:text-gray-700">
                         <Eye className="w-5 h-5" />
@@ -393,6 +419,17 @@ export default function CategoriesPage() {
             <p className="text-gray-500">No categories found</p>
           </div>
         )}
+
+        <div className="mx-4 pb-4">
+          <PaginationControl
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            totalItems={filteredCategories.length}
+          />
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={closeDialog}>

@@ -21,240 +21,22 @@ import {
 import { Search, Upload, Download, Edit2, Trash2, Eye, FilePen, Plus, CloudUpload } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
+import { usePagination } from "@/hooks/use-pagination"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { useProduct, type Product } from "@/contexts/product-context"
+import { useVendor } from "@/contexts/vendor-context"
+import Link from "next/link"
 
-interface Product {
-  id: string
-  name: string
-  description: string
-  category: string
-  price: number
-  salePrice: number
-  stock: number
-  status: "Selling" | "Out of Stock" | "Discontinued"
-  published: boolean
-  image: string
-  sku: string
-  barcode: string
-}
 
-const initialProducts: Product[] = [
-  {
-    id: "1",
-    name: "Premium T-Shirt",
-    description: "High-quality cotton t-shirt with premium fabric",
-    category: "Men",
-    price: 450.0,
-    salePrice: 450.0,
-    stock: 4969,
-    status: "Selling",
-    published: true,
-    image: "/plain-white-tshirt.png",
-    sku: "TSH-001",
-    barcode: "1234567890123",
-  },
-  {
-    id: "2",
-    name: "Himalaya Powder",
-    description: "A luxurious powder for skin care",
-    category: "Skin Care",
-    price: 174.97,
-    salePrice: 160.0,
-    stock: 5471,
-    status: "Selling",
-    published: true,
-    image: "/powder.jpg",
-    sku: "SKC-002",
-    barcode: "2345678901234",
-  },
-  {
-    id: "3",
-    name: "Green Leaf Lettuce",
-    description: "Fresh and crisp lettuce",
-    category: "Fresh Vegetable",
-    price: 112.72,
-    salePrice: 112.72,
-    stock: 463,
-    status: "Selling",
-    published: true,
-    image: "/fresh-lettuce.png",
-    sku: "FVL-003",
-    barcode: "3456789012345",
-  },
-  {
-    id: "4",
-    name: "Rainbow Chard",
-    description: "Colorful and nutritious chard",
-    category: "Fresh Vegetable",
-    price: 7.07,
-    salePrice: 7.07,
-    stock: 472,
-    status: "Selling",
-    published: true,
-    image: "/chard.jpg",
-    sku: "FVL-004",
-    barcode: "4567890123456",
-  },
-  {
-    id: "5",
-    name: "Clementine",
-    description: "Juicy and sweet clementine",
-    category: "Fresh Fruits",
-    price: 48.12,
-    salePrice: 48.12,
-    stock: 443,
-    status: "Selling",
-    published: true,
-    image: "/single-clementine.png",
-    sku: "FFR-005",
-    barcode: "5678901234567",
-  },
-  {
-    id: "6",
-    name: "Kale Sprouts",
-    description: "Vibrant and healthy kale sprouts",
-    category: "Fresh Vegetable",
-    price: 106.06,
-    salePrice: 90.0,
-    stock: 297,
-    status: "Selling",
-    published: true,
-    image: "/vibrant-kale.png",
-    sku: "FVL-006",
-    barcode: "6789012345678",
-  },
-  {
-    id: "7",
-    name: "Rainbow Peppers",
-    description: "Colorful and flavorful peppers",
-    category: "Fresh Vegetable",
-    price: 90.85,
-    salePrice: 90.85,
-    stock: 412,
-    status: "Selling",
-    published: true,
-    image: "/colorful-peppers.png",
-    sku: "FVL-007",
-    barcode: "7890123456789",
-  },
-  {
-    id: "8",
-    name: "Blueberry",
-    description: "Ripe and delicious blueberry",
-    category: "Fresh Fruits",
-    price: 211.96,
-    salePrice: 211.96,
-    stock: 201,
-    status: "Selling",
-    published: true,
-    image: "/ripe-blueberries.png",
-    sku: "FFR-008",
-    barcode: "8901234567890",
-  },
-  {
-    id: "9",
-    name: "Calabaza Squash",
-    description: "Fresh and versatile calabaza squash",
-    category: "Fresh Vegetable",
-    price: 98.03,
-    salePrice: 98.03,
-    stock: 581,
-    status: "Selling",
-    published: true,
-    image: "/squash.jpg",
-    sku: "FVL-009",
-    barcode: "9012345678901",
-  },
-  {
-    id: "10",
-    name: "Lettuce",
-    description: "Fresh lettuce for salads",
-    category: "Fresh Vegetable",
-    price: 193.26,
-    salePrice: 193.26,
-    stock: 367,
-    status: "Selling",
-    published: true,
-    image: "/fresh-lettuce.png",
-    sku: "FVL-010",
-    barcode: "0123456789012",
-  },
-  {
-    id: "11",
-    name: "Radicchio",
-    description: "Nutritious and flavorful radicchio",
-    category: "Fresh Vegetable",
-    price: 58.66,
-    salePrice: 45.0,
-    stock: 78,
-    status: "Selling",
-    published: true,
-    image: "/radicchio.jpg",
-    sku: "FVL-011",
-    barcode: "1234567890123",
-  },
-  {
-    id: "12",
-    name: "Parsley",
-    description: "Fresh and aromatic parsley",
-    category: "Fresh Vegetable",
-    price: 134.63,
-    salePrice: 134.63,
-    stock: 172,
-    status: "Selling",
-    published: true,
-    image: "/fresh-parsley.png",
-    sku: "FVL-012",
-    barcode: "2345678901234",
-  },
-  {
-    id: "13",
-    name: "Strawberrie",
-    description: "Ripe and juicy strawberry",
-    category: "Fresh Fruits",
-    price: 156.95,
-    salePrice: 140.0,
-    stock: 421,
-    status: "Selling",
-    published: true,
-    image: "/ripe-strawberry.png",
-    sku: "FFR-013",
-    barcode: "3456789012345",
-  },
-  {
-    id: "14",
-    name: "Cauliflower",
-    description: "Versatile and healthy cauliflower",
-    category: "Fresh Vegetable",
-    price: 139.15,
-    salePrice: 139.15,
-    stock: 224,
-    status: "Selling",
-    published: true,
-    image: "/single-cauliflower.png",
-    sku: "FVL-014",
-    barcode: "4567890123456",
-  },
-  {
-    id: "15",
-    name: "Organic Purple Cauliflower",
-    description: "Organic and colorful purple cauliflower",
-    category: "Fresh Vegetable",
-    price: 19.57,
-    salePrice: 19.57,
-    stock: 29,
-    status: "Selling",
-    published: true,
-    image: "/purple-cauliflower.jpg",
-    sku: "FVL-015",
-    barcode: "5678901234567",
-  },
-]
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const { products, addProduct, updateProduct, deleteProduct } = useProduct()
+  const { vendors } = useVendor()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
-  const [selectedPrice, setSelectedPrice] = useState<string>("all")
+  const [selectedVendor, setSelectedVendor] = useState<string>("all")
+  const [sortOption, setSortOption] = useState<string>("default")
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
@@ -270,6 +52,7 @@ export default function ProductsPage() {
     stock: "",
     sku: "",
     barcode: "",
+    vendorId: "",
   })
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
@@ -277,23 +60,64 @@ export default function ProductsPage() {
   const [bulkStatus, setBulkStatus] = useState("")
   const [bulkCategory, setBulkCategory] = useState("")
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || product.category === selectedCategory
-    const matchesPrice =
-      selectedPrice === "all" ||
-      (selectedPrice === "low" && product.price < 50) ||
-      (selectedPrice === "medium" && product.price >= 50 && product.price < 150) ||
-      (selectedPrice === "high" && product.price >= 150)
+  const filteredProducts = products
+    .filter((product) => {
+      const matchesSearch =
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory
+      const matchesVendor = selectedVendor === "all" || product.vendorId === selectedVendor
 
-    return matchesSearch && matchesCategory && matchesPrice
-  })
+      let matchesStatus = true
+      // Handle status/published filters from sortOption
+      if (sortOption === "published") {
+        matchesStatus = product.published === true
+      } else if (sortOption === "unpublished") {
+        matchesStatus = product.published === false
+      } else if (sortOption === "selling") {
+        matchesStatus = product.status === "Selling"
+      } else if (sortOption === "out-of-stock") {
+        matchesStatus = product.status === "Out of Stock"
+      }
+
+      return matchesSearch && matchesCategory && matchesVendor && matchesStatus
+    })
+    .sort((a, b) => {
+      if (sortOption === "low-to-high") {
+        return a.salePrice - b.salePrice
+      } else if (sortOption === "high-to-low") {
+        return b.salePrice - a.salePrice
+      } else if (sortOption === "date-added-asc") {
+        return new Date(a.createdAt || "").getTime() - new Date(b.createdAt || "").getTime()
+      } else if (sortOption === "date-added-desc") {
+        return new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime()
+      } else if (sortOption === "date-updated-asc") {
+        return new Date(a.updatedAt || "").getTime() - new Date(b.updatedAt || "").getTime()
+      } else if (sortOption === "date-updated-desc") {
+        return new Date(b.updatedAt || "").getTime() - new Date(a.updatedAt || "").getTime()
+      }
+      return 0
+    })
+
+  // Pagination
+  const {
+    currentItems: currentProducts,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    goToPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredProducts, 10)
+
+  // Reset pagination when filter changes
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedProducts(filteredProducts.map((p) => p.id))
+      setSelectedProducts(currentProducts.map((p) => p.id))
     } else {
       setSelectedProducts([])
     }
@@ -308,7 +132,10 @@ export default function ProductsPage() {
   }
 
   const handleTogglePublished = (productId: string) => {
-    setProducts(products.map((p) => (p.id === productId ? { ...p, published: !p.published } : p)))
+    const product = products.find((p) => p.id === productId)
+    if (product) {
+      updateProduct({ ...product, published: !product.published })
+    }
   }
 
   const handleEdit = (product: Product) => {
@@ -323,17 +150,18 @@ export default function ProductsPage() {
       stock: String(product.stock),
       sku: product.sku,
       barcode: product.barcode,
+      vendorId: product.vendorId || "",
     })
     setIsAddDialogOpen(true)
   }
 
   const handleDelete = (id: string) => {
-    setProducts(products.filter((p) => p.id !== id))
+    deleteProduct(id)
     setSelectedProducts(selectedProducts.filter((sid) => sid !== id))
   }
 
   const handleBulkDelete = () => {
-    setProducts(products.filter((p) => !selectedProducts.includes(p.id)))
+    selectedProducts.forEach(id => deleteProduct(id))
     setSelectedProducts([])
   }
 
@@ -341,7 +169,7 @@ export default function ProductsPage() {
     if (!formData.name || !formData.category || !formData.price || !formData.salePrice || !formData.stock) return
 
     const newProduct: Product = {
-      id: String(products.length + 1),
+      id: String(Date.now()),
       name: formData.name,
       description: formData.description,
       category: formData.category,
@@ -355,12 +183,13 @@ export default function ProductsPage() {
         `/placeholder.svg?height=40&width=40&query=${formData.name.toLowerCase().replace(" ", "-")}`,
       sku: formData.sku,
       barcode: formData.barcode,
+      vendorId: formData.vendorId || undefined,
     }
 
-    setProducts([...products, newProduct])
+    addProduct(newProduct)
     setIsAddDialogOpen(false)
     setUploadedImages([])
-    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "" })
+    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "" })
   }
 
   const handleUpdate = () => {
@@ -374,35 +203,31 @@ export default function ProductsPage() {
     )
       return
 
-    const updatedProducts = products.map((p) =>
-      p.id === editingProduct.id
-        ? {
-            ...p,
-            name: formData.name,
-            description: formData.description,
-            category: formData.category,
-            price: Number.parseFloat(formData.price),
-            salePrice: Number.parseFloat(formData.salePrice),
-            stock: Number.parseInt(formData.stock),
-            sku: formData.sku,
-            barcode: formData.barcode,
-            image: uploadedImages[0] || p.image,
-          }
-        : p,
-    )
+    updateProduct({
+      ...editingProduct,
+      name: formData.name,
+      description: formData.description,
+      category: formData.category,
+      price: Number.parseFloat(formData.price),
+      salePrice: Number.parseFloat(formData.salePrice),
+      stock: Number.parseInt(formData.stock),
+      sku: formData.sku,
+      barcode: formData.barcode,
+      image: uploadedImages[0] || editingProduct.image,
+      vendorId: formData.vendorId || undefined,
+    })
 
-    setProducts(updatedProducts)
     setIsAddDialogOpen(false)
     setEditingProduct(null)
     setUploadedImages([])
-    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "" })
+    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "" })
   }
 
   const closeDialog = () => {
     setIsAddDialogOpen(false)
     setEditingProduct(null)
     setUploadedImages([])
-    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "" })
+    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "" })
   }
 
   const categories = [
@@ -518,10 +343,10 @@ export default function ProductsPage() {
         sku: item.sku || "",
         barcode: item.barcode || "",
         description: item.description || "",
-        images: [],
+        vendorId: item.vendor_id || undefined,
       }))
 
-      setProducts([...products, ...newProducts])
+      newProducts.forEach(product => addProduct(product))
       setIsImportDialogOpen(false)
     }
     reader.readAsText(file)
@@ -533,16 +358,28 @@ export default function ProductsPage() {
     if (bulkAction === "delete") {
       handleBulkDelete()
     } else if (bulkAction === "status" && bulkStatus) {
-      setProducts(products.map((p) => (selectedProducts.includes(p.id) ? { ...p, status: bulkStatus as any } : p)))
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id)
+        if (product) updateProduct({ ...product, status: bulkStatus as any })
+      })
       setSelectedProducts([])
     } else if (bulkAction === "category" && bulkCategory) {
-      setProducts(products.map((p) => (selectedProducts.includes(p.id) ? { ...p, category: bulkCategory } : p)))
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id)
+        if (product) updateProduct({ ...product, category: bulkCategory })
+      })
       setSelectedProducts([])
     } else if (bulkAction === "publish") {
-      setProducts(products.map((p) => (selectedProducts.includes(p.id) ? { ...p, published: true } : p)))
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id)
+        if (product) updateProduct({ ...product, published: true })
+      })
       setSelectedProducts([])
     } else if (bulkAction === "unpublish") {
-      setProducts(products.map((p) => (selectedProducts.includes(p.id) ? { ...p, published: false } : p)))
+      selectedProducts.forEach(id => {
+        const product = products.find(p => p.id === id)
+        if (product) updateProduct({ ...product, published: false })
+      })
       setSelectedProducts([])
     }
 
@@ -605,12 +442,21 @@ export default function ProductsPage() {
               type="text"
               placeholder="Search Product"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                handleFilterChange()
+              }}
               className="pl-10"
             />
           </div>
 
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+          <Select
+            value={selectedCategory}
+            onValueChange={(value) => {
+              setSelectedCategory(value)
+              handleFilterChange()
+            }}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
@@ -627,15 +473,48 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
 
-          <Select value={selectedPrice} onValueChange={setSelectedPrice}>
+          <Select
+            value={selectedVendor}
+            onValueChange={(value) => {
+              setSelectedVendor(value)
+              handleFilterChange()
+            }}
+          >
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Price" />
+              <SelectValue placeholder="Vendor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Prices</SelectItem>
-              <SelectItem value="low">Under $50</SelectItem>
-              <SelectItem value="medium">$50 - $150</SelectItem>
-              <SelectItem value="high">Over $150</SelectItem>
+              <SelectItem value="all">All Vendors</SelectItem>
+              {vendors.map((vendor) => (
+                <SelectItem key={vendor.id} value={vendor.id}>
+                  {vendor.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={sortOption}
+            onValueChange={(value) => {
+              setSortOption(value)
+              handleFilterChange()
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Low to High" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default</SelectItem>
+              <SelectItem value="low-to-high">Low to High</SelectItem>
+              <SelectItem value="high-to-low">High to Low</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="unpublished">Unpublished</SelectItem>
+              <SelectItem value="selling">Status - Selling</SelectItem>
+              <SelectItem value="out-of-stock">Status - Out of Stock</SelectItem>
+              <SelectItem value="date-added-asc">Date Added (Asc)</SelectItem>
+              <SelectItem value="date-added-desc">Date Added (Desc)</SelectItem>
+              <SelectItem value="date-updated-asc">Date Updated (Asc)</SelectItem>
+              <SelectItem value="date-updated-desc">Date Updated (Desc)</SelectItem>
             </SelectContent>
           </Select>
 
@@ -645,7 +524,9 @@ export default function ProductsPage() {
             onClick={() => {
               setSearchQuery("")
               setSelectedCategory("all")
-              setSelectedPrice("all")
+              setSelectedVendor("all")
+              setSortOption("default")
+              handleFilterChange()
             }}
           >
             Reset
@@ -656,25 +537,26 @@ export default function ProductsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   <Checkbox
                     checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Product Name</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Category</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Price</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Sale Price</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Stock</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Status</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">View</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Published</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Product Name</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Price</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Sale Price</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Stock</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Vendor</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">View</th>
+                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Published</th>
+                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {currentProducts.map((product) => (
                 <tr key={product.id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="py-3 px-4">
                     <Checkbox
@@ -696,10 +578,17 @@ export default function ProductsPage() {
                   <td className="py-3 px-4 text-sm font-semibold text-gray-900">${product.price.toFixed(2)}</td>
                   <td className="py-3 px-4 text-sm font-semibold text-gray-900">${product.salePrice.toFixed(2)}</td>
                   <td className="py-3 px-4 text-sm text-gray-600">{product.stock}</td>
+                  <td className="py-3 px-4 text-sm text-gray-600">
+                    {product.vendorId ? (
+                      <Link href={`/dashboard/vendors/${product.vendorId}`} className="text-emerald-600 hover:underline">
+                        {vendors.find(v => v.id === product.vendorId)?.name || "Unknown"}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-400">No Vendor</span>
+                    )}
+                  </td>
                   <td className="py-3 px-4">
-                    <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-emerald-100 text-emerald-700">
-                      {product.status}
-                    </span>
+                    <StatusBadge status={product.status} />
                   </td>
                   <td className="py-3 px-4 text-center">
                     <button onClick={() => setViewingProduct(product)} className="text-gray-400 hover:text-emerald-600">
@@ -735,6 +624,15 @@ export default function ProductsPage() {
           </div>
         )}
       </Card>
+
+      <PaginationControl
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        totalItems={filteredProducts.length}
+      />
 
       <Dialog open={isAddDialogOpen} onOpenChange={closeDialog}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -775,9 +673,8 @@ export default function ProductsPage() {
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer ${
-                  isDragging ? "border-emerald-500 bg-emerald-50" : "border-gray-300 hover:border-emerald-500"
-                }`}
+                className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer ${isDragging ? "border-emerald-500 bg-emerald-50" : "border-gray-300 hover:border-emerald-500"
+                  }`}
               >
                 <input
                   type="file"
@@ -854,6 +751,25 @@ export default function ProductsPage() {
                         <span>{cat.icon}</span>
                         <span>{cat.value}</span>
                       </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="vendor">Vendor</Label>
+              <Select
+                value={formData.vendorId || undefined}
+                onValueChange={(value) => setFormData({ ...formData, vendorId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Vendor (Optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendors.map((vendor) => (
+                    <SelectItem key={vendor.id} value={vendor.id}>
+                      {vendor.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -953,9 +869,8 @@ export default function ProductsPage() {
                       {viewingProduct.status}
                     </span>
                     <span
-                      className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${
-                        viewingProduct.published ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"
-                      }`}
+                      className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${viewingProduct.published ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"
+                        }`}
                     >
                       {viewingProduct.published ? "Published" : "Draft"}
                     </span>
