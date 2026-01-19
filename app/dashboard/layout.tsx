@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { StaffProvider } from "@/contexts/staff-context"
 import { VendorProvider } from "@/contexts/vendor-context"
 import { ProductProvider } from "@/contexts/product-context"
+import { AttributeProvider } from "@/contexts/attribute-context"
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -18,7 +19,7 @@ import {
   X,
   LogOut,
   Bell,
-  Search,
+
   ShoppingBag,
   ChevronDown,
   ChevronRight,
@@ -34,6 +35,15 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -133,8 +143,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <VendorProvider>
-      <ProductProvider>
-        <StaffProvider>
+      <AttributeProvider>
+        <ProductProvider>
+          <StaffProvider>
           <Suspense fallback={null}>
             <div className="min-h-screen bg-gray-50">
               {sidebarOpen && (
@@ -310,18 +321,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <Menu className="w-6 h-6" />
                     </button>
 
-                    <div className="flex-1 max-w-2xl mx-4">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Search..."
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-4">
+
+                    <div className="flex items-center gap-4 ml-auto">
                       <div className="relative" ref={notificationRef}>
                         <button
                           onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -381,17 +383,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       </div>
 
                       <div className="flex items-center gap-3 pl-4 border-l">
-                        <div className="hidden sm:block text-right">
-                          <p className="text-sm font-medium text-gray-900">Admin User</p>
-                          <p className="text-xs text-gray-500">{userEmail}</p>
-                        </div>
-                        <button
-                          onClick={logout}
-                          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span className="hidden sm:inline">Logout</span>
-                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-3 hover:bg-gray-50 p-2 rounded-lg transition-colors outline-none">
+                              <div className="hidden sm:block text-right">
+                                <p className="text-sm font-medium text-gray-900">Admin User</p>
+                                <p className="text-xs text-gray-500">{userEmail}</p>
+                              </div>
+                              <Avatar>
+                                <AvatarImage src="/admin-avatar.jpg" alt="Admin" />
+                                <AvatarFallback className="bg-emerald-100 text-emerald-700">AD</AvatarFallback>
+                              </Avatar>
+                              <ChevronDown className="w-4 h-4 text-gray-500" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                              <Link href="/dashboard" className="cursor-pointer">
+                                <LayoutDashboard className="mr-2 h-4 w-4" />
+                                <span>Dashboard</span>
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href="/dashboard/edit-profile" className="cursor-pointer">
+                                <Settings className="mr-2 h-4 w-4" />
+                                <span>Edit Profile</span>
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer focus:text-red-600">
+                              <LogOut className="mr-2 h-4 w-4" />
+                              <span>Log out</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </div>
@@ -401,8 +428,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
           </Suspense>
-        </StaffProvider>
-      </ProductProvider>
+          </StaffProvider>
+        </ProductProvider>
+      </AttributeProvider>
     </VendorProvider>
   )
 }

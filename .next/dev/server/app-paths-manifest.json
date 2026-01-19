@@ -1,23 +1,10 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/dashboard/attributes/[id]/page": "app/dashboard/attributes/[id]/page.js",
   "/dashboard/attributes/page": "app/dashboard/attributes/page.js",
-  "/dashboard/categories/page": "app/dashboard/categories/page.js",
-  "/dashboard/coupons/page": "app/dashboard/coupons/page.js",
   "/dashboard/customers/page": "app/dashboard/customers/page.js",
-  "/dashboard/international/page": "app/dashboard/international/page.js",
   "/dashboard/orders/page": "app/dashboard/orders/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/dashboard/pos/page": "app/dashboard/pos/page.js",
   "/dashboard/products/page": "app/dashboard/products/page.js",
-  "/dashboard/sells/page": "app/dashboard/sells/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js",
-  "/dashboard/staff/page": "app/dashboard/staff/page.js",
-  "/dashboard/staff/roles/page": "app/dashboard/staff/roles/page.js",
-  "/dashboard/staff/salary/page": "app/dashboard/staff/salary/page.js",
-  "/dashboard/store/page": "app/dashboard/store/page.js",
   "/dashboard/vendors/[id]/page": "app/dashboard/vendors/[id]/page.js",
-  "/dashboard/vendors/page": "app/dashboard/vendors/page.js",
-  "/login/page": "app/login/page.js",
-  "/page": "app/page.js"
+  "/dashboard/vendors/page": "app/dashboard/vendors/page.js"
 }

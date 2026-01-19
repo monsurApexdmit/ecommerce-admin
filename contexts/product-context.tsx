@@ -18,8 +18,24 @@ export interface Product {
     barcode: string
     createdAt?: string
     updatedAt?: string
-    vendorId?: string // Link to Vendor
+    vendorId?: string
     receiptNumber?: string
+    attributes?: {
+        id: string
+        name: string
+        value: string | string[]
+    }[]
+    variants?: Variant[]
+}
+
+export interface Variant {
+    id: string
+    name: string
+    attributes: { [key: string]: string }
+    price: number
+    salePrice: number
+    stock: number
+    sku: string
 }
 
 interface ProductContextType {
@@ -40,7 +56,7 @@ const initialProducts: Product[] = [
         category: "Men",
         price: 450.0,
         salePrice: 450.0,
-        stock: 4969,
+        stock: 30, // Sum of variant stocks
         status: "Selling",
         published: true,
         image: "/plain-white-tshirt.png",
@@ -48,7 +64,19 @@ const initialProducts: Product[] = [
         barcode: "1234567890123",
         createdAt: "2023-11-20T10:00:00Z",
         updatedAt: "2023-11-21T10:00:00Z",
-        vendorId: "1", // Fresh Farms (Wait, T-shirt? Let's fix data later or assume diversified vendor)
+        vendorId: "1",
+        attributes: [
+            { id: "1", name: "Size", value: ["S", "M", "L"] },
+            { id: "2", name: "Color", value: ["Red", "Blue"] }
+        ],
+        variants: [
+            { id: "v1", name: "S / Red", attributes: { "Size": "S", "Color": "Red" }, price: 450, salePrice: 450, stock: 5, sku: "TSH-001-S-RE" },
+            { id: "v2", name: "S / Blue", attributes: { "Size": "S", "Color": "Blue" }, price: 450, salePrice: 450, stock: 5, sku: "TSH-001-S-BL" },
+            { id: "v3", name: "M / Red", attributes: { "Size": "M", "Color": "Red" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-RE" },
+            { id: "v4", name: "M / Blue", attributes: { "Size": "M", "Color": "Blue" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-BL" },
+            { id: "v5", name: "L / Red", attributes: { "Size": "L", "Color": "Red" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-RE" },
+            { id: "v6", name: "L / Blue", attributes: { "Size": "L", "Color": "Blue" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-BL" }
+        ]
     },
     {
         id: "2",

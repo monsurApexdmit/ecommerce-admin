@@ -24,54 +24,36 @@ import {
 } from "@/components/ui/alert-dialog"
 
 // Mock Data
-const PRODUCTS = [
-    { id: "1", name: "Fresh Mustard Oil", price: 99.91, stock: 45, image: "/oil.png", category: "Oil" },
-    { id: "2", name: "Himalaya Powder", price: 160.00, stock: 20, image: "/powder.jpg", category: "Skin Care" },
-    { id: "3", name: "Green Leaf Lettuce", price: 112.72, stock: 15, image: "/fresh-lettuce.png", category: "Vegetable" },
-    { id: "4", name: "Rainbow Chard", price: 7.07, stock: 0, image: "/chard.jpg", category: "Vegetable" },
-    { id: "5", name: "Clementine", price: 48.12, stock: 100, image: "/single-clementine.png", category: "Fruits" },
-    { id: "6", name: "Kale Sprouts", price: 90.00, stock: 50, image: "/vibrant-kale.png", category: "Vegetable" },
-    { id: "7", name: "Rainbow Peppers", price: 90.85, stock: 30, image: "/colorful-peppers.png", category: "Vegetable" },
-    { id: "8", name: "Blueberry", price: 211.96, stock: 12, image: "/ripe-blueberries.png", category: "Fruits" },
-    { id: "9", name: "Fresh Organic Apple", price: 15.00, stock: 50, image: "/placeholder.svg", category: "Fruits" },
-    { id: "10", name: "Organic Banana", price: 5.00, stock: 100, image: "/placeholder.svg", category: "Fruits" },
-    { id: "11", name: "Fresh Tomato", price: 8.50, stock: 40, image: "/placeholder.svg", category: "Vegetable" },
-    { id: "12", name: "Cauliflower", price: 12.00, stock: 25, image: "/placeholder.svg", category: "Vegetable" },
-    { id: "13", name: "Organic Carrot", price: 6.00, stock: 60, image: "/placeholder.svg", category: "Vegetable" },
-    { id: "14", name: "Fresh Broccoli", price: 10.00, stock: 35, image: "/placeholder.svg", category: "Vegetable" },
-    { id: "15", name: "Red Onion", price: 7.00, stock: 80, image: "/placeholder.svg", category: "Vegetable" },
-    { id: "16", name: "Organic Potato", price: 4.50, stock: 120, image: "/placeholder.svg", category: "Vegetable" },
-    { id: "17", name: "Coconut Oil", price: 120.00, stock: 15, image: "/placeholder.svg", category: "Oil" },
-    { id: "18", name: "Olive Oil", price: 250.00, stock: 10, image: "/placeholder.svg", category: "Oil" },
-    { id: "19", name: "Aloe Vera Gel", price: 180.00, stock: 20, image: "/placeholder.svg", category: "Skin Care" },
-    { id: "20", name: "Face Wash", price: 150.00, stock: 25, image: "/placeholder.svg", category: "Skin Care" },
-    { id: "21", name: "Body Lotion", price: 220.00, stock: 18, image: "/placeholder.svg", category: "Skin Care" },
-    { id: "22", name: "Sunflower Oil", price: 110.00, stock: 30, image: "/placeholder.svg", category: "Oil" },
-    { id: "23", name: "Fresh Orange", price: 25.00, stock: 45, image: "/placeholder.svg", category: "Fruits" },
-    { id: "24", name: "Grapes", price: 60.00, stock: 20, image: "/placeholder.svg", category: "Fruits" },
-]
+import { useProduct, type Product, type Variant } from "@/contexts/product-context"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 
 const CATEGORIES = [
     { id: "All", name: "All Items", icon: LayoutGrid },
-    { id: "Vegetable", name: "Vegetables", icon: LayoutGrid },
-    { id: "Fruits", name: "Fruits", icon: LayoutGrid },
-    { id: "Oil", name: "Oil & Spice", icon: LayoutGrid },
+    { id: "Men", name: "Men", icon: LayoutGrid },
     { id: "Skin Care", name: "Skin Care", icon: LayoutGrid },
+    { id: "Fresh Vegetable", name: "Vegetables", icon: LayoutGrid },
+    { id: "Fresh Fruits", name: "Fruits", icon: LayoutGrid },
+    { id: "Electronics", name: "Electronics", icon: LayoutGrid },
 ]
 
 interface CartItem {
     id: string
+    variantId?: string
     name: string
     price: number
     image: string
     quantity: number
+    variantName?: string
 }
 
 export default function PosPage() {
+    const { products } = useProduct()
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedCategory, setSelectedCategory] = useState("All")
     const [cart, setCart] = useState<CartItem[]>([])
     const [selectedCustomer, setSelectedCustomer] = useState("")
+    const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
 
     // New State
@@ -82,23 +64,44 @@ export default function PosPage() {
     const [shipping, setShipping] = useState(0)
 
     // Filter Products
-    const filteredProducts = PRODUCTS.filter(product => {
+    const filteredProducts = products.filter(product => {
         const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
         const matchesCategory = selectedCategory === "All" || product.category === selectedCategory
         return matchesSearch && matchesCategory
     })
 
     // Cart Logic
-    const addToCart = (product: typeof PRODUCTS[0]) => {
+    const addToCart = (product: Product, variant?: Variant) => {
+        if (product.variants && product.variants.length > 0 && !variant) {
+            setSelectedProductForVariant(product)
+            return
+        }
+
+        const cartItemId = variant ? `${product.id}-${variant.id}` : product.id
+        const price = variant ? variant.price : product.salePrice
+        const name = variant ? `${product.name} (${variant.name})` : product.name
+
         setCart(prev => {
-            const existing = prev.find(item => item.id === product.id)
+            const existing = prev.find(item => item.id === cartItemId)
             if (existing) {
                 return prev.map(item =>
-                    item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+                    item.id === cartItemId ? { ...item, quantity: item.quantity + 1 } : item
                 )
             }
-            return [...prev, { ...product, quantity: 1 }]
+            return [...prev, { 
+                id: cartItemId,
+                variantId: variant?.id,
+                name: name,
+                price: price,
+                image: product.image || "/placeholder.svg", 
+                quantity: 1,
+                variantName: variant?.name
+            }]
         })
+        
+        if (variant) {
+            setSelectedProductForVariant(null)
+        }
     }
 
     const updateQuantity = (id: string, delta: number) => {
@@ -335,6 +338,31 @@ export default function PosPage() {
                     customer: selectedCustomer
                 }}
             />
+
+            <Dialog open={!!selectedProductForVariant} onOpenChange={(open) => !open && setSelectedProductForVariant(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Select Variant</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {selectedProductForVariant?.variants?.map((variant) => (
+                            <div key={variant.id} className="flex items-center justify-between border p-3 rounded-lg hover:bg-gray-50 cursor-pointer" 
+                                 onClick={() => addToCart(selectedProductForVariant, variant)}>
+                                <div>
+                                    <p className="font-medium">{variant.name}</p>
+                                    <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-bold text-emerald-600">${variant.price}</p>
+                                    <Badge variant="outline" className={variant.stock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
+                                        {variant.stock > 0 ? `${variant.stock} in stock` : "Out of stock"}
+                                    </Badge>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

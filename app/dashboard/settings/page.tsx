@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { useAuth } from "@/contexts/auth-context"
 import { Building2, Mail, Phone, MapPin, Bell, Lock, Globe } from "lucide-react"
+import Swal from "sweetalert2"
 
 export default function SettingsPage() {
   const { userEmail } = useAuth()
@@ -30,25 +31,50 @@ export default function SettingsPage() {
 
   const handleSaveGeneral = () => {
     // Save general settings
-    alert("General settings saved successfully!")
+    Swal.fire({
+      title: "Success!",
+      text: "General settings saved successfully!",
+      icon: "success",
+      confirmButtonColor: "#10b981",
+    })
   }
 
   const handleSaveNotifications = () => {
     // Save notification settings
-    alert("Notification settings saved successfully!")
+    Swal.fire({
+      title: "Success!",
+      text: "Notification settings saved successfully!",
+      icon: "success",
+      confirmButtonColor: "#10b981",
+    })
   }
 
   const handleChangePassword = () => {
     if (newPassword !== confirmPassword) {
-      alert("Passwords do not match!")
+      Swal.fire({
+        title: "Error!",
+        text: "Passwords do not match!",
+        icon: "error",
+        confirmButtonColor: "#ef4444",
+      })
       return
     }
     if (newPassword.length < 8) {
-      alert("Password must be at least 8 characters!")
+      Swal.fire({
+        title: "Error!",
+        text: "Password must be at least 8 characters!",
+        icon: "error",
+        confirmButtonColor: "#ef4444",
+      })
       return
     }
     // Change password
-    alert("Password changed successfully!")
+    Swal.fire({
+      title: "Success!",
+      text: "Password changed successfully!",
+      icon: "success",
+      confirmButtonColor: "#10b981",
+    })
     setCurrentPassword("")
     setNewPassword("")
     setConfirmPassword("")

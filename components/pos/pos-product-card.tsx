@@ -3,15 +3,7 @@
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-
-interface Product {
-    id: string
-    name: string
-    price: number
-    image: string
-    stock: number
-    category: string
-}
+import type { Product } from "@/contexts/product-context"
 
 interface PosProductCardProps {
     product: Product
@@ -46,7 +38,7 @@ export function PosProductCard({ product, onAddToCart }: PosProductCardProps) {
                 </h3>
                 <div className="mt-auto pt-1 flex items-center justify-between">
                     <p className="font-bold text-emerald-600 text-sm">
-                        ${product.price.toFixed(2)}
+                        ${product.salePrice.toFixed(2)}
                     </p>
                     <div className="h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <Plus className="w-3.5 h-3.5" />

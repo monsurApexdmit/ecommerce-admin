@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Search, Download, Upload, Trash2, Edit2, Plus, FilePen } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,43 +14,33 @@ import Link from "next/link"
 import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
-
-interface Attribute {
-  id: string
-  name: string
-  displayName: string
-  option: "dropdown" | "radio"
-  published: boolean
-  values: string[]
-}
+import { useAttribute, type Attribute } from "@/contexts/attribute-context"
 
 export default function AttributesPage() {
+  const { attributes, addAttribute, updateAttribute, deleteAttribute } = useAttribute()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([])
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [bulkAction, setBulkAction] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [editingAttribute, setEditingAttribute] = useState<Attribute | null>(null)
+  
+  // Form state
+  const [formData, setFormData] = useState<{
+    name: string
+    displayName: string
+    option: "dropdown" | "radio"
+    values: string
+  }>({
+    name: "",
+    displayName: "",
+    option: "dropdown",
+    values: "",
+  })
 
-  const [attributes, setAttributes] = useState<Attribute[]>([
-    {
-      id: "81B2",
-      name: "Color",
-      displayName: "Color",
-      option: "dropdown",
-      published: true,
-      values: ["Red", "Blue", "Green", "Yellow", "Black", "White"],
-    },
-    {
-      id: "81B6",
-      name: "Size",
-      displayName: "Size",
-      option: "radio",
-      published: true,
-      values: ["Small", "Medium", "Large", "XL", "XXL"],
-    },
-  ])
-
+  // Filter attributes
   const filteredAttributes = attributes.filter(
     (attr) =>
       attr.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -75,7 +64,7 @@ export default function AttributesPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false)
-    }, 2000)
+    }, 1000)
     return () => clearTimeout(timer)
   }, [])
 
@@ -96,12 +85,15 @@ export default function AttributesPage() {
   }
 
   const handleTogglePublished = (id: string) => {
-    setAttributes(attributes.map((attr) => (attr.id === id ? { ...attr, published: !attr.published } : attr)))
+    const attr = attributes.find((a) => a.id === id)
+    if (attr) {
+      updateAttribute({ ...attr, published: !attr.published })
+    }
   }
 
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to delete this attribute?")) {
-      setAttributes(attributes.filter((attr) => attr.id !== id))
+      deleteAttribute(id)
       setSelectedAttributes(selectedAttributes.filter((sid) => sid !== id))
     }
   }
@@ -112,8 +104,8 @@ export default function AttributesPage() {
       return
     }
     if (confirm(`Delete ${selectedAttributes.length} selected attribute(s)?`)) {
-      setAttributes(attributes.filter((attr) => !selectedAttributes.includes(attr.id)))
-      setSelectedAttributes([])
+        selectedAttributes.forEach(id => deleteAttribute(id))
+        setSelectedAttributes([])
     }
   }
 
@@ -144,12 +136,12 @@ export default function AttributesPage() {
         id: item.id || generateId(),
         name: item.name,
         displayName: item.display_name,
-        option: item.option || "dropdown",
+        option: (item.option as "dropdown" | "radio") || "dropdown",
         published: item.published === "Yes",
         values: item.values ? item.values.split(";") : [],
       }))
-
-      setAttributes([...attributes, ...newAttributes])
+      
+      newAttributes.forEach(attr => addAttribute(attr))
       setIsImportDialogOpen(false)
     }
     reader.readAsText(file)
@@ -161,15 +153,64 @@ export default function AttributesPage() {
     if (bulkAction === "delete") {
       handleBulkDelete()
     } else if (bulkAction === "publish") {
-      setAttributes(attributes.map((a) => (selectedAttributes.includes(a.id) ? { ...a, published: true } : a)))
+        selectedAttributes.forEach(id => {
+            const attr = attributes.find(a => a.id === id)
+            if (attr) updateAttribute({ ...attr, published: true })
+        })
       setSelectedAttributes([])
     } else if (bulkAction === "unpublish") {
-      setAttributes(attributes.map((a) => (selectedAttributes.includes(a.id) ? { ...a, published: false } : a)))
+        selectedAttributes.forEach(id => {
+            const attr = attributes.find(a => a.id === id)
+            if (attr) updateAttribute({ ...attr, published: false })
+        })
       setSelectedAttributes([])
     }
 
     setIsBulkActionDialogOpen(false)
     setBulkAction("")
+  }
+  
+  const openAddDialog = () => {
+      setEditingAttribute(null)
+      setFormData({ name: "", displayName: "", option: "dropdown", values: "" })
+      setIsAddDialogOpen(true)
+  }
+  
+  const openEditDialog = (attr: Attribute) => {
+      setEditingAttribute(attr)
+      setFormData({
+          name: attr.name,
+          displayName: attr.displayName,
+          option: attr.option,
+          values: attr.values.join(", ")
+      })
+      setIsAddDialogOpen(true)
+  }
+  
+  const handleSaveAttribute = () => {
+      if (!formData.name || !formData.displayName) return
+      
+      const valuesArray = formData.values.split(",").map(v => v.trim()).filter(v => v !== "")
+      
+      if (editingAttribute) {
+          updateAttribute({
+              ...editingAttribute,
+              name: formData.name,
+              displayName: formData.displayName,
+              option: formData.option,
+              values: valuesArray
+          })
+      } else {
+          addAttribute({
+              id: generateId(),
+              name: formData.name,
+              displayName: formData.displayName,
+              option: formData.option,
+              published: true,
+              values: valuesArray
+          })
+      }
+      setIsAddDialogOpen(false)
   }
 
   const allSelected =
@@ -213,7 +254,7 @@ export default function AttributesPage() {
             <Trash2 className="w-4 h-4" />
             Delete
           </Button>
-          <Button size="sm" className="gap-2 bg-emerald-500 hover:bg-emerald-600">
+          <Button size="sm" className="gap-2 bg-emerald-500 hover:bg-emerald-600" onClick={openAddDialog}>
             <Plus className="w-4 h-4" />
             Add Attribute
           </Button>
@@ -303,7 +344,7 @@ export default function AttributesPage() {
                       <td className="py-3 px-4 text-gray-900 font-medium">{attribute.id}</td>
                       <td className="py-3 px-4 text-gray-900">{attribute.name}</td>
                       <td className="py-3 px-4 text-gray-900">{attribute.displayName}</td>
-                      <td className="py-3 px-4 text-gray-600">{attribute.option}</td>
+                      <td className="py-3 px-4 text-gray-600 capitalize">{attribute.option}</td>
                       <td className="py-3 px-4">
                         <button
                           onClick={() => handleTogglePublished(attribute.id)}
@@ -317,21 +358,21 @@ export default function AttributesPage() {
                         </button>
                       </td>
                       <td className="py-3 px-4">
-                        <Link
-                          href={`/dashboard/attributes/${attribute.id}`}
-                          className="p-2 hover:bg-gray-100 rounded inline-block"
-                        >
-                          <Edit2 className="w-4 h-4 text-gray-600" />
-                        </Link>
+                         <div className="flex flex-wrap gap-1">
+                            {attribute.values.slice(0, 3).map((val, i) => (
+                                <span key={i} className="text-xs bg-gray-100 px-2 py-1 rounded">{val}</span>
+                            ))}
+                            {attribute.values.length > 3 && <span className="text-xs text-gray-500">+{attribute.values.length - 3}</span>}
+                         </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <Link
-                            href={`/dashboard/attributes/${attribute.id}`}
+                          <button
+                            onClick={() => openEditDialog(attribute)}
                             className="p-2 hover:bg-gray-100 rounded inline-block"
                           >
                             <Edit2 className="w-4 h-4 text-gray-600" />
-                          </Link>
+                          </button>
                           <button onClick={() => handleDelete(attribute.id)} className="p-2 hover:bg-gray-100 rounded">
                             <Trash2 className="w-4 h-4 text-gray-600" />
                           </button>
@@ -408,6 +449,70 @@ export default function AttributesPage() {
               disabled={!bulkAction}
             >
               Apply Action
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Add/Edit Attribute Dialog */}
+       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingAttribute ? "Edit Attribute" : "Add Attribute"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input 
+                id="name" 
+                value={formData.name} 
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                placeholder="Attribute Name (e.g. Color)" 
+               />
+            </div>
+             <div className="space-y-2">
+              <Label htmlFor="displayName">Display Name</Label>
+              <Input 
+                id="displayName" 
+                value={formData.displayName} 
+                onChange={(e) => setFormData({...formData, displayName: e.target.value})}
+                placeholder="Display Name (e.g. Color)" 
+               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="option">Option Type</Label>
+              <Select 
+                value={formData.option} 
+                onValueChange={(value: "dropdown" | "radio") => setFormData({...formData, option: value})}
+              >
+                  <SelectTrigger>
+                      <SelectValue placeholder="Select Option Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      <SelectItem value="dropdown">Dropdown</SelectItem>
+                      <SelectItem value="radio">Radio</SelectItem>
+                  </SelectContent>
+              </Select>
+            </div>
+             <div className="space-y-2">
+              <Label htmlFor="values">Values (comma separated)</Label>
+              <Input 
+                id="values" 
+                value={formData.values} 
+                onChange={(e) => setFormData({...formData, values: e.target.value})}
+                placeholder="Red, Blue, Green" 
+               />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveAttribute}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {editingAttribute ? "Update Attribute" : "Add Attribute"}
             </Button>
           </DialogFooter>
         </DialogContent>

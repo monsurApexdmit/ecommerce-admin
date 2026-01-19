@@ -25,8 +25,10 @@ import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { useProduct, type Product } from "@/contexts/product-context"
+import { useProduct, type Product, type Variant } from "@/contexts/product-context"
 import { useVendor } from "@/contexts/vendor-context"
+import { useAttribute } from "@/contexts/attribute-context"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 
 
@@ -59,6 +61,19 @@ export default function ProductsPage() {
   })
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const { attributes: globalAttributes } = useAttribute()
+  const [selectedAttributeIds, setSelectedAttributeIds] = useState<string[]>([])
+  const [productAttributes, setProductAttributes] = useState<{ id: string; name: string; value: string | string[] }[]>([])
+  const [generatedVariants, setGeneratedVariants] = useState<Variant[]>([])
+
+  // Real-time stock sync
+  useEffect(() => {
+    if (generatedVariants.length > 0) {
+        const totalStock = generatedVariants.reduce((sum, v) => sum + v.stock, 0)
+        setFormData(prev => ({ ...prev, stock: String(totalStock) }))
+    }
+  }, [generatedVariants])
+
   const [bulkAction, setBulkAction] = useState("")
   const [bulkStatus, setBulkStatus] = useState("")
   const [bulkCategory, setBulkCategory] = useState("")
@@ -163,6 +178,22 @@ export default function ProductsPage() {
       vendorId: product.vendorId || "",
       receiptNumber: product.receiptNumber || "",
     })
+    
+    // Load attributes and variants
+    if (product.attributes) {
+        setProductAttributes(product.attributes)
+        setSelectedAttributeIds(product.attributes.map(a => a.id))
+    } else {
+        setProductAttributes([])
+        setSelectedAttributeIds([])
+    }
+    
+    if (product.variants) {
+        setGeneratedVariants(product.variants)
+    } else {
+        setGeneratedVariants([])
+    }
+
     setIsAddDialogOpen(true)
   }
 
@@ -179,6 +210,12 @@ export default function ProductsPage() {
   const handleAdd = () => {
     if (!formData.name || !formData.category || !formData.price || !formData.salePrice || !formData.stock) return
 
+    // Calculate total stock from variants if they exist
+    let finalStock = Number.parseInt(formData.stock)
+    if (generatedVariants.length > 0) {
+        finalStock = generatedVariants.reduce((sum, v) => sum + v.stock, 0)
+    }
+
     const newProduct: Product = {
       id: String(Date.now()),
       name: formData.name,
@@ -186,8 +223,8 @@ export default function ProductsPage() {
       category: formData.category,
       price: Number.parseFloat(formData.price),
       salePrice: Number.parseFloat(formData.salePrice),
-      stock: Number.parseInt(formData.stock),
-      status: "Selling",
+      stock: finalStock,
+      status: finalStock > 0 ? "Selling" : "Out of Stock",
       published: true,
       image:
         uploadedImages[0] ||
@@ -196,12 +233,12 @@ export default function ProductsPage() {
       barcode: formData.barcode,
       vendorId: formData.vendorId || undefined,
       receiptNumber: formData.receiptNumber || undefined,
+      attributes: productAttributes,
+      variants: generatedVariants,
     }
 
     addProduct(newProduct)
-    setIsAddDialogOpen(false)
-    setUploadedImages([])
-    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "", receiptNumber: "" })
+    closeDialog()
   }
 
   const handleUpdate = () => {
@@ -215,6 +252,12 @@ export default function ProductsPage() {
     )
       return
 
+    // Calculate total stock from variants if they exist
+    let finalStock = Number.parseInt(formData.stock)
+    if (generatedVariants.length > 0) {
+        finalStock = generatedVariants.reduce((sum, v) => sum + v.stock, 0)
+    }
+
     updateProduct({
       ...editingProduct,
       name: formData.name,
@@ -222,18 +265,18 @@ export default function ProductsPage() {
       category: formData.category,
       price: Number.parseFloat(formData.price),
       salePrice: Number.parseFloat(formData.salePrice),
-      stock: Number.parseInt(formData.stock),
+      stock: finalStock,
+      status: finalStock > 0 ? "Selling" : "Out of Stock",
       sku: formData.sku,
       barcode: formData.barcode,
       image: uploadedImages[0] || editingProduct.image,
       vendorId: formData.vendorId || undefined,
       receiptNumber: formData.receiptNumber || undefined,
+      attributes: productAttributes,
+      variants: generatedVariants,
     })
 
-    setIsAddDialogOpen(false)
-    setEditingProduct(null)
-    setUploadedImages([])
-    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "", receiptNumber: "" })
+    closeDialog()
   }
 
   const closeDialog = () => {
@@ -241,6 +284,9 @@ export default function ProductsPage() {
     setEditingProduct(null)
     setUploadedImages([])
     setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "", receiptNumber: "" })
+    setProductAttributes([])
+    setSelectedAttributeIds([])
+    setGeneratedVariants([])
   }
 
   const categories = [
@@ -400,6 +446,98 @@ export default function ProductsPage() {
     setBulkAction("")
     setBulkStatus("")
     setBulkCategory("")
+  }
+
+  // Attribute & Variant Logic
+  const handleAttributeSelect = (attributeId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedAttributeIds([...selectedAttributeIds, attributeId])
+      const attr = globalAttributes.find((a) => a.id === attributeId)
+      if (attr) {
+        // ALWAYS initialize as array for variant generation purposes
+        setProductAttributes([...productAttributes, { id: attr.id, name: attr.name, value: [] }])
+      }
+    } else {
+      setSelectedAttributeIds(selectedAttributeIds.filter((id) => id !== attributeId))
+      setProductAttributes(productAttributes.filter((pa) => pa.id !== attributeId))
+      // Cleanup: clear generated variants if an attribute is removed to force regeneration
+      setGeneratedVariants([])
+    }
+  }
+
+  const handleAttributeValueChange = (attributeId: string, value: string | string[]) => {
+    setProductAttributes(
+      productAttributes.map((pa) => (pa.id === attributeId ? { ...pa, value } : pa))
+    )
+  }
+
+  const generateVariants = () => {
+    if (productAttributes.length === 0) return
+
+    // Filter out attributes with no values selected
+    const activeAttributes = productAttributes.filter(attr => 
+        Array.isArray(attr.value) ? attr.value.length > 0 : attr.value !== ""
+    )
+
+    if (activeAttributes.length === 0) {
+        setGeneratedVariants([])
+        return
+    }
+
+    // Helper to generate cartesian product
+    const cartesian = (args: any[][]): any[][] => {
+        const result: any[][] = [];
+        const max = args.length - 1;
+        function helper(arr: any[], i: number) {
+            for (let j = 0, l = args[i].length; j < l; j++) {
+                const a = arr.slice(0); // clone arr
+                a.push(args[i][j]);
+                if (i === max) result.push(a);
+                else helper(a, i + 1);
+            }
+        }
+        helper([], 0);
+        return result;
+    }
+
+    // Prepare arrays of values
+    // validValues will be an array of arrays, e.g. [['S', 'M'], ['Red', 'Blue']]
+    const valueArrays = activeAttributes.map(attr => 
+        Array.isArray(attr.value) ? attr.value : [attr.value]
+    )
+
+    const combinations = cartesian(valueArrays)
+    
+    const newVariants: Variant[] = combinations.map((combo) => {
+        const variantAttributes: { [key: string]: string } = {}
+        let variantNameParts: string[] = []
+        
+        combo.forEach((val: string, index: number) => {
+            const attrName = activeAttributes[index].name
+            variantAttributes[attrName] = val
+            variantNameParts.push(val)
+        })
+
+        return {
+            id: generateId(),
+            name: variantNameParts.join(" / "),
+            attributes: variantAttributes,
+            price: Number(formData.price) || 0,
+            salePrice: Number(formData.salePrice) || 0,
+            stock: Math.floor(Number(formData.stock) / combinations.length) || 0,
+            sku: `${formData.sku}-${variantNameParts.map(p => p.substring(0,2).toUpperCase()).join("-")}`
+        }
+    })
+
+    setGeneratedVariants(newVariants)
+  }
+
+  const updateVariant = (id: string, field: keyof Variant, value: any) => {
+      setGeneratedVariants(prev => prev.map(v => v.id === id ? { ...v, [field]: value } : v))
+  }
+
+  const removeVariant = (id: string) => {
+      setGeneratedVariants(prev => prev.filter(v => v.id !== id))
   }
 
   return (
@@ -697,7 +835,7 @@ export default function ProductsPage() {
       />
 
       <Dialog open={isAddDialogOpen} onOpenChange={closeDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">{editingProduct ? "Edit Product" : "Add Product"}</DialogTitle>
             <DialogDescription>
@@ -821,6 +959,7 @@ export default function ProductsPage() {
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                     placeholder="0"
                     className="pl-7"
+                    disabled={generatedVariants.length > 0}
                   />
                 </div>
               </div>
@@ -836,6 +975,7 @@ export default function ProductsPage() {
                     onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })}
                     placeholder="0"
                     className="pl-7"
+                    disabled={generatedVariants.length > 0}
                   />
                 </div>
               </div>
@@ -852,6 +992,150 @@ export default function ProductsPage() {
               </div>
             </>
           </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-lg font-medium">Attributes & Variants</h3>
+            
+            <div className="space-y-4">
+                <div className="flex flex-wrap gap-4">
+                    {globalAttributes.map(attr => (
+                        <div key={attr.id} className="flex items-center space-x-2">
+                            <Checkbox 
+                                id={`attr-${attr.id}`} 
+                                checked={selectedAttributeIds.includes(attr.id)}
+                                onCheckedChange={(checked) => handleAttributeSelect(attr.id, checked as boolean)}
+                            />
+                            <Label htmlFor={`attr-${attr.id}`}>{attr.displayName}</Label>
+                        </div>
+                    ))}
+                </div>
+
+                {productAttributes.map(attr => {
+                    const globalAttr = globalAttributes.find(a => a.id === attr.id)
+                    if (!globalAttr) return null
+                    
+                    return (
+                        <div key={attr.id} className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">{attr.name}</Label>
+                            <div className="col-span-3">
+                                {globalAttr.option === "dropdown" || globalAttr.option === "radio" ? (
+                                    <>
+                                       <div className="flex flex-wrap gap-2">
+                                           {globalAttr.values.map(val => {
+                                               const isSelected = Array.isArray(attr.value) ? attr.value.includes(val) : attr.value === val
+                                               return (
+                                                   <Badge 
+                                                    key={val}
+                                                    variant={isSelected ? "default" : "outline"}
+                                                    className="cursor-pointer"
+                                                    onClick={() => {
+                                                        let newValue: string | string[] = attr.value;
+                                                        if (!Array.isArray(newValue)) {
+                                                            // If it was a string (shouldn't happen with new logic but safe to handle), convert to array
+                                                            newValue = newValue ? [newValue] : []
+                                                        }
+                                                        
+                                                        // It's an array now
+                                                        if ((newValue as string[]).includes(val)) {
+                                                            newValue = (newValue as string[]).filter(v => v !== val)
+                                                        } else {
+                                                            newValue = [...(newValue as string[]), val]
+                                                        }
+                                                        
+                                                        handleAttributeValueChange(attr.id, newValue)
+                                                    }}
+                                                   >
+                                                    {val}
+                                                   </Badge>
+                                               )
+                                           })}
+                                       </div>
+                                    </>
+                                ) : (
+                                    <Input 
+                                        value={attr.value as string} 
+                                        onChange={(e) => handleAttributeValueChange(attr.id, e.target.value)}
+                                        placeholder={`Enter ${attr.name}`}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )
+                })}
+
+                {productAttributes.length > 0 && (
+                    <Button type="button" onClick={generateVariants} variant="secondary" className="w-full">
+                        Generate Variants
+                    </Button>
+                )}
+            </div>
+
+            {generatedVariants.length > 0 && (
+                <div className="rounded-md border">
+                    <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b">
+                            <tr>
+                                <th className="p-2 text-left">Variant</th>
+                                <th className="p-2 text-left">Price</th>
+                                <th className="p-2 text-left">Sale Price</th>
+                                <th className="p-2 text-left">Stock</th>
+                                <th className="p-2 text-left">SKU</th>
+                                <th className="p-2 text-left">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {generatedVariants.map(variant => (
+                                <tr key={variant.id} className="border-b last:border-0">
+                                    <td className="p-2 font-medium">{variant.name}</td>
+                                    <td className="p-2">
+                                        <Input 
+                                            type="number" 
+                                            className="h-8 w-24" 
+                                            value={variant.price || ''}
+                                            onChange={(e) => updateVariant(variant.id, 'price', Number(e.target.value))}
+                                        />
+                                    </td>
+                                    <td className="p-2">
+                                        <Input 
+                                            type="number" 
+                                            className="h-8 w-24" 
+                                            value={variant.salePrice || ''}
+                                            onChange={(e) => updateVariant(variant.id, 'salePrice', Number(e.target.value))}
+                                        />
+                                    </td>
+                                    <td className="p-2">
+                                         <Input 
+                                            type="number" 
+                                            className="h-8 w-24" 
+                                            value={variant.stock || ''}
+                                            onChange={(e) => updateVariant(variant.id, 'stock', Number(e.target.value))}
+                                        />
+                                    </td>
+                                    <td className="p-2">
+                                         <Input 
+                                            className="h-8 w-32" 
+                                            value={variant.sku}
+                                            onChange={(e) => updateVariant(variant.id, 'sku', e.target.value)}
+                                        />
+                                    </td>
+                                    <td className="p-2">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => removeVariant(variant.id)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+          </div>
+
            <div className="space-y-2">
                 <Label htmlFor="description">Product Description</Label>
                 <Textarea
@@ -991,6 +1275,50 @@ export default function ProductsPage() {
                   <p className="font-semibold text-emerald-600">${viewingProduct.salePrice.toFixed(2)}</p>
                 </div>
               </div>
+
+              {viewingProduct.variants && viewingProduct.variants.length > 0 && (
+                  <div className="mt-6 border-t pt-4">
+                      <h4 className="text-lg font-semibold mb-3">Variants</h4>
+                      <div className="rounded-md border overflow-hidden">
+                          <table className="w-full text-sm">
+                              <thead className="bg-gray-50 border-b">
+                                  <tr>
+                                      <th className="p-2 text-left">Variant</th>
+                                      <th className="p-2 text-left">SKU</th>
+                                      <th className="p-2 text-left">Product Price</th>
+                                      <th className="p-2 text-left">Sale Price</th>
+                                      <th className="p-2 text-left">Stock</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {viewingProduct.variants.map((variant) => (
+                                      <tr key={variant.id} className="border-b last:border-0 hover:bg-gray-50 bg-white">
+                                          <td className="p-2 font-medium">{variant.name}</td>
+                                          <td className="p-2 text-gray-600">{variant.sku}</td>
+                                          <td className="p-2 font-medium">
+                                              <span>${variant.price}</span>
+                                          </td>
+                                          <td className="p-2 font-medium text-emerald-600">
+                                              <span>${variant.salePrice || variant.price}</span>
+                                          </td>
+                                          <td className="p-2">
+                                              {variant.stock > 0 ? (
+                                                  <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">
+                                                      {variant.stock} in stock
+                                                  </Badge>
+                                              ) : (
+                                                  <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">
+                                                      Out of stock
+                                                  </Badge>
+                                              )}
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+              )}
             </div>
           )}
 

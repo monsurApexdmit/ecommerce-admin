@@ -9,6 +9,7 @@ interface CartItem {
     price: number
     image: string
     quantity: number
+    variantName?: string
 }
 
 interface PosCartItemProps {
@@ -32,6 +33,9 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
                 <h4 className="text-sm font-medium text-gray-900 truncate" title={item.name}>
                     {item.name}
                 </h4>
+                {item.variantName && (
+                    <p className="text-xs text-gray-500 truncate">{item.variantName}</p>
+                )}
                 <p className="text-sm font-semibold text-emerald-600">
                     ${item.price.toFixed(2)}
                 </p>
