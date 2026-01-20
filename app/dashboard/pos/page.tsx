@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Search, ShoppingCart, User, RotateCcw, LayoutGrid, Tag, Truck, Percent, Minus, Plus, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, ShoppingCart, LayoutGrid, RotateCcw, Percent } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -25,8 +25,10 @@ import {
 
 // Mock Data
 import { useProduct, type Product, type Variant } from "@/contexts/product-context"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useWarehouse } from "@/contexts/warehouse-context"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const CATEGORIES = [
     { id: "All", name: "All Items", icon: LayoutGrid },
@@ -48,7 +50,9 @@ interface CartItem {
 }
 
 export default function PosPage() {
-    const { products } = useProduct()
+    const { products, deductStock } = useProduct()
+    const { warehouses, defaultWarehouse } = useWarehouse()
+
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedCategory, setSelectedCategory] = useState("All")
     const [cart, setCart] = useState<CartItem[]>([])
@@ -56,12 +60,35 @@ export default function PosPage() {
     const [selectedProductForVariant, setSelectedProductForVariant] = useState<Product | null>(null)
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
 
+    // Warehouse State
+    const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("")
+
+    // Initialize default warehouse
+    useEffect(() => {
+        if (defaultWarehouse && !selectedWarehouseId) {
+            setSelectedWarehouseId(defaultWarehouse.id)
+        } else if (warehouses.length > 0 && !selectedWarehouseId) {
+            setSelectedWarehouseId(warehouses[0].id)
+        }
+    }, [defaultWarehouse, warehouses, selectedWarehouseId])
+
     // New State
     const [discount, setDiscount] = useState(0)
     const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false)
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false)
     const [shipping, setShipping] = useState(0)
+
+
+    // Helper to get stock for current warehouse
+    const getStock = (product: Product, variant?: Variant) => {
+        if (variant) {
+            const inv = variant.inventory?.find(i => i.warehouseId === selectedWarehouseId)
+            return inv ? inv.quantity : 0
+        }
+        const inv = product.inventory?.find(i => i.warehouseId === selectedWarehouseId)
+        return inv ? inv.quantity : 0
+    }
 
     // Filter Products
     const filteredProducts = products.filter(product => {
@@ -77,28 +104,38 @@ export default function PosPage() {
             return
         }
 
+        const availableStock = getStock(product, variant)
+
+        // Check local cart quantity too to prevent overselling
         const cartItemId = variant ? `${product.id}-${variant.id}` : product.id
+        const existingInCart = cart.find(item => item.id === cartItemId)
+        const currentQtyInCart = existingInCart ? existingInCart.quantity : 0
+
+        if (currentQtyInCart >= availableStock) {
+            alert("Not enough stock in selected warehouse!") // Or a nicer toast
+            return
+        }
+
         const price = variant ? variant.price : product.salePrice
         const name = variant ? `${product.name} (${variant.name})` : product.name
 
         setCart(prev => {
-            const existing = prev.find(item => item.id === cartItemId)
-            if (existing) {
+            if (existingInCart) {
                 return prev.map(item =>
                     item.id === cartItemId ? { ...item, quantity: item.quantity + 1 } : item
                 )
             }
-            return [...prev, { 
+            return [...prev, {
                 id: cartItemId,
                 variantId: variant?.id,
                 name: name,
                 price: price,
-                image: product.image || "/placeholder.svg", 
+                image: product.image || "/placeholder.svg",
                 quantity: 1,
                 variantName: variant?.name
             }]
         })
-        
+
         if (variant) {
             setSelectedProductForVariant(null)
         }
@@ -148,7 +185,28 @@ export default function PosPage() {
     const total = Math.max(0, subtotal + tax + shipping - discount)
 
     const handleCheckout = (method: string) => {
-        console.log("Order Placed:", { customer: selectedCustomer, cart, method, total })
+        // Deduct Stock
+        const itemsToDeduct = cart.map(item => {
+            // We need to parse product ID from cart ID if logical structure is used, 
+            // but here we didn't store raw product ID, so let's rely on cart structure
+            // Actually, we need productId. Let's assume cart item ID is `productId` or `productId-variantId`
+            // A better way is to store productId in cartItem. 
+            // FIX: The CartItem interface doesn't strictly have productId, but addToCart logic uses it.
+            // We'll extract it from the ID string for now (Fragile but works for this demo scope) or find in products.
+
+            // Safer: Find product by name? No.
+            // Best: Let's assume we can split string.
+            const [pid] = item.id.split('-')
+            return {
+                productId: pid,
+                variantId: item.variantId,
+                quantity: item.quantity
+            }
+        })
+
+        deductStock(itemsToDeduct, selectedWarehouseId)
+
+        console.log("Order Placed:", { customer: selectedCustomer, cart, method, total, warehouse: selectedWarehouseId })
         setIsSuccessModalOpen(true)
     }
 
@@ -180,15 +238,29 @@ export default function PosPage() {
             {/* COLUMN 2: Product Grid */}
             <div className="flex-1 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
                 {/* Header */}
-                <div className="p-4 border-b">
-                    <div className="relative">
+                <div className="p-4 border-b flex gap-4">
+                    <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <Input
-                            placeholder="Search products..."
-                            className="pl-10 h-12 text-base bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+                            placeholder="Search in selected warehouse..."
+                            className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white transition-colors"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
+                    </div>
+                    <div className="w-48">
+                        <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                            <SelectTrigger className="h-10">
+                                <SelectValue placeholder="Select Warehouse" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {warehouses.map(wh => (
+                                    <SelectItem key={wh.id} value={wh.id}>
+                                        {wh.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
@@ -197,13 +269,27 @@ export default function PosPage() {
                     <ScrollArea className="h-full p-4 bg-gray-50/30">
                         {filteredProducts.length > 0 ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 pb-4">
-                                {filteredProducts.map(product => (
-                                    <PosProductCard
-                                        key={product.id}
-                                        product={product}
-                                        onAddToCart={addToCart}
-                                    />
-                                ))}
+                                {filteredProducts.map(product => {
+                                    // Calculate stock for this specific warehouse context for the card
+                                    // If product has variants, stock is sum of variants in this warehouse?
+                                    // Or just pass the product and let card handle visual (Card only shows image/name/price mainly)
+                                    // We need to pass display Stock.
+
+                                    let displayStock = 0;
+                                    if (product.variants) {
+                                        displayStock = product.variants.reduce((acc, v) => acc + getStock(product, v), 0)
+                                    } else {
+                                        displayStock = getStock(product);
+                                    }
+
+                                    return (
+                                        <PosProductCard
+                                            key={product.id}
+                                            product={{ ...product, stock: displayStock }}
+                                            onAddToCart={addToCart}
+                                        />
+                                    )
+                                })}
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -345,21 +431,27 @@ export default function PosPage() {
                         <DialogTitle>Select Variant</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
-                        {selectedProductForVariant?.variants?.map((variant) => (
-                            <div key={variant.id} className="flex items-center justify-between border p-3 rounded-lg hover:bg-gray-50 cursor-pointer" 
-                                 onClick={() => addToCart(selectedProductForVariant, variant)}>
-                                <div>
-                                    <p className="font-medium">{variant.name}</p>
-                                    <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
+                        {selectedProductForVariant?.variants?.map((variant) => {
+                            const variantStock = getStock(selectedProductForVariant, variant)
+                            return (
+                                <div key={variant.id} className={cn(
+                                    "flex items-center justify-between border p-3 rounded-lg hover:bg-gray-50 cursor-pointer",
+                                    variantStock === 0 && "opacity-50 pointer-events-none"
+                                )}
+                                    onClick={() => variantStock > 0 && addToCart(selectedProductForVariant, variant)}>
+                                    <div>
+                                        <p className="font-medium">{variant.name}</p>
+                                        <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-emerald-600">${variant.price}</p>
+                                        <Badge variant="outline" className={variantStock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
+                                            {variantStock > 0 ? `${variantStock} in stock` : "Out of stock"}
+                                        </Badge>
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="font-bold text-emerald-600">${variant.price}</p>
-                                    <Badge variant="outline" className={variant.stock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
-                                        {variant.stock > 0 ? `${variant.stock} in stock` : "Out of stock"}
-                                    </Badge>
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </DialogContent>
             </Dialog>

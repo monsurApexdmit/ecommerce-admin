@@ -52,6 +52,7 @@ interface ProductContextType {
     updateProduct: (product: Product) => void
     deleteProduct: (id: string) => void
     getProductsByVendor: (vendorId: string) => Product[]
+    deductStock: (cartItems: { productId: string; variantId?: string; quantity: number }[], warehouseId: string) => void
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined)
@@ -78,12 +79,12 @@ const initialProducts: Product[] = [
             { id: "81B2", name: "Color", value: ["Red", "Blue"] }
         ],
         variants: [
-            { id: "v1", name: "Small / Red", attributes: { "Size": "Small", "Color": "Red" }, price: 450, salePrice: 450, stock: 5, sku: "TSH-001-S-RE" },
-            { id: "v2", name: "Small / Blue", attributes: { "Size": "Small", "Color": "Blue" }, price: 450, salePrice: 450, stock: 5, sku: "TSH-001-S-BL" },
-            { id: "v3", name: "Medium / Red", attributes: { "Size": "Medium", "Color": "Red" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-RE" },
-            { id: "v4", name: "Medium / Blue", attributes: { "Size": "Medium", "Color": "Blue" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-BL" },
-            { id: "v5", name: "Large / Red", attributes: { "Size": "Large", "Color": "Red" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-RE" },
-            { id: "v6", name: "Large / Blue", attributes: { "Size": "Large", "Color": "Blue" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-BL" }
+            { id: "v1", name: "Small / Red", attributes: { "Size": "Small", "Color": "Red" }, price: 450, salePrice: 450, stock: 5, sku: "TSH-001-S-RE", inventory: [{ warehouseId: "wh_main", quantity: 5 }] },
+            { id: "v2", name: "Small / Blue", attributes: { "Size": "Small", "Color": "Blue" }, price: 450, salePrice: 450, stock: 5, sku: "TSH-001-S-BL", inventory: [{ warehouseId: "wh_main", quantity: 5 }] },
+            { id: "v3", name: "Medium / Red", attributes: { "Size": "Medium", "Color": "Red" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-RE", inventory: [{ warehouseId: "wh_main", quantity: 5 }] },
+            { id: "v4", name: "Medium / Blue", attributes: { "Size": "Medium", "Color": "Blue" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-BL", inventory: [{ warehouseId: "wh_main", quantity: 5 }] },
+            { id: "v5", name: "Large / Red", attributes: { "Size": "Large", "Color": "Red" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-RE", inventory: [{ warehouseId: "wh_main", quantity: 5 }] },
+            { id: "v6", name: "Large / Blue", attributes: { "Size": "Large", "Color": "Blue" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-BL", inventory: [{ warehouseId: "wh_main", quantity: 5 }] }
         ],
         inventory: [
             { warehouseId: "wh_main", quantity: 30 }
@@ -104,7 +105,8 @@ const initialProducts: Product[] = [
         barcode: "2345678901234",
         vendorId: "2", // Best Electronics (Powder? Data mismatch, effectively random for now)
         inventory: [
-            { warehouseId: "wh_main", quantity: 5471 }
+            { warehouseId: "wh_main", quantity: 5471 },
+            { warehouseId: "wh_downtown", quantity: 100 } /* Demo data: Downtown has some stock */
         ]
     },
     // ... Adding a few more from the original list for completeness or relying on user adding them.
@@ -184,6 +186,70 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
         return products.filter(p => p.vendorId === vendorId)
     }
 
+    const deductStock = (cartItems: { productId: string; variantId?: string; quantity: number }[], warehouseId: string) => {
+        setProducts(prevProducts => {
+            return prevProducts.map(product => {
+                const cartItem = cartItems.find(item => item.productId === product.id);
+
+                if (!cartItem) return product;
+
+                // Handle Variant Deduction
+                if (cartItem.variantId && product.variants) {
+                    const updatedVariants = product.variants.map(variant => {
+                        if (variant.id !== cartItem.variantId) return variant;
+
+                        const inventory = variant.inventory || [];
+                        const whIndex = inventory.findIndex(i => i.warehouseId === warehouseId);
+
+                        let newInventory = [...inventory];
+                        if (whIndex > -1) {
+                            newInventory[whIndex] = {
+                                ...newInventory[whIndex],
+                                quantity: Math.max(0, newInventory[whIndex].quantity - cartItem.quantity)
+                            };
+                        } else {
+                            // If no record exists for this warehouse, assume 0 start or just don't go negative?
+                            // Ideally we shouldn't have been able to add to cart if 0.
+                            // For safety, let's just initialize if needed or do nothing.
+                        }
+
+                        // Recalculate total stock for variant
+                        const totalStock = newInventory.reduce((acc, curr) => acc + curr.quantity, 0);
+
+                        return {
+                            ...variant,
+                            inventory: newInventory,
+                            stock: totalStock
+                        };
+                    });
+
+                    // Also update main product total stock
+                    const productTotalStock = updatedVariants.reduce((acc, v) => acc + v.stock, 0);
+
+                    return { ...product, variants: updatedVariants, stock: productTotalStock };
+                }
+
+                // Handle Simple Product Deduction
+                else {
+                    const inventory = product.inventory || [];
+                    const whIndex = inventory.findIndex(i => i.warehouseId === warehouseId);
+
+                    let newInventory = [...inventory];
+                    if (whIndex > -1) {
+                        newInventory[whIndex] = {
+                            ...newInventory[whIndex],
+                            quantity: Math.max(0, newInventory[whIndex].quantity - cartItem.quantity)
+                        };
+                    }
+
+                    const totalStock = newInventory.reduce((acc, curr) => acc + curr.quantity, 0);
+
+                    return { ...product, inventory: newInventory, stock: totalStock };
+                }
+            });
+        });
+    }
+
     return (
         <ProductContext.Provider
             value={{
@@ -192,6 +258,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 updateProduct,
                 deleteProduct,
                 getProductsByVendor,
+                deductStock,
             }}
         >
             {children}

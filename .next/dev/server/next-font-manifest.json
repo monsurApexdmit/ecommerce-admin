@@ -1,12 +1,15 @@
 {
   "app": {
+    "[project]/app/dashboard/attributes/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
     "[project]/app/dashboard/categories/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/customers/page": [
+    "[project]/app/dashboard/coupons/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/international/page": [
+    "[project]/app/dashboard/customers/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/inventory/page": [
@@ -22,9 +25,6 @@
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/pos/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/products/[id]/barcode/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/products/page": [
@@ -45,10 +45,7 @@
     "[project]/app/dashboard/vendors/[id]/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/login/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/page": [
+    "[project]/app/dashboard/vendors/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ]
   },
