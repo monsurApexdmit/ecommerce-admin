@@ -19,7 +19,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Search, Upload, Download, Edit2, Trash2, Eye, FilePen, Plus, CloudUpload } from "lucide-react"
+import { Search, Upload, Download, Edit2, Trash2, Eye, FilePen, Plus, CloudUpload, QrCode } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
@@ -30,15 +30,18 @@ import { useVendor } from "@/contexts/vendor-context"
 import { useAttribute } from "@/contexts/attribute-context"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { useWarehouse } from "@/contexts/warehouse-context"
 
 
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProduct()
   const { vendors } = useVendor()
+  const { warehouses } = useWarehouse()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedVendor, setSelectedVendor] = useState<string>("all")
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [sortOption, setSortOption] = useState<string>("default")
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -58,6 +61,7 @@ export default function ProductsPage() {
     barcode: "",
     vendorId: "",
     receiptNumber: "",
+    warehouseId: "wh_main"
   })
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
@@ -73,10 +77,6 @@ export default function ProductsPage() {
       const totalStock = generatedVariants.reduce((sum, v) => sum + (v.stock || 0), 0)
       setFormData(prev => ({ ...prev, stock: String(totalStock) }))
     }
-    // Logic for when variants are removed to 0? 
-    // If I delete all variants, maybe I should let the user manually enter stock again.
-    // The Input field for stock has `disabled={generatedVariants.length > 0}`
-    // So if length is 0, it becomes enabled, and current value remains.
   }, [generatedVariants])
 
   const [bulkAction, setBulkAction] = useState("")
@@ -90,6 +90,9 @@ export default function ProductsPage() {
         product.category.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesCategory = selectedCategory === "all" || product.category === selectedCategory
       const matchesVendor = selectedVendor === "all" || product.vendorId === selectedVendor
+      const matchesWarehouse = selectedWarehouse === "all" || (
+        product.inventory && product.inventory.some(i => i.warehouseId === selectedWarehouse && i.quantity > 0)
+      ) || (!product.inventory && selectedWarehouse === "wh_main") // Fallback for pure main
 
       let matchesStatus = true
       // Handle status/published filters from sortOption
@@ -103,7 +106,7 @@ export default function ProductsPage() {
         matchesStatus = product.status === "Out of Stock"
       }
 
-      return matchesSearch && matchesCategory && matchesVendor && matchesStatus
+      return matchesSearch && matchesCategory && matchesVendor && matchesWarehouse && matchesStatus
     })
     .sort((a, b) => {
       if (sortOption === "low-to-high") {
@@ -133,6 +136,10 @@ export default function ProductsPage() {
     handleItemsPerPageChange,
   } = usePagination(filteredProducts, 10)
 
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false)
@@ -140,10 +147,7 @@ export default function ProductsPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Reset pagination when filter changes
-  const handleFilterChange = () => {
-    setCurrentPage(1)
-  }
+
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -182,6 +186,7 @@ export default function ProductsPage() {
       barcode: product.barcode,
       vendorId: product.vendorId || "",
       receiptNumber: product.receiptNumber || "",
+      warehouseId: product.inventory?.[0]?.warehouseId || "wh_main",
     })
 
     // Load attributes and variants
@@ -244,6 +249,9 @@ export default function ProductsPage() {
       receiptNumber: formData.receiptNumber || undefined,
       attributes: productAttributes,
       variants: generatedVariants,
+      inventory: [
+        { warehouseId: formData.warehouseId || "wh_main", quantity: finalStock }
+      ]
     }
 
     addProduct(newProduct)
@@ -292,7 +300,7 @@ export default function ProductsPage() {
     setIsAddDialogOpen(false)
     setEditingProduct(null)
     setUploadedImages([])
-    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "", receiptNumber: "" })
+    setFormData({ name: "", description: "", category: "", price: "", salePrice: "", stock: "", sku: "", barcode: "", vendorId: "", receiptNumber: "", warehouseId: "wh_main" })
     setProductAttributes([])
     setSelectedAttributeIds([])
     setGeneratedVariants([])
@@ -574,7 +582,10 @@ export default function ProductsPage() {
         price: Number(formData.price) || 0,
         salePrice: Number(formData.salePrice) || 0,
         stock: Math.floor(Number(formData.stock) / combinations.length) || 0,
-        sku: `${formData.sku}-${variantNameParts.map(p => p.substring(0, 2).toUpperCase()).join("-")}`
+        sku: `${formData.sku}-${variantNameParts.map(p => p.substring(0, 2).toUpperCase()).join("-")}`,
+        inventory: [
+          { warehouseId: formData.warehouseId || "wh_main", quantity: Math.floor(Number(formData.stock) / combinations.length) || 0 }
+        ]
       }
     })
 
@@ -693,6 +704,28 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
 
+
+
+          <Select
+            value={selectedWarehouse}
+            onValueChange={(value) => {
+              setSelectedWarehouse(value)
+              handleFilterChange()
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Warehouse" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Warehouses</SelectItem>
+              {warehouses.map((w) => (
+                <SelectItem key={w.id} value={w.id}>
+                  {w.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select
             value={sortOption}
             onValueChange={(value) => {
@@ -725,6 +758,7 @@ export default function ProductsPage() {
               setSearchQuery("")
               setSelectedCategory("all")
               setSelectedVendor("all")
+              setSelectedWarehouse("all")
               setSortOption("default")
               handleFilterChange()
             }}
@@ -750,6 +784,7 @@ export default function ProductsPage() {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Sale Price</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Stock</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Vendor</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Location</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">View</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Published</th>
@@ -783,6 +818,9 @@ export default function ProductsPage() {
                     </td>
                     <td className="py-3 px-4">
                       <Skeleton className="h-4 w-12" />
+                    </td>
+                    <td className="py-3 px-4">
+                      <Skeleton className="h-4 w-24" />
                     </td>
                     <td className="py-3 px-4">
                       <Skeleton className="h-4 w-24" />
@@ -847,13 +885,25 @@ export default function ProductsPage() {
                         <span className="text-gray-400">No Vendor</span>
                       )}
                     </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                        {product.inventory && product.inventory.length > 0 ? (
+                            warehouses.find(w => w.id === product.inventory?.[0]?.warehouseId)?.name || "Unknown"
+                        ) : (
+                            "Main Warehouse"
+                        )}
+                    </td>
                     <td className="py-3 px-4">
                       <StatusBadge status={product.status} />
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <button onClick={() => setViewingProduct(product)} className="text-gray-400 hover:text-emerald-600">
+                      <Button variant="ghost" size="icon" onClick={() => setViewingProduct(product)} className="text-gray-400 hover:text-emerald-600">
                         <Eye className="w-5 h-5" />
-                      </button>
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-gray-400 hover:text-blue-600" title="Print Label" asChild>
+                          <Link href={`/dashboard/products/${product.id}/barcode`}>
+                              <QrCode className="w-4 h-4" />
+                          </Link>
+                      </Button>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <Switch
@@ -1039,13 +1089,47 @@ export default function ProductsPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="stock">Stock</Label>
-                  <Input
-                    id="stock"
-                    type="number"
-                    value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                    placeholder="0"
-                  />
+                  <div className="flex gap-2">
+                      <Input
+                        id="stock"
+                        type="number"
+                        value={formData.stock}
+                        onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                        placeholder="0"
+                        className="flex-1"
+                        disabled={generatedVariants.length > 0} 
+                      />
+                      {generatedVariants.length === 0 && (
+                          // Keep hidden if variants exist? No, user wants it visible
+                          // But if variants exist, stock input is disabled. 
+                          // The warehouse selector should probably control where the variants are created?
+                          // Yes, we updated generateVariants to use formData.warehouseId
+                          <></>
+                      )}
+                         <div className="w-1/3">
+                             <Select 
+                                value={formData.warehouseId || "wh_main"} 
+                                // Enable changing warehouse even if variants exist, to re-assign them? 
+                                // Ideally changing this should update generated variants if we want to be fancy, 
+                                // but for now let's just allow selection for new variants/product.
+                                onValueChange={(val) => {
+                                    setFormData({...formData, warehouseId: val})
+                                    // Optional: update existing variants if they are just being created?
+                                    // For simple 'add' flow, this is enough.
+                                }}
+                             >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Location" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {warehouses.map(w => (
+                                        <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                             </Select>
+                         </div>
+                  </div>
+                  {generatedVariants.length > 0 && <p className="text-xs text-gray-500">Stock is calculated from variants</p>}
                 </div>
               </>
             </div>
@@ -1322,6 +1406,15 @@ export default function ProductsPage() {
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Stock</p>
                   <p className="font-semibold text-gray-900">{viewingProduct.stock} units</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Locations</p>
+                  <div className="text-sm text-gray-900">
+                      {viewingProduct.inventory?.map((inv, i) => {
+                          const wName = warehouses.find(w => w.id === inv.warehouseId)?.name || inv.warehouseId
+                          return <div key={i}>{wName}: {inv.quantity}</div>
+                      }) || "Main Warehouse: " + viewingProduct.stock}
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Price</p>

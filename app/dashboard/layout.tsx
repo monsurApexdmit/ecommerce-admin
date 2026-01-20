@@ -10,6 +10,8 @@ import { StaffProvider } from "@/contexts/staff-context"
 import { VendorProvider } from "@/contexts/vendor-context"
 import { ProductProvider } from "@/contexts/product-context"
 import { AttributeProvider } from "@/contexts/attribute-context"
+import { WarehouseProvider } from "@/contexts/warehouse-context"
+import { TransferProvider } from "@/contexts/transfer-context"
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -61,6 +63,14 @@ const navigation = [
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
   { name: "Vendors", href: "/dashboard/vendors", icon: Truck },
   { name: "POS", href: "/dashboard/pos", icon: CreditCard },
+  {
+    name: "Inventory",
+    icon: Store,
+    submenu: [
+      { name: "Stock Overview", href: "/dashboard/inventory" },
+      { name: "Transfers", href: "/dashboard/inventory/transfer" },
+    ],
+  },
   { name: "Sells", href: "/dashboard/sells", icon: ShoppingBag },
   {
     name: "Staff",
@@ -144,7 +154,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <VendorProvider>
       <AttributeProvider>
-        <ProductProvider>
+        <WarehouseProvider>
+          <TransferProvider>
+          <ProductProvider>
           <StaffProvider>
             <Suspense fallback={null}>
               <div className="min-h-screen bg-gray-50">
@@ -437,7 +449,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </Suspense>
           </StaffProvider>
-        </ProductProvider>
+          </ProductProvider>
+          </TransferProvider>
+        </WarehouseProvider>
       </AttributeProvider>
     </VendorProvider>
   )

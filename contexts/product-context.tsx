@@ -26,6 +26,10 @@ export interface Product {
         value: string | string[]
     }[]
     variants?: Variant[]
+    inventory?: {
+        warehouseId: string
+        quantity: number
+    }[]
 }
 
 export interface Variant {
@@ -36,6 +40,10 @@ export interface Variant {
     salePrice: number
     stock: number
     sku: string
+    inventory?: {
+        warehouseId: string
+        quantity: number
+    }[]
 }
 
 interface ProductContextType {
@@ -76,6 +84,9 @@ const initialProducts: Product[] = [
             { id: "v4", name: "Medium / Blue", attributes: { "Size": "Medium", "Color": "Blue" }, price: 460, salePrice: 460, stock: 5, sku: "TSH-001-M-BL" },
             { id: "v5", name: "Large / Red", attributes: { "Size": "Large", "Color": "Red" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-RE" },
             { id: "v6", name: "Large / Blue", attributes: { "Size": "Large", "Color": "Blue" }, price: 470, salePrice: 470, stock: 5, sku: "TSH-001-L-BL" }
+        ],
+        inventory: [
+            { warehouseId: "wh_main", quantity: 30 }
         ]
     },
     {
@@ -92,6 +103,9 @@ const initialProducts: Product[] = [
         sku: "SKC-002",
         barcode: "2345678901234",
         vendorId: "2", // Best Electronics (Powder? Data mismatch, effectively random for now)
+        inventory: [
+            { warehouseId: "wh_main", quantity: 5471 }
+        ]
     },
     // ... Adding a few more from the original list for completeness or relying on user adding them.
     // I will include the full list from the original file to ensure no data loss during migration.
@@ -109,6 +123,9 @@ const initialProducts: Product[] = [
         sku: "FVL-003",
         barcode: "3456789012345",
         vendorId: "1",
+        inventory: [
+            { warehouseId: "wh_main", quantity: 463 }
+        ]
     },
     {
         id: "4",
@@ -124,6 +141,9 @@ const initialProducts: Product[] = [
         sku: "FVL-004",
         barcode: "4567890123456",
         vendorId: "1",
+        inventory: [
+            { warehouseId: "wh_main", quantity: 472 }
+        ]
     },
     {
         id: "5",
@@ -139,6 +159,9 @@ const initialProducts: Product[] = [
         sku: "FFR-005",
         barcode: "5678901234567",
         vendorId: "1",
+        inventory: [
+            { warehouseId: "wh_main", quantity: 443 }
+        ]
     },
 ]
 

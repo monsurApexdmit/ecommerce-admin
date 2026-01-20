@@ -1,17 +1,19 @@
 {
+  "/dashboard/categories/page": "app/dashboard/categories/page.js",
   "/dashboard/customers/page": "app/dashboard/customers/page.js",
-  "/dashboard/edit-profile/page": "app/dashboard/edit-profile/page.js",
   "/dashboard/international/page": "app/dashboard/international/page.js",
+  "/dashboard/inventory/page": "app/dashboard/inventory/page.js",
+  "/dashboard/inventory/transfer/page": "app/dashboard/inventory/transfer/page.js",
   "/dashboard/orders/page": "app/dashboard/orders/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/pages/page": "app/dashboard/pages/page.js",
   "/dashboard/pos/page": "app/dashboard/pos/page.js",
+  "/dashboard/products/[id]/barcode/page": "app/dashboard/products/[id]/barcode/page.js",
   "/dashboard/products/page": "app/dashboard/products/page.js",
   "/dashboard/sells/page": "app/dashboard/sells/page.js",
   "/dashboard/settings/page": "app/dashboard/settings/page.js",
-  "/dashboard/staff/page": "app/dashboard/staff/page.js",
-  "/dashboard/staff/salary/page": "app/dashboard/staff/salary/page.js",
+  "/dashboard/store/locations/page": "app/dashboard/store/locations/page.js",
   "/dashboard/store/page": "app/dashboard/store/page.js",
+  "/dashboard/vendors/[id]/page": "app/dashboard/vendors/[id]/page.js",
   "/login/page": "app/login/page.js",
   "/page": "app/page.js"
 }
