@@ -113,9 +113,11 @@
     --color-emerald-50: #ecfdf5;
     --color-emerald-100: #d0fae5;
     --color-emerald-200: #a4f4cf;
+    --color-emerald-300: #5ee9b5;
     --color-emerald-500: #00bb7f;
     --color-emerald-600: #009767;
     --color-emerald-700: #007956;
+    --color-emerald-800: #005f46;
     --color-teal-50: #f0fdfa;
     --color-blue-50: #eff6ff;
     --color-blue-100: #dbeafe;
@@ -207,9 +209,11 @@
       --color-emerald-50: lab(97.8462% -6.94966 1.85487);
       --color-emerald-100: lab(94.9004% -17.0769 5.63836);
       --color-emerald-200: lab(90.2247% -31.039 9.47084);
+      --color-emerald-300: lab(83.9203% -48.7124 13.8849);
       --color-emerald-500: lab(66.9756% -58.27 19.5419);
       --color-emerald-600: lab(55.0481% -49.9246 15.93);
       --color-emerald-700: lab(44.4871% -41.0396 11.0361);
+      --color-emerald-800: lab(35.3675% -33.1188 8.04002);
       --color-teal-50: lab(98.3189% -4.74921 -.111711);
       --color-blue-50: lab(96.492% -1.14644 -5.11479);
       --color-blue-100: lab(92.0301% -2.24757 -11.6453);
@@ -519,6 +523,10 @@
 
   .invisible {
     visibility: hidden;
+  }
+
+  .visible {
+    visibility: visible;
   }
 
   .sr-only {
@@ -915,6 +923,10 @@
     field-sizing: content;
   }
 
+  .aspect-\[3\/2\] {
+    aspect-ratio: 3 / 2;
+  }
+
   .aspect-square {
     aspect-ratio: 1;
   }
@@ -1192,6 +1204,10 @@
     width: calc(var(--spacing) * 1);
   }
 
+  .w-1\/3 {
+    width: 33.3333%;
+  }
+
   .w-2 {
     width: calc(var(--spacing) * 2);
   }
@@ -1296,6 +1312,10 @@
     width: 180px;
   }
 
+  .w-\[200px\] {
+    width: 200px;
+  }
+
   .w-\[400px\] {
     width: 400px;
   }
@@ -1334,10 +1354,6 @@
 
   .max-w-4xl {
     max-width: var(--container-4xl);
-  }
-
-  .max-w-\[90vw\] {
-    max-width: 90vw;
   }
 
   .max-w-\[calc\(100\%-2rem\)\] {
@@ -2705,6 +2721,10 @@
     color: var(--color-emerald-700);
   }
 
+  .text-emerald-800 {
+    color: var(--color-emerald-800);
+  }
+
   .text-foreground {
     color: var(--foreground);
   }
@@ -3626,6 +3646,12 @@
   }
 
   @media (hover: hover) {
+    .hover\:border-emerald-300:hover {
+      border-color: var(--color-emerald-300);
+    }
+  }
+
+  @media (hover: hover) {
     .hover\:border-emerald-500:hover {
       border-color: var(--color-emerald-500);
     }
@@ -3802,6 +3828,12 @@
   @media (hover: hover) {
     .hover\:text-accent-foreground:hover {
       color: var(--accent-foreground);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:text-blue-600:hover {
+      color: var(--color-blue-600);
     }
   }
 
@@ -5432,6 +5464,12 @@
   @media (min-width: 64rem) {
     .lg\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .lg\:grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 

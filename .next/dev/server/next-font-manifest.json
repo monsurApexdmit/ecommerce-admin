@@ -1,12 +1,18 @@
 {
   "app": {
+    "[project]/app/dashboard/categories/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
     "[project]/app/dashboard/customers/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/edit-profile/page": [
+    "[project]/app/dashboard/international/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/international/page": [
+    "[project]/app/dashboard/inventory/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/inventory/transfer/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/orders/page": [
@@ -15,10 +21,10 @@
     "[project]/app/dashboard/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/pages/page": [
+    "[project]/app/dashboard/pos/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/pos/page": [
+    "[project]/app/dashboard/products/[id]/barcode/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/products/page": [
@@ -30,13 +36,13 @@
     "[project]/app/dashboard/settings/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/staff/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/staff/salary/page": [
+    "[project]/app/dashboard/store/locations/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/store/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/vendors/[id]/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/login/page": [
