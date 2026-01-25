@@ -14,6 +14,7 @@ import { WarehouseProvider } from "@/contexts/warehouse-context"
 import { TransferProvider } from "@/contexts/transfer-context"
 import { CustomerReturnProvider } from "@/contexts/customer-return-context"
 import { VendorReturnProvider } from "@/contexts/vendor-return-context"
+import { CustomerProvider } from "@/contexts/customer-context"
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -156,122 +157,124 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <ProductProvider>
               <StaffProvider>
                 <CustomerReturnProvider>
-                  <VendorReturnProvider>
-                    <Suspense fallback={null}>
-                  <SidebarProvider>
-                    <AppSidebar />
-                    <SidebarInset>
-                      <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b bg-white px-4">
-                        <div className="flex items-center gap-2 px-4">
-                          <SidebarTrigger className="-ml-1" />
-                        </div>
-
-                        <div className="flex items-center gap-4 ml-auto">
-                          <div className="relative" ref={notificationRef}>
-                            <button
-                              onClick={() => setNotificationsOpen(!notificationsOpen)}
-                              className="relative text-gray-500 hover:text-gray-700"
-                            >
-                              <Bell className="w-6 h-6" />
-                              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 rounded-full text-xs text-white flex items-center justify-center font-medium">
-                                26
-                              </span>
-                            </button>
-
-                            {notificationsOpen && (
-                              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border overflow-hidden z-50">
-                                <div className="max-h-96 overflow-y-auto">
-                                  {notifications.map((notification) => (
-                                    <div
-                                      key={notification.id}
-                                      className="flex items-start gap-3 p-4 hover:bg-gray-50 border-b last:border-b-0"
-                                    >
-                                      <Image
-                                        src={notification.avatar || "/placeholder.svg"}
-                                        alt={notification.user}
-                                        width={40}
-                                        height={40}
-                                        className="rounded-full"
-                                      />
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-gray-900 mb-1">
-                                          <span className="font-medium">{notification.user}</span> placed an order of{" "}
-                                          {notification.amount.toFixed(2)}!
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500 text-white">
-                                            New Order
-                                          </span>
-                                          <span className="text-xs text-gray-500">{notification.time}</span>
-                                        </div>
-                                      </div>
-                                      <button
-                                        onClick={(e) => handleDeleteNotification(notification.id, e)}
-                                        className="text-red-500 hover:text-red-700"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                                <Link
-                                  href="/dashboard/notifications"
-                                  onClick={() => setNotificationsOpen(false)}
-                                  className="block p-3 text-center text-sm font-medium text-emerald-600 hover:bg-gray-50 border-t"
+                    <CustomerProvider>
+                      <VendorReturnProvider>
+                        <Suspense fallback={null}>
+                      <SidebarProvider>
+                        <AppSidebar />
+                        <SidebarInset>
+                          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b bg-white px-4">
+                            <div className="flex items-center gap-2 px-4">
+                              <SidebarTrigger className="-ml-1" />
+                            </div>
+    
+                            <div className="flex items-center gap-4 ml-auto">
+                              <div className="relative" ref={notificationRef}>
+                                <button
+                                  onClick={() => setNotificationsOpen(!notificationsOpen)}
+                                  className="relative text-gray-500 hover:text-gray-700"
                                 >
-                                  Show all notifications
-                                </Link>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-3 pl-4 border-l">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="flex items-center gap-3 hover:bg-gray-50 p-2 rounded-lg transition-colors outline-none">
-                                  <div className="hidden sm:block text-right">
-                                    <p className="text-sm font-medium text-gray-900">Admin User</p>
-                                    <p className="text-xs text-gray-500">{userEmail}</p>
-                                  </div>
-                                  <Avatar>
-                                    <AvatarImage src="/admin-avatar.jpg" alt="Admin" />
-                                    <AvatarFallback className="bg-emerald-100 text-emerald-700">AD</AvatarFallback>
-                                  </Avatar>
-                                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                                  <Bell className="w-6 h-6" />
+                                  <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 rounded-full text-xs text-white flex items-center justify-center font-medium">
+                                    26
+                                  </span>
                                 </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
-                                  <Link href="/dashboard" className="cursor-pointer">
-                                    <LayoutDashboard className="mr-2 h-4 w-4" />
-                                    <span>Dashboard</span>
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                  <Link href="/dashboard/edit-profile" className="cursor-pointer">
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    <span>Edit Profile</span>
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer focus:text-red-600">
-                                  <LogOut className="mr-2 h-4 w-4" />
-                                  <span>Log out</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      </header>
-                      <main className="p-4 lg:p-8 bg-gray-50/50 min-h-[calc(100vh-4rem)]">
-                        {children}
-                      </main>
-                    </SidebarInset>
-                  </SidebarProvider>
-                    </Suspense>
-                  </VendorReturnProvider>
+    
+                                {notificationsOpen && (
+                                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border overflow-hidden z-50">
+                                    <div className="max-h-96 overflow-y-auto">
+                                      {notifications.map((notification) => (
+                                        <div
+                                          key={notification.id}
+                                          className="flex items-start gap-3 p-4 hover:bg-gray-50 border-b last:border-b-0"
+                                        >
+                                          <Image
+                                            src={notification.avatar || "/placeholder.svg"}
+                                            alt={notification.user}
+                                            width={40}
+                                            height={40}
+                                            className="rounded-full"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-gray-900 mb-1">
+                                              <span className="font-medium">{notification.user}</span> placed an order of{" "}
+                                              {notification.amount.toFixed(2)}!
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500 text-white">
+                                                New Order
+                                              </span>
+                                              <span className="text-xs text-gray-500">{notification.time}</span>
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={(e) => handleDeleteNotification(notification.id, e)}
+                                            className="text-red-500 hover:text-red-700"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <Link
+                                      href="/dashboard/notifications"
+                                      onClick={() => setNotificationsOpen(false)}
+                                      className="block p-3 text-center text-sm font-medium text-emerald-600 hover:bg-gray-50 border-t"
+                                    >
+                                      Show all notifications
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
+    
+                              <div className="flex items-center gap-3 pl-4 border-l">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className="flex items-center gap-3 hover:bg-gray-50 p-2 rounded-lg transition-colors outline-none">
+                                      <div className="hidden sm:block text-right">
+                                        <p className="text-sm font-medium text-gray-900">Admin User</p>
+                                        <p className="text-xs text-gray-500">{userEmail}</p>
+                                      </div>
+                                      <Avatar>
+                                        <AvatarImage src="/admin-avatar.jpg" alt="Admin" />
+                                        <AvatarFallback className="bg-emerald-100 text-emerald-700">AD</AvatarFallback>
+                                      </Avatar>
+                                      <ChevronDown className="w-4 h-4 text-gray-500" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                      <Link href="/dashboard" className="cursor-pointer">
+                                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                                        <span>Dashboard</span>
+                                      </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <Link href="/dashboard/edit-profile" className="cursor-pointer">
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        <span>Edit Profile</span>
+                                      </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer focus:text-red-600">
+                                      <LogOut className="mr-2 h-4 w-4" />
+                                      <span>Log out</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+                          </header>
+                          <main className="p-4 lg:p-8 bg-gray-50/50 min-h-[calc(100vh-4rem)]">
+                            {children}
+                          </main>
+                        </SidebarInset>
+                      </SidebarProvider>
+                        </Suspense>
+                      </VendorReturnProvider>
+                    </CustomerProvider>
                 </CustomerReturnProvider>
               </StaffProvider>
             </ProductProvider>

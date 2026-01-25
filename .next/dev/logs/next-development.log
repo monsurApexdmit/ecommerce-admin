@@ -1,109 +1,663 @@
-[00:00:00.680] Server  LOG      ✓ Ready in 490ms
-[00:00:03.462] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:04.175] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:00:04.175] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
-[00:00:04.175] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988129699}
-[00:01:17.431] Server  LOG      ✓ Compiled in 126ms
-[00:01:20.606] Server  LOG      ✓ Compiled in 38ms
-[00:01:22.635] Server  LOG      ✓ Compiled in 42ms
-[00:01:33.251] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:01:33.902] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:01:33.902] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
-[00:01:33.902] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988219426}
-[00:03:02.500] Server  LOG      ✓ Compiled in 49ms
-[00:03:06.251] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:03:06.933] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:03:06.934] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
-[00:03:06.934] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988312457}
-[00:03:18.212] Server  LOG      ✓ Compiled in 80ms
-[00:06:31.427] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:06:32.239] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:06:32.239] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
-[00:06:32.239] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988517762}
-[00:06:35.856] Server  LOG      ✓ Compiled in 64ms
-[00:06:35.960] Browser ERROR   ./app/dashboard/returns/vendor/page.tsx:726:25
+[00:00:00.873] Server  LOG      ✓ Ready in 679ms
+[00:00:05.828] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:00:08.212] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:00:08.213] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
+[00:00:08.213] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[00:00:08.213] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3001/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769328838213}
+[00:00:08.213] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769328838213}
+[00:19:38.743] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:19:39.025] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:19:39.025] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[00:19:39.025] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330009813}
+[00:19:42.984] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/customer color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/customer","o":"http://localhost:3001/dashboard/returns/customer","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330013755}
+[00:20:01.719] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330032475}
+[00:20:04.775] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/customer color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/customer","o":"http://localhost:3001/dashboard/returns/customer","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330035548}
+[00:20:06.461] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330037220}
+[00:24:18.778] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:24:19.065] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:24:19.065] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
+[00:24:19.065] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330289852}
+[00:24:20.431] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/customer color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/customer","o":"http://localhost:3001/dashboard/returns/customer","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330291195}
+[00:24:22.886] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769330293642}
+[02:51:37.481] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.488] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.496] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.501] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.510] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.516] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.523] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.530] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.537] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.543] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.548] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.553] Server  ERROR    ⨯ ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[02:51:37.558] Server  LOG      ✓ Compiled in 114ms
+[02:51:38.212] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[02:51:38.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:5:1
+Module not found: Can't resolve '@/contexts/customer-context'
+  3 | import { useState, useMemo } from "react"
+  4 | import { useCustomerReturn } from "@/contexts/customer-return-context"
+> 5 | import { useCustomer } from "@/contexts/customer-context" // You'll need this
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  6 | import { useProduct } from "@/contexts/product-context" // You'll need this
+  7 | import { Button } from "@/components/ui/button"
+  8 | import { Input } from "@/components/ui/input"
+
+Import map: aliased to relative './contexts/customer-context' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[02:52:55.436] Server  LOG      ✓ Compiled in 107ms
+[03:11:33.351] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[03:11:33.393] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[03:11:35.215] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[03:11:35.215] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
+[03:11:35.215] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769340325116}
+[03:11:35.216] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[03:11:35.216] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[03:11:35.216] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769340325116}
+[03:12:01.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:664:9
 Parsing ecmascript source code failed
-  724 |             </Button>
-  725 |           </DialogFooter>
-> 726 |         </DialogContent>
-      |                         ^
-> 727 |       </Dialog>
+  662 |         </DialogContent>
+  663 |       </Dialog>
+> 664 |       </Dialog>
+      |         ^^^^^^
+  665 |
+  666 |       {/* Create Return Dialog */}
+  667 |       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+
+Expected corresponding JSX closing tag for <div>
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:01.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:664:9
+Parsing ecmascript source code failed
+  662 |         </DialogContent>
+  663 |       </Dialog>
+> 664 |       </Dialog>
+      |         ^^^^^^
+  665 |
+  666 |       {/* Create Return Dialog */}
+  667 |       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+
+Expected corresponding JSX closing tag for <div>
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:11.212] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:662:16
+Parsing ecmascript source code failed
+  660 |             </Button>
+  661 |           </DialogFooter>
+> 662 |       </Dialog>
+      |                ^
+> 663 |
+      | ^
+> 664 |       {/* Create Return Dialog */}
       | ^^^^^^^
-  728 |     </div>
-  729 |   )
-  730 | }
+  665 |       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+  666 |         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+  667 |           <DialogHeader>
+
+Expected '</', got 'jsx text (
+
+      )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:11.212] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:662:16
+Parsing ecmascript source code failed
+  660 |             </Button>
+  661 |           </DialogFooter>
+> 662 |       </Dialog>
+      |                ^
+> 663 |
+      | ^
+> 664 |       {/* Create Return Dialog */}
+      | ^^^^^^^
+  665 |       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+  666 |         <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+  667 |           <DialogHeader>
+
+Expected '</', got 'jsx text (
+
+      )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:16.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:660:25
+Parsing ecmascript source code failed
+  658 |             >
+  659 |               Reject Return
+> 660 |         </DialogContent>
+      |                         ^
+> 661 |       </Dialog>
+      | ^^^^^^^
+  662 |
+  663 |       {/* Create Return Dialog */}
+  664 |       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
 
 Expected '</', got 'jsx text (
       )'
 
 Import traces:
   Client Component Browser:
-    ./app/dashboard/returns/vendor/page.tsx [Client Component Browser]
-    ./app/dashboard/returns/vendor/page.tsx [Server Component]
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
 
   Client Component SSR:
-    ./app/dashboard/returns/vendor/page.tsx [Client Component SSR]
-    ./app/dashboard/returns/vendor/page.tsx [Server Component]
-[00:06:37.936] Server  LOG      ✓ Compiled in 42ms
-[00:06:51.287] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/products color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/products","o":"http://localhost:3001/dashboard/products","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988536669}
-[00:07:49.399] Server  LOG      ✓ Compiled in 41ms
-[00:07:49.700] Browser ERROR   ./app/dashboard/returns/vendor/page.tsx:728:16
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:16.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:660:25
 Parsing ecmascript source code failed
-  726 |           </DialogFooter>
-  727 |         </DialogContent>
-> 728 |       </Dialog>
-      |                ^
-> 729 |     </div>
-      | ^^^^^
-  730 |   )
-  731 | }
-  732 |
+  658 |             >
+  659 |               Reject Return
+> 660 |         </DialogContent>
+      |                         ^
+> 661 |       </Dialog>
+      | ^^^^^^^
+  662 |
+  663 |       {/* Create Return Dialog */}
+  664 |       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
 
 Expected '</', got 'jsx text (
-    )'
+      )'
 
 Import traces:
   Client Component Browser:
-    ./app/dashboard/returns/vendor/page.tsx [Client Component Browser]
-    ./app/dashboard/returns/vendor/page.tsx [Server Component]
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
 
   Client Component SSR:
-    ./app/dashboard/returns/vendor/page.tsx [Client Component SSR]
-    ./app/dashboard/returns/vendor/page.tsx [Server Component]
-[00:07:51.615] Server  LOG      ✓ Compiled in 58ms
-[00:07:57.323] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:07:58.193] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:07:58.193] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/products","route":"/dashboard/products"}
-[00:07:58.193] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/products color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/products","o":"http://localhost:3001/dashboard/products","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988603718}
-[00:08:03.456] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988608891}
-[00:08:24.240] Server  LOG      ✓ Compiled in 57ms
-[00:08:25.385] Server  LOG      ✓ Compiled in 45ms
-[00:08:26.871] Server  LOG      ✓ Compiled in 56ms
-[00:08:26.974] Browser ERROR   ./app/dashboard/returns/vendor/page.tsx:730:16
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:31.212] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:654:22
 Parsing ecmascript source code failed
-  728 |           </DialogFooter>
-  729 |         </DialogContent>
-> 730 |       </Dialog>
-      |                ^
-> 731 |     </div>
-      | ^^^^^
-  732 |   )
-  733 | }
-  734 |
+  652 |               Cancel
+  653 |             </Button>
+> 654 |             </Button>
+      |                      ^
+> 655 |           </DialogFooter>
+      | ^^^^^^^^^^^
+  656 |         </DialogContent>
+  657 |       </Dialog>
+  658 |
 
 Expected '</', got 'jsx text (
-    )'
+          )'
 
 Import traces:
   Client Component Browser:
-    ./app/dashboard/returns/vendor/page.tsx [Client Component Browser]
-    ./app/dashboard/returns/vendor/page.tsx [Server Component]
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
 
   Client Component SSR:
-    ./app/dashboard/returns/vendor/page.tsx [Client Component SSR]
-    ./app/dashboard/returns/vendor/page.tsx [Server Component]
-[00:08:34.008] Server  LOG      ✓ Compiled in 63ms
-[00:08:39.056] Server  LOG      ✓ Compiled in 55ms
-[00:09:35.980] Server  LOG      ✓ Compiled in 45ms
-[00:09:46.427] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/customer color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/customer","o":"http://localhost:3001/dashboard/returns/customer","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1768988711895}
-[00:10:15.623] Server  LOG      ✓ Compiled in 43ms
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:31.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:654:22
+Parsing ecmascript source code failed
+  652 |               Cancel
+  653 |             </Button>
+> 654 |             </Button>
+      |                      ^
+> 655 |           </DialogFooter>
+      | ^^^^^^^^^^^
+  656 |         </DialogContent>
+  657 |       </Dialog>
+  658 |
+
+Expected '</', got 'jsx text (
+          )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:42.212] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:657:26
+Parsing ecmascript source code failed
+  655 |               Reject Return
+  656 |             </Button>
+> 657 |           </DialogFooter>
+      |                          ^
+> 658 |         </DialogContent>
+      | ^^^^^^^^^
+  659 |       </Dialog>
+  660 |
+  661 |       {/* Create Return Dialog */}
+
+Expected '</', got 'jsx text (
+        )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:42.213] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:657:26
+Parsing ecmascript source code failed
+  655 |               Reject Return
+  656 |             </Button>
+> 657 |           </DialogFooter>
+      |                          ^
+> 658 |         </DialogContent>
+      | ^^^^^^^^^
+  659 |       </Dialog>
+  660 |
+  661 |       {/* Create Return Dialog */}
+
+Expected '</', got 'jsx text (
+        )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[03:12:53.607] Server  LOG      ✓ Compiled in 78ms
+[04:50:28.220] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[04:50:28.510] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[04:50:28.510] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/vendor","route":"/dashboard/returns/vendor"}
+[04:50:28.510] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/vendor color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/vendor","o":"http://localhost:3001/dashboard/returns/vendor","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769346259298}
+[04:50:31.200] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/customer color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/customer","o":"http://localhost:3001/dashboard/returns/customer","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769346261971}
+[04:53:37.419] Server  LOG      ✓ Compiled in 47ms
+[04:53:37.522] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:734:34
+Parsing ecmascript source code failed
+  732 |                   <Card key={index} className="p-4">
+  733 |                     <div className="grid grid-cols-12 gap-3">
+> 734 |                         </Select>
+      |                                  ^
+> 735 |                       </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+  736 |
+  737 |                       <div className="col-span-3">
+  738 |                         <Label className="text-xs">Variant</Label>
+
+Expected '</', got 'jsx text (
+                      )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[04:53:38.212] Browser ERROR   ./app/dashboard/returns/customer/page.tsx:734:34
+Parsing ecmascript source code failed
+  732 |                   <Card key={index} className="p-4">
+  733 |                     <div className="grid grid-cols-12 gap-3">
+> 734 |                         </Select>
+      |                                  ^
+> 735 |                       </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+  736 |
+  737 |                       <div className="col-span-3">
+  738 |                         <Label className="text-xs">Variant</Label>
+
+Expected '</', got 'jsx text (
+                      )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/returns/customer/page.tsx [Client Component Browser]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/returns/customer/page.tsx [Client Component SSR]
+    ./app/dashboard/returns/customer/page.tsx [Server Component]
+[04:53:54.797] Server  LOG      ✓ Compiled in 76ms
+[04:58:17.613] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[04:58:17.868] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[04:58:17.868] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/returns/customer","route":"/dashboard/returns/customer"}
+[04:58:17.868] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/returns/customer color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/returns/customer","o":"http://localhost:3001/dashboard/returns/customer","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1769346728656}

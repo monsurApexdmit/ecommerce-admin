@@ -26,6 +26,10 @@ import { Search, Check, X, Eye, Download, RotateCcw } from "lucide-react"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useCustomer } from "@/contexts/customer-context"
+import { useProduct } from "@/contexts/product-context"
+import { Label } from "@/components/ui/label"
+import { Plus, Trash2 } from "lucide-react"
 
 // Status badge component
 function ReturnStatusBadge({ status }: { status: string }) {
@@ -45,6 +49,17 @@ function ReturnStatusBadge({ status }: { status: string }) {
   )
 }
 
+// Return reasons
+const RETURN_REASONS = [
+  "Size mismatch",
+  "Defective product",
+  "Not as described",
+  "Changed my mind",
+  "Package damaged",
+  "Wrong item received",
+  "Other"
+]
+
 // Format date helper
 function formatDate(dateString: string) {
   const date = new Date(dateString)
@@ -58,7 +73,9 @@ function formatDate(dateString: string) {
 }
 
 export default function CustomerReturnsPage() {
-  const { returns, approveReturn, rejectReturn, getReturnStats } = useCustomerReturn()
+  const { returns, addReturn, approveReturn, rejectReturn, getReturnStats } = useCustomerReturn()
+  const { customers } = useCustomer()
+  const { products } = useProduct()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [isLoading, setIsLoading] = useState(false)
@@ -67,6 +84,23 @@ export default function CustomerReturnsPage() {
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false)
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
   const [rejectNotes, setRejectNotes] = useState("")
+
+  // Create Return Dialog State
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [formData, setFormData] = useState({
+    customerId: "",
+    orderNumber: "",
+    refundMethod: "original_payment" as const,
+    notes: "",
+    items: [
+      {
+        productId: "",
+        variantId: "",
+        quantity: 1,
+        reason: ""
+      }
+    ]
+  })
 
   const stats = getReturnStats()
 
@@ -151,6 +185,103 @@ export default function CustomerReturnsPage() {
     window.URL.revokeObjectURL(url)
   }
 
+  // Create Return Handlers
+  const handleOpenCreateDialog = () => {
+    setFormData({
+      customerId: "",
+      orderNumber: "",
+      refundMethod: "original_payment",
+      notes: "",
+      items: [{
+        productId: "",
+        variantId: "",
+        quantity: 1,
+        reason: ""
+      }]
+    })
+    setIsCreateDialogOpen(true)
+  }
+
+  const handleAddItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { productId: "", variantId: "", quantity: 1, reason: "" }]
+    }))
+  }
+
+  const handleRemoveItem = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }))
+  }
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item)
+    }))
+  }
+
+  const calculateTotal = () => {
+    return formData.items.reduce((total, item) => {
+      const product = products.find(p => p.id === item.productId)
+      if (!product) return total
+      
+      const variant = item.variantId ? product.variants?.find(v => v.id === item.variantId) : null
+      const priceToUse = variant?.salePrice || variant?.price || product.salePrice || product.price
+      
+      return total + (priceToUse * item.quantity)
+    }, 0)
+  }
+
+  const handleCreateReturn = () => {
+    // Validation
+    if (!formData.customerId) {
+      alert("Please select a customer")
+      return
+    }
+
+    if (formData.items.some(item => !item.productId || !item.quantity || !item.reason)) {
+      alert("Please fill in all item details")
+      return
+    }
+
+    const customer = customers.find(c => c.id === formData.customerId)
+    if (!customer) return
+
+    const returnItems = formData.items.map(item => {
+      const product = products.find(p => p.id === item.productId)
+      const variant = item.variantId ? product?.variants?.find((v: any) => v.id === item.variantId) : null
+      const priceToUse = variant?.salePrice || variant?.price || product?.salePrice || product?.price || 0
+
+      return {
+        productId: item.productId,
+        productName: product?.name || "",
+        variantId: item.variantId || undefined,
+        variantName: variant?.name || undefined,
+        quantity: item.quantity,
+        price: priceToUse,
+        reason: item.reason
+      }
+    })
+
+    const totalAmount = returnItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+
+    addReturn({
+      customerId: formData.customerId,
+      customerName: customer.name,
+      orderNumber: formData.orderNumber || undefined,
+      items: returnItems,
+      totalAmount,
+      status: "pending",
+      refundMethod: formData.refundMethod,
+      notes: formData.notes
+    })
+
+    setIsCreateDialogOpen(false)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -159,10 +290,16 @@ export default function CustomerReturnsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Customer Returns</h1>
           <p className="text-gray-600 mt-1">Manage product returns from customers</p>
         </div>
-        <Button onClick={handleDownloadReport} variant="outline">
-          <Download className="w-4 h-4 mr-2" />
-          Export
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleOpenCreateDialog} className="bg-emerald-600 hover:bg-emerald-700">
+            <Plus className="w-4 h-4 mr-2" />
+            New Return
+          </Button>
+          <Button onClick={handleDownloadReport} variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -523,6 +660,214 @@ export default function CustomerReturnsPage() {
               disabled={!rejectNotes.trim()}
             >
               Reject Return
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Return Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Customer Return</DialogTitle>
+            <DialogDescription>
+              Initiate a return of products from a customer for refund or store credit
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Customer Selection and Order Info */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Customer *</Label>
+                <Select value={formData.customerId} onValueChange={(value) => setFormData({...formData, customerId: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Order Number (Optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. ORD-12345"
+                  value={formData.orderNumber}
+                  onChange={(e) => setFormData({...formData, orderNumber: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label>Refund Method *</Label>
+                <Select value={formData.refundMethod} onValueChange={(value: any) => setFormData({...formData, refundMethod: value})}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="original_payment">Original Payment</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="store_credit">Store Credit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Items */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <Label>Return Items *</Label>
+                <Button type="button" onClick={handleAddItem} variant="outline" size="sm">
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Item
+                </Button>
+              </div>
+              
+              <div className="space-y-3">
+                {formData.items.map((item, index) => (
+                  <Card key={index} className="p-4">
+                    <div className="grid grid-cols-12 gap-3">
+                      <div className="col-span-3">
+                        <Label className="text-xs">Product</Label>
+                        <Select 
+                          value={item.productId} 
+                          onValueChange={(value) => {
+                            const product = products.find(p => p.id === value)
+                            handleItemChange(index, 'productId', value)
+                            // Reset variant if product changes
+                            if (product && !product.variants?.length) {
+                              handleItemChange(index, 'variantId', "")
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select product" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="col-span-3">
+                        <Label className="text-xs">Variant</Label>
+                        <Select
+                          value={item.variantId}
+                          onValueChange={(value) => handleItemChange(index, "variantId", value)}
+                          disabled={!item.productId || !products.find((p) => p.id === item.productId)?.variants?.length}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select variant" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products
+                              .find((p) => p.id === item.productId)
+                              ?.variants?.map((variant) => (
+                                <SelectItem key={variant.id} value={variant.id}>
+                                  {variant.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="col-span-1">
+                        <Label className="text-xs">Qty</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                        />
+                      </div>
+                      
+                      <div className="col-span-3">
+                        <Label className="text-xs">Reason</Label>
+                        <Select 
+                          value={item.reason} 
+                          onValueChange={(value) => handleItemChange(index, 'reason', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select reason" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {RETURN_REASONS.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="col-span-1 flex items-end">
+                        <div className="text-sm">
+                          <div className="text-xs text-gray-500 mb-1">Total</div>
+                          <div className="font-semibold">
+                            ${(() => {
+                              const product = products.find(p => p.id === item.productId)
+                              if (!product) return "0.00"
+                              const variant = item.variantId ? product.variants?.find(v => v.id === item.variantId) : null
+                              const priceToUse = variant?.salePrice || variant?.price || product.salePrice || product.price
+                              return (priceToUse * item.quantity).toFixed(2)
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="col-span-1 flex items-end justify-end">
+                        {formData.items.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveItem(index)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label>Notes (Optional)</Label>
+              <Textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                placeholder="Add any additional notes about this return..."
+                rows={3}
+              />
+            </div>
+
+            {/* Total */}
+            <div className="flex justify-end pt-4 border-t">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Total Refund Amount</p>
+                <p className="text-2xl font-bold text-gray-900">${calculateTotal().toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateReturn} className="bg-emerald-600 hover:bg-emerald-700">
+              Create Return
             </Button>
           </DialogFooter>
         </DialogContent>
