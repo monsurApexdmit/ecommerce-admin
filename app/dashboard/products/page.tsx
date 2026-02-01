@@ -28,6 +28,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { useProduct, type Product, type Variant } from "@/contexts/product-context"
 import { useVendor } from "@/contexts/vendor-context"
 import { useAttribute } from "@/contexts/attribute-context"
+import { useCategory } from "@/contexts/category-context"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useWarehouse } from "@/contexts/warehouse-context"
@@ -38,6 +39,7 @@ export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useProduct()
   const { vendors } = useVendor()
   const { warehouses } = useWarehouse()
+  const { getAllCategoriesFlat } = useCategory()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [selectedVendor, setSelectedVendor] = useState<string>("all")
@@ -82,6 +84,9 @@ export default function ProductsPage() {
   const [bulkAction, setBulkAction] = useState("")
   const [bulkStatus, setBulkStatus] = useState("")
   const [bulkCategory, setBulkCategory] = useState("")
+
+  // Get all categories (flat list including parents and children)
+  const allCategories = getAllCategoriesFlat()
 
   const filteredProducts = products
     .filter((product) => {
@@ -305,15 +310,6 @@ export default function ProductsPage() {
     setSelectedAttributeIds([])
     setGeneratedVariants([])
   }
-
-  const categories = [
-    { value: "Men", icon: "👔" },
-    { value: "Skin Care", icon: "💆" },
-    { value: "Fresh Vegetable", icon: "🥬" },
-    { value: "Fresh Fruits", icon: "🍎" },
-    { value: "Electronics", icon: "📱" },
-    { value: "Accessories", icon: "⌚" },
-  ]
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -673,11 +669,11 @@ export default function ProductsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>
+              {allCategories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.category_name}>
                   <div className="flex items-center gap-2">
-                    <span>{cat.icon}</span>
-                    <span>{cat.value}</span>
+                    {cat.parent_id !== null && <span className="text-gray-400 ml-2">└─</span>}
+                    <span>{cat.category_name}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -1008,11 +1004,12 @@ export default function ProductsPage() {
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.value} value={cat.value}>
+                      {allCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.category_name}>
                           <div className="flex items-center gap-2">
-                            <span>{cat.icon}</span>
-                            <span>{cat.value}</span>
+                            {cat.parent_id !== null && <span className="text-gray-400 ml-4">└─</span>}
+                            <span>{cat.category_name}</span>
+                            {!cat.status && <span className="text-xs text-gray-400">(Inactive)</span>}
                           </div>
                         </SelectItem>
                       ))}
@@ -1563,11 +1560,11 @@ export default function ProductsPage() {
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.value} value={cat.value}>
+                    {allCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.category_name}>
                         <div className="flex items-center gap-2">
-                          <span>{cat.icon}</span>
-                          <span>{cat.value}</span>
+                          {cat.parent_id !== null && <span className="text-gray-400 ml-2">└─</span>}
+                          <span>{cat.category_name}</span>
                         </div>
                       </SelectItem>
                     ))}
