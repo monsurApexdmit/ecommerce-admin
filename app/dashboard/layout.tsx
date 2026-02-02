@@ -15,6 +15,7 @@ import { TransferProvider } from "@/contexts/transfer-context"
 import { CustomerReturnProvider } from "@/contexts/customer-return-context"
 import { VendorReturnProvider } from "@/contexts/vendor-return-context"
 import { CustomerProvider } from "@/contexts/customer-context"
+import { CategoryProvider } from "@/contexts/category-context"
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -151,15 +152,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <VendorProvider>
-      <AttributeProvider>
-        <WarehouseProvider>
-          <TransferProvider>
-            <ProductProvider>
-              <StaffProvider>
-                <CustomerReturnProvider>
-                    <CustomerProvider>
-                      <VendorReturnProvider>
-                        <Suspense fallback={null}>
+      <CategoryProvider>
+        <AttributeProvider>
+          <WarehouseProvider>
+            <TransferProvider>
+              <ProductProvider>
+                <StaffProvider>
+                  <CustomerReturnProvider>
+                      <CustomerProvider>
+                        <VendorReturnProvider>
+                          <Suspense fallback={null}>
                       <SidebarProvider>
                         <AppSidebar />
                         <SidebarInset>
@@ -281,6 +283,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </TransferProvider>
         </WarehouseProvider>
       </AttributeProvider>
+      </CategoryProvider>
     </VendorProvider>
   )
 }

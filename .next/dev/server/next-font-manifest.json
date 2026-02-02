@@ -1,15 +1,12 @@
 {
   "app": {
+    "[project]/app/dashboard/customers/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
     "[project]/app/dashboard/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/returns/customer/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/returns/vendor/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/page": [
+    "[project]/app/dashboard/products/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ]
   },
