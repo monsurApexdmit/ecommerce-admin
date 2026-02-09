@@ -13,6 +13,19 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
 
+interface ShippingAddress {
+  id: string
+  fullName: string
+  phone: string
+  email?: string
+  addressLine1: string
+  addressLine2?: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+}
+
 interface Order {
   invoiceNo: string
   orderTime: string
@@ -21,6 +34,7 @@ interface Order {
   amount: number
   status: "Delivered" | "Processing" | "Pending"
   note?: string
+  shippingAddress?: ShippingAddress
 }
 
 const initialOrders: Order[] = [
@@ -31,7 +45,19 @@ const initialOrders: Order[] = [
     method: "Cash",
     amount: 159.91,
     status: "Delivered",
-    note: "Customer requested expedited delivery."
+    note: "Customer requested expedited delivery.",
+    shippingAddress: {
+      id: "1",
+      fullName: "sdfg Ram",
+      phone: "+8801712345678",
+      email: "ram@example.com",
+      addressLine1: "123 Main Street",
+      addressLine2: "Apartment 4B",
+      city: "Dhaka",
+      state: "Dhaka Division",
+      postalCode: "1205",
+      country: "Bangladesh"
+    }
   },
   {
     invoiceNo: "12309",
@@ -40,6 +66,17 @@ const initialOrders: Order[] = [
     method: "Cash",
     amount: 371.1,
     status: "Processing",
+    shippingAddress: {
+      id: "2",
+      fullName: "Mydeen Bhatsha",
+      phone: "+8801812345678",
+      email: "mydeen@example.com",
+      addressLine1: "456 Commerce Road",
+      city: "Chittagong",
+      state: "Chittagong Division",
+      postalCode: "4000",
+      country: "Bangladesh"
+    }
   },
   {
     invoiceNo: "12332",
@@ -742,11 +779,33 @@ export default function OrdersPage() {
                   <p className="text-sm text-gray-900">#{selectedOrder.invoiceNo}</p>
                 </div>
                 <div className="sm:text-right">
-                  <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice To</h3>
-                  <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
-                  <p className="text-xs text-gray-600">hram8251@gmail.com</p>
-                  <p className="text-xs text-gray-600">123456789</p>
-                  <p className="text-xs text-gray-600">state, cuntyre, 1235</p>
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">
+                    {selectedOrder.shippingAddress ? "Ship To" : "Invoice To"}
+                  </h3>
+                  {selectedOrder.shippingAddress ? (
+                    <>
+                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.shippingAddress.fullName}</p>
+                      {selectedOrder.shippingAddress.email && (
+                        <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.email}</p>
+                      )}
+                      <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.phone}</p>
+                      <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.addressLine1}</p>
+                      {selectedOrder.shippingAddress.addressLine2 && (
+                        <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.addressLine2}</p>
+                      )}
+                      <p className="text-xs text-gray-600">
+                        {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.postalCode}
+                      </p>
+                      <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.country}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
+                      <p className="text-xs text-gray-600">hram8251@gmail.com</p>
+                      <p className="text-xs text-gray-600">123456789</p>
+                      <p className="text-xs text-gray-600">state, country, 1235</p>
+                    </>
+                  )}
                 </div>
               </div>
 

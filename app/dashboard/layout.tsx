@@ -16,6 +16,9 @@ import { CustomerReturnProvider } from "@/contexts/customer-return-context"
 import { VendorReturnProvider } from "@/contexts/vendor-return-context"
 import { CustomerProvider } from "@/contexts/customer-context"
 import { CategoryProvider } from "@/contexts/category-context"
+import { ShippingAddressProvider } from "@/contexts/shipping-address-context"
+import { ShipmentProvider } from "@/contexts/shipment-context"
+import { OrderProvider } from "@/contexts/order-context"
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -161,6 +164,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <CustomerReturnProvider>
                       <CustomerProvider>
                         <VendorReturnProvider>
+                          <ShippingAddressProvider>
+                            <ShipmentProvider>
+                              <OrderProvider>
                           <Suspense fallback={null}>
                       <SidebarProvider>
                         <AppSidebar />
@@ -275,14 +281,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </SidebarInset>
                       </SidebarProvider>
                         </Suspense>
-                      </VendorReturnProvider>
-                    </CustomerProvider>
-                </CustomerReturnProvider>
-              </StaffProvider>
-            </ProductProvider>
-          </TransferProvider>
-        </WarehouseProvider>
-      </AttributeProvider>
+                              </OrderProvider>
+                            </ShipmentProvider>
+                          </ShippingAddressProvider>
+                        </VendorReturnProvider>
+                      </CustomerProvider>
+                  </CustomerReturnProvider>
+                </StaffProvider>
+              </ProductProvider>
+            </TransferProvider>
+          </WarehouseProvider>
+        </AttributeProvider>
       </CategoryProvider>
     </VendorProvider>
   )

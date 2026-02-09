@@ -1,25 +1,485 @@
-[00:00:00.802] Server  LOG      ✓ Ready in 612ms
-[00:00:07.272] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:08.618] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:00:08.618] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
-[00:00:08.618] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
-[00:00:08.618] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3001/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770103178392}
-[00:00:08.618] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770103178392}
-[00:00:10.503] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/customers color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/customers","o":"http://localhost:3001/dashboard/customers","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770103180246}
-[00:00:35.412] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/categories color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/categories","o":"http://localhost:3001/dashboard/categories","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770103205180}
-[00:11:35.961] Server  LOG      ✓ Compiled in 68ms
-[00:11:38.026] Server  LOG      ✓ Compiled in 181ms
-[00:11:39.171] Browser ERROR   uncaughtError: TypeError: category.id.substring is not a function
-[01:12:30.316] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[01:12:30.585] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[01:12:30.585] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/categories","route":"/dashboard/categories"}
-[01:12:30.585] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/categories color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/categories","o":"http://localhost:3001/dashboard/categories","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770107520360}
-[01:12:33.871] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:12:33.871] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:13:01.701] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:13:01.701] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:13:07.297] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:13:07.297] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:13:20.471] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/attributes color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/attributes","o":"http://localhost:3001/dashboard/attributes","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770107570227}
-[01:13:20.632] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/categories color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/categories","o":"http://localhost:3001/dashboard/categories","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770107570400}
-[01:13:30.484] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/customers color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/customers","o":"http://localhost:3001/dashboard/customers","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770107580223}
+[00:00:00.805] Server  LOG      ✓ Ready in 605ms
+[00:02:40.487] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:02:41.799] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:02:41.799] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
+[00:02:41.799] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3001/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770618398087}
+[00:02:41.799] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770618398257}
+[00:19:35.408] Server  LOG      ✓ Compiled in 5ms
+[00:20:27.517] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:20:27.810] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:20:27.810] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[00:20:27.810] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770619464294}
+[00:21:41.413] Server  LOG      ✓ Compiled in 0ms
+[00:22:02.542] Server  LOG      ✓ Compiled in 104ms
+[00:22:08.602] Server  LOG      ✓ Compiled in 44ms
+[00:22:08.704] Browser ERROR   ./app/dashboard/layout.tsx:282:46
+Parsing ecmascript source code failed
+  280 |                       </SidebarProvider>
+  281 |                         </Suspense>
+> 282 |                       </VendorReturnProvider>
+      |                                              ^
+> 283 |                     </CustomerProvider>
+      | ^^^^^^^^^^^^^^^^^^^^^
+  284 |                 </CustomerReturnProvider>
+  285 |               </StaffProvider>
+  286 |             </ProductProvider>
+
+Expected '</', got 'jsx text (
+                    )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/layout.tsx [Client Component Browser]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/layout.tsx [Client Component SSR]
+    ./app/dashboard/layout.tsx [Server Component]
+[00:22:15.335] Server  LOG      ✓ Compiled in 100ms
+[00:22:15.647] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:22:15.980] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:22:15.980] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[00:22:15.980] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770619572464}
+[00:38:01.069] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:38:01.385] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:38:01.385] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[00:38:01.385] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620517869}
+[00:38:03.341] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:38:03.582] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:38:03.582] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard","route":"/dashboard"}
+[00:38:03.582] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620520066}
+[00:38:05.979] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620522435}
+[00:38:09.880] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:38:09.880] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:38:29.224] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620545700}
+[00:38:33.239] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620549704}
+[00:38:41.116] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:38:41.116] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:38:52.949] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/vendors color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/vendors","o":"http://localhost:3001/dashboard/vendors","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620569428}
+[00:38:55.789] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620572251}
+[00:38:58.692] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/customers color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/customers","o":"http://localhost:3001/dashboard/customers","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620575150}
+[00:39:26.409] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store","o":"http://localhost:3001/dashboard/store","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620602890}
+[00:39:27.746] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store/locations color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store/locations","o":"http://localhost:3001/dashboard/store/locations","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620604226}
+[00:39:36.249] Server  ERROR    ⨯ ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:39:36.367] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:36.950] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:36.950] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:37.245] Browser ERROR   uncaughtError: Error: ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:39:37.426] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:37.426] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:54.654] Server  ERROR    ⨯ ./app/dashboard/orders/shipments/page.tsx:42:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  40 | } from "lucide-react"
+  41 | import { Skeleton } from "@/components/ui/skeleton"
+> 42 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  43 |
+  44 | export default function ShipmentsPage() {
+  45 |   const {
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component Browser]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component SSR]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:39:54.760] Browser ERROR   uncaughtError: Error: ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+[00:39:54.902] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:54.902] Browser ERROR   ./app/dashboard/orders/shipments/page.tsx:42:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  40 | } from "lucide-react"
+  41 | import { Skeleton } from "@/components/ui/skeleton"
+> 42 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  43 |
+  44 | export default function ShipmentsPage() {
+  45 |   const {
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component Browser]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component SSR]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:54.902] Browser ERROR   ./app/dashboard/store/shipping-addresses/page.tsx:28:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  26 | import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
+  27 | import { Skeleton } from "@/components/ui/skeleton"
+> 28 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  29 | import {
+  30 |   DropdownMenu,
+  31 |   DropdownMenuContent,
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component Browser]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/store/shipping-addresses/page.tsx [Client Component SSR]
+    ./app/dashboard/store/shipping-addresses/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:39:54.902] Browser ERROR   ./app/dashboard/orders/shipments/page.tsx:42:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  40 | } from "lucide-react"
+  41 | import { Skeleton } from "@/components/ui/skeleton"
+> 42 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  43 |
+  44 | export default function ShipmentsPage() {
+  45 |   const {
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component Browser]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component SSR]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:40:17.423] Server  LOG      ✓ Compiled in 111ms
+[00:40:17.526] Browser ERROR   ./app/dashboard/orders/shipments/page.tsx:42:1
+Module not found: Can't resolve '@/hooks/usePagination'
+  40 | } from "lucide-react"
+  41 | import { Skeleton } from "@/components/ui/skeleton"
+> 42 | import { usePagination } from "@/hooks/usePagination"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  43 |
+  44 | export default function ShipmentsPage() {
+  45 |   const {
+
+Import map: aliased to relative './hooks/usePagination' inside of [project]/
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component Browser]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/orders/shipments/page.tsx [Client Component SSR]
+    ./app/dashboard/orders/shipments/page.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+[00:40:21.834] Server  LOG      ✓ Compiled in 61ms
+[00:40:22.159] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:40:22.441] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:40:22.441] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/orders/shipments","route":"/dashboard/orders/shipments"}
+[00:40:22.441] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders/shipments color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders/shipments","o":"http://localhost:3001/dashboard/orders/shipments","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620658925}
+[00:41:53.546] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:41:53.784] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:41:53.784] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/store/shipping-addresses","route":"/dashboard/store/shipping-addresses"}
+[00:41:53.784] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store/shipping-addresses color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store/shipping-addresses","o":"http://localhost:3001/dashboard/store/shipping-addresses","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620750268}
+[00:42:06.970] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620763427}
+[00:42:13.016] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:42:13.016] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:42:58.904] Server  LOG      ✓ Compiled in 40ms
+[00:43:06.184] Server  LOG      ✓ Compiled in 34ms
+[00:43:12.842] Server  LOG      ✓ Compiled in 50ms
+[00:43:48.626] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:43:48.945] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:43:48.945] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/orders","route":"/dashboard/orders"}
+[00:43:48.945] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620865429}
+[00:44:00.713] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders/shipments color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders/shipments","o":"http://localhost:3001/dashboard/orders/shipments","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620877166}
+[00:44:17.876] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store","o":"http://localhost:3001/dashboard/store","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620894357}
+[00:44:19.200] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store/shipping-addresses color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store/shipping-addresses","o":"http://localhost:3001/dashboard/store/shipping-addresses","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620895664}
+[00:44:26.822] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770620903286}
+[00:44:30.269] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:44:30.269] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:50:43.159] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/sells color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/sells","o":"http://localhost:3001/dashboard/sells","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621279617}
+[00:50:48.788] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store","o":"http://localhost:3001/dashboard/store","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621285269}
+[00:51:15.160] Server  LOG      ✓ Compiled in 127ms
+[00:51:25.809] Server  LOG      ✓ Compiled in 100ms
+[00:51:34.507] Server  LOG      ✓ Compiled in 48ms
+[00:51:41.570] Server  LOG      ✓ Compiled in 33ms
+[00:54:36.016] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:54:36.285] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:54:36.285] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/store","route":"/dashboard/store"}
+[00:54:36.285] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store","o":"http://localhost:3001/dashboard/store","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621512770}
+[00:54:37.922] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621514377}
+[00:54:41.453] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:54:41.453] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:55:01.329] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders/shipments color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders/shipments","o":"http://localhost:3001/dashboard/orders/shipments","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621537784}
+[00:55:04.911] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621541372}
+[00:55:09.007] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders/shipments color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders/shipments","o":"http://localhost:3001/dashboard/orders/shipments","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621545467}
+[00:55:41.214] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store/shipping-addresses color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store/shipping-addresses","o":"http://localhost:3001/dashboard/store/shipping-addresses","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621577670}
+[01:01:23.607] Server  LOG      ✓ Compiled in 36ms
+[01:01:28.790] Server  LOG      ✓ Compiled in 43ms
+[01:01:29.347] Browser ERROR   ./app/dashboard/layout.tsx:284:48
+Parsing ecmascript source code failed
+  282 |                       </SidebarProvider>
+  283 |                         </Suspense>
+> 284 |                             </ShipmentProvider>
+      |                                                ^
+> 285 |                           </ShippingAddressProvider>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  286 |                         </VendorReturnProvider>
+  287 |                       </CustomerProvider>
+  288 |                   </CustomerReturnProvider>
+
+Expected '</', got 'jsx text (
+                          )'
+
+Import traces:
+  Client Component Browser:
+    ./app/dashboard/layout.tsx [Client Component Browser]
+    ./app/dashboard/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/dashboard/layout.tsx [Client Component SSR]
+    ./app/dashboard/layout.tsx [Server Component]
+[01:01:33.814] Server  LOG      ✓ Compiled in 110ms
+[01:01:34.079] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[01:01:36.347] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[01:01:36.347] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/store/shipping-addresses","route":"/dashboard/store/shipping-addresses"}
+[01:01:36.347] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store/shipping-addresses color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store/shipping-addresses","o":"http://localhost:3001/dashboard/store/shipping-addresses","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770621931988}
+[01:02:31.331] Server  LOG      ✓ Compiled in 0ms
+[01:22:23.214] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[01:22:23.502] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[01:22:23.502] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/store/shipping-addresses","route":"/dashboard/store/shipping-addresses"}
+[01:22:23.502] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/store/shipping-addresses color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/store/shipping-addresses","o":"http://localhost:3001/dashboard/store/shipping-addresses","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623179986}
+[01:22:29.254] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623185709}
+[01:22:34.662] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders/shipments color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders/shipments","o":"http://localhost:3001/dashboard/orders/shipments","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623191115}
+[01:22:53.490] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[01:22:53.702] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[01:22:53.702] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/checkout","route":"/dashboard/checkout"}
+[01:22:53.702] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/checkout color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/checkout","o":"http://localhost:3001/dashboard/checkout","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623210186}
+[01:22:55.872] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/products color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/products","o":"http://localhost:3001/dashboard/products","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623212314}
+[01:23:02.088] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/pos color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pos","o":"http://localhost:3001/dashboard/pos","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623218549}
+[01:23:07.452] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623223924}
+[01:23:09.880] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/customers color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/customers","o":"http://localhost:3001/dashboard/customers","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623226340}
+[01:23:11.178] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770623227637}
+[01:23:25.637] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[01:23:25.637] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[02:06:47.378] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[02:06:47.674] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[02:06:47.674] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/orders","route":"/dashboard/orders"}
+[02:06:47.674] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770625844157}
+[02:06:51.037] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[02:06:51.037] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[02:33:00.277] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[02:33:00.640] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[02:33:00.640] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/orders","route":"/dashboard/orders"}
+[02:33:00.640] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770627417124}
+[02:33:06.380] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard/pos color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pos","o":"http://localhost:3001/dashboard/pos","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770627422841}
+[02:33:19.176] Browser LOG     %c[Vercel Web Analytics]%c [pageview] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1770627435651}

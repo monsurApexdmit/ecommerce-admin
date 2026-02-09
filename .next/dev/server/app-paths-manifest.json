@@ -1,7 +1,15 @@
 {
-  "/dashboard/attributes/page": "app/dashboard/attributes/page.js",
-  "/dashboard/categories/page": "app/dashboard/categories/page.js",
+  "/dashboard/checkout/page": "app/dashboard/checkout/page.js",
   "/dashboard/customers/page": "app/dashboard/customers/page.js",
+  "/dashboard/orders/page": "app/dashboard/orders/page.js",
+  "/dashboard/orders/shipments/page": "app/dashboard/orders/shipments/page.js",
   "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/pos/page": "app/dashboard/pos/page.js",
+  "/dashboard/products/page": "app/dashboard/products/page.js",
+  "/dashboard/sells/page": "app/dashboard/sells/page.js",
+  "/dashboard/store/locations/page": "app/dashboard/store/locations/page.js",
+  "/dashboard/store/page": "app/dashboard/store/page.js",
+  "/dashboard/store/shipping-addresses/page": "app/dashboard/store/shipping-addresses/page.js",
+  "/dashboard/vendors/page": "app/dashboard/vendors/page.js",
   "/page": "app/page.js"
 }

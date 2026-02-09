@@ -20,6 +20,8 @@ import {
     ShieldCheck,
     ChevronRight,
     RotateCcw,
+    MapPin,
+    Package,
 } from "lucide-react"
 
 import {
@@ -67,7 +69,14 @@ const navigation = [
         ],
     },
     { name: "Customers", href: "/dashboard/customers", icon: Users },
-    { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+    {
+        name: "Orders",
+        icon: ShoppingCart,
+        items: [
+            { name: "All Orders", href: "/dashboard/orders" },
+            { name: "Shipments", href: "/dashboard/orders/shipments" },
+        ],
+    },
     { name: "Vendors", href: "/dashboard/vendors", icon: Truck },
     { name: "POS", href: "/dashboard/pos", icon: CreditCard },
     {
@@ -98,7 +107,14 @@ const navigation = [
     },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
     { name: "International", href: "/dashboard/international", icon: Globe },
-    { name: "Store", href: "/dashboard/store", icon: Store },
+    {
+        name: "Store",
+        icon: Store,
+        items: [
+            { name: "Store Settings", href: "/dashboard/store" },
+            { name: "Shipping Addresses", href: "/dashboard/store/shipping-addresses" },
+        ],
+    },
     { name: "Pages", href: "/dashboard/pages", icon: FileText },
 ]
 
