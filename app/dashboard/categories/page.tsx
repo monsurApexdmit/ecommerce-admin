@@ -30,7 +30,6 @@ export default function CategoriesPage() {
   const flatCategories = getAllCategoriesFlat()
 
   const [formData, setFormData] = useState({
-    icon: "",
     name: "",
     description: "",
     parent_id: "none",
@@ -95,7 +94,6 @@ export default function CategoriesPage() {
 
     addCategory({
       category_name: formData.name,
-      icon: formData.icon || "📦",
       description: formData.description,
       status: formData.published,
       parent_id: formData.parent_id === "none" ? null : formData.parent_id,
@@ -107,7 +105,6 @@ export default function CategoriesPage() {
   const handleEdit = (category: Category) => {
     setEditingCategory(category)
     setFormData({
-      icon: category.icon || "📦",
       name: category.category_name,
       description: category.description || "",
       parent_id: category.parent_id || "none",
@@ -121,7 +118,6 @@ export default function CategoriesPage() {
 
     updateCategory(editingCategory.id, {
       category_name: formData.name,
-      icon: formData.icon,
       description: formData.description,
       status: formData.published,
       // Note: Changing parent_id logic in Context is complex (need to move from old parent's children to new parent's children).
@@ -148,14 +144,13 @@ export default function CategoriesPage() {
   const handleExport = () => {
     const exportData = filteredCategories.map((category) => ({
       id: category.id,
-      icon: category.icon,
       name: category.category_name,
       parent_id: category.parent_id || "None",
       description: category.description,
       published: category.status ? "Yes" : "No",
     }))
 
-    const headers = ["ID", "Icon", "Name", "Parent ID", "Description", "Published"]
+    const headers = ["ID", "Name", "Parent ID", "Description", "Published"]
     exportToCSV(exportData, "categories", headers)
   }
 
@@ -172,7 +167,6 @@ export default function CategoriesPage() {
          if(item.name) {
              addCategory({
                  category_name: item.name,
-                 icon: item.icon || "📦",
                  description: item.description || "",
                  status: item.published === "Yes",
                  parent_id: item.parent_id === "None" ? null : item.parent_id
@@ -204,7 +198,7 @@ export default function CategoriesPage() {
   const closeDialog = () => {
     setIsDialogOpen(false)
     setEditingCategory(null)
-    setFormData({ icon: "", name: "", description: "", parent_id: "none", published: true })
+    setFormData({ name: "", description: "", parent_id: "none", published: true })
   }
   
   // Helper to get parent name
@@ -308,7 +302,6 @@ export default function CategoriesPage() {
                   />
                 </th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ICON</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
                  {!parentsOnly && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PARENT</th>}
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">DESCRIPTION</th>
@@ -322,7 +315,6 @@ export default function CategoriesPage() {
                     <tr key={index} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4"><Skeleton className="h-4 w-4 rounded" /></td>
                       <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-8 w-8 rounded" /></td>
                       <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
                        {!parentsOnly && <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>}
                       <td className="py-3 px-4"><Skeleton className="h-4 w-48" /></td>
@@ -341,9 +333,6 @@ export default function CategoriesPage() {
                         />
                       </td>
                       <td className="py-3 px-4 text-gray-600 text-xs">{category.id.substring(0, 6)}...</td>
-                      <td className="py-3 px-4">
-                        <div className="w-8 h-8 flex items-center justify-center text-xl bg-gray-100 rounded-md">{category.icon}</div>
-                      </td>
                       <td className="py-3 px-4 text-gray-900 font-medium">{category.category_name}</td>
                       {!parentsOnly && (
                           <td className="py-3 px-4 text-gray-500 text-sm">
@@ -398,18 +387,9 @@ export default function CategoriesPage() {
             <DialogTitle>{editingCategory ? "Edit Category" : "Add New Category"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="icon">Icon (Emoji) *</Label>
-              <Input
-                id="icon"
-                value={formData.icon}
-                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                placeholder="Enter emoji icon (e.g., 🍎)"
-                maxLength={2}
-              />
-            </div>
 
+
+          <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Category Name *</Label>
               <Input
@@ -488,7 +468,7 @@ export default function CategoriesPage() {
               <Label>CSV File</Label>
               <Input type="file" accept=".csv" onChange={handleImport} />
               <p className="text-sm text-gray-500">
-                Upload a CSV file with columns: Name, Icon, Description, Status, Parent ID
+                Upload a CSV file with columns: Name, Description, Status, Parent ID
               </p>
             </div>
           </div>

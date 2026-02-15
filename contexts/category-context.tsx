@@ -6,7 +6,6 @@ import { generateId } from "@/lib/export-import-utils"
 export interface Category {
   id: string
   category_name: string
-  icon?: string
   description?: string
   parent_id: string | null
   Parent: Category | null
@@ -35,7 +34,6 @@ const initialCategories: Category[] = [
   {
     id: "1",
     category_name: "Electronics",
-    icon: "🔌",
     description: "Electronic devices and accessories",
     parent_id: null,
     Parent: null,
@@ -43,7 +41,6 @@ const initialCategories: Category[] = [
       {
         id: "2",
         category_name: "Mobile Phones",
-        icon: "📱",
         description: "Smartphones and feature phones",
         parent_id: "1",
         Parent: null,
@@ -56,7 +53,6 @@ const initialCategories: Category[] = [
       {
         id: "3",
         category_name: "Laptops",
-        icon: "💻",
         description: "Gaming and business laptops",
         parent_id: "1",
         Parent: null,
@@ -75,7 +71,6 @@ const initialCategories: Category[] = [
   {
     id: "4",
     category_name: "Clothing",
-    icon: "👕",
     description: "Apparel for men and women",
     parent_id: null,
     Parent: null,
@@ -83,7 +78,6 @@ const initialCategories: Category[] = [
       {
         id: "5",
         category_name: "Men",
-        icon: "👔",
         description: "Men's fashion",
         parent_id: "4",
         Parent: null,
@@ -96,7 +90,6 @@ const initialCategories: Category[] = [
       {
         id: "6",
         category_name: "Women",
-        icon: "👗",
         description: "Women's fashion",
         parent_id: "4",
         Parent: null,
@@ -115,7 +108,6 @@ const initialCategories: Category[] = [
   {
     id: "7",
     category_name: "Fresh Vegetable",
-    icon: "🥕",
     description: "Farm fresh vegetables",
     parent_id: null,
     Parent: null,
@@ -128,7 +120,6 @@ const initialCategories: Category[] = [
   {
     id: "8",
     category_name: "Fresh Fruits",
-    icon: "🍎",
     description: "Seasonal fruits",
     parent_id: null,
     Parent: null,
