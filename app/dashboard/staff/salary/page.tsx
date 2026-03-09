@@ -1,36 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useStaff, type SalaryPayment } from "@/contexts/staff-context"
+import { useState } from "react"
+import { useStaff } from "@/contexts/staff-context"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { DollarSign, CreditCard, Clock, CheckCircle2 } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { DollarSign, CreditCard, Clock, CheckCircle2, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
 export default function SalaryManagementPage() {
-    const { staff, salaryPayments, addSalaryPayment, updateSalaryPayment } = useStaff()
+    const { staff, salaryPayments, isLoading, salaryPaymentsLoading, addSalaryPayment, updateSalaryPayment, deleteSalaryPayment } = useStaff()
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = new Date()
         return `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
     })
-    const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
-    const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null)
-    const [paymentAmount, setPaymentAmount] = useState("")
-    const [paymentNotes, setPaymentNotes] = useState("")
-    const [isLoading, setIsLoading] = useState(true)
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsLoading(false)
-        }, 2000)
-        return () => clearTimeout(timer)
-    }, [])
-
     // Generate month options (last 12 months)
     const monthOptions = Array.from({ length: 12 }, (_, i) => {
         const date = new Date()
@@ -50,48 +34,33 @@ export default function SalaryManagementPage() {
         .filter(s => !monthPayments.find(p => p.staffId === s.id && p.status === "Paid"))
         .reduce((sum, s) => sum + s.salary, 0)
 
-    const handleMarkAsPaid = (staffId: string, staffSalary: number) => {
-        setSelectedStaffId(staffId)
-        setPaymentAmount(staffSalary.toString())
-        setIsPaymentDialogOpen(true)
-    }
-
-    const handleSubmitPayment = () => {
-        if (!selectedStaffId) return
-
-        const staffMember = staff.find(s => s.id === selectedStaffId)
+    const handleMarkAsPaid = async (staffId: string, staffSalary: number) => {
+        const staffMember = staff.find(s => s.id === staffId)
         if (!staffMember) return
 
-        const existingPayment = monthPayments.find(p => p.staffId === selectedStaffId)
-        const amount = parseFloat(paymentAmount) || 0
+        const existingPayment = monthPayments.find(p => p.staffId === staffId)
+        const paymentDate = new Date().toISOString().split('T')[0]
 
         if (existingPayment) {
-            updateSalaryPayment({
+            await updateSalaryPayment({
                 ...existingPayment,
-                paidAmount: amount,
-                status: amount >= staffMember.salary ? "Paid" : "Partial",
-                paymentDate: new Date().toISOString(),
+                amount: staffSalary,
+                paidAmount: staffSalary,
+                status: "Paid",
+                paymentDate,
                 paymentMethod: staffMember.paymentMethod,
-                notes: paymentNotes,
             })
         } else {
-            addSalaryPayment({
-                id: Date.now().toString(),
-                staffId: selectedStaffId,
+            await addSalaryPayment({
+                staffId,
                 month: selectedMonth,
-                amount: staffMember.salary,
-                paidAmount: amount,
-                status: amount >= staffMember.salary ? "Paid" : "Partial",
-                paymentDate: new Date().toISOString(),
+                amount: staffSalary,
+                paidAmount: staffSalary,
+                status: "Paid",
+                paymentDate,
                 paymentMethod: staffMember.paymentMethod,
-                notes: paymentNotes,
             })
         }
-
-        setIsPaymentDialogOpen(false)
-        setSelectedStaffId(null)
-        setPaymentAmount("")
-        setPaymentNotes("")
     }
 
     const getPaymentStatus = (staffId: string) => {
@@ -203,7 +172,7 @@ export default function SalaryManagementPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y">
-                            {isLoading
+                            {isLoading || salaryPaymentsLoading
                                 ? Array.from({ length: 3 }).map((_, index) => (
                                     <tr key={index} className="hover:bg-gray-50">
                                         <td className="py-3 px-4">
@@ -249,19 +218,30 @@ export default function SalaryManagementPage() {
                                                 </span>
                                             </td>
                                             <td className="py-3 px-4">
-                                                {status !== "Paid" && (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => handleMarkAsPaid(member.id, member.salary)}
-                                                        className="bg-emerald-600 hover:bg-emerald-700"
-                                                    >
-                                                        <CreditCard className="w-4 h-4 mr-2" />
-                                                        Mark as Paid
-                                                    </Button>
-                                                )}
-                                                {status === "Paid" && (
-                                                    <span className="text-sm text-emerald-600 font-medium">✓ Paid</span>
-                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    {status !== "Paid" && (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleMarkAsPaid(member.id, member.salary)}
+                                                            className="bg-emerald-600 hover:bg-emerald-700"
+                                                        >
+                                                            <CreditCard className="w-4 h-4 mr-2" />
+                                                            Mark as Paid
+                                                        </Button>
+                                                    )}
+                                                    {status !== "Pending" && (() => {
+                                                        const payment = monthPayments.find(p => p.staffId === member.id)
+                                                        return payment ? (
+                                                            <button
+                                                                onClick={() => deleteSalaryPayment(payment.id)}
+                                                                className="p-1 hover:bg-red-50 rounded text-red-500 hover:text-red-700"
+                                                                title="Delete payment record"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        ) : null
+                                                    })()}
+                                                </div>
                                             </td>
                                         </tr>
                                     )
@@ -272,45 +252,6 @@ export default function SalaryManagementPage() {
                 </div>
             </Card>
 
-            {/* Payment Dialog */}
-            <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Record Salary Payment</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div>
-                            <Label>Payment Amount</Label>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                value={paymentAmount}
-                                onChange={(e) => setPaymentAmount(e.target.value)}
-                                placeholder="0.00"
-                                className="mt-1"
-                            />
-                        </div>
-                        <div>
-                            <Label>Notes (Optional)</Label>
-                            <Textarea
-                                value={paymentNotes}
-                                onChange={(e) => setPaymentNotes(e.target.value)}
-                                placeholder="Add any notes about this payment..."
-                                className="mt-1"
-                                rows={3}
-                            />
-                        </div>
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleSubmitPayment} className="bg-emerald-600 hover:bg-emerald-700">
-                                Record Payment
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }

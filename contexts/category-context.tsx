@@ -1,12 +1,11 @@
 "use client"
 
-import React, { createContext, useContext, useState } from "react"
-import { generateId } from "@/lib/export-import-utils"
+import React, { createContext, useContext, useState, useEffect } from "react"
+import { categoryApi, type CategoryResponse } from "@/lib/categoryApi"
 
 export interface Category {
   id: string
   category_name: string
-  description?: string
   parent_id: string | null
   Parent: Category | null
   Children: Category[] | null
@@ -18,215 +17,173 @@ export interface Category {
 
 interface CategoryContextType {
   categories: Category[]
-  addCategory: (category: Omit<Category, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'Children' | 'Parent'>) => void
-  updateCategory: (id: string, updates: Partial<Category>) => void
-  deleteCategory: (id: string) => void
+  isLoading: boolean
+  error: string | null
+  addCategory: (category: Omit<Category, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'Children' | 'Parent'>) => Promise<void>
+  updateCategory: (id: string, updates: Partial<Category>) => Promise<void>
+  deleteCategory: (id: string) => Promise<void>
   getCategoryById: (id: string) => Category | undefined
   getParentCategories: () => Category[]
   getChildCategories: (parentId: string) => Category[]
   getAllCategoriesFlat: () => Category[]
+  refreshCategories: () => Promise<void>
 }
 
 const CategoryContext = createContext<CategoryContextType | undefined>(undefined)
 
-// Mock data matching backend structure
-const initialCategories: Category[] = [
-  {
-    id: "1",
-    category_name: "Electronics",
-    description: "Electronic devices and accessories",
-    parent_id: null,
-    Parent: null,
-    Children: [
-      {
-        id: "2",
-        category_name: "Mobile Phones",
-        description: "Smartphones and feature phones",
-        parent_id: "1",
-        Parent: null,
-        Children: null,
-        status: true,
-        created_at: "2026-01-27T12:56:56Z",
-        updated_at: "2026-01-27T12:56:56Z",
-        deleted_at: null,
-      },
-      {
-        id: "3",
-        category_name: "Laptops",
-        description: "Gaming and business laptops",
-        parent_id: "1",
-        Parent: null,
-        Children: null,
-        status: true,
-        created_at: "2026-01-27T12:57:00Z",
-        updated_at: "2026-01-27T12:57:00Z",
-        deleted_at: null,
-      },
-    ],
-    status: true,
-    created_at: "2026-01-27T12:56:10Z",
-    updated_at: "2026-01-27T12:57:53Z",
-    deleted_at: null,
-  },
-  {
-    id: "4",
-    category_name: "Clothing",
-    description: "Apparel for men and women",
-    parent_id: null,
-    Parent: null,
-    Children: [
-      {
-        id: "5",
-        category_name: "Men",
-        description: "Men's fashion",
-        parent_id: "4",
-        Parent: null,
-        Children: null,
-        status: true,
-        created_at: "2026-01-27T12:58:00Z",
-        updated_at: "2026-01-27T12:58:00Z",
-        deleted_at: null,
-      },
-      {
-        id: "6",
-        category_name: "Women",
-        description: "Women's fashion",
-        parent_id: "4",
-        Parent: null,
-        Children: null,
-        status: true,
-        created_at: "2026-01-27T12:58:10Z",
-        updated_at: "2026-01-27T12:58:10Z",
-        deleted_at: null,
-      },
-    ],
-    status: true,
-    created_at: "2026-01-27T12:57:50Z",
-    updated_at: "2026-01-27T12:57:50Z",
-    deleted_at: null,
-  },
-  {
-    id: "7",
-    category_name: "Fresh Vegetable",
-    description: "Farm fresh vegetables",
-    parent_id: null,
-    Parent: null,
-    Children: null,
-    status: true,
-    created_at: "2026-01-27T12:59:00Z",
-    updated_at: "2026-01-27T12:59:00Z",
-    deleted_at: null,
-  },
-  {
-    id: "8",
-    category_name: "Fresh Fruits",
-    description: "Seasonal fruits",
-    parent_id: null,
-    Parent: null,
-    Children: null,
-    status: true,
-    created_at: "2026-01-27T12:59:10Z",
-    updated_at: "2026-01-27T12:59:10Z",
-    deleted_at: null,
-  },
-]
+// Convert backend response to frontend Category interface
+function convertToCategory(backendCategory: CategoryResponse): Category {
+  return {
+    id: backendCategory.id.toString(),
+    category_name: backendCategory.category_name,
+    parent_id: backendCategory.parent_id?.toString() || null,
+    Parent: backendCategory.parent ? convertToCategory(backendCategory.parent) : null,
+    Children: backendCategory.children?.map(convertToCategory) || null,
+    status: backendCategory.status,
+    created_at: backendCategory.created_at,
+    updated_at: backendCategory.updated_at,
+    deleted_at: backendCategory.deleted_at || null,
+  }
+}
 
 export function CategoryProvider({ children }: { children: React.ReactNode }) {
-  const [categories, setCategories] = useState<Category[]>(initialCategories)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const addCategory = (categoryData: Omit<Category, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'Children' | 'Parent'>) => {
-    const parent = categoryData.parent_id 
-      ? getCategoryById(categoryData.parent_id)
-      : null
+  // Fetch categories from backend
+  const refreshCategories = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
 
-    const newCategory: Category = {
-      ...categoryData,
-      id: generateId(),
-      Parent: parent || null,
-      Children: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deleted_at: null
-    }
-
-    if (parent) {
-      // Add as child to existing parent
-      updateCategory(parent.id, { 
-        Children: [...(parent.Children || []), newCategory] 
+      const response = await categoryApi.getAll({
+        view: 'tree',
+        limit: 100,
+        include_inactive: true,
       })
-    } else {
-       // Add as new root category
-       setCategories(prev => [...prev, newCategory])
+
+      const convertedCategories = response.data.map(convertToCategory)
+      setCategories(convertedCategories)
+    } catch (err: any) {
+      console.error('Error fetching categories:', err)
+      setError(err.response?.data?.error || 'Failed to fetch categories')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const updateCategory = (id: string, updates: Partial<Category>) => {
-    // Helper to recursively update
-    const updateRecursive = (list: Category[]): Category[] => {
-      return list.map(cat => {
-        if (cat.id === id) {
-          return { ...cat, ...updates, updated_at: new Date().toISOString() }
-        }
-        if (cat.Children) {
-          return { ...cat, Children: updateRecursive(cat.Children) }
-        }
-        return cat
+  // Load categories on mount
+  useEffect(() => {
+    refreshCategories()
+  }, [])
+
+  const addCategory = async (category: Omit<Category, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'Children' | 'Parent'>) => {
+    try {
+      await categoryApi.create({
+        category_name: category.category_name,
+        parent_id: category.parent_id ? parseInt(category.parent_id) : null,
+        status: category.status,
       })
+
+      // Refresh categories to get updated tree structure
+      await refreshCategories()
+    } catch (err: any) {
+      console.error('Error creating category:', err)
+      throw new Error(err.response?.data?.error || 'Failed to create category')
     }
-    setCategories(prev => updateRecursive(prev))
   }
 
-  const deleteCategory = (id: string) => {
-     const deleteRecursive = (list: Category[]): Category[] => {
-      return list.filter(cat => cat.id !== id).map(cat => ({
-        ...cat,
-        Children: cat.Children ? deleteRecursive(cat.Children) : null
-      }))
+  const updateCategory = async (id: string, updates: Partial<Category>) => {
+    try {
+      const updateData: any = {}
+
+      if (updates.category_name !== undefined) {
+        updateData.category_name = updates.category_name
+      }
+      if (updates.parent_id !== undefined) {
+        updateData.parent_id = updates.parent_id ? parseInt(updates.parent_id) : null
+      }
+      if (updates.status !== undefined) {
+        updateData.status = updates.status
+      }
+
+      await categoryApi.update(parseInt(id), updateData)
+
+      // Refresh categories to get updated tree structure
+      await refreshCategories()
+    } catch (err: any) {
+      console.error('Error updating category:', err)
+      throw new Error(err.response?.data?.error || 'Failed to update category')
     }
-    setCategories(prev => deleteRecursive(prev))
+  }
+
+  const deleteCategory = async (id: string) => {
+    try {
+      await categoryApi.delete(parseInt(id))
+
+      // Refresh categories to get updated tree structure
+      await refreshCategories()
+    } catch (err: any) {
+      console.error('Error deleting category:', err)
+      throw new Error(err.response?.data?.error || 'Failed to delete category')
+    }
   }
 
   const getCategoryById = (id: string): Category | undefined => {
-    // Helper search
-    const findRecursive = (list: Category[]): Category | undefined => {
-      for (const cat of list) {
+    const findCategory = (categories: Category[]): Category | undefined => {
+      for (const cat of categories) {
         if (cat.id === id) return cat
         if (cat.Children) {
-          const found = findRecursive(cat.Children)
+          const found = findCategory(cat.Children)
           if (found) return found
         }
       }
       return undefined
     }
-    return findRecursive(categories)
+    return findCategory(categories)
   }
 
-  const getParentCategories = () => {
-    // Assuming 'categories' state holds the root categories
-    return categories
+  const getParentCategories = (): Category[] => {
+    return categories.filter((cat) => cat.parent_id === null)
   }
 
-  const getChildCategories = (parentId: string) => {
-    const parent = getCategoryById(parentId)
-    return parent?.Children || []
-  }
-
-  const getAllCategoriesFlat = () => {
-    const flat: Category[] = []
-    const flattenRecursive = (list: Category[]) => {
-      list.forEach(cat => {
-        flat.push(cat)
-        if (cat.Children) flattenRecursive(cat.Children)
-      })
+  const getChildCategories = (parentId: string): Category[] => {
+    const getAllChildren = (categories: Category[]): Category[] => {
+      const result: Category[] = []
+      for (const cat of categories) {
+        if (cat.parent_id === parentId) {
+          result.push(cat)
+        }
+        if (cat.Children) {
+          result.push(...getAllChildren(cat.Children))
+        }
+      }
+      return result
     }
-    flattenRecursive(categories)
-    return flat
+    return getAllChildren(categories)
+  }
+
+  const getAllCategoriesFlat = (): Category[] => {
+    const flattenCategories = (categories: Category[]): Category[] => {
+      const result: Category[] = []
+      for (const cat of categories) {
+        result.push(cat)
+        if (cat.Children) {
+          result.push(...flattenCategories(cat.Children))
+        }
+      }
+      return result
+    }
+    return flattenCategories(categories)
   }
 
   return (
     <CategoryContext.Provider
       value={{
         categories,
+        isLoading,
+        error,
         addCategory,
         updateCategory,
         deleteCategory,
@@ -234,6 +191,7 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
         getParentCategories,
         getChildCategories,
         getAllCategoriesFlat,
+        refreshCategories,
       }}
     >
       {children}

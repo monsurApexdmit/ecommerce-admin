@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,238 +8,141 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Printer, Eye, Download, Mail, ShoppingBag } from "lucide-react"
-import { usePagination } from "@/hooks/use-pagination"
+import { Printer, Eye, Download, Mail, ShoppingBag, Trash2 } from "lucide-react"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { sellsApi, SellResponse, SellItem } from "@/lib/sellsApi"
 
-interface ShippingAddress {
-  id: string
-  fullName: string
-  phone: string
-  email?: string
-  addressLine1: string
-  addressLine2?: string
-  city: string
-  state: string
-  postalCode: string
-  country: string
-}
-
-interface Order {
-  invoiceNo: string
-  orderTime: string
-  customerName: string
-  method: string
-  amount: number
-  status: "Delivered" | "Processing" | "Pending"
-  note?: string
-  shippingAddress?: ShippingAddress
-}
-
-const initialOrders: Order[] = [
-  {
-    invoiceNo: "12301",
-    orderTime: "31 Dec, 2025 5:01 PM",
-    customerName: "sdfg Ram",
-    method: "Cash",
-    amount: 159.91,
-    status: "Delivered",
-    note: "Customer requested expedited delivery.",
-    shippingAddress: {
-      id: "1",
-      fullName: "sdfg Ram",
-      phone: "+8801712345678",
-      email: "ram@example.com",
-      addressLine1: "123 Main Street",
-      addressLine2: "Apartment 4B",
-      city: "Dhaka",
-      state: "Dhaka Division",
-      postalCode: "1205",
-      country: "Bangladesh"
-    }
-  },
-  {
-    invoiceNo: "12309",
-    orderTime: "31 Dec, 2025 4:52 AM",
-    customerName: "Mydeen Bhatsha",
-    method: "Cash",
-    amount: 371.1,
-    status: "Processing",
-    shippingAddress: {
-      id: "2",
-      fullName: "Mydeen Bhatsha",
-      phone: "+8801812345678",
-      email: "mydeen@example.com",
-      addressLine1: "456 Commerce Road",
-      city: "Chittagong",
-      state: "Chittagong Division",
-      postalCode: "4000",
-      country: "Bangladesh"
-    }
-  },
-  {
-    invoiceNo: "12332",
-    orderTime: "30 Dec, 2025 3:55 PM",
-    customerName: "Justin Luis",
-    method: "Cash",
-    amount: 110.0,
-    status: "Delivered",
-  },
-  {
-    invoiceNo: "12342",
-    orderTime: "30 Dec, 2025 3:55 PM",
-    customerName: "Justin Luis",
-    method: "Cash",
-    amount: 677.91,
-    status: "Delivered",
-    note: "Leave package at the back door."
-  },
-  {
-    invoiceNo: "12336",
-    orderTime: "29 Dec, 2025 2:31 PM",
-    customerName: "Justinn Luish",
-    method: "Cash",
-    amount: 265.01,
-    status: "Delivered",
-  },
-  {
-    invoiceNo: "12338",
-    orderTime: "28 Dec, 2025 4:38 PM",
-    customerName: "TEJPAL SONI",
-    method: "Cash",
-    amount: 166.49,
-    status: "Delivered",
-  },
-  {
-    invoiceNo: "12341",
-    orderTime: "26 Dec, 2025 9:17 AM",
-    customerName: "Justin Luis",
-    method: "Cash",
-    amount: 2810.13,
-    status: "Pending",
-  },
-  {
-    invoiceNo: "12340",
-    orderTime: "26 Dec, 2025 8:29 AM",
-    customerName: "Nevil Nevil",
-    method: "Cash",
-    amount: 253.26,
-    status: "Pending",
-  },
-  {
-    invoiceNo: "12339",
-    orderTime: "26 Dec, 2025 7:57 AM",
-    customerName: "Nevil Nevil",
-    method: "Cash",
-    amount: 121.56,
-    status: "Pending",
-  },
-  {
-    invoiceNo: "12321",
-    orderTime: "26 Dec, 2025 2:49 AM",
-    customerName: "Kazi Hasan",
-    method: "Cash",
-    amount: 68.12,
-    status: "Pending",
-  },
-  {
-    invoiceNo: "12337",
-    orderTime: "26 Dec, 2025 2:49 AM",
-    customerName: "Nevil Nevil",
-    method: "Cash",
-    amount: 660.0,
-    status: "Pending",
-  },
-  {
-    invoiceNo: "12335",
-    orderTime: "23 Dec, 2025 4:28 PM",
-    customerName: "Vikas WHITE",
-    method: "Cash",
-    amount: 825.74,
-    status: "Pending",
-  },
-  {
-    invoiceNo: "11140",
-    orderTime: "23 Dec, 2025 12:55 PM",
-    customerName: "fhg jk scsd",
-    method: "Cash",
-    amount: 108.12,
-    status: "Processing",
-  },
-]
+const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
+const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
+const itemTotal = (item: SellItem) => item.total_price ?? item.totalPrice ?? (itemPrice(item) * item.quantity)
 
 export default function OrdersPage() {
   const searchParams = useSearchParams()
-  const [orders, setOrders] = useState<Order[]>(initialOrders)
+  const [orders, setOrders] = useState<SellResponse[]>([])
+  const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [limitFilter, setLimitFilter] = useState<string>("all")
   const [methodFilter, setMethodFilter] = useState<string>("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<SellResponse | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   useEffect(() => {
     const customerParam = searchParams.get("customer")
-    if (customerParam) {
-      setSearchQuery(customerParam)
-    }
+    if (customerParam) setSearchQuery(customerParam)
   }, [searchParams])
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  const fetchOrders = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const params: Record<string, string | number> = {
+        page: currentPage,
+        limit: itemsPerPage,
+      }
+      if (searchQuery) params.search = searchQuery
+      if (statusFilter !== "all") params.status = statusFilter
+      if (methodFilter !== "all") params.method = methodFilter
+      if (startDate) params.start_date = startDate
+      if (endDate) params.end_date = endDate
+
+      const res = await sellsApi.getAll(params)
+      setOrders(res.data ?? [])
+      setTotal(res.total ?? res.data?.length ?? 0)
+    } catch (err) {
+      console.error("Failed to fetch orders:", err)
+      setOrders([])
+    } finally {
       setIsLoading(false)
-    }, 2000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch = order.customerName.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter
-    const matchesMethod = methodFilter === "all" || order.method === methodFilter
-
-    let matchesDateRange = true
-    if (startDate && endDate) {
-      const orderDate = new Date(order.orderTime)
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      matchesDateRange = orderDate >= start && orderDate <= end
     }
+  }, [currentPage, itemsPerPage, searchQuery, statusFilter, methodFilter, startDate, endDate])
 
-    return matchesSearch && matchesStatus && matchesMethod && matchesDateRange
-  })
+  useEffect(() => {
+    fetchOrders()
+  }, [fetchOrders])
 
-  const {
-    currentItems: currentOrders,
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    goToPage,
-    setCurrentPage,
-    handleItemsPerPageChange,
-  } = usePagination(filteredOrders, 10)
-
-  const handleFilterChange = () => {
-    setCurrentPage(1)
+  const handleStatusChange = async (id: number, newStatus: SellResponse["status"]) => {
+    setUpdatingStatus(id)
+    try {
+      await sellsApi.updateStatus(id, newStatus)
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus } : o)))
+      if (selectedOrder?.id === id) setSelectedOrder((prev) => prev ? { ...prev, status: newStatus } : prev)
+    } catch (err) {
+      console.error("Failed to update status:", err)
+    } finally {
+      setUpdatingStatus(null)
+    }
   }
 
-  const handleStatusChange = (invoiceNo: string, newStatus: Order["status"]) => {
-    setOrders(orders.map((order) => (order.invoiceNo === invoiceNo ? { ...order, status: newStatus } : order)))
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this order?")) return
+    setDeletingId(id)
+    try {
+      await sellsApi.delete(id)
+      setOrders((prev) => prev.filter((o) => o.id !== id))
+      setTotal((prev) => prev - 1)
+      if (selectedOrder?.id === id) setIsDetailsOpen(false)
+    } catch (err) {
+      console.error("Failed to delete order:", err)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const fetchFullOrder = async (id: number): Promise<SellResponse | null> => {
+    try {
+      const res = await sellsApi.getById(id)
+      // Backend may return { data: order } or the order directly
+      return (res.data ?? res) as SellResponse
+    } catch (err) {
+      console.error("Failed to fetch order details:", err)
+      return null
+    }
+  }
+
+  const handleViewDetails = async (order: SellResponse) => {
+    setSelectedOrder(order)
+    setIsDetailsOpen(true)
+    const full = await fetchFullOrder(order.id)
+    if (full) setSelectedOrder(full)
+  }
+
+  const handlePrintFromTable = async (order: SellResponse) => {
+    // If items already loaded (from list response), print immediately
+    if (order.items?.length) {
+      handlePrintInvoice(order)
+      return
+    }
+    // Otherwise fetch full order first
+    const full = await fetchFullOrder(order.id)
+    handlePrintInvoice(full ?? order)
+  }
+
+  const handleReset = () => {
+    setSearchQuery("")
+    setStatusFilter("all")
+    setMethodFilter("all")
+    setStartDate("")
+    setEndDate("")
+    setCurrentPage(1)
   }
 
   const handleDownloadAllOrders = () => {
     const csvContent = [
       ["Invoice No", "Order Time", "Customer Name", "Method", "Amount", "Status"],
-      ...filteredOrders.map((order) => [
-        order.invoiceNo,
-        order.orderTime,
-        order.customerName,
-        order.method,
-        order.amount.toString(),
-        order.status,
+      ...orders.map((o) => [
+        o.invoiceNo,
+        o.orderTime,
+        o.customerName,
+        o.method,
+        fmt(o.amount),
+        o.status,
       ]),
     ]
       .map((row) => row.join(","))
@@ -254,7 +157,33 @@ export default function OrdersPage() {
     window.URL.revokeObjectURL(url)
   }
 
-  const handlePrintInvoice = (order: Order) => {
+  const handlePrintInvoice = (order: SellResponse) => {
+    const shipTo = order.shippingFullName
+      ? `<p style="font-weight:600;">${order.shippingFullName}</p>
+         ${order.shippingEmail ? `<p style="font-size:13px;color:#6b7280;">${order.shippingEmail}</p>` : ""}
+         <p style="font-size:13px;color:#6b7280;">${order.shippingPhone ?? ""}</p>
+         <p style="font-size:13px;color:#6b7280;">${order.shippingAddressLine1 ?? ""}${order.shippingAddressLine2 ? ", " + order.shippingAddressLine2 : ""}</p>
+         <p style="font-size:13px;color:#6b7280;">${[order.shippingCity, order.shippingState, order.shippingPostalCode].filter(Boolean).join(", ")}</p>
+         <p style="font-size:13px;color:#6b7280;">${order.shippingCountry ?? ""}</p>`
+      : `<p style="font-weight:600;">${order.customerName}</p>`
+
+    const itemsHtml = order.items?.length
+      ? order.items.map((item, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${item.productName}</td>
+            <td style="text-align:center;">${item.quantity}</td>
+            <td style="text-align:right;">$${fmt(itemPrice(item))}</td>
+            <td class="amount-red">$${fmt(itemTotal(item))}</td>
+          </tr>`).join("")
+      : `<tr>
+           <td>1</td>
+           <td>${order.customerName}</td>
+           <td style="text-align:center;">1</td>
+           <td style="text-align:right;">$${fmt(order.amount)}</td>
+           <td class="amount-red">$${fmt(order.amount)}</td>
+         </tr>`
+
     const printWindow = window.open("", "_blank")
     if (printWindow) {
       printWindow.document.write(`
@@ -262,146 +191,31 @@ export default function OrdersPage() {
           <head>
             <title>Invoice ${order.invoiceNo}</title>
             <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { 
-                font-family: Arial, sans-serif; 
-                padding: 40px; 
-                color: #374151;
-                line-height: 1.6;
-              }
-              .invoice-container {
-                max-width: 900px;
-                margin: 0 auto;
-                background: white;
-              }
-              .header {
-                display: flex;
-                justify-content: space-between;
-                align-items: start;
-                margin-bottom: 40px;
-              }
-              .company-info {
-                text-align: right;
-              }
-              .logo {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 24px;
-                font-weight: bold;
-                color: #10b981;
-              }
-              .logo-icon {
-                width: 32px;
-                height: 32px;
-                background: #10b981;
-                border-radius: 8px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-              }
-              .company-info p {
-                font-size: 14px;
-                color: #6b7280;
-                margin-top: 4px;
-              }
-              .invoice-title {
-                font-size: 32px;
-                font-weight: bold;
-                margin-bottom: 12px;
-              }
-              .status-badge {
-                display: inline-block;
-                padding: 6px 16px;
-                background: #10b981;
-                color: white;
-                border-radius: 4px;
-                font-size: 14px;
-                font-weight: 600;
-                text-transform: capitalize;
-              }
-              .invoice-meta {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 40px;
-                margin: 40px 0;
-              }
-              .meta-item h3 {
-                font-size: 12px;
-                color: #6b7280;
-                text-transform: uppercase;
-                margin-bottom: 8px;
-                font-weight: 600;
-              }
-              .meta-item p {
-                font-size: 14px;
-                color: #374151;
-              }
-              .invoice-to {
-                text-align: right;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 40px 0;
-              }
-              thead {
-                background: #f9fafb;
-              }
-              th {
-                padding: 16px;
-                text-align: left;
-                font-size: 12px;
-                font-weight: 600;
-                text-transform: uppercase;
-                color: #374151;
-                border-bottom: 2px solid #e5e7eb;
-              }
-              th:last-child {
-                text-align: right;
-              }
-              td {
-                padding: 20px 16px;
-                border-bottom: 1px solid #f3f4f6;
-                font-size: 14px;
-              }
-              td:last-child {
-                text-align: right;
-                font-weight: 600;
-              }
-              .amount-red {
-                color: #ef4444;
-              }
-              .summary {
-                background: #f9fafb;
-                padding: 32px;
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 32px;
-                margin: 40px 0;
-              }
-              .summary-item h3 {
-                font-size: 12px;
-                color: #6b7280;
-                text-transform: uppercase;
-                margin-bottom: 8px;
-                font-weight: 600;
-              }
-              .summary-item p {
-                font-size: 16px;
-                color: #374151;
-                font-weight: 600;
-              }
-              .total-amount {
-                font-size: 24px !important;
-                color: #ef4444 !important;
-                font-weight: bold !important;
-              }
-              @media print {
-                body { padding: 20px; }
-                .no-print { display: none; }
-              }
+              * { margin:0; padding:0; box-sizing:border-box; }
+              body { font-family:Arial,sans-serif; padding:40px; color:#374151; line-height:1.6; }
+              .invoice-container { max-width:900px; margin:0 auto; }
+              .header { display:flex; justify-content:space-between; align-items:start; margin-bottom:40px; }
+              .company-info { text-align:right; }
+              .logo { font-size:24px; font-weight:bold; color:#10b981; }
+              .company-info p { font-size:14px; color:#6b7280; margin-top:4px; }
+              .invoice-title { font-size:32px; font-weight:bold; margin-bottom:12px; }
+              .status-badge { display:inline-block; padding:6px 16px; background:#10b981; color:white; border-radius:4px; font-size:14px; font-weight:600; }
+              .invoice-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:40px; margin:40px 0; }
+              .meta-item h3 { font-size:12px; color:#6b7280; text-transform:uppercase; margin-bottom:8px; font-weight:600; }
+              .meta-item p { font-size:14px; color:#374151; }
+              .invoice-to { text-align:right; }
+              table { width:100%; border-collapse:collapse; margin:40px 0; }
+              thead { background:#f9fafb; }
+              th { padding:16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; color:#374151; border-bottom:2px solid #e5e7eb; }
+              th:last-child { text-align:right; }
+              td { padding:20px 16px; border-bottom:1px solid #f3f4f6; font-size:14px; }
+              td:last-child { text-align:right; font-weight:600; }
+              .amount-red { color:#ef4444; }
+              .summary { background:#f9fafb; padding:32px; display:grid; grid-template-columns:repeat(4,1fr); gap:32px; margin:40px 0; }
+              .summary-item h3 { font-size:12px; color:#6b7280; text-transform:uppercase; margin-bottom:8px; font-weight:600; }
+              .summary-item p { font-size:16px; color:#374151; font-weight:600; }
+              .total-amount { font-size:24px !important; color:#ef4444 !important; font-weight:bold !important; }
+              @media print { body { padding:20px; } }
             </style>
           </head>
           <body>
@@ -410,61 +224,42 @@ export default function OrdersPage() {
                 <div>
                   <h1 class="invoice-title">INVOICE</h1>
                   <div>
-                    <span style="font-weight: 600; margin-right: 8px;">STATUS</span>
+                    <span style="font-weight:600;margin-right:8px;">STATUS</span>
                     <span class="status-badge">${order.status}</span>
                   </div>
                 </div>
                 <div class="company-info">
-                  <div class="logo">
-                    <div class="logo-icon">🛒</div>
-                    <span>Admin</span>
-                  </div>
+                  <div class="logo">Admin</div>
                   <p>59 Station Rd, Purls Bridge, United Kingdom</p>
                   <p>019579034</p>
-                  <p>kachabazar@gmail.com</p>
-                  <p>kachabazar-admin.vercel.app</p>
                 </div>
               </div>
-
               <div class="invoice-meta">
                 <div class="meta-item">
                   <h3>Date</h3>
-                  <p>${order.orderTime.split(" ")[0]} ${order.orderTime.split(" ")[1]} ${order.orderTime.split(" ")[2]}</p>
+                  <p>${new Date(order.orderTime).toLocaleDateString()}</p>
                 </div>
                 <div class="meta-item">
                   <h3>Invoice No</h3>
                   <p>#${order.invoiceNo}</p>
                 </div>
                 <div class="meta-item invoice-to">
-                  <h3>Invoice To</h3>
-                  <p style="font-weight: 600;">${order.customerName}</p>
-                  <p style="font-size: 13px; color: #6b7280;">hram8251@gmail.com</p>
-                  <p style="font-size: 13px; color: #6b7280;">123456789</p>
-                  <p style="font-size: 13px; color: #6b7280;">state, cuntyre, 1235</p>
+                  <h3>${order.shippingFullName ? "Ship To" : "Invoice To"}</h3>
+                  ${shipTo}
                 </div>
               </div>
-
               <table>
                 <thead>
                   <tr>
-                    <th style="width: 80px;">SR.</th>
+                    <th style="width:80px;">SR.</th>
                     <th>PRODUCT TITLE</th>
-                    <th style="text-align: center; width: 120px;">QUANTITY</th>
-                    <th style="text-align: right; width: 120px;">ITEM PRICE</th>
-                    <th style="width: 120px;">AMOUNT</th>
+                    <th style="text-align:center;width:120px;">QUANTITY</th>
+                    <th style="text-align:right;width:120px;">ITEM PRICE</th>
+                    <th style="width:120px;">AMOUNT</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td>1</td>
-                    <td>Fresh Mustard Oil</td>
-                    <td style="text-align: center;">1</td>
-                    <td style="text-align: right;">$${(order.amount - 60).toFixed(2)}</td>
-                    <td class="amount-red">$${(order.amount - 60).toFixed(2)}</td>
-                  </tr>
-                </tbody>
+                <tbody>${itemsHtml}</tbody>
               </table>
-
               <div class="summary">
                 <div class="summary-item">
                   <h3>Payment Method</h3>
@@ -472,15 +267,15 @@ export default function OrdersPage() {
                 </div>
                 <div class="summary-item">
                   <h3>Shipping Cost</h3>
-                  <p style="color: #6b7280;">$60.00</p>
+                  <p style="color:#6b7280;">$${fmt(order.shippingCost)}</p>
                 </div>
                 <div class="summary-item">
                   <h3>Discount</h3>
-                  <p style="color: #6b7280;">$0.00</p>
+                  <p style="color:#6b7280;">$${fmt(order.discount)}</p>
                 </div>
                 <div class="summary-item">
                   <h3>Total Amount</h3>
-                  <p class="total-amount">$${order.amount.toFixed(2)}</p>
+                  <p class="total-amount">$${fmt(order.amount)}</p>
                 </div>
               </div>
             </div>
@@ -492,30 +287,16 @@ export default function OrdersPage() {
     }
   }
 
-  const handleDownloadInvoice = (order: Order) => {
-    handlePrintInvoice(order)
-  }
-
-  const handleEmailInvoice = (order: Order) => {
+  const handleEmailInvoice = (order: SellResponse) => {
     alert(`Email invoice #${order.invoiceNo} functionality would be implemented here`)
   }
 
-  const handleReset = () => {
-    setSearchQuery("")
-    setStatusFilter("all")
-    setLimitFilter("all")
-    setMethodFilter("all")
-    setStartDate("")
-    setEndDate("")
-    handleFilterChange()
+  const totalPages = Math.ceil(total / itemsPerPage)
+
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value)
+    setCurrentPage(1)
   }
-
-  const handleViewDetails = (order: Order) => {
-    setSelectedOrder(order)
-    setIsDetailsOpen(true)
-  }
-
-
 
   return (
     <div className="space-y-6">
@@ -531,20 +312,11 @@ export default function OrdersPage() {
                 type="text"
                 placeholder="Search by Customer Name"
                 value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  handleFilterChange()
-                }}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
               />
             </div>
 
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(value)
-                handleFilterChange()
-              }}
-            >
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1) }}>
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -556,25 +328,7 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
 
-            <Select value={limitFilter} onValueChange={setLimitFilter}>
-              <SelectTrigger className="w-full lg:w-48">
-                <SelectValue placeholder="Order limits" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Limits</SelectItem>
-                <SelectItem value="5">Last 5</SelectItem>
-                <SelectItem value="10">Last 10</SelectItem>
-                <SelectItem value="20">Last 20</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={methodFilter}
-              onValueChange={(value) => {
-                setMethodFilter(value)
-                handleFilterChange()
-              }}
-            >
+            <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v); setCurrentPage(1) }}>
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="Method" />
               </SelectTrigger>
@@ -595,35 +349,15 @@ export default function OrdersPage() {
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value)
-                  handleFilterChange()
-                }}
-              />
+              <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1) }} />
             </div>
-
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value)
-                  handleFilterChange()
-                }}
-              />
+              <Input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1) }} />
             </div>
-
             <div className="flex items-end gap-2">
-              <Button onClick={() => { }} className="bg-emerald-600 hover:bg-emerald-700">
-                Filter
-              </Button>
-              <Button onClick={handleReset} variant="outline">
-                Reset
-              </Button>
+              <Button onClick={fetchOrders} className="bg-emerald-600 hover:bg-emerald-700">Filter</Button>
+              <Button onClick={handleReset} variant="outline">Reset</Button>
             </div>
           </div>
         </div>
@@ -644,53 +378,37 @@ export default function OrdersPage() {
             </thead>
             <tbody>
               {isLoading
-                ? Array.from({ length: 3 }).map((_, index) => (
-                  <tr key={index} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-4 w-16" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-4 w-32" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-4 w-24" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-4 w-12" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-4 w-16" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-6 w-20 rounded-full" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Skeleton className="h-8 w-32" />
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Skeleton className="h-8 w-8 rounded" />
-                        <Skeleton className="h-8 w-8 rounded" />
-                      </div>
-                    </td>
+                ? Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-8 w-32" /></td>
+                    <td className="py-3 px-4"><div className="flex gap-2"><Skeleton className="h-8 w-8 rounded" /><Skeleton className="h-8 w-8 rounded" /></div></td>
                   </tr>
                 ))
-                : currentOrders.map((order) => (
-                  <tr key={order.invoiceNo} className="border-b last:border-0 hover:bg-gray-50">
+                : orders.map((order) => (
+                  <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
                     <td className="py-3 px-4">
-                      <span className="font-semibold text-gray-900">{order.invoiceNo}</span>
+                      <span className="font-semibold text-gray-900">#{order.invoiceNo}</span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{order.orderTime}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {new Date(order.orderTime).toLocaleString()}
+                    </td>
                     <td className="py-3 px-4 text-sm text-gray-900">{order.customerName}</td>
                     <td className="py-3 px-4 text-sm text-gray-900">{order.method}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${order.amount.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${fmt(order.amount)}</td>
                     <td className="py-3 px-4">
                       <StatusBadge status={order.status} />
                     </td>
                     <td className="py-3 px-4">
                       <Select
                         value={order.status}
-                        onValueChange={(value) => handleStatusChange(order.invoiceNo, value as Order["status"])}
+                        onValueChange={(value) => handleStatusChange(order.id, value as SellResponse["status"])}
+                        disabled={updatingStatus === order.id}
                       >
                         <SelectTrigger className="w-32 h-8 text-xs">
                           <SelectValue />
@@ -703,12 +421,22 @@ export default function OrdersPage() {
                       </Select>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handlePrintInvoice(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600">
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => handlePrintFromTable(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600" title="Print">
                           <Printer className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600">
+                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600" title="View">
                           <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(order.id)}
+                          disabled={deletingId === order.id}
+                          className="p-2 h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </td>
@@ -718,7 +446,7 @@ export default function OrdersPage() {
           </table>
         </div>
 
-        {filteredOrders.length === 0 && (
+        {!isLoading && orders.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500">No orders found</p>
           </div>
@@ -731,9 +459,10 @@ export default function OrdersPage() {
         onPageChange={setCurrentPage}
         itemsPerPage={itemsPerPage}
         onItemsPerPageChange={handleItemsPerPageChange}
-        totalItems={filteredOrders.length}
+        totalItems={total}
       />
 
+      {/* Order Detail Dialog */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -742,7 +471,7 @@ export default function OrdersPage() {
 
           {selectedOrder && (
             <div className="space-y-8 py-4">
-              {/* Header Section */}
+              {/* Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div>
                   <h1 className="text-4xl font-bold mb-3">INVOICE</h1>
@@ -760,19 +489,14 @@ export default function OrdersPage() {
                   </div>
                   <p className="text-sm text-gray-600">59 Station Rd, Purls Bridge, United Kingdom</p>
                   <p className="text-sm text-gray-600">019579034</p>
-                  <p className="text-sm text-gray-600">kachabazar@gmail.com</p>
-                  <p className="text-sm text-gray-600">kachabazar-admin.vercel.app</p>
                 </div>
               </div>
 
-              {/* Invoice Meta */}
+              {/* Meta */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                 <div>
                   <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Date</h3>
-                  <p className="text-sm text-gray-900">
-                    {selectedOrder.orderTime.split(" ")[0]} {selectedOrder.orderTime.split(" ")[1]}{" "}
-                    {selectedOrder.orderTime.split(" ")[2]}
-                  </p>
+                  <p className="text-sm text-gray-900">{new Date(selectedOrder.orderTime).toLocaleDateString()}</p>
                 </div>
                 <div>
                   <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice No</h3>
@@ -780,66 +504,56 @@ export default function OrdersPage() {
                 </div>
                 <div className="sm:text-right">
                   <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">
-                    {selectedOrder.shippingAddress ? "Ship To" : "Invoice To"}
+                    {selectedOrder.shippingFullName ? "Ship To" : "Invoice To"}
                   </h3>
-                  {selectedOrder.shippingAddress ? (
+                  {selectedOrder.shippingFullName ? (
                     <>
-                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.shippingAddress.fullName}</p>
-                      {selectedOrder.shippingAddress.email && (
-                        <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.email}</p>
-                      )}
-                      <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.phone}</p>
-                      <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.addressLine1}</p>
-                      {selectedOrder.shippingAddress.addressLine2 && (
-                        <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.addressLine2}</p>
-                      )}
-                      <p className="text-xs text-gray-600">
-                        {selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.postalCode}
-                      </p>
-                      <p className="text-xs text-gray-600">{selectedOrder.shippingAddress.country}</p>
+                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.shippingFullName}</p>
+                      {selectedOrder.shippingEmail && <p className="text-xs text-gray-600">{selectedOrder.shippingEmail}</p>}
+                      {selectedOrder.shippingPhone && <p className="text-xs text-gray-600">{selectedOrder.shippingPhone}</p>}
+                      {selectedOrder.shippingAddressLine1 && <p className="text-xs text-gray-600">{selectedOrder.shippingAddressLine1}{selectedOrder.shippingAddressLine2 ? `, ${selectedOrder.shippingAddressLine2}` : ""}</p>}
+                      <p className="text-xs text-gray-600">{[selectedOrder.shippingCity, selectedOrder.shippingState, selectedOrder.shippingPostalCode].filter(Boolean).join(", ")}</p>
+                      {selectedOrder.shippingCountry && <p className="text-xs text-gray-600">{selectedOrder.shippingCountry}</p>}
                     </>
                   ) : (
-                    <>
-                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
-                      <p className="text-xs text-gray-600">hram8251@gmail.com</p>
-                      <p className="text-xs text-gray-600">123456789</p>
-                      <p className="text-xs text-gray-600">state, country, 1235</p>
-                    </>
+                    <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
                   )}
                 </div>
               </div>
 
-              {/* Products Table */}
+              {/* Items Table */}
               <div className="border rounded-lg overflow-x-auto">
                 <table className="w-full min-w-[600px]">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">SR.</th>
-                      <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">
-                        Product Title
-                      </th>
+                      <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Product Title</th>
                       <th className="text-center py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Quantity</th>
                       <th className="text-right py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Item Price</th>
                       <th className="text-right py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-t">
-                      <td className="py-5 px-4 text-sm text-gray-900">1</td>
-                      <td className="py-5 px-4 text-sm text-gray-900">Fresh Mustard Oil</td>
-                      <td className="py-5 px-4 text-sm text-center text-gray-900">1</td>
-                      <td className="py-5 px-4 text-sm text-right text-gray-900">
-                        ${(selectedOrder.amount - 60).toFixed(2)}
-                      </td>
-                      <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">
-                        ${(selectedOrder.amount - 60).toFixed(2)}
-                      </td>
-                    </tr>
+                    {selectedOrder.items?.length ? (
+                      selectedOrder.items.map((item, i) => (
+                        <tr key={item.id ?? i} className="border-t">
+                          <td className="py-5 px-4 text-sm text-gray-900">{i + 1}</td>
+                          <td className="py-5 px-4 text-sm text-gray-900">{item.productName}</td>
+                          <td className="py-5 px-4 text-sm text-center text-gray-900">{item.quantity}</td>
+                          <td className="py-5 px-4 text-sm text-right text-gray-900">${fmt(itemPrice(item))}</td>
+                          <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">${fmt(itemTotal(item))}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr className="border-t">
+                        <td colSpan={5} className="py-8 text-center text-sm text-gray-500">No items available</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
 
-              {/* Summary Section */}
+              {/* Summary */}
               <div className="bg-gray-50 p-6 rounded-lg">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
                   <div>
@@ -848,57 +562,71 @@ export default function OrdersPage() {
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Shipping Cost</h3>
-                    <p className="text-base font-semibold text-gray-600">$60.00</p>
+                    <p className="text-base font-semibold text-gray-600">${fmt(selectedOrder.shippingCost)}</p>
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Discount</h3>
-                    <p className="text-base font-semibold text-gray-600">$0.00</p>
+                    <p className="text-base font-semibold text-gray-600">${fmt(selectedOrder.discount)}</p>
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Total Amount</h3>
-                    <p className="text-2xl font-bold text-red-600">${selectedOrder.amount.toFixed(2)}</p>
+                    <p className="text-2xl font-bold text-red-600">${fmt(selectedOrder.amount)}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Update Status */}
+              <div className="border rounded-lg p-6 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-900 uppercase">Update Status</h3>
+                <Select
+                  value={selectedOrder.status}
+                  onValueChange={(value) => handleStatusChange(selectedOrder.id, value as SellResponse["status"])}
+                  disabled={updatingStatus === selectedOrder.id}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                    <SelectItem value="Processing">Processing</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Order Notes */}
               <div className="border rounded-lg p-6 space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 uppercase">Order Note</h3>
-                <div className="flex gap-4">
-                  <Input
-                    placeholder="Add a note to this order..."
-                    value={selectedOrder.note || ""}
-                    onChange={(e) => {
-                      const note = e.target.value
-                      setSelectedOrder({ ...selectedOrder, note })
-                      // Update main orders list as well to persist change locally
-                      setOrders(orders.map(o => o.invoiceNo === selectedOrder.invoiceNo ? { ...o, note } : o))
-                    }}
-                    className="flex-1"
-                  />
-                </div>
+                <Input
+                  placeholder="Add a note to this order..."
+                  defaultValue={selectedOrder.notes || ""}
+                  onBlur={async (e) => {
+                    const notes = e.target.value
+                    if (notes !== selectedOrder.notes) {
+                      try {
+                        await sellsApi.update(selectedOrder.id, { notes })
+                        setOrders((prev) => prev.map((o) => o.id === selectedOrder.id ? { ...o, notes } : o))
+                        setSelectedOrder((prev) => prev ? { ...prev, notes } : prev)
+                      } catch (err) {
+                        console.error("Failed to save note:", err)
+                      }
+                    }
+                  }}
+                  className="flex-1"
+                />
               </div>
 
-              {/* Action Buttons */}
+              {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <Button
-                  onClick={() => handleDownloadInvoice(selectedOrder)}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
-                >
+                <Button onClick={() => handlePrintInvoice(selectedOrder)} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
                   <Download className="w-4 h-4 mr-2" />
                   Download Invoice
                 </Button>
-                <Button
-                  onClick={() => handleEmailInvoice(selectedOrder)}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                >
+                <Button onClick={() => handleEmailInvoice(selectedOrder)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
                   <Mail className="w-4 h-4 mr-2" />
                   Email Invoice
                 </Button>
-                <Button
-                  onClick={() => handlePrintInvoice(selectedOrder)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                >
+                <Button onClick={() => handlePrintInvoice(selectedOrder)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
                   <Printer className="w-4 h-4 mr-2" />
                   Print Invoice
                 </Button>

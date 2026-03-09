@@ -55,6 +55,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { Toaster } from "@/components/ui/toaster"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -281,6 +282,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </SidebarInset>
                       </SidebarProvider>
                         </Suspense>
+                        <Toaster />
                               </OrderProvider>
                             </ShipmentProvider>
                           </ShippingAddressProvider>

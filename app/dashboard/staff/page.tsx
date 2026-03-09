@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown } from "lucide-react"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
@@ -14,7 +14,7 @@ import Image from "next/image"
 import { useStaff, type Staff } from "@/contexts/staff-context"
 
 export default function StaffPage() {
-  const { staff, roles, addStaff, updateStaff, deleteStaff } = useStaff()
+  const { staff, roles, isLoading, addStaff, updateStaff, deleteStaff } = useStaff()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedRole, setSelectedRole] = useState("All Roles")
   const [showRoleDropdown, setShowRoleDropdown] = useState(false)
@@ -38,7 +38,6 @@ export default function StaffPage() {
     currentPage,
     totalPages,
     itemsPerPage,
-    goToPage,
     setCurrentPage,
     handleItemsPerPageChange,
   } = usePagination(filteredStaff, 10)
@@ -47,25 +46,16 @@ export default function StaffPage() {
     setCurrentPage(1)
   }
 
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 2000)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const handleTogglePublished = (id: string) => {
+  const handleTogglePublished = async (id: string) => {
     const member = staff.find((s) => s.id === id)
     if (member) {
-      updateStaff({ ...member, published: !member.published })
+      await updateStaff({ ...member, published: !member.published })
     }
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this staff member?")) {
-      deleteStaff(id)
+      await deleteStaff(id)
     }
   }
 
@@ -79,37 +69,31 @@ export default function StaffPage() {
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editFormData) {
-      updateStaff(editFormData)
+      await updateStaff(editFormData)
       setIsEditDialogOpen(false)
       setEditFormData(null)
     }
   }
 
-  const handleAddStaff = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
 
-    // Safety check for role, though required should handle it
-    const roleIdOrName = formData.get("role") as string
-
-    const newStaff: Staff = {
-      id: Date.now().toString(),
+    await addStaff({
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       contact: formData.get("contact") as string,
       joiningDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-      role: roleIdOrName,
+      role: formData.get("role") as string,
       status: "Active",
       published: true,
       avatar: "/placeholder.svg?height=40&width=40",
       salary: parseFloat(formData.get("salary") as string) || 0,
       bankAccount: formData.get("bankAccount") as string,
       paymentMethod: (formData.get("paymentMethod") as "Bank Transfer" | "Cash" | "Check") || "Bank Transfer",
-    }
-
-    addStaff(newStaff)
+    })
     setIsAddDialogOpen(false)
   }
 

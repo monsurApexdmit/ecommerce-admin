@@ -1,111 +1,107 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from "react"
-import { generateId } from "@/lib/export-import-utils"
+import { locationApi, type LocationResponse } from "@/lib/locationApi"
 
 export interface Warehouse {
-    id: string
-    name: string
-    address: string
-    contact: string
-    isDefault: boolean
+  id: number
+  name: string
+  address: string
+  contact: string
+  isDefault: boolean
 }
 
 interface WarehouseContextType {
-    warehouses: Warehouse[]
-    addWarehouse: (warehouse: Omit<Warehouse, "id">) => void
-    updateWarehouse: (warehouse: Warehouse) => void
-    deleteWarehouse: (id: string) => void
-    defaultWarehouse: Warehouse | undefined
+  warehouses: Warehouse[]
+  loading: boolean
+  addWarehouse: (warehouse: Omit<Warehouse, "id">) => Promise<void>
+  updateWarehouse: (warehouse: Warehouse) => Promise<void>
+  deleteWarehouse: (id: number) => Promise<void>
+  defaultWarehouse: Warehouse | undefined
+  refreshLocations: () => Promise<void>
 }
 
 const WarehouseContext = createContext<WarehouseContextType | undefined>(undefined)
 
-// Initial dummy data
-const initialWarehouses: Warehouse[] = [
-    {
-        id: "wh_main",
-        name: "Main Warehouse",
-        address: "123 Commerce St, Business City",
-        contact: "John Doe",
-        isDefault: true
-    },
-    {
-        id: "wh_downtown",
-        name: "Downtown Store",
-        address: "456 Market Ave, Downtown",
-        contact: "Jane Smith",
-        isDefault: false
-    }
-]
+function toWarehouse(loc: LocationResponse): Warehouse {
+  return {
+    id: loc.id,
+    name: loc.name,
+    address: loc.address,
+    contact: loc.contact_person,
+    isDefault: loc.is_default,
+  }
+}
 
 export function WarehouseProvider({ children }: { children: React.ReactNode }) {
-    const [warehouses, setWarehouses] = useState<Warehouse[]>(initialWarehouses)
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [loading, setLoading] = useState(true)
 
-    const addWarehouse = (warehouseData: Omit<Warehouse, "id">) => {
-        const newWarehouse = {
-            ...warehouseData,
-            id: generateId(),
-        }
-        
-        // If it's the first one or marked default, handle default logic
-        if (newWarehouse.isDefault) {
-            setWarehouses(prev => prev.map(w => ({ ...w, isDefault: false })).concat(newWarehouse))
-        } else {
-            setWarehouses(prev => [...prev, newWarehouse])
-        }
+  const fetchLocations = async () => {
+    try {
+      setLoading(true)
+      const res = await locationApi.getAll()
+      setWarehouses((res.data ?? []).map(toWarehouse))
+    } catch (err) {
+      console.error("Failed to fetch locations:", err)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const updateWarehouse = (warehouse: Warehouse) => {
-        setWarehouses(prev => {
-            let updatedList = prev.map(w => (w.id === warehouse.id ? warehouse : w))
-            
-            // Ensure only one default
-            if (warehouse.isDefault) {
-                updatedList = updatedList.map(w => 
-                    w.id === warehouse.id ? w : { ...w, isDefault: false }
-                )
-            }
-            return updatedList
-        })
-    }
+  useEffect(() => {
+    fetchLocations()
+  }, [])
 
-    const deleteWarehouse = (id: string) => {
-        setWarehouses(prev => {
-            const warehouseToDelete = prev.find(w => w.id === id)
-            if (warehouseToDelete?.isDefault) {
-                // Prevent deleting default or reassign default?
-                // For now, allow but warn (simulated) or just prevent
-                if (prev.length > 1) {
-                     alert("Cannot delete the default warehouse. Please set another as default first.")
-                     return prev
-                }
-            }
-            return prev.filter(w => w.id !== id)
-        })
-    }
+  const addWarehouse = async (warehouseData: Omit<Warehouse, "id">) => {
+    const res = await locationApi.create({
+      name: warehouseData.name,
+      address: warehouseData.address,
+      contact_person: warehouseData.contact,
+      is_default: warehouseData.isDefault,
+    })
+    setWarehouses(prev => [...prev, toWarehouse(res.data)])
+  }
 
-    const defaultWarehouse = warehouses.find(w => w.isDefault) || warehouses[0]
+  const updateWarehouse = async (warehouse: Warehouse) => {
+    await locationApi.update(warehouse.id, {
+      name: warehouse.name,
+      address: warehouse.address,
+      contact_person: warehouse.contact,
+      is_default: warehouse.isDefault,
+    })
+    // Refresh to get accurate is_default state from backend
+    await fetchLocations()
+  }
 
-    return (
-        <WarehouseContext.Provider
-            value={{
-                warehouses,
-                addWarehouse,
-                updateWarehouse,
-                deleteWarehouse,
-                defaultWarehouse,
-            }}
-        >
-            {children}
-        </WarehouseContext.Provider>
-    )
+  const deleteWarehouse = async (id: number) => {
+    await locationApi.delete(id)
+    setWarehouses(prev => prev.filter(w => w.id !== id))
+  }
+
+  const defaultWarehouse = warehouses.find(w => w.isDefault) || warehouses[0]
+
+  return (
+    <WarehouseContext.Provider
+      value={{
+        warehouses,
+        loading,
+        addWarehouse,
+        updateWarehouse,
+        deleteWarehouse,
+        defaultWarehouse,
+        refreshLocations: fetchLocations,
+      }}
+    >
+      {children}
+    </WarehouseContext.Provider>
+  )
 }
 
 export function useWarehouse() {
-    const context = useContext(WarehouseContext)
-    if (context === undefined) {
-        throw new Error("useWarehouse must be used within a WarehouseProvider")
-    }
-    return context
+  const context = useContext(WarehouseContext)
+  if (context === undefined) {
+    throw new Error("useWarehouse must be used within a WarehouseProvider")
+  }
+  return context
 }

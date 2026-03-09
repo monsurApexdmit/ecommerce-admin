@@ -16,7 +16,9 @@ export const StatusBadge = ({ status, className, ...props }: StatusBadgeProps) =
     } else if (["pending", "processing"].includes(lowerStatus)) {
         badgeClass = "bg-[#f59e0b] text-white" // Amber/Orange for pending states
     } else if (["out of stock", "expired", "discontinued", "unpublished"].includes(lowerStatus)) {
-        badgeClass = "bg-red-500 text-white"
+        badgeClass = lowerStatus === "out of stock"
+            ? "bg-red-600 text-white ring-2 ring-red-300 animate-pulse font-semibold"
+            : "bg-red-500 text-white"
     } else if (lowerStatus === "processing") {
         badgeClass = "bg-blue-500 text-white"
     }

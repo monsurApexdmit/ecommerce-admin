@@ -1,7 +1,7 @@
 "use client"
 
-import React, { createContext, useContext, useState } from "react"
-import { generateId } from "@/lib/export-import-utils"
+import React, { createContext, useContext, useState, useEffect } from "react"
+import { customerApi, type CustomerResponse } from "@/lib/customerApi"
 
 export interface Customer {
   id: string
@@ -25,9 +25,12 @@ export interface Customer {
 
 interface CustomerContextType {
   customers: Customer[]
-  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => void
-  updateCustomer: (id: string, updates: Partial<Customer>) => void
-  deleteCustomer: (id: string) => void
+  isLoading: boolean
+  error: string | null
+  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>
+  deleteCustomer: (id: string) => Promise<void>
+  refreshCustomers: () => Promise<void>
   getCustomerById: (id: string) => Customer | undefined
   getActiveCustomers: () => Customer[]
   getCustomerStats: () => {
@@ -41,148 +44,133 @@ interface CustomerContextType {
 
 const CustomerContext = createContext<CustomerContextType | undefined>(undefined)
 
-// Sample data
-const initialCustomers: Customer[] = [
-  {
-    id: "1",
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+1-555-0101",
-    address: "123 Main St",
-    city: "New York",
-    state: "NY",
-    zipCode: "10001",
-    country: "USA",
-    customerType: "retail",
-    status: "active",
-    totalOrders: 15,
-    totalSpent: 2450.50,
-    storeCredit: 0,
-    createdAt: "2025-01-01T10:00:00",
-    updatedAt: "2025-01-20T15:30:00"
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    email: "jane.smith@example.com",
-    phone: "+1-555-0102",
-    address: "456 Oak Ave",
-    city: "Los Angeles",
-    state: "CA",
-    zipCode: "90001",
-    country: "USA",
-    customerType: "retail",
-    status: "active",
-    totalOrders: 8,
-    totalSpent: 1280.00,
-    storeCredit: 50,
-    createdAt: "2025-01-05T14:20:00",
-    updatedAt: "2025-01-19T11:15:00"
-  },
-  {
-    id: "3",
-    name: "ABC Corporation",
-    email: "purchasing@abccorp.com",
-    phone: "+1-555-0103",
-    address: "789 Business Blvd",
-    city: "Chicago",
-    state: "IL",
-    zipCode: "60601",
-    country: "USA",
-    customerType: "wholesale",
-    status: "active",
-    totalOrders: 45,
-    totalSpent: 25600.75,
-    storeCredit: 200,
-    createdAt: "2024-12-01T09:00:00",
-    updatedAt: "2025-01-18T16:45:00"
-  },
-  {
-    id: "4",
-    name: "Robert Johnson",
-    email: "robert.j@email.com",
-    phone: "+1-555-0104",
-    address: "321 Pine St",
-    city: "Houston",
-    state: "TX",
-    zipCode: "77001",
-    country: "USA",
-    customerType: "retail",
-    status: "active",
-    totalOrders: 3,
-    totalSpent: 450.00,
-    storeCredit: 0,
-    createdAt: "2025-01-15T11:30:00",
-    updatedAt: "2025-01-15T11:30:00"
-  },
-  {
-    id: "5",
-    name: "Sarah Williams",
-    email: "sarah.w@example.com",
-    phone: "+1-555-0105",
-    customerType: "retail",
-    status: "inactive",
-    totalOrders: 1,
-    totalSpent: 89.99,
-    storeCredit: 0,
-    createdAt: "2024-11-20T13:00:00",
-    updatedAt: "2024-11-20T13:00:00"
+function convertToCustomer(c: CustomerResponse): Customer {
+  return {
+    id: c.id.toString(),
+    name: c.name,
+    email: c.email,
+    phone: c.phone || '',
+    address: c.address || '',
+    city: c.city || '',
+    state: c.state || '',
+    zipCode: c.zipCode || '',
+    country: c.country || '',
+    customerType: c.customerType || 'retail',
+    status: c.status || 'active',
+    totalOrders: c.totalOrders || 0,
+    totalSpent: c.totalSpent || 0,
+    storeCredit: c.storeCredit || 0,
+    notes: c.notes || '',
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
   }
-]
+}
 
 export function CustomerProvider({ children }: { children: React.ReactNode }) {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const addCustomer = (customerData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newCustomer: Customer = {
-      ...customerData,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    setCustomers(prev => [newCustomer, ...prev])
-  }
-
-  const updateCustomer = (id: string, updates: Partial<Customer>) => {
-    setCustomers(prev => prev.map(customer => 
-      customer.id === id 
-        ? { ...customer, ...updates, updatedAt: new Date().toISOString() } 
-        : customer
-    ))
-  }
-
-  const deleteCustomer = (id: string) => {
-    setCustomers(prev => prev.filter(customer => customer.id !== id))
-  }
-
-  const getCustomerById = (id: string) => {
-    return customers.find(customer => customer.id === id)
-  }
-
-  const getActiveCustomers = () => {
-    return customers.filter(customer => customer.status === 'active')
-  }
-
-  const getCustomerStats = () => {
-    return {
-      total: customers.length,
-      active: customers.filter(c => c.status === 'active').length,
-      inactive: customers.filter(c => c.status === 'inactive').length,
-      retail: customers.filter(c => c.customerType === 'retail').length,
-      wholesale: customers.filter(c => c.customerType === 'wholesale').length
+  const refreshCustomers = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const response = await customerApi.getAll({ limit: 100 })
+      setCustomers(response.data.map(convertToCustomer))
+    } catch (err: any) {
+      console.error('Error fetching customers:', err)
+      setError(err.response?.data?.error || 'Failed to fetch customers')
+    } finally {
+      setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    refreshCustomers()
+  }, [])
+
+  const addCustomer = async (customerData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      await customerApi.create({
+        name: customerData.name,
+        email: customerData.email,
+        phone: customerData.phone,
+        address: customerData.address,
+        city: customerData.city,
+        state: customerData.state,
+        zipCode: customerData.zipCode,
+        country: customerData.country,
+        customerType: customerData.customerType,
+        status: customerData.status,
+        notes: customerData.notes,
+        storeCredit: customerData.storeCredit,
+      })
+      await refreshCustomers()
+    } catch (err: any) {
+      console.error('Error creating customer:', err)
+      throw new Error(err.response?.data?.error || 'Failed to create customer')
+    }
+  }
+
+  const updateCustomer = async (id: string, updates: Partial<Customer>) => {
+    try {
+      const updateData: any = {}
+      if (updates.name !== undefined) updateData.name = updates.name
+      if (updates.email !== undefined) updateData.email = updates.email
+      if (updates.phone !== undefined) updateData.phone = updates.phone
+      if (updates.address !== undefined) updateData.address = updates.address
+      if (updates.city !== undefined) updateData.city = updates.city
+      if (updates.state !== undefined) updateData.state = updates.state
+      if (updates.zipCode !== undefined) updateData.zipCode = updates.zipCode
+      if (updates.country !== undefined) updateData.country = updates.country
+      if (updates.customerType !== undefined) updateData.customerType = updates.customerType
+      if (updates.status !== undefined) updateData.status = updates.status
+      if (updates.notes !== undefined) updateData.notes = updates.notes
+      if (updates.storeCredit !== undefined) updateData.storeCredit = updates.storeCredit
+
+      await customerApi.update(parseInt(id), updateData)
+      await refreshCustomers()
+    } catch (err: any) {
+      console.error('Error updating customer:', err)
+      throw new Error(err.response?.data?.error || 'Failed to update customer')
+    }
+  }
+
+  const deleteCustomer = async (id: string) => {
+    try {
+      await customerApi.delete(parseInt(id))
+      await refreshCustomers()
+    } catch (err: any) {
+      console.error('Error deleting customer:', err)
+      throw new Error(err.response?.data?.error || 'Failed to delete customer')
+    }
+  }
+
+  const getCustomerById = (id: string) => customers.find(c => c.id === id)
+
+  const getActiveCustomers = () => customers.filter(c => c.status === 'active')
+
+  const getCustomerStats = () => ({
+    total: customers.length,
+    active: customers.filter(c => c.status === 'active').length,
+    inactive: customers.filter(c => c.status === 'inactive').length,
+    retail: customers.filter(c => c.customerType === 'retail').length,
+    wholesale: customers.filter(c => c.customerType === 'wholesale').length,
+  })
 
   return (
     <CustomerContext.Provider
       value={{
         customers,
+        isLoading,
+        error,
         addCustomer,
         updateCustomer,
         deleteCustomer,
+        refreshCustomers,
         getCustomerById,
         getActiveCustomers,
-        getCustomerStats
+        getCustomerStats,
       }}
     >
       {children}

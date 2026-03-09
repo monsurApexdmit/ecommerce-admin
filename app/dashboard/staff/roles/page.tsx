@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import { Plus, Edit, Trash2, Search, Filter } from "lucide-react"
+import { useState } from "react"
+import { Plus, Edit, Trash2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -29,18 +29,10 @@ const modules: Module[] = [
 ]
 
 export default function RolesPage() {
-    const { roles, addRole, updateRole, deleteRole } = useStaff()
+    const { roles, rolesLoading, addRole, updateRole, deleteRole } = useStaff()
     const [searchQuery, setSearchQuery] = useState("")
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [editingRole, setEditingRole] = useState<Role | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsLoading(false)
-        }, 2000)
-        return () => clearTimeout(timer)
-    }, [])
 
     // Form State
     const [roleName, setRoleName] = useState("")
@@ -82,28 +74,27 @@ export default function RolesPage() {
         }))
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
         if (editingRole) {
-            updateRole({
+            await updateRole({
                 ...editingRole,
                 name: roleName,
-                permissions: permissions
+                permissions,
             })
         } else {
-            addRole({
-                id: Date.now().toString(),
+            await addRole({
                 name: roleName,
-                permissions: permissions
+                permissions,
             })
         }
         setIsDialogOpen(false)
     }
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm("Are you sure you want to delete this role?")) {
-            deleteRole(id)
+            await deleteRole(id)
         }
     }
 
@@ -143,7 +134,7 @@ export default function RolesPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y">
-                            {isLoading
+                            {rolesLoading
                                 ? Array.from({ length: 3 }).map((_, index) => (
                                     <tr key={index} className="hover:bg-gray-50">
                                         <td className="py-3 px-4">
@@ -172,7 +163,7 @@ export default function RolesPage() {
                                         </td>
                                     </tr>
                                 ))}
-                            {filteredRoles.length === 0 && (
+                            {!rolesLoading && filteredRoles.length === 0 && (
                                 <tr>
                                     <td colSpan={2} className="py-8 text-center text-gray-500">No roles found</td>
                                 </tr>

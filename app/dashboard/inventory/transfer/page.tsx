@@ -1,230 +1,316 @@
 "use client"
 
-import { useState } from "react"
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { ArrowLeft, CheckCircle2, Clock, XCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useProduct, type Product, type Variant } from "@/contexts/product-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useTransfer } from "@/contexts/transfer-context"
 import { useRouter } from "next/navigation"
+import { Skeleton } from "@/components/ui/skeleton"
+import { transferApi, type LocationProduct, type LocationProductRaw } from "@/lib/transferApi"
+
+const STATUS_COLORS: Record<string, string> = {
+  Pending: "bg-yellow-100 text-yellow-800",
+  Completed: "bg-green-100 text-green-800",
+  Cancelled: "bg-red-100 text-red-800",
+}
+
+function flattenLocationProducts(raw: LocationProductRaw[]): LocationProduct[] {
+  const rows: LocationProduct[] = []
+  for (const product of raw) {
+    if (product.variants && product.variants.length > 0) {
+      for (const variant of product.variants) {
+        rows.push({
+          type: 'variant',
+          id: variant.id,
+          productId: product.id,
+          productName: product.name,
+          variantName: variant.name,
+          sku: variant.sku,
+          stock: variant.stock,
+        })
+      }
+    } else {
+      rows.push({
+        type: 'product',
+        id: product.id,
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        stock: product.stock,
+      })
+    }
+  }
+  return rows
+}
 
 export default function StockTransferPage() {
   const router = useRouter()
-  const { products, updateProduct } = useProduct()
   const { warehouses } = useWarehouse()
-  const { addTransfer } = useTransfer()
-  
+  const { transfers, loading, addTransfer, cancelTransfer } = useTransfer()
+
   const [fromWarehouse, setFromWarehouse] = useState("")
   const [toWarehouse, setToWarehouse] = useState("")
-  const [selectedProductId, setSelectedProductId] = useState("")
-  const [selectedVariantId, setSelectedVariantId] = useState("")
+  const [rawLocationProducts, setRawLocationProducts] = useState<LocationProductRaw[]>([])
+  const [locationProductsLoading, setLocationProductsLoading] = useState(false)
+  const [selectedRowKey, setSelectedRowKey] = useState("")
   const [quantity, setQuantity] = useState("")
   const [notes, setNotes] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [cancelling, setCancelling] = useState<number | null>(null)
 
-  const getAvailableStock = () => {
-    if (!selectedProductId || !fromWarehouse) return 0
-    
-    const product = products.find(p => p.id === selectedProductId)
-    if (!product) return 0
-    
-    if (selectedVariantId) {
-        const variant = product.variants?.find(v => v.id === selectedVariantId)
-        if (!variant) return 0
-        const inv = variant.inventory?.find(i => i.warehouseId === fromWarehouse)
-        // Fallback for default warehouse if inventory not explicitly set (legacy compat)
-        if (!inv && warehouses.find(w => w.id === fromWarehouse)?.isDefault) return variant.stock
-        return inv ? inv.quantity : 0
-    } else {
-        const inv = product.inventory?.find(i => i.warehouseId === fromWarehouse)
-         if (!inv && warehouses.find(w => w.id === fromWarehouse)?.isDefault) return product.stock
-        return inv ? inv.quantity : 0
+  useEffect(() => {
+    if (!fromWarehouse) {
+      setRawLocationProducts([])
+      setSelectedRowKey("")
+      return
     }
-  }
+    setLocationProductsLoading(true)
+    setSelectedRowKey("")
+    transferApi.getProductsByLocation(Number(fromWarehouse))
+      .then(res => setRawLocationProducts(res.data ?? []))
+      .catch(err => console.error("Failed to fetch location products:", err))
+      .finally(() => setLocationProductsLoading(false))
+  }, [fromWarehouse])
 
-  const handleTransfer = (e: React.FormEvent) => {
+  const locationProducts = useMemo(() => flattenLocationProducts(rawLocationProducts), [rawLocationProducts])
+
+  const selectedItem = locationProducts.find(p =>
+    (p.type === 'variant' ? `v-${p.id}` : `p-${p.id}`) === selectedRowKey
+  )
+
+  const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedProductId || !fromWarehouse || !toWarehouse || !quantity) return
-    
+    if (!selectedItem || !fromWarehouse || !toWarehouse || !quantity) return
     const qtyNum = Number(quantity)
     if (qtyNum <= 0) return
-    if (qtyNum > getAvailableStock()) {
-        alert("Insufficient stock in source warehouse")
-        return
+    if (qtyNum > selectedItem.stock) {
+      alert(`Only ${selectedItem.stock} in stock at this location`)
+      return
     }
 
-    const product = products.find(p => p.id === selectedProductId)
-    if (!product) return
-
-    // 1. Record Transfer
-    addTransfer({
-        productId: selectedProductId,
-        productName: product.name,
-        variantId: selectedVariantId,
-        fromWarehouseId: fromWarehouse,
-        toWarehouseId: toWarehouse,
+    try {
+      setSubmitting(true)
+      await addTransfer({
+        productId: selectedItem.productId,
+        variantId: selectedItem.type === 'variant' ? selectedItem.id : undefined,
+        fromLocationId: Number(fromWarehouse),
+        toLocationId: Number(toWarehouse),
         quantity: qtyNum,
-        notes
-    })
-
-    // 2. Update Product Inventory
-    // Deep copy product to avoid mutation issues
-    const updatedProduct = JSON.parse(JSON.stringify(product)) as Product
-
-    const updateInventory = (inventoryList: {warehouseId: string, quantity: number}[] = [], warehouseId: string, change: number) => {
-        const index = inventoryList.findIndex(i => i.warehouseId === warehouseId)
-        if (index >= 0) {
-            inventoryList[index].quantity += change
-        } else {
-            // Initialize if not exists (should handle case where it's decreasing from default implicit stock)
-            // Ideally we should have normalized this before.
-            // For MVP: if source doesn't exist but has stock (default), we assume it exists. 
-            // If dest doesn't exist, create it with 0 + change
-            inventoryList.push({ warehouseId, quantity: change })
-        }
+        notes: notes || undefined,
+      })
+      setFromWarehouse("")
+      setToWarehouse("")
+      setRawLocationProducts([])
+      setSelectedRowKey("")
+      setQuantity("")
+      setNotes("")
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Transfer failed")
+    } finally {
+      setSubmitting(false)
     }
-
-    if (selectedVariantId) {
-        const variant = updatedProduct.variants?.find(v => v.id === selectedVariantId)
-        if (variant) {
-             if (!variant.inventory) variant.inventory = [] 
-             // Logic to handle implicit default stock
-             const defWarehouse = warehouses.find(w => w.isDefault)
-             if (defWarehouse && !variant.inventory.find(i => i.warehouseId === defWarehouse.id)) {
-                 variant.inventory.push({ warehouseId: defWarehouse.id, quantity: variant.stock })
-             }
-
-             updateInventory(variant.inventory, fromWarehouse, -qtyNum)
-             updateInventory(variant.inventory, toWarehouse, qtyNum)
-             
-             // Update total stock? No, total stock remains same for transfer. 
-             // But we should re-sum just in case? 
-             // Wait, product.stock is sum of variants. Variant.stock is constant during transfer between locations? 
-             // Yes, if I move 5 items from A to B, total stock is same.
-             // BUT, if I treat `stock` as sum of `inventory`, I don't need to touch `stock`?
-             // Actually, `Variant.stock` IS the total. So it doesn't change on transfer.
-        }
-    } else {
-        if (!updatedProduct.inventory) updatedProduct.inventory = []
-        
-        const defWarehouse = warehouses.find(w => w.isDefault)
-        if (defWarehouse && !updatedProduct.inventory.find(i => i.warehouseId === defWarehouse.id)) {
-            updatedProduct.inventory.push({ warehouseId: defWarehouse.id, quantity: updatedProduct.stock })
-        }
-
-        updateInventory(updatedProduct.inventory, fromWarehouse, -qtyNum)
-        updateInventory(updatedProduct.inventory, toWarehouse, qtyNum)
-    }
-
-    updateProduct(updatedProduct)
-    alert("Transfer successful!")
-    router.push("/dashboard/inventory")
   }
 
-  const selectedProduct = products.find(p => p.id === selectedProductId)
+  const handleCancel = async (id: number) => {
+    try {
+      setCancelling(id)
+      await cancelTransfer(id)
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to cancel transfer")
+    } finally {
+      setCancelling(null)
+    }
+  }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" onClick={() => router.back()}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
         </Button>
-        <h1 className="text-2xl font-bold text-gray-900">New Stock Transfer</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Stock Transfers</h1>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Transfer Details</CardTitle>
-          <CardDescription>Move stock between warehouses</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleTransfer} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* New Transfer Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle>New Transfer</CardTitle>
+            <CardDescription>Move stock between warehouses</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleTransfer} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label>Source Warehouse</Label>
-                    <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="From..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {warehouses.map(w => (
-                                <SelectItem key={w.id} value={w.id} disabled={w.id === toWarehouse}>{w.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label>Destination Warehouse</Label>
-                    <Select value={toWarehouse} onValueChange={setToWarehouse}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="To..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {warehouses.map(w => (
-                                <SelectItem key={w.id} value={w.id} disabled={w.id === fromWarehouse}>{w.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            <div className="space-y-2">
-                <Label>Select Product</Label>
-                <Select value={selectedProductId} onValueChange={(val) => { setSelectedProductId(val); setSelectedVariantId(""); }}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Choose product..." />
-                    </SelectTrigger>
+                  <Label>Source Warehouse</Label>
+                  <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
+                    <SelectTrigger><SelectValue placeholder="From..." /></SelectTrigger>
                     <SelectContent>
-                        {products.map(p => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
+                      {warehouses.map(w => (
+                        <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === toWarehouse}>
+                          {w.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
-                </Select>
-            </div>
-
-            {selectedProduct && selectedProduct.variants && selectedProduct.variants.length > 0 && (
-                <div className="space-y-2">
-                    <Label>Select Variant</Label>
-                    <Select value={selectedVariantId} onValueChange={setSelectedVariantId}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Choose variant..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {selectedProduct.variants.map(v => (
-                                <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                  </Select>
                 </div>
-            )}
+                <div className="space-y-2">
+                  <Label>Destination Warehouse</Label>
+                  <Select value={toWarehouse} onValueChange={setToWarehouse}>
+                    <SelectTrigger><SelectValue placeholder="To..." /></SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(w => (
+                        <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === fromWarehouse}>
+                          {w.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-                <Label>Quantity (Available: {getAvailableStock()})</Label>
-                <Input 
-                    type="number" 
-                    value={quantity} 
-                    onChange={e => setQuantity(e.target.value)} 
-                    max={getAvailableStock()}
-                    min={1}
+              <div className="space-y-2">
+                <Label>Product / Variant</Label>
+                <Select
+                  value={selectedRowKey}
+                  onValueChange={setSelectedRowKey}
+                  disabled={!fromWarehouse || locationProductsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !fromWarehouse ? "Select source warehouse first" :
+                      locationProductsLoading ? "Loading..." :
+                      locationProducts.length === 0 ? "No stock at this location" :
+                      "Choose product..."
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locationProducts.map(p => {
+                      const key = p.type === 'variant' ? `v-${p.id}` : `p-${p.id}`
+                      const label = p.variantName ? `${p.productName} — ${p.variantName}` : p.productName
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                          <span className="ml-2 text-xs text-gray-400">({p.stock} in stock)</span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  Quantity
+                  {selectedItem && (
+                    <span className="text-gray-500 font-normal ml-1">(Available: {selectedItem.stock})</span>
+                  )}
+                </Label>
+                <Input
+                  type="number"
+                  value={quantity}
+                  onChange={e => setQuantity(e.target.value)}
+                  min={1}
+                  max={selectedItem?.stock}
+                  placeholder="0"
                 />
-            </div>
+              </div>
 
-            <div className="space-y-2">
+              <div className="space-y-2">
                 <Label>Notes</Label>
                 <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Reason for transfer..." />
-            </div>
+              </div>
 
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={!selectedProductId || !fromWarehouse || !toWarehouse || !quantity}>
+              <Button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                disabled={!selectedRowKey || !fromWarehouse || !toWarehouse || !quantity || submitting}
+              >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
-                Confirm Transfer
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+                {submitting ? "Processing..." : "Confirm Transfer"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Transfer History */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Transfer History</CardTitle>
+            <CardDescription>Recent stock movements</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-y-auto max-h-[520px]">
+              {loading ? (
+                <div className="space-y-3 p-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : transfers.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">No transfers yet</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Product</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Route</th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Qty</th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Status</th>
+                      <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transfers.map(t => (
+                      <tr key={t.id} className="border-b hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-gray-900">{t.product.name}</div>
+                          {t.variant?.name && <div className="text-xs text-gray-500">{t.variant.name}</div>}
+                          {t.notes && <div className="text-xs text-gray-400 mt-0.5 italic">{t.notes}</div>}
+                        </td>
+                        <td className="py-3 px-4 text-xs text-gray-600">
+                          <div className="font-medium">{t.fromLocation.name}</div>
+                          <div className="text-gray-400 my-0.5">↓</div>
+                          <div className="font-medium">{t.toLocation.name}</div>
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold text-gray-900">{t.quantity}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status] || "bg-gray-100 text-gray-700"}`}>
+                            {t.status === "Completed" && <CheckCircle2 className="w-3 h-3" />}
+                            {t.status === "Pending" && <Clock className="w-3 h-3" />}
+                            {t.status === "Cancelled" && <XCircle className="w-3 h-3" />}
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {t.status === "Pending" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs"
+                              onClick={() => handleCancel(t.id)}
+                              disabled={cancelling === t.id}
+                            >
+                              <XCircle className="w-3 h-3 mr-1" />
+                              {cancelling === t.id ? "..." : "Cancel"}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

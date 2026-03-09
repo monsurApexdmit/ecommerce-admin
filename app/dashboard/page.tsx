@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { ArrowUpRight, ArrowDownRight, DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
 import { useVendor } from "@/contexts/vendor-context"
@@ -18,65 +19,118 @@ import {
   Legend,
   Filler,
 } from "chart.js"
+import { sellsApi, SellResponse } from "@/lib/sellsApi"
+import { StatusBadge } from "@/components/ui/status-badge"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
-const stats = [
-  {
-    name: "Total Revenue",
-    value: "$45,231",
-    change: "+12.5%",
-    changeType: "positive",
-    icon: DollarSign,
-    bgColor: "bg-emerald-50",
-    iconColor: "text-emerald-600",
-  },
-  {
-    name: "Total Orders",
-    value: "1,234",
-    change: "+8.2%",
-    changeType: "positive",
-    icon: ShoppingBag,
-    bgColor: "bg-blue-50",
-    iconColor: "text-blue-600",
-  },
-  {
-    name: "Total Customers",
-    value: "3,456",
-    change: "+5.7%",
-    changeType: "positive",
-    icon: Users,
-    bgColor: "bg-purple-50",
-    iconColor: "text-purple-600",
-  },
-  {
-    name: "Total Products",
-    value: "789",
-    change: "-2.3%",
-    changeType: "negative",
-    icon: Package,
-    bgColor: "bg-orange-50",
-    iconColor: "text-orange-600",
-  },
-]
-
-const recentOrders = [
-  { id: "#ORD-001", customer: "John Doe", amount: "$125.00", status: "Completed", date: "2024-01-15" },
-  { id: "#ORD-002", customer: "Jane Smith", amount: "$89.50", status: "Processing", date: "2024-01-15" },
-  { id: "#ORD-003", customer: "Bob Johnson", amount: "$234.00", status: "Pending", date: "2024-01-14" },
-  { id: "#ORD-004", customer: "Alice Brown", amount: "$156.75", status: "Completed", date: "2024-01-14" },
-  { id: "#ORD-005", customer: "Charlie Wilson", amount: "$92.00", status: "Cancelled", date: "2024-01-13" },
-]
-
-const topProducts = [
-  { name: "Wireless Headphones", sales: 245, revenue: "$12,250" },
-  { name: "Smart Watch", sales: 189, revenue: "$18,900" },
-  { name: "Laptop Stand", sales: 156, revenue: "$4,680" },
-  { name: "USB-C Cable", sales: 423, revenue: "$6,345" },
-  { name: "Phone Case", sales: 312, revenue: "$3,120" },
-]
-
 export default function DashboardPage() {
+  const { vendors } = useVendor()
+  const { products } = useProduct()
+  const { staff, salaryPayments } = useStaff()
+
+  const [recentOrders, setRecentOrders] = useState<SellResponse[]>([])
+  const [sellStats, setSellStats] = useState<{
+    totalRevenue: number
+    totalOrders: number
+    pendingCount: number
+    processingCount: number
+    deliveredCount: number
+  } | null>(null)
+  const [ordersLoading, setOrdersLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [listRes, statsRes] = await Promise.all([
+          sellsApi.getAll({ limit: 5 }),
+          sellsApi.getStats(),
+        ])
+        setRecentOrders(listRes.data ?? [])
+
+        const s = statsRes.data
+        setSellStats({
+          totalRevenue: Number(s?.total_revenue ?? 0),
+          totalOrders: Number(s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
+          pendingCount: Number(s?.pending_count ?? 0),
+          processingCount: Number(s?.processing_count ?? 0),
+          deliveredCount: Number(s?.delivered_count ?? 0),
+        })
+      } catch {
+        // fallback: just use list length
+        try {
+          const listRes = await sellsApi.getAll({ limit: 5 })
+          setRecentOrders(listRes.data ?? [])
+          const revenue = (listRes.data ?? []).reduce((sum, o) => sum + Number(o.amount ?? 0), 0)
+          setSellStats({
+            totalRevenue: revenue,
+            totalOrders: listRes.total ?? listRes.data?.length ?? 0,
+            pendingCount: 0,
+            processingCount: 0,
+            deliveredCount: 0,
+          })
+        } catch {
+          setRecentOrders([])
+        }
+      } finally {
+        setOrdersLoading(false)
+      }
+    }
+    fetchDashboardData()
+  }, [])
+
+  // Vendor statistics
+  const totalVendors = vendors.length
+  const totalPaid = vendors.reduce((sum, vendor) => sum + vendor.totalPaid, 0)
+  const totalInventoryValue = products.reduce((sum, product) => {
+    if (product.vendorId) return sum + product.salePrice * product.stock
+    return sum
+  }, 0)
+  const totalDue = totalInventoryValue - totalPaid
+
+  // Staff salary statistics
+  const now = new Date()
+  const currentMonth = `${now.toLocaleString("en-US", { month: "short" })} ${now.getFullYear()}`
+  const totalSalaryBudget = staff.reduce((sum, s) => sum + s.salary, 0)
+  const monthSalaryPayments = salaryPayments.filter((p) => p.month === currentMonth)
+  const totalSalaryPaid = monthSalaryPayments
+    .filter((p) => p.status === "Paid")
+    .reduce((sum, p) => sum + p.paidAmount, 0)
+  const totalSalaryPending = staff
+    .filter((s) => !monthSalaryPayments.find((p) => p.staffId === s.id && p.status === "Paid"))
+    .reduce((sum, s) => sum + s.salary, 0)
+
+  const statsCards = [
+    {
+      name: "Total Revenue",
+      value: sellStats ? `$${sellStats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—",
+      icon: DollarSign,
+      bgColor: "bg-emerald-50",
+      iconColor: "text-emerald-600",
+    },
+    {
+      name: "Total Orders",
+      value: sellStats ? sellStats.totalOrders.toLocaleString() : "—",
+      icon: ShoppingBag,
+      bgColor: "bg-blue-50",
+      iconColor: "text-blue-600",
+    },
+    {
+      name: "Delivered",
+      value: sellStats ? sellStats.deliveredCount.toLocaleString() : "—",
+      icon: Package,
+      bgColor: "bg-purple-50",
+      iconColor: "text-purple-600",
+    },
+    {
+      name: "Pending / Processing",
+      value: sellStats ? (sellStats.pendingCount + sellStats.processingCount).toLocaleString() : "—",
+      icon: Truck,
+      bgColor: "bg-orange-50",
+      iconColor: "text-orange-600",
+    },
+  ]
+
   const salesData = {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     datasets: [
@@ -106,57 +160,15 @@ export default function DashboardPage() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-    },
+    plugins: { legend: { display: false } },
     scales: {
-      x: {
-        grid: {
-          display: false,
-        },
-      },
+      x: { grid: { display: false } },
       y: {
-        grid: {
-          color: "rgba(0, 0, 0, 0.05)",
-        },
-        ticks: {
-          callback: (value: number | string) => "$" + value + "k",
-        },
+        grid: { color: "rgba(0, 0, 0, 0.05)" },
+        ticks: { callback: (value: number | string) => "$" + value + "k" },
       },
     },
   }
-
-  // Vendor statistics
-  const { vendors } = useVendor()
-  const { products } = useProduct()
-  const { staff, salaryPayments } = useStaff()
-
-  const totalVendors = vendors.length
-  const totalPaid = vendors.reduce((sum, vendor) => sum + vendor.totalPaid, 0)
-
-  // Calculate total inventory value across all vendors
-  const totalInventoryValue = products.reduce((sum, product) => {
-    if (product.vendorId) {
-      return sum + (product.salePrice * product.stock)
-    }
-    return sum
-  }, 0)
-
-  const totalDue = totalInventoryValue - totalPaid
-
-  // Staff salary statistics
-  const now = new Date()
-  const currentMonth = `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
-  const totalSalaryBudget = staff.reduce((sum, s) => sum + s.salary, 0)
-  const monthSalaryPayments = salaryPayments.filter(p => p.month === currentMonth)
-  const totalSalaryPaid = monthSalaryPayments
-    .filter(p => p.status === "Paid")
-    .reduce((sum, p) => sum + p.paidAmount, 0)
-  const totalSalaryPending = staff
-    .filter(s => !monthSalaryPayments.find(p => p.staffId === s.id && p.status === "Paid"))
-    .reduce((sum, s) => sum + s.salary, 0)
 
   return (
     <div className="space-y-6">
@@ -167,25 +179,14 @@ export default function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
+        {statsCards.map((stat) => (
           <Card key={stat.name} className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                <div className="flex items-center gap-1 mt-2">
-                  {stat.changeType === "positive" ? (
-                    <ArrowUpRight className="w-4 h-4 text-emerald-600" />
-                  ) : (
-                    <ArrowDownRight className="w-4 h-4 text-red-600" />
-                  )}
-                  <span
-                    className={`text-sm font-medium ${stat.changeType === "positive" ? "text-emerald-600" : "text-red-600"}`}
-                  >
-                    {stat.change}
-                  </span>
-                  <span className="text-sm text-gray-500">vs last month</span>
-                </div>
+                <p className="text-2xl font-bold text-gray-900 mt-2">
+                  {ordersLoading ? <span className="text-gray-300 animate-pulse">—</span> : stat.value}
+                </p>
               </div>
               <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                 <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
@@ -213,11 +214,11 @@ export default function DashboardPage() {
           </div>
           <div className="p-4 bg-emerald-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Paid</p>
-            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Due</p>
-            <p className="text-2xl font-bold text-orange-600">${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-orange-600">${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
       </Card>
@@ -236,15 +237,15 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Monthly Budget</p>
-            <p className="text-2xl font-bold text-gray-900">${totalSalaryBudget.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-gray-900">${totalSalaryBudget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <div className="p-4 bg-emerald-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Paid This Month</p>
-            <p className="text-2xl font-bold text-emerald-600">${totalSalaryPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-emerald-600">${totalSalaryPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Pending</p>
-            <p className="text-2xl font-bold text-orange-600">${totalSalaryPending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-orange-600">${totalSalaryPending.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
       </Card>
@@ -266,7 +267,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Orders & Top Products */}
+      {/* Recent Orders & Order Status Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Recent Orders</h2>
@@ -274,57 +275,83 @@ export default function DashboardPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">Order ID</th>
+                  <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">Invoice</th>
                   <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">Customer</th>
                   <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">Amount</th>
                   <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="py-3 px-2 text-sm font-medium">{order.id}</td>
-                    <td className="py-3 px-2 text-sm">{order.customer}</td>
-                    <td className="py-3 px-2 text-sm font-medium">{order.amount}</td>
-                    <td className="py-3 px-2">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${order.status === "Completed"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : order.status === "Processing"
-                            ? "bg-blue-50 text-blue-700"
-                            : order.status === "Pending"
-                              ? "bg-yellow-50 text-yellow-700"
-                              : "bg-red-50 text-red-700"
-                          }`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
+                {ordersLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-3 px-2"><div className="h-4 w-24 bg-gray-100 rounded animate-pulse" /></td>
+                      <td className="py-3 px-2"><div className="h-4 w-28 bg-gray-100 rounded animate-pulse" /></td>
+                      <td className="py-3 px-2"><div className="h-4 w-16 bg-gray-100 rounded animate-pulse" /></td>
+                      <td className="py-3 px-2"><div className="h-5 w-20 bg-gray-100 rounded animate-pulse" /></td>
+                    </tr>
+                  ))
+                ) : recentOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-sm text-gray-500">No orders yet</td>
                   </tr>
-                ))}
+                ) : (
+                  recentOrders.map((order) => (
+                    <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="py-3 px-2 text-sm font-medium text-gray-900">#{order.invoiceNo}</td>
+                      <td className="py-3 px-2 text-sm text-gray-700">{order.customerName}</td>
+                      <td className="py-3 px-2 text-sm font-medium text-gray-900">${Number(order.amount ?? 0).toFixed(2)}</td>
+                      <td className="py-3 px-2">
+                        <StatusBadge status={order.status} />
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </Card>
 
         <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Top Products</h2>
-          <div className="space-y-4">
-            {topProducts.map((product, index) => (
-              <div key={product.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-sm font-medium text-emerald-600">
-                    {index + 1}
+          <h2 className="text-lg font-semibold mb-4">Order Status Breakdown</h2>
+          {ordersLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-16 bg-gray-100 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : sellStats ? (
+            <div className="space-y-4">
+              {[
+                { label: "Delivered", count: sellStats.deliveredCount, color: "bg-emerald-500", bg: "bg-emerald-50", text: "text-emerald-700" },
+                { label: "Processing", count: sellStats.processingCount, color: "bg-amber-500", bg: "bg-amber-50", text: "text-amber-700" },
+                { label: "Pending", count: sellStats.pendingCount, color: "bg-red-400", bg: "bg-red-50", text: "text-red-700" },
+              ].map((item) => {
+                const total = sellStats.totalOrders || 1
+                const pct = Math.round((item.count / total) * 100)
+                return (
+                  <div key={item.label} className={`p-4 rounded-lg ${item.bg}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-medium ${item.text}`}>{item.label}</span>
+                      <span className={`text-sm font-bold ${item.text}`}>{item.count} orders</span>
+                    </div>
+                    <div className="w-full bg-white rounded-full h-2">
+                      <div className={`${item.color} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className={`text-xs mt-1 ${item.text} opacity-70`}>{pct}% of total</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{product.name}</p>
-                    <p className="text-xs text-gray-500">{product.sales} sales</p>
-                  </div>
+                )
+              })}
+              <div className="pt-2 border-t">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Total Revenue</span>
+                  <span className="font-bold text-gray-900">${sellStats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                <p className="text-sm font-semibold text-gray-900">{product.revenue}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-8">No data available</p>
+          )}
         </Card>
       </div>
     </div>

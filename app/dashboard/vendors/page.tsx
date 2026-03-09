@@ -2,506 +2,361 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Plus, Edit, Trash2, Search, Eye, CreditCard } from "lucide-react"
+import { Search, Plus, Edit2, Trash2, Eye } from "lucide-react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useVendor, type Vendor } from "@/contexts/vendor-context"
-import { useRouter } from "next/navigation"
-import Image from "next/image"
+import { useToast } from "@/hooks/use-toast"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 
 export default function VendorsPage() {
-    const { vendors, addVendor, updateVendor, deleteVendor, addTransaction } = useVendor()
-    const router = useRouter()
-    const [isLoading, setIsLoading] = useState(true)
-    const [searchQuery, setSearchQuery] = useState("")
-    const [isDialogOpen, setIsDialogOpen] = useState(false)
-    const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
-    const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
-    const [payingVendor, setPayingVendor] = useState<Vendor | null>(null)
-    const [paymentAmount, setPaymentAmount] = useState("")
-    const [paymentNote, setPaymentNote] = useState("")
+  const { vendors, isLoading: contextLoading, addVendor, updateVendor, deleteVendor } = useVendor()
+  const { toast } = useToast()
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
 
-    // Form State
-    const [formData, setFormData] = useState({
-        name: "",
-        email: "",
-        phone: "",
-        address: "",
-        description: "",
-        status: "Active" as "Active" | "Inactive" | "Blocked",
-        totalPaid: 0,
-        amountPayable: 0,
+  // Form state
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    logo: "",
+    status: "Active",
+    description: "",
+    totalPaid: 0,
+    amountPayable: 0,
+  })
+
+  // Filter vendors
+  const filteredVendors = vendors.filter(
+    (vendor) =>
+      vendor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vendor?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      vendor?.phone?.includes(searchTerm),
+  )
+
+  const {
+    currentItems: currentVendors,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    setCurrentPage,
+    handleItemsPerPageChange,
+  } = usePagination(filteredVendors, 10)
+
+  const handleFilterChange = () => {
+    setCurrentPage(1)
+  }
+
+  useEffect(() => {
+    if (!contextLoading) {
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [contextLoading])
+
+  const openAddDialog = () => {
+    setEditingVendor(null)
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      logo: "",
+      status: "Active",
+      description: "",
+      totalPaid: 0,
+      amountPayable: 0,
     })
+    setIsDialogOpen(true)
+  }
 
-    const filteredVendors = vendors.filter((vendor) =>
-        vendor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        vendor.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        vendor.phone.includes(searchQuery)
-    )
+  const openEditDialog = (vendor: Vendor) => {
+    setEditingVendor(vendor)
+    setFormData({
+      name: vendor.name,
+      email: vendor.email,
+      phone: vendor.phone,
+      address: vendor.address,
+      logo: vendor.logo,
+      status: vendor.status,
+      description: vendor.description,
+      totalPaid: vendor.totalPaid,
+      amountPayable: vendor.amountPayable,
+    })
+    setIsDialogOpen(true)
+  }
 
-    const {
-        currentItems: currentVendors,
-        currentPage,
-        totalPages,
-        itemsPerPage,
-        setCurrentPage,
-        handleItemsPerPageChange,
-    } = usePagination(filteredVendors, 10)
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsLoading(false)
-        }, 2000)
-        return () => clearTimeout(timer)
-    }, [])
-
-    const handleOpenDialog = (vendor?: Vendor) => {
-        if (vendor) {
-            setEditingVendor(vendor)
-            setFormData({
-                name: vendor.name,
-                email: vendor.email,
-                phone: vendor.phone,
-                address: vendor.address,
-                description: vendor.description || "",
-                status: vendor.status,
-                totalPaid: vendor.totalPaid,
-                amountPayable: vendor.amountPayable || 0,
-            })
-        } else {
-            setEditingVendor(null)
-            setFormData({
-                name: "",
-                email: "",
-                phone: "",
-                address: "",
-                description: "",
-                status: "Active",
-                totalPaid: 0,
-                amountPayable: 0,
-            })
-        }
-        setIsDialogOpen(true)
+  const handleSaveVendor = async () => {
+    if (!formData.name || !formData.email || !formData.phone) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Vendor Name, Email, and Phone are required",
+      })
+      return
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-
-        if (editingVendor) {
-            updateVendor({
-                ...editingVendor,
-                ...formData,
-            })
-        } else {
-            addVendor({
-                id: Date.now().toString(),
-                logo: "/placeholder.svg?height=40&width=40",
-                transactions: [],
-                ...formData,
-            })
-        }
-        setIsDialogOpen(false)
-    }
-
-    const handleDelete = (id: string) => {
-        if (confirm("Are you sure you want to delete this vendor?")) {
-            deleteVendor(id)
-        }
-    }
-
-    const handleViewDetails = (id: string) => {
-        router.push(`/dashboard/vendors/${id}`)
-    }
-
-    const handleOpenPayment = (vendor: Vendor) => {
-        setPayingVendor(vendor)
-        setPaymentAmount("")
-        setPaymentNote("")
-        setIsPaymentDialogOpen(true)
-    }
-
-    const handlePaymentSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!payingVendor || !paymentAmount) return
-
-        const amount = parseFloat(paymentAmount)
-        if (isNaN(amount) || amount <= 0) return
-
-        addTransaction(payingVendor.id, {
-            id: Date.now().toString(),
-            amount: amount,
-            date: new Date().toISOString().split('T')[0],
-            type: "PAYMENT",
-            note: paymentNote
+    try {
+      if (editingVendor) {
+        await updateVendor(editingVendor.id, formData)
+        toast({
+          title: "Success",
+          description: "Vendor updated successfully",
         })
-
-        setIsPaymentDialogOpen(false)
-        setPayingVendor(null)
+      } else {
+        await addVendor(formData)
+        toast({
+          title: "Success",
+          description: "Vendor created successfully",
+        })
+      }
+      setIsDialogOpen(false)
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || `Failed to ${editingVendor ? 'update' : 'create'} vendor`,
+      })
     }
+  }
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "Active":
-                return "bg-emerald-100 text-emerald-700"
-            case "Inactive":
-                return "bg-gray-100 text-gray-700"
-            case "Blocked":
-                return "bg-red-100 text-red-700"
-            default:
-                return "bg-gray-100 text-gray-700"
-        }
+  const handleDelete = async (id: string) => {
+    if (confirm("Are you sure you want to delete this vendor?")) {
+      try {
+        await deleteVendor(id)
+        toast({
+          title: "Success",
+          description: "Vendor deleted successfully",
+        })
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || 'Failed to delete vendor',
+        })
+      }
     }
+  }
 
-    return (
-        <div>
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
-                <Button onClick={() => handleOpenDialog()} className="bg-emerald-500 hover:bg-emerald-600">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Vendor
-                </Button>
+  const handleToggleStatus = async (vendor: Vendor) => {
+    const newStatus = vendor.status === 'Active' ? 'Inactive' : 'Active'
+    try {
+      await updateVendor(vendor.id, { status: newStatus })
+      toast({
+        title: "Success",
+        description: `Vendor ${newStatus === 'Active' ? 'activated' : 'deactivated'} successfully`,
+      })
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || 'Failed to update vendor status',
+      })
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
+        <Button size="sm" className="gap-2 bg-emerald-500 hover:bg-emerald-600" onClick={openAddDialog}>
+          <Plus className="w-4 h-4" />
+          Add Vendor
+        </Button>
+      </div>
+
+      <div className="bg-white rounded-lg border">
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search by name, email, phone, or contact person"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  handleFilterChange()
+                }}
+                className="pl-10"
+              />
             </div>
-
-            {/* Search */}
-            <div className="bg-white rounded-lg border mb-6 p-4">
-                <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <Input
-                        type="text"
-                        placeholder="Search by name, email or phone"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
-                    />
-                </div>
-            </div>
-
-            {/* Vendors Table */}
-            <div className="bg-white rounded-lg border overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
-                            <tr>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Vendor
-                                </th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Contact
-                                </th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Address
-                                </th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Status
-                                </th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Total Paid
-                                </th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Payable
-                                </th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {isLoading
-                                ? Array.from({ length: 3 }).map((_, index) => (
-                                    <tr key={index} className="hover:bg-gray-50">
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-3">
-                                                <Skeleton className="h-10 w-10 rounded-full" />
-                                                <div>
-                                                    <Skeleton className="h-4 w-32 mb-1" />
-                                                    <Skeleton className="h-3 w-24" />
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-4 w-24" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-4 w-40" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-6 w-16 rounded-full" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-4 w-20" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-2">
-                                                <Skeleton className="h-6 w-6 rounded" />
-                                                <Skeleton className="h-6 w-6 rounded" />
-                                                <Skeleton className="h-6 w-6 rounded" />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                                : currentVendors.map((vendor) => (
-                                    <tr key={vendor.id} className="hover:bg-gray-50">
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-3">
-                                                <Image
-                                                    src={vendor.logo || "/placeholder.svg"}
-                                                    alt={vendor.name}
-                                                    width={40}
-                                                    height={40}
-                                                    className="rounded-full"
-                                                />
-                                                <div>
-                                                    <div className="font-medium text-gray-900">{vendor.name}</div>
-                                                    <div className="text-sm text-gray-500">{vendor.email}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-4 text-sm text-gray-600">{vendor.phone}</td>
-                                        <td className="py-3 px-4 text-sm text-gray-600">{vendor.address}</td>
-                                        <td className="py-3 px-4">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(vendor.status)}`}>
-                                                {vendor.status}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-sm font-semibold text-gray-900">
-                                            ${vendor.totalPaid.toFixed(2)}
-                                        </td>
-                                        <td className="py-3 px-4 text-sm font-semibold text-red-600">
-                                            ${(vendor.amountPayable || 0).toFixed(2)}
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => handleViewDetails(vendor.id)}
-                                                    className="p-1 hover:bg-gray-100 rounded"
-                                                >
-                                                    <Eye className="w-4 h-4 text-gray-600" />
-                                                </button>
-                                                <button onClick={() => handleOpenDialog(vendor)} className="p-1 hover:bg-gray-100 rounded">
-                                                    <Edit className="w-4 h-4 text-gray-600" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenPayment(vendor)}
-                                                    className="p-1 hover:bg-emerald-100 rounded text-emerald-600"
-                                                    title="Make Payment"
-                                                >
-                                                    <CreditCard className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDelete(vendor.id)} className="p-1 hover:bg-gray-100 rounded">
-                                                    <Trash2 className="w-4 h-4 text-red-600" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            {(!isLoading && currentVendors.length === 0) && (
-                                <tr>
-                                    <td colSpan={6} className="py-8 text-center text-gray-500">
-                                        No vendors found
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className="mt-6">
-                <PaginationControl
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    itemsPerPage={itemsPerPage}
-                    onItemsPerPageChange={handleItemsPerPageChange}
-                    totalItems={filteredVendors.length}
-                />
-            </div>
-
-            {/* Add/Edit Vendor Dialog */}
-
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>{editingVendor ? "Edit Vendor" : "Add Vendor"}</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <Label>Vendor Name</Label>
-                            <Input
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                required
-                                placeholder="e.g. Fresh Farms Ltd."
-                                className="mt-1"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label>Email</Label>
-                                <Input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    required
-                                    placeholder="vendor@example.com"
-                                    className="mt-1"
-                                />
-                            </div>
-                            <div>
-                                <Label>Phone</Label>
-                                <Input
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    required
-                                    placeholder="+1 234 567 890"
-                                    className="mt-1"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <Label>Address</Label>
-                            <Input
-                                value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                required
-                                placeholder="123 Business Street, City"
-                                className="mt-1"
-                            />
-                        </div>
-
-                        <div>
-                            <Label>Description</Label>
-                            <Textarea
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                placeholder="Brief description about the vendor..."
-                                className="mt-1"
-                                rows={3}
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label>Status</Label>
-                                <Select
-                                    value={formData.status}
-                                    onValueChange={(value: "Active" | "Inactive" | "Blocked") =>
-                                        setFormData({ ...formData, status: value })
-                                    }
-                                >
-                                    <SelectTrigger className="mt-1">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Active">Active</SelectItem>
-                                        <SelectItem value="Inactive">Inactive</SelectItem>
-                                        <SelectItem value="Blocked">Blocked</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        {/* Show financial fields only when editing */}
-                        {editingVendor && (
-                            <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                                <div>
-                                    <Label>Total Paid</Label>
-                                    <Input
-                                        type="number"
-                                        value={formData.totalPaid}
-                                        readOnly
-                                        className="mt-1 bg-gray-50 cursor-not-allowed"
-                                        step="0.01"
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Payable Amount</Label>
-                                    <Input
-                                        type="number"
-                                        value={formData.amountPayable}
-                                        readOnly
-                                        className="mt-1 bg-gray-50 cursor-not-allowed"
-                                        step="0.01"
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" className="bg-emerald-500 hover:bg-emerald-600">
-                                {editingVendor ? "Update Vendor" : "Add Vendor"}
-                            </Button>
-                        </div>
-                    </form>
-                </DialogContent>
-            </Dialog>
-            {/* Payment Modal */}
-            <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Make Payment - {payingVendor?.name}</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                        <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Total Paid:</span>
-                                <span className="font-semibold">${payingVendor?.totalPaid.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">Current Payable:</span>
-                                <span className="font-semibold text-red-600">${payingVendor?.amountPayable?.toFixed(2) || "0.00"}</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <Label>Payment Amount</Label>
-                            <Input
-                                type="number"
-                                value={paymentAmount}
-                                onChange={(e) => setPaymentAmount(e.target.value)}
-                                required
-                                placeholder="0.00"
-                                className="mt-1"
-                                step="0.01"
-                                min="0.01"
-                            />
-                        </div>
-
-                        <div>
-                            <Label>Note (Optional)</Label>
-                            <Textarea
-                                value={paymentNote}
-                                onChange={(e) => setPaymentNote(e.target.value)}
-                                placeholder="Payment reference or note..."
-                                className="mt-1"
-                                rows={2}
-                            />
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" className="bg-emerald-500 hover:bg-emerald-600">
-                                Confirm Payment
-                            </Button>
-                        </div>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            <Button className="bg-emerald-500 hover:bg-emerald-600">Filter</Button>
+          </div>
         </div>
-    )
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b bg-gray-50">
+              <tr>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">VENDOR NAME</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">EMAIL</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PHONE</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ADDRESS</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">STATUS</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading
+                ? Array.from({ length: 5 }).map((_, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-40" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-6 w-11 rounded-full" /></td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-8 w-8 rounded" />
+                          <Skeleton className="h-8 w-8 rounded" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                : currentVendors.map((vendor) => (
+                    <tr key={vendor.id} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-4 text-gray-900 font-medium">{vendor.id}</td>
+                      <td className="py-3 px-4">
+                        <Link href={`/dashboard/vendors/${vendor.id}`} className="text-emerald-600 hover:underline font-medium">
+                          {vendor.name}
+                        </Link>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{vendor.email}</td>
+                      <td className="py-3 px-4 text-gray-600">{vendor.phone}</td>
+                      <td className="py-3 px-4 text-gray-600">{vendor.address || '-'}</td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => handleToggleStatus(vendor)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            vendor.status === 'Active' ? "bg-emerald-500" : "bg-gray-300"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              vendor.status === 'Active' ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <Link href={`/dashboard/vendors/${vendor.id}`} className="p-2 hover:bg-gray-100 rounded inline-block">
+                            <Eye className="w-4 h-4 text-gray-600" />
+                          </Link>
+                          <button
+                            onClick={() => openEditDialog(vendor)}
+                            className="p-2 hover:bg-gray-100 rounded inline-block"
+                          >
+                            <Edit2 className="w-4 h-4 text-gray-600" />
+                          </button>
+                          <button onClick={() => handleDelete(vendor.id)} className="p-2 hover:bg-gray-100 rounded">
+                            <Trash2 className="w-4 h-4 text-gray-600" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mx-4 pb-4">
+          <PaginationControl
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            totalItems={filteredVendors.length}
+          />
+        </div>
+      </div>
+
+      {/* Add/Edit Vendor Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingVendor ? "Edit Vendor" : "Add Vendor"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="name">Vendor Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Enter vendor name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="vendor@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone *</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+1 234 567 890"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                placeholder="456 Business Ave"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="logo">Logo URL</Label>
+              <Input
+                id="logo"
+                value={formData.logo}
+                onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="A reliable supplier"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveVendor} className="bg-emerald-600 hover:bg-emerald-700">
+              {editingVendor ? "Update Vendor" : "Add Vendor"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 }

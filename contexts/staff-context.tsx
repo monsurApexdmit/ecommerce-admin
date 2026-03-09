@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from "react"
+import { staffApi, staffRoleApi, salaryPaymentApi, type StaffResponse, type SalaryPaymentResponse, type StaffRoleResponse } from "@/lib/staffApi"
 
 export type Module =
     | "Dashboard"
@@ -64,152 +65,270 @@ interface StaffContextType {
     staff: Staff[]
     roles: Role[]
     salaryPayments: SalaryPayment[]
-    addStaff: (member: Staff) => void
-    updateStaff: (member: Staff) => void
-    deleteStaff: (id: string) => void
-    addRole: (role: Role) => void
-    updateRole: (role: Role) => void
-    deleteRole: (id: string) => void
+    isLoading: boolean
+    rolesLoading: boolean
+    error: string | null
+    addStaff: (member: Omit<Staff, 'id'>) => Promise<void>
+    updateStaff: (member: Staff) => Promise<void>
+    deleteStaff: (id: string) => Promise<void>
+    refreshStaff: () => Promise<void>
+    addRole: (role: Omit<Role, 'id'>) => Promise<void>
+    updateRole: (role: Role) => Promise<void>
+    deleteRole: (id: string) => Promise<void>
+    refreshRoles: () => Promise<void>
     getRoleByName: (name: string) => Role | undefined
-    addSalaryPayment: (payment: SalaryPayment) => void
-    updateSalaryPayment: (payment: SalaryPayment) => void
+    salaryPaymentsLoading: boolean
+    addSalaryPayment: (payment: Omit<SalaryPayment, 'id'>) => Promise<void>
+    updateSalaryPayment: (payment: SalaryPayment) => Promise<void>
+    deleteSalaryPayment: (id: string) => Promise<void>
+    refreshSalaryPayments: () => Promise<void>
     getSalaryPaymentsByStaff: (staffId: string) => SalaryPayment[]
     getSalaryPaymentsByMonth: (month: string) => SalaryPayment[]
 }
 
 const StaffContext = createContext<StaffContextType | undefined>(undefined)
 
-const initialStaff: Staff[] = [
-    {
-        id: "1",
-        name: "admin",
-        email: "admin@gmail.com",
-        contact: "360-943-7332",
-        joiningDate: "31 Dec, 2025",
-        role: "Super Admin",
-        status: "Active",
-        published: true,
-        avatar: "/admin-avatar.jpg",
-        salary: 5000,
-        bankAccount: "1234567890",
-        paymentMethod: "Bank Transfer",
-    },
-    {
-        id: "2",
-        name: "Marion V. Parker",
-        email: "marion@gmail.com",
-        contact: "713-675-8813",
-        joiningDate: "31 Dec, 2025",
-        role: "Admin",
-        status: "Active",
-        published: true,
-        avatar: "/marion-avatar.jpg",
-        salary: 3500,
-        bankAccount: "0987654321",
-        paymentMethod: "Bank Transfer",
-    },
-    {
-        id: "3",
-        name: "Stacey J. Meikle",
-        email: "stacey@gmail.com",
-        contact: "616-738-0407",
-        joiningDate: "31 Dec, 2025",
-        role: "CEO",
-        status: "Active",
-        published: true,
-        avatar: "/stacey-avatar.jpg",
-        salary: 8000,
-        bankAccount: "1122334455",
-        paymentMethod: "Bank Transfer",
-    },
-]
-
-const initialRoles: Role[] = [
-    {
-        id: "1",
-        name: "Super Admin",
-        permissions: [], // Super admin usually implies all, but we'll leave empty to signify 'all' or fill logically later
-    },
-    {
-        id: "2",
-        name: "Admin",
-        permissions: [],
-    },
-    {
-        id: "3",
-        name: "CEO",
-        permissions: [],
-    },
-    {
-        id: "4",
-        name: "Manager",
-        permissions: [],
-    },
-    {
-        id: "5",
-        name: "Accountant",
-        permissions: [],
-    },
-    {
-        id: "6",
-        name: "Cashier",
-        permissions: [],
-    },
-    {
-        id: "7",
-        name: "Security Guard",
-        permissions: [],
+function convertToStaff(s: StaffResponse): Staff {
+    return {
+        id: s.id.toString(),
+        name: s.name,
+        email: s.email,
+        contact: s.contact || '',
+        joiningDate: s.joiningDate
+            ? new Date(s.joiningDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+            : '',
+        role: s.role || '',
+        status: s.status || 'Active',
+        published: s.published ?? true,
+        avatar: s.avatar || '/placeholder.svg',
+        salary: s.salary || 0,
+        bankAccount: s.bankAccount || '',
+        paymentMethod: (s.paymentMethod as Staff['paymentMethod']) || 'Bank Transfer',
     }
-]
+}
+
+function convertToRole(r: StaffRoleResponse): Role {
+    return {
+        id: r.id.toString(),
+        name: r.name,
+        permissions: (r.permissions || []).map(p => ({
+            name: p.name as Module,
+            read: p.read,
+            write: p.write,
+            delete: p.delete,
+        })),
+    }
+}
+
+function convertToSalaryPayment(p: SalaryPaymentResponse): SalaryPayment {
+    return {
+        id: p.id.toString(),
+        staffId: p.staffId.toString(),
+        month: p.month,
+        amount: p.amount,
+        paidAmount: p.paidAmount,
+        status: p.status,
+        paymentDate: p.paymentDate,
+        paymentMethod: p.paymentMethod,
+        notes: p.notes,
+    }
+}
 
 export function StaffProvider({ children }: { children: React.ReactNode }) {
-    const [staff, setStaff] = useState<Staff[]>(initialStaff)
-    const [roles, setRoles] = useState<Role[]>(initialRoles)
+    const [staff, setStaff] = useState<Staff[]>([])
+    const [roles, setRoles] = useState<Role[]>([])
     const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([])
+    const [isLoading, setIsLoading] = useState(true)
+    const [rolesLoading, setRolesLoading] = useState(true)
+    const [salaryPaymentsLoading, setSalaryPaymentsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    const addStaff = (member: Staff) => {
-        setStaff((prev) => [...prev, member])
+    const refreshStaff = async () => {
+        try {
+            setIsLoading(true)
+            setError(null)
+            const response = await staffApi.getAll({ limit: 100 })
+            setStaff(response.data.map(convertToStaff))
+        } catch (err: any) {
+            console.error('Error fetching staff:', err)
+            setError(err.response?.data?.error || 'Failed to fetch staff')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
-    const updateStaff = (member: Staff) => {
-        setStaff((prev) => prev.map((s) => (s.id === member.id ? member : s)))
+    const refreshRoles = async () => {
+        try {
+            setRolesLoading(true)
+            const response = await staffRoleApi.getAll({ limit: 100 })
+            setRoles(response.data.map(convertToRole))
+        } catch (err: any) {
+            console.error('Error fetching staff roles:', err)
+        } finally {
+            setRolesLoading(false)
+        }
     }
 
-    const deleteStaff = (id: string) => {
-        setStaff((prev) => prev.filter((s) => s.id !== id))
+    const refreshSalaryPayments = async () => {
+        try {
+            setSalaryPaymentsLoading(true)
+            const response = await salaryPaymentApi.getAll({ limit: 1000 })
+            setSalaryPayments(response.data.map(convertToSalaryPayment))
+        } catch (err: any) {
+            console.error('Error fetching salary payments:', err)
+        } finally {
+            setSalaryPaymentsLoading(false)
+        }
     }
 
-    const addRole = (role: Role) => {
-        setRoles((prev) => [...prev, role])
+    useEffect(() => {
+        refreshStaff()
+        refreshRoles()
+        refreshSalaryPayments()
+    }, [])
+
+    const addStaff = async (member: Omit<Staff, 'id'>) => {
+        try {
+            await staffApi.create({
+                name: member.name,
+                email: member.email,
+                contact: member.contact,
+                joiningDate: member.joiningDate,
+                role: member.role,
+                status: member.status,
+                published: member.published,
+                avatar: member.avatar,
+                salary: member.salary,
+                bankAccount: member.bankAccount,
+                paymentMethod: member.paymentMethod,
+            })
+            await refreshStaff()
+        } catch (err: any) {
+            console.error('Error creating staff:', err)
+            throw new Error(err.response?.data?.error || 'Failed to create staff')
+        }
     }
 
-    const updateRole = (role: Role) => {
-        setRoles((prev) => prev.map((r) => (r.id === role.id ? role : r)))
+    const updateStaff = async (member: Staff) => {
+        try {
+            await staffApi.update(parseInt(member.id), {
+                name: member.name,
+                email: member.email,
+                contact: member.contact,
+                joiningDate: member.joiningDate,
+                role: member.role,
+                status: member.status,
+                published: member.published,
+                avatar: member.avatar,
+                salary: member.salary,
+                bankAccount: member.bankAccount,
+                paymentMethod: member.paymentMethod,
+            })
+            await refreshStaff()
+        } catch (err: any) {
+            console.error('Error updating staff:', err)
+            throw new Error(err.response?.data?.error || 'Failed to update staff')
+        }
     }
 
-    const deleteRole = (id: string) => {
-        setRoles((prev) => prev.filter((r) => r.id !== id))
+    const deleteStaff = async (id: string) => {
+        try {
+            await staffApi.delete(parseInt(id))
+            await refreshStaff()
+        } catch (err: any) {
+            console.error('Error deleting staff:', err)
+            throw new Error(err.response?.data?.error || 'Failed to delete staff')
+        }
     }
 
-    const getRoleByName = (name: string) => {
-        return roles.find(r => r.name === name)
+    const addRole = async (role: Omit<Role, 'id'>) => {
+        try {
+            await staffRoleApi.create({
+                name: role.name,
+                permissions: role.permissions,
+            })
+            await refreshRoles()
+        } catch (err: any) {
+            console.error('Error creating role:', err)
+            throw new Error(err.response?.data?.error || 'Failed to create role')
+        }
     }
 
-    const addSalaryPayment = (payment: SalaryPayment) => {
-        setSalaryPayments((prev) => [...prev, payment])
+    const updateRole = async (role: Role) => {
+        try {
+            await staffRoleApi.update(parseInt(role.id), {
+                name: role.name,
+                permissions: role.permissions,
+            })
+            await refreshRoles()
+        } catch (err: any) {
+            console.error('Error updating role:', err)
+            throw new Error(err.response?.data?.error || 'Failed to update role')
+        }
     }
 
-    const updateSalaryPayment = (payment: SalaryPayment) => {
-        setSalaryPayments((prev) => prev.map((p) => (p.id === payment.id ? payment : p)))
+    const deleteRole = async (id: string) => {
+        try {
+            await staffRoleApi.delete(parseInt(id))
+            await refreshRoles()
+        } catch (err: any) {
+            console.error('Error deleting role:', err)
+            throw new Error(err.response?.data?.error || 'Failed to delete role')
+        }
     }
 
-    const getSalaryPaymentsByStaff = (staffId: string) => {
-        return salaryPayments.filter(p => p.staffId === staffId)
+    const getRoleByName = (name: string) => roles.find((r) => r.name === name)
+
+    const addSalaryPayment = async (payment: Omit<SalaryPayment, 'id'>) => {
+        try {
+            await salaryPaymentApi.create({
+                staffId: parseInt(payment.staffId),
+                month: payment.month,
+                amount: payment.amount,
+                paidAmount: payment.paidAmount,
+                status: payment.status,
+                paymentDate: payment.paymentDate,
+                paymentMethod: payment.paymentMethod,
+                notes: payment.notes,
+            })
+            await refreshSalaryPayments()
+        } catch (err: any) {
+            console.error('Error creating salary payment:', err)
+            throw new Error(err.response?.data?.error || 'Failed to create salary payment')
+        }
     }
 
-    const getSalaryPaymentsByMonth = (month: string) => {
-        return salaryPayments.filter(p => p.month === month)
+    const updateSalaryPayment = async (payment: SalaryPayment) => {
+        try {
+            await salaryPaymentApi.update(parseInt(payment.id), {
+                staffId: parseInt(payment.staffId),
+                month: payment.month,
+                amount: payment.amount,
+                paidAmount: payment.paidAmount,
+                status: payment.status,
+                paymentDate: payment.paymentDate,
+                paymentMethod: payment.paymentMethod,
+                notes: payment.notes,
+            })
+            await refreshSalaryPayments()
+        } catch (err: any) {
+            console.error('Error updating salary payment:', err)
+            throw new Error(err.response?.data?.error || 'Failed to update salary payment')
+        }
     }
+
+    const deleteSalaryPayment = async (id: string) => {
+        try {
+            await salaryPaymentApi.delete(parseInt(id))
+            await refreshSalaryPayments()
+        } catch (err: any) {
+            console.error('Error deleting salary payment:', err)
+            throw new Error(err.response?.data?.error || 'Failed to delete salary payment')
+        }
+    }
+
+    const getSalaryPaymentsByStaff = (staffId: string) => salaryPayments.filter((p) => p.staffId === staffId)
+    const getSalaryPaymentsByMonth = (month: string) => salaryPayments.filter((p) => p.month === month)
 
     return (
         <StaffContext.Provider
@@ -217,15 +336,23 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 staff,
                 roles,
                 salaryPayments,
+                isLoading,
+                rolesLoading,
+                salaryPaymentsLoading,
+                error,
                 addStaff,
                 updateStaff,
                 deleteStaff,
+                refreshStaff,
                 addRole,
                 updateRole,
                 deleteRole,
+                refreshRoles,
                 getRoleByName,
                 addSalaryPayment,
                 updateSalaryPayment,
+                deleteSalaryPayment,
+                refreshSalaryPayments,
                 getSalaryPaymentsByStaff,
                 getSalaryPaymentsByMonth,
             }}

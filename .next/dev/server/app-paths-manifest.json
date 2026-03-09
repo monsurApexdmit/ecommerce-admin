@@ -1,7 +1,16 @@
 {
-  "/dashboard/attributes/page": "app/dashboard/attributes/page.js",
-  "/dashboard/categories/page": "app/dashboard/categories/page.js",
-  "/dashboard/coupons/page": "app/dashboard/coupons/page.js",
+  "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
+  "/dashboard/customers/page": "app/dashboard/customers/page.js",
+  "/dashboard/inventory/transfer/page": "app/dashboard/inventory/transfer/page.js",
+  "/dashboard/orders/page": "app/dashboard/orders/page.js",
+  "/dashboard/orders/shipments/page": "app/dashboard/orders/shipments/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/page": "app/page.js"
+  "/dashboard/pos/page": "app/dashboard/pos/page.js",
+  "/dashboard/products/page": "app/dashboard/products/page.js",
+  "/dashboard/returns/customer/page": "app/dashboard/returns/customer/page.js",
+  "/dashboard/returns/vendor/page": "app/dashboard/returns/vendor/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
+  "/dashboard/staff/page": "app/dashboard/staff/page.js",
+  "/dashboard/staff/roles/page": "app/dashboard/staff/roles/page.js",
+  "/dashboard/staff/salary/page": "app/dashboard/staff/salary/page.js"
 }

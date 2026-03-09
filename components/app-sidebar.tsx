@@ -87,7 +87,6 @@ const navigation = [
             { name: "Transfers", href: "/dashboard/inventory/transfer" },
         ],
     },
-    { name: "Sells", href: "/dashboard/sells", icon: ShoppingBag },
     {
         name: "Returns",
         icon: RotateCcw,

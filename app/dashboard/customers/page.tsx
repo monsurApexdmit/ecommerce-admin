@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,12 +55,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
+import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 
 export default function CustomersPage() {
   const router = useRouter()
-  const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
-  const [isLoading, setIsLoading] = useState(true)
+  const { customers, isLoading, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
@@ -93,13 +92,6 @@ export default function CustomersPage() {
     notes: ""
   })
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [])
-
   // Filter Logic
   const filteredCustomers = customers
     .filter((customer) => {
@@ -128,7 +120,6 @@ export default function CustomersPage() {
     currentPage,
     totalPages,
     itemsPerPage,
-    goToPage,
     setCurrentPage,
     handleItemsPerPageChange,
   } = usePagination(filteredCustomers, 10)
@@ -194,38 +185,38 @@ export default function CustomersPage() {
     setIsAddDialogOpen(true)
   }
 
-  const handleSaveCustomer = () => {
-    if (!formData.name || !formData.email) return // Basic validation
+  const handleSaveCustomer = async () => {
+    if (!formData.name || !formData.email) return
 
     if (editingCustomer) {
-      updateCustomer(editingCustomer.id, formData)
+      await updateCustomer(editingCustomer.id, formData)
     } else {
-      addCustomer(formData)
+      await addCustomer(formData)
     }
     setIsAddDialogOpen(false)
     resetForm()
   }
 
-  const handleDelete = (id: string) => {
-    deleteCustomer(id)
+  const handleDelete = async (id: string) => {
+    await deleteCustomer(id)
     setSelectedCustomerIds(selectedCustomerIds.filter(sid => sid !== id))
   }
 
   // Bulk Actions
-  const handleBulkDelete = () => {
-    selectedCustomerIds.forEach(id => deleteCustomer(id))
+  const handleBulkDelete = async () => {
+    await Promise.all(selectedCustomerIds.map(id => deleteCustomer(id)))
     setSelectedCustomerIds([])
   }
 
-  const handleBulkAction = () => {
+  const handleBulkAction = async () => {
     if (!bulkAction || selectedCustomerIds.length === 0) return
 
     if (bulkAction === "delete") {
-      handleBulkDelete()
+      await handleBulkDelete()
     } else if (bulkAction === "active") {
-      selectedCustomerIds.forEach(id => updateCustomer(id, { status: "active" }))
+      await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "active" })))
     } else if (bulkAction === "inactive") {
-      selectedCustomerIds.forEach(id => updateCustomer(id, { status: "inactive" }))
+      await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "inactive" })))
     }
 
     setIsBulkActionDialogOpen(false)

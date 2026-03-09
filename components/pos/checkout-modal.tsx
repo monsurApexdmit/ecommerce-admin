@@ -16,7 +16,7 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: CheckoutModalProps) {
-    const [paymentMethod, setPaymentMethod] = useState("cash")
+    const [paymentMethod, setPaymentMethod] = useState("Cash")
     const [isProcessing, setIsProcessing] = useState(false)
 
     const handleConfirm = () => {
@@ -45,9 +45,9 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
 
                     <div className="space-y-3">
                         <Label className="text-base">Payment Method</Label>
-                        <RadioGroup defaultValue="cash" value={paymentMethod} onValueChange={setPaymentMethod} className="grid grid-cols-3 gap-4">
+                        <RadioGroup defaultValue="Cash" value={paymentMethod} onValueChange={setPaymentMethod} className="grid grid-cols-3 gap-4">
                             <div>
-                                <RadioGroupItem value="cash" id="cash" className="peer sr-only" />
+                                <RadioGroupItem value="Cash" id="cash" className="peer sr-only" />
                                 <Label
                                     htmlFor="cash"
                                     className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 cursor-pointer transition-all h-full"
@@ -57,7 +57,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                                 </Label>
                             </div>
                             <div>
-                                <RadioGroupItem value="card" id="card" className="peer sr-only" />
+                                <RadioGroupItem value="Card" id="card" className="peer sr-only" />
                                 <Label
                                     htmlFor="card"
                                     className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 cursor-pointer transition-all h-full"
@@ -67,7 +67,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                                 </Label>
                             </div>
                             <div>
-                                <RadioGroupItem value="cod" id="cod" className="peer sr-only" />
+                                <RadioGroupItem value="Online" id="cod" className="peer sr-only" />
                                 <Label
                                     htmlFor="cod"
                                     className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-emerald-500 peer-data-[state=checked]:bg-emerald-50 cursor-pointer transition-all h-full"
@@ -79,7 +79,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                         </RadioGroup>
                     </div>
 
-                    {paymentMethod === "card" && (
+                    {paymentMethod === "Card" && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                             <div className="space-y-1">
                                 <Label>Card Number</Label>

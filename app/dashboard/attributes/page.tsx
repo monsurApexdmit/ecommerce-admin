@@ -15,9 +15,11 @@ import { exportToCSV, parseCSV, generateId } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { useAttribute, type Attribute } from "@/contexts/attribute-context"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AttributesPage() {
-  const { attributes, addAttribute, updateAttribute, deleteAttribute } = useAttribute()
+  const { attributes, isLoading: contextLoading, addAttribute, updateAttribute, deleteAttribute } = useAttribute()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([])
   const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
@@ -43,8 +45,8 @@ export default function AttributesPage() {
   // Filter attributes
   const filteredAttributes = attributes.filter(
     (attr) =>
-      attr.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      attr.displayName.toLowerCase().includes(searchTerm.toLowerCase()),
+      attr?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      attr?.displayName?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   const {
@@ -62,11 +64,13 @@ export default function AttributesPage() {
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [])
+    if (!contextLoading) {
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [contextLoading])
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -84,28 +88,81 @@ export default function AttributesPage() {
     }
   }
 
-  const handleTogglePublished = (id: string) => {
+  const handleTogglePublished = async (id: string) => {
     const attr = attributes.find((a) => a.id === id)
     if (attr) {
-      updateAttribute({ ...attr, published: !attr.published })
+      try {
+        await updateAttribute(id, { published: !attr.published })
+        toast({
+          title: "Success",
+          description: `Attribute ${attr.published ? 'unpublished' : 'published'} successfully`,
+        })
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || 'Failed to update attribute',
+        })
+      }
     }
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this attribute?")) {
-      deleteAttribute(id)
-      setSelectedAttributes(selectedAttributes.filter((sid) => sid !== id))
+      try {
+        await deleteAttribute(id)
+        setSelectedAttributes(selectedAttributes.filter((sid) => sid !== id))
+        toast({
+          title: "Success",
+          description: "Attribute deleted successfully",
+        })
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || 'Failed to delete attribute',
+        })
+      }
     }
   }
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedAttributes.length === 0) {
-      alert("Please select attributes to delete")
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please select attributes to delete",
+      })
       return
     }
     if (confirm(`Delete ${selectedAttributes.length} selected attribute(s)?`)) {
-        selectedAttributes.forEach(id => deleteAttribute(id))
-        setSelectedAttributes([])
+      const errors: string[] = []
+      let successCount = 0
+
+      for (const id of selectedAttributes) {
+        try {
+          await deleteAttribute(id)
+          successCount++
+        } catch (error: any) {
+          const attr = attributes.find(a => a.id === id)
+          const attrName = attr ? attr.name : id
+          errors.push(`${attrName}: ${error.message}`)
+        }
+      }
+      setSelectedAttributes([])
+
+      if (errors.length > 0) {
+        toast({
+          variant: "destructive",
+          title: `${successCount} deleted, ${errors.length} failed`,
+          description: errors.join(', '),
+        })
+      } else {
+        toast({
+          title: "Success",
+          description: `${successCount} attributes deleted successfully`,
+        })
+      }
     }
   }
 
@@ -123,47 +180,92 @@ export default function AttributesPage() {
     exportToCSV(exportData, "attributes", headers)
   }
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string
       const importedData = parseCSV(text)
 
-      const newAttributes = importedData.map((item) => ({
-        id: item.id || generateId(),
-        name: item.name,
-        displayName: item.display_name,
-        option: (item.option as "dropdown" | "radio") || "dropdown",
-        published: item.published === "Yes",
-        values: item.values ? item.values.split(";") : [],
-      }))
-      
-      newAttributes.forEach(attr => addAttribute(attr))
-      setIsImportDialogOpen(false)
+      try {
+        let successCount = 0
+        let errorCount = 0
+
+        for (const item of importedData) {
+          try {
+            await addAttribute({
+              name: item.name,
+              displayName: item.display_name,
+              option: (item.option as "dropdown" | "radio") || "dropdown",
+              published: item.published === "Yes",
+              values: item.values ? item.values.split(";") : [],
+            })
+            successCount++
+          } catch (error) {
+            errorCount++
+          }
+        }
+
+        if (errorCount > 0) {
+          toast({
+            variant: "destructive",
+            title: `Import partially completed`,
+            description: `${successCount} imported, ${errorCount} failed`,
+          })
+        } else {
+          toast({
+            title: "Success",
+            description: `${successCount} attributes imported successfully`,
+          })
+        }
+        setIsImportDialogOpen(false)
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to import attributes",
+        })
+      }
     }
     reader.readAsText(file)
   }
 
-  const handleBulkActionSubmit = () => {
+  const handleBulkActionSubmit = async () => {
     if (!bulkAction || selectedAttributes.length === 0) return
 
     if (bulkAction === "delete") {
-      handleBulkDelete()
-    } else if (bulkAction === "publish") {
-        selectedAttributes.forEach(id => {
-            const attr = attributes.find(a => a.id === id)
-            if (attr) updateAttribute({ ...attr, published: true })
-        })
+      await handleBulkDelete()
+    } else if (bulkAction === "publish" || bulkAction === "unpublish") {
+      const errors: string[] = []
+      let successCount = 0
+      const targetStatus = bulkAction === "publish"
+
+      for (const id of selectedAttributes) {
+        try {
+          await updateAttribute(id, { published: targetStatus })
+          successCount++
+        } catch (error: any) {
+          const attr = attributes.find(a => a.id === id)
+          const attrName = attr ? attr.name : id
+          errors.push(`${attrName}: ${error.message}`)
+        }
+      }
       setSelectedAttributes([])
-    } else if (bulkAction === "unpublish") {
-        selectedAttributes.forEach(id => {
-            const attr = attributes.find(a => a.id === id)
-            if (attr) updateAttribute({ ...attr, published: false })
+
+      if (errors.length > 0) {
+        toast({
+          variant: "destructive",
+          title: `${successCount} updated, ${errors.length} failed`,
+          description: errors.join(', '),
         })
-      setSelectedAttributes([])
+      } else {
+        toast({
+          title: "Success",
+          description: `${successCount} attributes ${bulkAction === "publish" ? 'published' : 'unpublished'} successfully`,
+        })
+      }
     }
 
     setIsBulkActionDialogOpen(false)
@@ -187,30 +289,51 @@ export default function AttributesPage() {
       setIsAddDialogOpen(true)
   }
   
-  const handleSaveAttribute = () => {
-      if (!formData.name || !formData.displayName) return
-      
-      const valuesArray = formData.values.split(",").map(v => v.trim()).filter(v => v !== "")
-      
-      if (editingAttribute) {
-          updateAttribute({
-              ...editingAttribute,
-              name: formData.name,
-              displayName: formData.displayName,
-              option: formData.option,
-              values: valuesArray
-          })
-      } else {
-          addAttribute({
-              id: generateId(),
-              name: formData.name,
-              displayName: formData.displayName,
-              option: formData.option,
-              published: true,
-              values: valuesArray
-          })
+  const handleSaveAttribute = async () => {
+      if (!formData.name || !formData.displayName) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Name and Display Name are required",
+        })
+        return
       }
-      setIsAddDialogOpen(false)
+
+      const valuesArray = formData.values.split(",").map(v => v.trim()).filter(v => v !== "")
+
+      try {
+        if (editingAttribute) {
+          await updateAttribute(editingAttribute.id, {
+            name: formData.name,
+            displayName: formData.displayName,
+            option: formData.option,
+            values: valuesArray
+          })
+          toast({
+            title: "Success",
+            description: "Attribute updated successfully",
+          })
+        } else {
+          await addAttribute({
+            name: formData.name,
+            displayName: formData.displayName,
+            option: formData.option,
+            published: true,
+            values: valuesArray
+          })
+          toast({
+            title: "Success",
+            description: "Attribute created successfully",
+          })
+        }
+        setIsAddDialogOpen(false)
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || `Failed to ${editingAttribute ? 'update' : 'create'} attribute`,
+        })
+      }
   }
 
   const allSelected =
@@ -277,10 +400,6 @@ export default function AttributesPage() {
               />
             </div>
             <Button className="bg-emerald-500 hover:bg-emerald-600">Filter</Button>
-            <Button variant="outline" onClick={() => {
-              setSearchTerm("")
-              handleFilterChange()
-            }}>Reset</Button>
           </div>
         </div>
 
