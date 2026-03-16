@@ -5,13 +5,14 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useAuth } from "@/contexts/auth-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { User, Mail, Lock, Camera, Save } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Swal from "sweetalert2"
 
 export default function EditProfilePage() {
-  const { userEmail } = useAuth()
+  const { user } = useSaasAuth()
+  const userEmail = user?.email || ""
   const [name, setName] = useState("Admin User")
   const [email, setEmail] = useState(userEmail || "")
   const [avatar, setAvatar] = useState("/admin-avatar.jpg")

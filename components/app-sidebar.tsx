@@ -105,6 +105,17 @@ const navigation = [
         ],
     },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
+    {
+        name: "SaaS Settings",
+        icon: CreditCard,
+        items: [
+            { name: "Company Profile", href: "/dashboard/company/profile" },
+            { name: "Company Settings", href: "/dashboard/company/settings" },
+            { name: "Billing Contact", href: "/dashboard/company/billing-contact" },
+            { name: "Team Members", href: "/dashboard/team/users" },
+            { name: "Subscriptions", href: "/dashboard/billing/subscriptions" },
+        ],
+    },
     { name: "International", href: "/dashboard/international", icon: Globe },
     {
         name: "Store",

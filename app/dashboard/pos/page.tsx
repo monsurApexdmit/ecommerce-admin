@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, ShoppingCart, LayoutGrid, RotateCcw, Percent } from "lucide-react"
+import { Search, ShoppingCart, RotateCcw, Percent, Ticket } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { sellsApi } from "@/lib/sellsApi"
 import { productApi } from "@/lib/productApi"
+import { couponApi, CouponResponse } from "@/lib/couponApi"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -58,6 +59,11 @@ export default function PosPage() {
 
     const [discount, setDiscount] = useState(0)
     const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false)
+    const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
+    const [appliedCoupon, setAppliedCoupon] = useState<CouponResponse | null>(null)
+    const [couponDiscount, setCouponDiscount] = useState(0)
+    const [availableCoupons, setAvailableCoupons] = useState<CouponResponse[]>([])
+    const [couponsLoading, setCouponsLoading] = useState(false)
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false)
     const [shipping] = useState(0)
@@ -227,15 +233,45 @@ export default function PosPage() {
     const handleApplyDiscount = (amount: number, type: 'fixed' | 'percentage') => {
         setDiscount(type === 'fixed' ? amount : (subtotal * amount) / 100)
     }
+
+    const loadAvailableCoupons = async () => {
+        setCouponsLoading(true)
+        try {
+            const res = await couponApi.getAll()
+            setAvailableCoupons(res.data?.filter(c => c.status) || [])
+        } catch (err) {
+            toast.error("Failed to load coupons")
+        } finally {
+            setCouponsLoading(false)
+        }
+    }
+
+    const handleApplyCoupon = (coupon: CouponResponse) => {
+        const discountAmount = coupon.type === 'fixed'
+            ? coupon.discount
+            : (subtotal * coupon.discount) / 100
+        setCouponDiscount(discountAmount)
+        setAppliedCoupon(coupon)
+        setIsCouponModalOpen(false)
+        toast.success(`Coupon applied: ${coupon.code}`)
+    }
+
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null)
+        setCouponDiscount(0)
+        toast.success("Coupon removed")
+    }
+
     const handleSuccessClose = () => {
         setIsSuccessModalOpen(false); setCart([])
         setSelectedCustomerId(""); setSelectedCustomerName("Walk-in Customer")
-        setDiscount(0); setInvoiceNo("")
+        setDiscount(0); setAppliedCoupon(null); setCouponDiscount(0); setInvoiceNo("")
     }
 
     const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0)
     const tax = subtotal * 0.1
-    const total = Math.max(0, subtotal + tax + shipping - discount)
+    const totalDiscount = discount + couponDiscount
+    const total = Math.max(0, subtotal + tax + shipping - totalDiscount)
 
     const handleCheckout = async (method: string) => {
         setIsSubmitting(true)
@@ -249,6 +285,10 @@ export default function PosPage() {
                 method,
                 amount: total,
                 discount: discount > 0 ? discount : undefined,
+                ...(couponDiscount > 0 && appliedCoupon ? {
+                    couponId: appliedCoupon.id,
+                    couponCode: appliedCoupon.code,
+                } : {}),
                 shippingCost: shipping > 0 ? shipping : undefined,
                 status: 'Pending',
                 items: cart.map(item => ({
@@ -273,32 +313,11 @@ export default function PosPage() {
     }
 
     return (
-        <div className="flex h-[calc(100vh-6rem)] gap-4 overflow-hidden">
-            {/* Categories */}
-            <div className="w-24 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
-                <ScrollArea className="h-full w-full">
-                    <div className="flex flex-col items-center py-4 space-y-2">
-                        {categories.map(cat => (
-                            <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-                                className={cn(
-                                    "flex flex-col items-center justify-center w-20 min-h-16 rounded-xl transition-all p-2 gap-1 shrink-0",
-                                    selectedCategory === cat.id
-                                        ? "bg-emerald-600 text-white shadow-md scale-105"
-                                        : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                                )}
-                            >
-                                <LayoutGrid className="w-5 h-5" />
-                                <span className="text-[10px] font-medium text-center leading-tight">{cat.name}</span>
-                            </button>
-                        ))}
-                    </div>
-                </ScrollArea>
-            </div>
-
-            {/* Product Grid */}
-            <div className="flex-1 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
-                <div className="p-4 border-b flex gap-4">
-                    <div className="relative flex-1">
+        <div className="flex flex-col h-[calc(100vh-6rem)] gap-0 overflow-hidden">
+            {/* Top Navigation Bar */}
+            <div className="bg-white border-b shadow-sm">
+                <div className="flex items-center gap-4 px-6 py-3">
+                    <div className="relative flex-1 max-w-lg">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <Input placeholder="Search products..." className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white"
                             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
@@ -314,28 +333,54 @@ export default function PosPage() {
                         </Select>
                     </div>
                 </div>
-                <div className="flex-1 min-h-0">
-                    <ScrollArea className="h-full p-4 bg-gray-50/30">
-                        {productsLoading ? (
-                            <div className="flex items-center justify-center h-64 text-gray-400"><p>Loading products...</p></div>
-                        ) : filteredProducts.length > 0 ? (
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 pb-4">
-                                {filteredProducts.map(product => (
-                                    <PosProductCard key={product.id} product={{ ...product, stock: getAvailableStock(product) }} onAddToCart={addToCart} />
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-                                <Search className="w-12 h-12 mb-2 opacity-20" />
-                                <p>No products in stock at this location</p>
-                            </div>
-                        )}
+
+                {/* Horizontal Category Tabs */}
+                <div className="border-t bg-gray-50/50 px-6 overflow-x-auto">
+                    <ScrollArea className="w-full">
+                        <div className="flex gap-2 py-3">
+                            {categories.map(cat => (
+                                <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
+                                    className={cn(
+                                        "px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all shrink-0",
+                                        selectedCategory === cat.id
+                                            ? "bg-emerald-600 text-white shadow-md"
+                                            : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600"
+                                    )}
+                                >
+                                    {cat.name}
+                                </button>
+                            ))}
+                        </div>
                     </ScrollArea>
                 </div>
             </div>
 
-            {/* Cart */}
-            <div className="w-[420px] flex flex-col bg-white rounded-xl border shadow-sm h-full overflow-hidden">
+            {/* Main Content - Products & Cart Side by Side */}
+            <div className="flex gap-4 flex-1 overflow-hidden p-4">
+                {/* Product Grid - 60% width */}
+                <div className="flex-1 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
+                    <div className="flex-1 min-h-0">
+                        <ScrollArea className="h-full p-4 bg-gray-50/30">
+                            {productsLoading ? (
+                                <div className="flex items-center justify-center h-64 text-gray-400"><p>Loading products...</p></div>
+                            ) : filteredProducts.length > 0 ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+                                    {filteredProducts.map(product => (
+                                        <PosProductCard key={product.id} product={{ ...product, stock: getAvailableStock(product) }} onAddToCart={addToCart} />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                                    <Search className="w-12 h-12 mb-2 opacity-20" />
+                                    <p>No products in stock at this location</p>
+                                </div>
+                            )}
+                        </ScrollArea>
+                    </div>
+                </div>
+
+                {/* Cart - 40% width */}
+                <div className="w-[40%] min-w-[380px] flex flex-col bg-white rounded-xl border shadow-sm h-full overflow-hidden">
                 <div className="p-4 border-b bg-gray-50/50">
                     <CustomerCombobox value={selectedCustomerId}
                         onValueChange={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name) }} />
@@ -358,10 +403,26 @@ export default function PosPage() {
                         </ScrollArea>
                     )}
                 </div>
-                <div className="grid grid-cols-2 gap-2 p-3 border-t bg-gray-50/30">
+                <div className="grid grid-cols-3 gap-2 p-3 border-t bg-gray-50/30">
                     <Button variant="outline" size="sm" className="h-9 gap-2 text-gray-600 border-dashed" onClick={() => setIsDiscountModalOpen(true)}>
                         <Percent className="w-3.5 h-3.5" />
                         Discount {discount > 0 && `($${discount.toFixed(2)})`}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className={`h-9 gap-2 ${appliedCoupon ? 'text-emerald-600 border-emerald-200 hover:bg-emerald-50' : 'text-blue-600 border-blue-100 hover:bg-blue-50'}`}
+                        onClick={() => {
+                            if (appliedCoupon) {
+                                handleRemoveCoupon()
+                            } else {
+                                loadAvailableCoupons()
+                                setIsCouponModalOpen(true)
+                            }
+                        }}
+                    >
+                        <Ticket className="w-3.5 h-3.5" />
+                        {appliedCoupon ? `${appliedCoupon.code}` : "Coupon"}
                     </Button>
                     <Button variant="outline" size="sm" className="h-9 gap-2 text-red-600 border-red-100 hover:bg-red-50" onClick={() => setIsResetDialogOpen(true)}>
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -374,7 +435,12 @@ export default function PosPage() {
                         <div className="flex justify-between"><span>Tax (10%)</span><span className="font-medium font-mono">${tax.toFixed(2)}</span></div>
                         {discount > 0 && (
                             <div className="flex justify-between text-emerald-600">
-                                <span>Discount</span><span className="font-medium font-mono">-${discount.toFixed(2)}</span>
+                                <span>Manual Discount</span><span className="font-medium font-mono">-${discount.toFixed(2)}</span>
+                            </div>
+                        )}
+                        {couponDiscount > 0 && (
+                            <div className="flex justify-between text-blue-600">
+                                <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-${couponDiscount.toFixed(2)}</span>
                             </div>
                         )}
                         <div className="pt-2 border-t mt-2 flex justify-between items-end text-gray-900">
@@ -388,9 +454,51 @@ export default function PosPage() {
                     </Button>
                 </div>
             </div>
+            </div>
 
             <CheckoutModal open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen} totalAmount={total} onConfirm={handleCheckout} />
             <DiscountModal open={isDiscountModalOpen} onOpenChange={setIsDiscountModalOpen} onApplyDiscount={handleApplyDiscount} currentSubtotal={subtotal} />
+
+            {/* Coupon Modal */}
+            <Dialog open={isCouponModalOpen} onOpenChange={setIsCouponModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Apply Coupon</DialogTitle>
+                    </DialogHeader>
+                    {couponsLoading ? (
+                        <div className="flex justify-center py-6">
+                            <p className="text-gray-500">Loading coupons...</p>
+                        </div>
+                    ) : availableCoupons.length === 0 ? (
+                        <div className="py-6 text-center">
+                            <p className="text-gray-500">No active coupons available</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                            {availableCoupons.map(coupon => (
+                                <button
+                                    key={coupon.id}
+                                    onClick={() => handleApplyCoupon(coupon)}
+                                    className="w-full p-3 text-left border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold text-gray-900">{coupon.code}</p>
+                                            <p className="text-sm text-gray-600">{coupon.campaign_name}</p>
+                                        </div>
+                                        <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+                                            {coupon.type === 'percentage' ? `${coupon.discount}%` : `$${coupon.discount}`}
+                                        </Badge>
+                                    </div>
+                                    {coupon.min_order_amount > 0 && (
+                                        <p className="text-xs text-gray-500 mt-1">Min order: ${coupon.min_order_amount}</p>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
                 <AlertDialogContent>

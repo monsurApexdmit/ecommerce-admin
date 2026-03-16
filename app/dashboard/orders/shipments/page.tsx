@@ -114,10 +114,28 @@ export default function ShipmentsPage() {
     description: "",
   })
 
+  const [orderSearch, setOrderSearch] = useState("")
+  const [filteredOrders, setFilteredOrders] = useState<SellResponse[]>([])
+  const [showOrderDropdown, setShowOrderDropdown] = useState(false)
+
   // Load orders for the sell selector
   useEffect(() => {
     sellsApi.getAll({ limit: 100 }).then((res) => setOrders(res.data ?? [])).catch(() => {})
   }, [])
+
+  // Filter orders based on search query
+  useEffect(() => {
+    if (!orderSearch.trim()) {
+      setFilteredOrders(orders.slice(0, 20)) // Show first 20 if search is empty
+      return
+    }
+    const query = orderSearch.toLowerCase().replace(/^#/, '') // Remove # if user types it
+    const filtered = orders.filter((o) =>
+      String(o.invoiceNo).toLowerCase().includes(query) ||
+      (o.customerName?.toLowerCase().includes(query) ?? false)
+    )
+    setFilteredOrders(filtered)
+  }, [orderSearch, orders])
 
   const fetchShipments = useCallback(async () => {
     setIsLoading(true)
@@ -371,21 +389,57 @@ export default function ShipmentsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2 sm:col-span-2">
               <Label>Order *</Label>
-              <Select
-                value={formData.sellId ? String(formData.sellId) : ""}
-                onValueChange={(v) => setFormData({ ...formData, sellId: Number(v) })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an order..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {orders.map((o) => (
-                    <SelectItem key={o.id} value={String(o.id)}>
-                      #{o.invoiceNo} — {o.customerName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Input
+                  placeholder="Search by invoice number or customer name..."
+                  value={orderSearch}
+                  onChange={(e) => {
+                    setOrderSearch(e.target.value)
+                    setShowOrderDropdown(true)
+                  }}
+                  onFocus={() => {
+                    setOrderSearch("")
+                    setShowOrderDropdown(true)
+                  }}
+                  onBlur={() => setTimeout(() => setShowOrderDropdown(false), 200)}
+                  className="w-full"
+                />
+                {showOrderDropdown && filteredOrders.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto z-[9999] shadow-lg">
+                    {filteredOrders.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setFormData({ ...formData, sellId: o.id })
+                          setOrderSearch(`#${o.invoiceNo} — ${o.customerName}`)
+                          setShowOrderDropdown(false)
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-emerald-50 border-b last:border-b-0 transition-colors"
+                      >
+                        <div className="font-medium text-sm">#{o.invoiceNo}</div>
+                        <div className="text-xs text-gray-500">{o.customerName}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showOrderDropdown && orderSearch && filteredOrders.length === 0 && orders.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md mt-1 p-3 z-[9999] shadow-lg text-center text-sm text-gray-500">
+                    No orders found matching "{orderSearch}"
+                  </div>
+                )}
+                {formData.sellId > 0 && (
+                  <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-md text-sm">
+                    <div className="font-medium text-emerald-900">
+                      Selected: #{orders.find(o => o.id === formData.sellId)?.invoiceNo}
+                    </div>
+                    <div className="text-xs text-emerald-700">
+                      {orders.find(o => o.id === formData.sellId)?.customerName}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">

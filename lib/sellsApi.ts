@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import { getCompanyId } from './utils/apiInterceptor';
 
 const API_URL = '/api/proxy';
 
@@ -21,6 +22,13 @@ api.interceptors.request.use(
       const token = localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+
+        // Add company_id for multi-tenant support
+        const companyId = getCompanyId();
+        if (companyId) {
+          if (!config.params) config.params = {};
+          config.params.company_id = companyId;
+        }
       }
     }
     return config;
@@ -113,8 +121,10 @@ export interface SellResponse {
   shippingAddressType?: string;
   method: string;
   amount: number;
-  shippingCost?: number;
   discount?: number;
+  couponId?: number;
+  couponCode?: string;
+  shippingCost?: number;
   status: 'Pending' | 'Processing' | 'Delivered';
   paymentStatus?: string;
   fulfillmentStatus?: string;
@@ -156,6 +166,8 @@ export interface CreateSellData {
   method: string;
   amount: number;
   discount?: number;
+  couponId?: number;
+  couponCode?: string;
   shippingCost?: number;
   status?: 'Pending' | 'Processing' | 'Delivered';
   note?: string;

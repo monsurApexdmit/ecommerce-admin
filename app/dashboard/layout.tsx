@@ -5,7 +5,7 @@ import { Suspense } from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { StaffProvider } from "@/contexts/staff-context"
 import { VendorProvider } from "@/contexts/vendor-context"
 import { ProductProvider } from "@/contexts/product-context"
@@ -92,6 +92,17 @@ const navigation = [
     ],
   },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  {
+    name: "SaaS Settings",
+    icon: CreditCard,
+    submenu: [
+      { name: "Company Profile", href: "/dashboard/company/profile" },
+      { name: "Company Settings", href: "/dashboard/company/settings" },
+      { name: "Billing Contact", href: "/dashboard/company/billing-contact" },
+      { name: "Team Members", href: "/dashboard/team/users" },
+      { name: "Subscriptions", href: "/dashboard/billing/subscriptions" },
+    ],
+  },
   { name: "International", href: "/dashboard/international", icon: Globe, hasArrow: true },
   { name: "Store", href: "/dashboard/store", icon: Store, hasArrow: true },
   { name: "Pages", href: "/dashboard/pages", icon: FileText, hasArrow: true },
@@ -100,7 +111,8 @@ const navigation = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement>(null)
-  const { userEmail, logout } = useAuth()
+  const { user, logout } = useSaasAuth()
+  const userEmail = user?.email || ""
 
   const notifications = [
     {

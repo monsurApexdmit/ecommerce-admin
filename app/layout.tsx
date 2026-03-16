@@ -2,7 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Open_Sans } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
-import { AuthProvider } from "@/contexts/auth-context"
+import { SaasAuthProvider } from "@/contexts/saas-auth-context"
 import "./globals.css"
 
 const openSans = Open_Sans({ subsets: ["latin"] })
@@ -37,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${openSans.className} antialiased`} suppressHydrationWarning>
-        <AuthProvider>{children}</AuthProvider>
+        <SaasAuthProvider>{children}</SaasAuthProvider>
         <Analytics />
       </body>
     </html>

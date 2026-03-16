@@ -2,9 +2,11 @@
  * Product API Service
  * Proxied through Next.js API route to avoid browser TLS issues with self-signed certs
  * Uses multipart/form-data for create/update (backend expects form-data with file uploads)
+ * Auto-injects company_id from auth context for multi-tenant support
  */
 
 import axios from 'axios';
+import { getCompanyId } from './utils/apiInterceptor';
 
 const API_URL = '/api/proxy';
 
@@ -18,6 +20,13 @@ api.interceptors.request.use(
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
       if (token) config.headers.Authorization = `Bearer ${token}`;
+
+      // Add company_id to params for multi-tenant support
+      const companyId = getCompanyId();
+      if (companyId) {
+        if (!config.params) config.params = {};
+        config.params.company_id = companyId;
+      }
     }
     return config;
   },
