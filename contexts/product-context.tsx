@@ -16,6 +16,8 @@ export interface Product {
     published: boolean
     image: string
     images?: File[]         // for upload
+    delete_images?: boolean
+    keep_images?: string[]  // existing paths to keep on update
     sku: string
     barcode: string
     createdAt?: string
@@ -69,33 +71,50 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined)
 
 function convertToProduct(p: ProductResponse): Product {
     const categoryObj = typeof p.category === "object" && p.category !== null ? p.category : null
+    // DTO returns camelCase IDs
+    const categoryId = categoryObj ? String(categoryObj.id) : ((p as any).categoryId ? String((p as any).categoryId) : undefined)
+    const vendorId = (p as any).vendorId ? String((p as any).vendorId) : (p.vendor_id ? String(p.vendor_id) : undefined)
+    const locationId = (p as any).locationId ? String((p as any).locationId) : (p.location_id ? String(p.location_id) : undefined)
     return {
         id: String(p.id),
         name: p.name,
         description: p.description || "",
         category: categoryObj ? categoryObj.category_name : (p.category as string || ""),
-        categoryId: categoryObj ? String(categoryObj.id) : undefined,
+        categoryId,
         price: p.price,
-        salePrice: p.sale_price,
+        salePrice: p.salePrice ?? p.sale_price,
         stock: p.stock,
         status: (p.status as Product["status"]) || (p.stock > 0 ? "Selling" : "Out of Stock"),
         published: p.published ?? true,
         image: (() => {
-            if (p.images && p.images.length > 0) {
-                const path = p.images.find(i => i.is_primary)?.path || p.images[0].path
-                return path ? `/api/proxy/${path}` : ""
+            try {
+                // Try images array first (from backend relationship)
+                if (Array.isArray(p.images) && p.images.length > 0) {
+                    const primaryImage = p.images.find((i: any) => i.isPrimary === true || i.is_primary === true)
+                    const imagePath = primaryImage?.path || p.images[0]?.path
+                    if (imagePath && typeof imagePath === 'string' && imagePath.trim()) {
+                        if (imagePath.startsWith("/api/proxy/") || imagePath.startsWith("http")) return imagePath
+                        return `/api/proxy/uploads/${imagePath}`
+                    }
+                }
+                // Fallback to image field
+                if (p.image && typeof p.image === 'string' && p.image.trim()) {
+                    if (p.image.startsWith("/api/proxy/") || p.image.startsWith("http")) return p.image
+                    return `/api/proxy/uploads/${p.image}`
+                }
+            } catch (e) {
+                console.error("Error processing image for product", p.id, "error:", e, "p.images:", p.images, "p.image:", p.image)
             }
-            if (p.image) return p.image.startsWith("/api/proxy/") ? p.image : `/api/proxy/${p.image}`
-            return ""
+            return "/placeholder.svg"
         })(),
         sku: p.sku || "",
         barcode: p.barcode || "",
         createdAt: p.created_at,
         updatedAt: p.updated_at,
-        vendorId: p.vendor_id ? String(p.vendor_id) : undefined,
-        locationId: p.location_id ? String(p.location_id) : (p.inventory?.[0] ? String(p.inventory[0].warehouse_id) : undefined),
+        vendorId,
+        locationId,
         locationName: p.location?.name,
-        receiptNumber: p.receipt_number || undefined,
+        receiptNumber: (p as any).receiptNumber || p.receipt_number || undefined,
         attributes: p.attributes?.map(a => ({
             id: String(a.id),
             name: a.name,
@@ -104,9 +123,14 @@ function convertToProduct(p: ProductResponse): Product {
         variants: p.variants?.map(v => ({
             id: String(v.id),
             name: v.name,
-            attributes: v.attributes || {},
+            attributes: (() => {
+                const raw = (v as any).attributes
+                if (!raw) return {}
+                if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return {} } }
+                return raw
+            })(),
             price: v.price,
-            salePrice: v.sale_price,
+            salePrice: (v as any).salePrice ?? v.sale_price,
             stock: v.stock,
             sku: v.sku || "",
             barcode: v.barcode,
@@ -174,7 +198,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
             await refreshProducts()
         } catch (err: any) {
             console.error("Failed to create product:", err)
-            throw new Error(err.response?.data?.error || "Failed to create product")
+            throw new Error(err.response?.data?.message || err.response?.data?.error || err.message || "Failed to create product")
         }
     }
 
@@ -208,11 +232,13 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                     }
                 }),
                 images: product.images,
+                delete_images: product.delete_images,
+                keep_images: product.keep_images,
             })
             await refreshProducts()
         } catch (err: any) {
             console.error("Failed to update product:", err)
-            throw new Error(err.response?.data?.error || "Failed to update product")
+            throw new Error(err.response?.data?.message || err.response?.data?.error || err.message || "Failed to update product")
         }
     }
 

@@ -8,20 +8,31 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Printer, Eye, Download, Mail, ShoppingBag, Trash2 } from "lucide-react"
+import { Printer, Eye, Download, Mail, ShoppingBag, Trash2, Package, Clock, CheckCircle, AlertCircle } from "lucide-react"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { StatsCards } from "@/components/ui/stats-card"
 import { sellsApi, SellResponse, SellItem } from "@/lib/sellsApi"
 
 const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
 const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
 const itemTotal = (item: SellItem) => item.total_price ?? item.totalPrice ?? (itemPrice(item) * item.quantity)
 
+interface StatsData {
+  totalSells: number
+  totalRevenue: number
+  pendingOrders: number
+  processingOrders: number
+  deliveredOrders: number
+}
+
 export default function OrdersPage() {
   const searchParams = useSearchParams()
   const [orders, setOrders] = useState<SellResponse[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [stats, setStats] = useState<StatsData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [methodFilter, setMethodFilter] = useState<string>("all")
@@ -63,9 +74,22 @@ export default function OrdersPage() {
     }
   }, [currentPage, itemsPerPage, searchQuery, statusFilter, methodFilter, startDate, endDate])
 
+  const fetchStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const res = await sellsApi.getStats()
+      setStats(res.data)
+    } catch (err) {
+      console.error("Failed to fetch stats:", err)
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchOrders()
-  }, [fetchOrders])
+    fetchStats()
+  }, [fetchOrders, fetchStats])
 
   const handleStatusChange = async (id: number, newStatus: SellResponse["status"]) => {
     setUpdatingStatus(id)
@@ -303,6 +327,22 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
       </div>
+
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+      ) : stats ? (
+        <StatsCards
+          stats={[
+            { label: "Total", value: stats.totalSells, icon: <ShoppingBag className="w-5 h-5" />, color: "blue" },
+            { label: "Pending", value: stats.pendingOrders, icon: <Clock className="w-5 h-5" />, color: "yellow" },
+            { label: "Processing", value: stats.processingOrders, icon: <Package className="w-5 h-5" />, color: "purple" },
+            { label: "Delivered", value: stats.deliveredOrders, icon: <CheckCircle className="w-5 h-5" />, color: "green" },
+            { label: "Revenue", value: `$${stats.totalRevenue.toFixed(2)}`, icon: <AlertCircle className="w-5 h-5" />, color: "blue" },
+          ]}
+        />
+      ) : null}
 
       <Card className="p-6">
         <div className="space-y-4 mb-6">

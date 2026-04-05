@@ -180,6 +180,8 @@ export interface CreateSellData {
     productName: string;
     quantity: number;
     price: number;
+    unitPrice?: number;
+    unit_price?: number;
   }[];
 }
 
@@ -206,7 +208,21 @@ export const sellsApi = {
     end_date?: string;
   }): Promise<SellListResponse> => {
     const response = await api.get('/sells', { params });
-    return response.data;
+    // Backend returns either:
+    // 1. { success, message, data: [sells array] } - direct array
+    // 2. { success, message, data: { data: [...], pagination } } - paginated format
+    const data = response.data.data || [];
+    const isArray = Array.isArray(data);
+    const sellsData = isArray ? data : (data.data || []);
+    const paginationData = isArray ? {} : data;
+
+    return {
+      message: response.data.message || '',
+      data: sellsData,
+      total: paginationData.total || sellsData.length || 0,
+      page: paginationData.current_page || 1,
+      limit: paginationData.per_page || 10,
+    };
   },
 
   getStats: async (): Promise<SellStatsResponse> => {
@@ -220,7 +236,9 @@ export const sellsApi = {
   },
 
   getByInvoice: async (invoiceNo: string): Promise<{ message: string; data: SellResponse }> => {
-    const response = await api.get(`/sells/invoice/${encodeURIComponent(invoiceNo)}`);
+    // Remove leading # if present (in case user copies invoice number with # prefix)
+    const cleanInvoiceNo = invoiceNo.startsWith('#') ? invoiceNo.substring(1) : invoiceNo;
+    const response = await api.get(`/sells/invoice/${encodeURIComponent(cleanInvoiceNo)}`);
     return response.data;
   },
 

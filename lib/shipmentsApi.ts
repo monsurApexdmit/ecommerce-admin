@@ -145,7 +145,17 @@ export const shipmentsApi = {
     carrier?: string;
   }): Promise<ShipmentListResponse> => {
     const response = await api.get('/shipments', { params });
-    return response.data;
+    // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      pagination: {
+        page: laravelData.current_page || 1,
+        per_page: laravelData.per_page || 10,
+        total: laravelData.total || 0,
+      },
+    };
   },
 
   getStats: async (): Promise<ShipmentStatsResponse> => {

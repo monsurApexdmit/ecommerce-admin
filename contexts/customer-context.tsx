@@ -108,7 +108,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       await refreshCustomers()
     } catch (err: any) {
       console.error('Error creating customer:', err)
-      throw new Error(err.response?.data?.error || 'Failed to create customer')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create customer')
     }
   }
 
@@ -132,7 +132,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       await refreshCustomers()
     } catch (err: any) {
       console.error('Error updating customer:', err)
-      throw new Error(err.response?.data?.error || 'Failed to update customer')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to update customer')
     }
   }
 
@@ -142,7 +142,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       await refreshCustomers()
     } catch (err: any) {
       console.error('Error deleting customer:', err)
-      throw new Error(err.response?.data?.error || 'Failed to delete customer')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete customer')
     }
   }
 

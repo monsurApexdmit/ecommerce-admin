@@ -36,13 +36,20 @@ export function PosProductCard({ product, onAddToCart }: PosProductCardProps) {
                 <h3 className="font-medium text-gray-700 text-xs leading-snug line-clamp-2 min-h-[2.5em]" title={product.name}>
                     {product.name}
                 </h3>
-                <div className="mt-auto pt-1 flex items-center justify-between">
-                    <p className="font-bold text-emerald-600 text-sm">
-                        ${product.salePrice.toFixed(2)}
-                    </p>
-                    <div className="h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus className="w-3.5 h-3.5" />
+                <div className="mt-auto pt-1 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <p className="font-bold text-emerald-600 text-sm">
+                            ${(product.salePrice || product.price || 0).toFixed(2)}
+                        </p>
+                        <div className="h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Plus className="w-3.5 h-3.5" />
+                        </div>
                     </div>
+                    <p className="text-xs text-gray-500">
+                        Stock: <span className={product.stock > 0 ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>
+                            {product.stock}
+                        </span>
+                    </p>
                 </div>
             </div>
         </Card>

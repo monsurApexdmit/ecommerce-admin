@@ -99,17 +99,30 @@ export default function PosPage() {
                         category: categoryObj ? categoryObj.category_name : (p.category as string || ""),
                         categoryId: categoryObj ? String(categoryObj.id) : p.category_id ? String(p.category_id) : undefined,
                         price: p.price,
-                        salePrice: p.sale_price,
+                        salePrice: p.sale_price ?? p.salePrice ?? p.price,
                         stock: p.stock,
                         status: p.status || (p.stock > 0 ? "Selling" : "Out of Stock"),
                         published: p.published ?? true,
                         image: (() => {
-                            if (p.images?.length > 0) {
-                                const path = p.images.find((i: any) => i.is_primary)?.path || p.images[0].path
-                                return path ? `/api/proxy/${path}` : ""
+                            try {
+                                if (p.images?.length > 0) {
+                                    const primaryImage = p.images.find((i: any) => i.isPrimary === true || i.is_primary === true)
+                                    const path = primaryImage?.path || p.images[0]?.path
+                                    if (path) {
+                                        if (path.startsWith("/api/proxy/") || path.startsWith("http")) return path
+                                        // Storage paths come as "products/..." - use /api/proxy/uploads/ for file serving
+                                        return `/api/proxy/uploads/${path}`
+                                    }
+                                }
+                                if (p.image && p.image.trim()) {
+                                    if (p.image.startsWith("/api/proxy/") || p.image.startsWith("http")) return p.image
+                                    // Storage paths come as "products/..." - use /api/proxy/uploads/ for file serving
+                                    return `/api/proxy/uploads/${p.image}`
+                                }
+                            } catch (e) {
+                                console.error("Error processing image for POS product", p.id, e)
                             }
-                            if (p.image) return p.image.startsWith("/api/proxy/") ? p.image : `/api/proxy/${p.image}`
-                            return ""
+                            return "/placeholder.svg"
                         })(),
                         sku: p.sku || "",
                         barcode: p.barcode || "",
@@ -118,20 +131,15 @@ export default function PosPage() {
                             name: v.name,
                             attributes: v.attributes || {},
                             price: v.price,
-                            salePrice: v.sale_price,
+                            salePrice: v.salePrice ?? v.sale_price ?? v.price,
                             stock: v.stock,
                             sku: v.sku || "",
                             barcode: v.barcode,
                             inventory: v.inventory?.map((i: any) => ({
                                 inventoryId: i.id,
-                                warehouseId: String(i.location_id),
+                                warehouseId: String(i.locationId ?? i.location_id),
                                 quantity: i.quantity,
                             })) || [],
-                        })) || [],
-                        inventory: p.inventory?.map((i: any) => ({
-                            inventoryId: i.id,
-                            warehouseId: String(i.location_id ?? i.warehouse_id),
-                            quantity: i.quantity,
                         })) || [],
                     } as Product
                 }))
@@ -147,10 +155,13 @@ export default function PosPage() {
             return loc ? loc.quantity : variant.stock
         }
         if (product.variants && product.variants.length > 0) {
-            return product.variants.reduce((sum, v) => {
+            // For products with variants, sum up inventory across all variants at this warehouse
+            const totalAtWarehouse = product.variants.reduce((sum, v) => {
                 const loc = v.inventory?.find(i => i.warehouseId === whId)
                 return sum + (loc ? loc.quantity : 0)
             }, 0)
+            // If warehouse-specific inventory is 0, fall back to total product stock
+            return totalAtWarehouse > 0 ? totalAtWarehouse : product.stock
         }
         const loc = product.inventory?.find(i => i.warehouseId === whId)
         return loc ? loc.quantity : product.stock
@@ -300,6 +311,8 @@ export default function PosPage() {
                     productName: item.name,
                     quantity: item.quantity,
                     price: item.price,
+                    unitPrice: item.price,
+                    unit_price: item.price,
                 })),
             })
             setInvoiceNo(res.data.invoiceNo || "")
@@ -366,7 +379,17 @@ export default function PosPage() {
                             ) : filteredProducts.length > 0 ? (
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
                                     {filteredProducts.map(product => (
-                                        <PosProductCard key={product.id} product={{ ...product, stock: getAvailableStock(product) }} onAddToCart={addToCart} />
+                                        <PosProductCard
+                                            key={product.id}
+                                            product={{ ...product, stock: getAvailableStock(product) }}
+                                            onAddToCart={(product) => {
+                                                if (product.variants && product.variants.length > 0) {
+                                                    setSelectedProductForVariant(product)
+                                                } else {
+                                                    addToCart(product)
+                                                }
+                                            }}
+                                        />
                                     ))}
                                 </div>
                             ) : (

@@ -153,7 +153,15 @@ export const staffApi = {
     search?: string;
   }): Promise<StaffListResponse> => {
     const response = await api.get('/staff', { params });
-    return response.data;
+    // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      total: laravelData.total || 0,
+      page: laravelData.current_page || 1,
+      limit: laravelData.per_page || 10,
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: StaffResponse }> => {
@@ -175,12 +183,23 @@ export const staffApi = {
     const response = await api.delete(`/staff/${id}`);
     return response.data;
   },
+
+  getStats: async (): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+  }> => {
+    const response = await api.get('/staff/stats');
+    return response.data.data;
+  },
 };
 
 export interface StaffRoleResponse {
   id: number;
+  companyId?: number;
   name: string;
   permissions: {
+    id?: number;
     name: string;
     read: boolean;
     write: boolean;
@@ -201,7 +220,7 @@ export interface StaffRoleListResponse {
 export interface CreateStaffRoleData {
   name: string;
   permissions: {
-    name: string;
+    permissionId: number;
     read: boolean;
     write: boolean;
     delete: boolean;
@@ -211,17 +230,31 @@ export interface CreateStaffRoleData {
 export interface UpdateStaffRoleData {
   name: string;
   permissions: {
-    name: string;
+    permissionId: number;
     read: boolean;
     write: boolean;
     delete: boolean;
   }[];
 }
 
+export interface PermissionResponse {
+  id: number;
+  name: string;
+  description: string;
+}
+
 export const staffRoleApi = {
   getAll: async (params?: { page?: number; limit?: number; search?: string }): Promise<StaffRoleListResponse> => {
     const response = await api.get('/staff-roles', { params });
-    return response.data;
+    // Laravel returns: { success, message, data: [...] }
+    const items = Array.isArray(response.data.data) ? response.data.data : [];
+    return {
+      message: response.data.message || '',
+      data: items,
+      total: items.length,
+      page: 1,
+      limit: items.length,
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: StaffRoleResponse }> => {
@@ -243,6 +276,11 @@ export const staffRoleApi = {
     const response = await api.delete(`/staff-roles/${id}`);
     return response.data;
   },
+
+  getPermissions: async (): Promise<PermissionResponse[]> => {
+    const response = await api.get('/staff-roles/permissions');
+    return response.data.data || [];
+  },
 };
 
 export const salaryPaymentApi = {
@@ -253,7 +291,15 @@ export const salaryPaymentApi = {
     month?: string;
   }): Promise<SalaryPaymentListResponse> => {
     const response = await api.get('/salary-payments', { params });
-    return response.data;
+    // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      total: laravelData.total || 0,
+      page: laravelData.current_page || 1,
+      limit: laravelData.per_page || 10,
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: SalaryPaymentResponse }> => {

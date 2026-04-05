@@ -24,8 +24,14 @@ export function TransferProvider({ children }: { children: React.ReactNode }) {
             setLoading(true)
             const res = await transferApi.getAll()
             setTransfers(res.data ?? [])
-        } catch (err) {
-            console.error("Failed to fetch transfers:", err)
+        } catch (err: any) {
+            // Handle 404 for transfers endpoint (not implemented in backend)
+            if (err.response?.status === 404) {
+                console.warn("Transfers endpoint not available in backend")
+                setTransfers([])
+            } else {
+                console.error("Failed to fetch transfers:", err)
+            }
         } finally {
             setLoading(false)
         }
@@ -36,13 +42,21 @@ export function TransferProvider({ children }: { children: React.ReactNode }) {
     }, [fetchTransfers])
 
     const addTransfer = async (data: CreateTransferData) => {
-        const res = await transferApi.create(data)
-        setTransfers(prev => [res.data, ...prev])
+        try {
+            const res = await transferApi.create(data)
+            setTransfers(prev => [res.data, ...prev])
+        } catch (err: any) {
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create transfer')
+        }
     }
 
     const cancelTransfer = async (id: number) => {
-        const res = await transferApi.cancel(id)
-        setTransfers(prev => prev.map(t => t.id === id ? res.data : t))
+        try {
+            const res = await transferApi.cancel(id)
+            setTransfers(prev => prev.map(t => t.id === id ? res.data : t))
+        } catch (err: any) {
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to cancel transfer')
+        }
     }
 
     return (

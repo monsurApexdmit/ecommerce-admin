@@ -52,7 +52,7 @@ export default function CategoriesPage() {
   const sourceList = parentsOnly ? rootCategories : flatCategories
 
   const filteredCategories = sourceList.filter((category) =>
-    category.category_name.toLowerCase().includes(searchQuery.toLowerCase()),
+    (category.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   const {
@@ -94,7 +94,7 @@ export default function CategoriesPage() {
 
     try {
       await addCategory({
-        category_name: formData.name,
+        category_name: formData.name.replace(/\b\w/g, (c) => c.toUpperCase()),
         status: formData.published,
         parent_id: formData.parent_id === "none" ? null : formData.parent_id,
       })
@@ -128,7 +128,7 @@ export default function CategoriesPage() {
 
     try {
       await updateCategory(editingCategory.id, {
-        category_name: formData.name,
+        category_name: formData.name.replace(/\b\w/g, (c) => c.toUpperCase()),
         status: formData.published,
         parent_id: formData.parent_id === "none" ? null : formData.parent_id,
       })

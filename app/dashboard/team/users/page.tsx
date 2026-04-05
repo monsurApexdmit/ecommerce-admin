@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import {
   saasCompanyApi,
   type CompanyUser,
-  type InviteUserPayload,
 } from "@/lib/saasCompanyApi"
+import { staffRoleApi, type StaffRoleResponse } from "@/lib/staffApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import {
   AlertCircle,
@@ -18,7 +18,6 @@ import {
   Mail,
   Shield,
   Calendar,
-  Clock,
   Send,
 } from "lucide-react"
 
@@ -26,6 +25,7 @@ export default function TeamUsersPage() {
   const { company, user } = useSaasAuth()
 
   const [users, setUsers] = useState<CompanyUser[]>([])
+  const [staffRoles, setStaffRoles] = useState<StaffRoleResponse[]>([])
   const [maxUsers, setMaxUsers] = useState(0)
   const [canAddMore, setCanAddMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -37,19 +37,24 @@ export default function TeamUsersPage() {
   const [inviteForm, setInviteForm] = useState({
     email: "",
     fullName: "",
-    role: "staff" as "admin" | "manager" | "staff",
+    roleId: 0,
   })
 
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadData = async () => {
       try {
         setLoading(true)
         setError("")
 
-        const response = await saasCompanyApi.getTeamUsers()
-        setUsers(response.data.users)
-        setMaxUsers(response.data.maxUsers)
-        setCanAddMore(response.data.canAddMore)
+        // Load team users
+        const usersResponse = await saasCompanyApi.getTeamUsers()
+        setUsers(usersResponse.data.users)
+        setMaxUsers(usersResponse.data.maxUsers)
+        setCanAddMore(usersResponse.data.canAddMore)
+
+        // Load staff roles
+        const rolesResponse = await staffRoleApi.getAll({ limit: 100 })
+        setStaffRoles(rolesResponse.data || [])
       } catch (err: any) {
         setError(err.response?.data?.message || "Failed to load team members")
       } finally {
@@ -57,11 +62,11 @@ export default function TeamUsersPage() {
       }
     }
 
-    loadUsers()
+    loadData()
   }, [])
 
   const handleInvite = async () => {
-    if (!inviteForm.email || !inviteForm.fullName) {
+    if (!inviteForm.email || !inviteForm.fullName || !inviteForm.roleId) {
       setError("Please fill in all required fields")
       return
     }
@@ -74,11 +79,11 @@ export default function TeamUsersPage() {
       await saasCompanyApi.inviteUser({
         email: inviteForm.email,
         fullName: inviteForm.fullName,
-        role: inviteForm.role,
+        roleId: inviteForm.roleId,
       })
 
       setSuccessMessage(`Invitation sent to ${inviteForm.email}`)
-      setInviteForm({ email: "", fullName: "", role: "staff" })
+      setInviteForm({ email: "", fullName: "", roleId: 0 })
       setIsInviteModalOpen(false)
 
       // Reload users
@@ -109,14 +114,21 @@ export default function TeamUsersPage() {
     }
   }
 
-  const handleChangeRole = async (userId: number, newRole: "admin" | "manager" | "staff") => {
+  const handleChangeRole = async (userId: number, newRole: string) => {
     try {
-      await saasCompanyApi.updateUserRole(userId, { role: newRole })
+      // If newRole is a staff role name from staffRoles, send it as is
+      // Otherwise map to standard role
+      const roleToSend = newRole as "admin" | "manager" | "staff";
+      await saasCompanyApi.updateUserRole(userId, { role: roleToSend })
       setSuccessMessage("User role updated successfully")
       setUsers(
         users.map((u) =>
           u.id === userId
-            ? { ...u, role: newRole }
+            ? {
+                ...u,
+                role: newRole,
+                staffRole: staffRoles.find(r => r.name === newRole) || null
+              }
             : u
         )
       )
@@ -262,20 +274,23 @@ export default function TeamUsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Role <span className="text-red-500">*</span></label>
                 <select
-                  value={inviteForm.role}
+                  value={inviteForm.roleId}
                   onChange={(e) =>
                     setInviteForm({
                       ...inviteForm,
-                      role: e.target.value as "admin" | "manager" | "staff",
+                      roleId: Number(e.target.value),
                     })
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="admin">Admin - Full access to all features</option>
-                  <option value="manager">Manager - Can manage products & orders</option>
-                  <option value="staff">Staff - View-only access</option>
+                  <option value="0">Select a role...</option>
+                  {staffRoles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -346,25 +361,35 @@ export default function TeamUsersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm">
                       {u.role === "owner" ? (
-                        <span className={`px-3 py-1 rounded text-xs font-medium ${getRoleColor(u.role)}`}>
+                        <span className={`px-3 py-1 rounded text-xs font-medium ${getRoleColor("owner")}`}>
                           <Shield className="w-3 h-3 inline mr-1" />
-                          {u.role.charAt(0).toUpperCase() + u.role.slice(1)}
+                          Owner
+                        </span>
+                      ) : u.staffRole ? (
+                        <span className={`px-3 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-800`}>
+                          {u.staffRole.name}
                         </span>
                       ) : u.id !== user?.id ? (
                         <select
-                          value={u.role}
-                          onChange={(e) =>
-                            handleChangeRole(u.id, e.target.value as "admin" | "manager" | "staff")
-                          }
-                          className={`px-3 py-1 rounded text-xs font-medium border-0 cursor-pointer ${getRoleColor(u.role)}`}
+                          value={u.roleId || ""}
+                          onChange={(e) => {
+                            const selectedRole = staffRoles.find(r => r.id === Number(e.target.value))
+                            if (selectedRole) {
+                              handleChangeRole(u.id, selectedRole.name)
+                            }
+                          }}
+                          className="px-3 py-1 rounded text-xs font-medium border-0 cursor-pointer bg-gray-100 text-gray-800"
                         >
-                          <option value="admin">Admin</option>
-                          <option value="manager">Manager</option>
-                          <option value="staff">Staff</option>
+                          <option value="">Select role...</option>
+                          {staffRoles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
                         </select>
                       ) : (
-                        <span className={`px-3 py-1 rounded text-xs font-medium ${getRoleColor(u.role)}`}>
-                          {u.role.charAt(0).toUpperCase() + u.role.slice(1)}
+                        <span className={`px-3 py-1 rounded text-xs font-medium ${getRoleColor(u.role || "")}`}>
+                          {u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : "N/A"}
                         </span>
                       )}
                     </td>

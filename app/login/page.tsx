@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
 import { Eye, EyeOff } from "lucide-react"
+import { saasAuthApi } from "@/lib/saasAuthApi"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,16 +24,29 @@ export default function LoginPage() {
     setError("")
     setLoading(true)
 
-    // Validate credentials
-    if (email === "admin@gmail.com" && password === "12345678") {
-      // Store auth token
-      localStorage.setItem("auth_token", "authenticated")
-      localStorage.setItem("user_email", email)
+    try {
+      const response = await saasAuthApi.login({ email, password })
+
+      // Store auth data
+      localStorage.setItem("token", response.data.token)
+      localStorage.setItem("user_email", response.data.userEmail)
+      localStorage.setItem("company_id", response.data.companyId.toString())
+      localStorage.setItem("company_name", response.data.companyName)
+      localStorage.setItem("user_role", response.data.userRole)
+
+      // Store trial/subscription info
+      if (response.data.trialDaysRemaining !== undefined) {
+        localStorage.setItem("trial_days", response.data.trialDaysRemaining.toString())
+      }
+      if (response.data.subscriptionEndDate) {
+        localStorage.setItem("subscription_end_date", response.data.subscriptionEndDate)
+      }
 
       // Redirect to dashboard
       router.push("/dashboard")
-    } else {
-      setError("Invalid email or password")
+    } catch (err: any) {
+      const message = err.response?.data?.message || "Invalid email or password"
+      setError(message)
       setLoading(false)
     }
   }
@@ -96,7 +110,7 @@ export default function LoginPage() {
 
           <div className="text-center text-sm text-gray-600">
             <p>Demo credentials:</p>
-            <p className="font-mono text-xs mt-1">admin@gmail.com / 12345678</p>
+            <p className="font-mono text-xs mt-1">jane.smith@startup.io / StartupPass123!</p>
           </div>
         </form>
       </Card>

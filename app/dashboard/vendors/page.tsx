@@ -2,21 +2,30 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Search, Plus, Edit2, Trash2, Eye } from "lucide-react"
+import { Search, Plus, Edit2, Trash2, Eye, Users, UserCheck, UserX } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Card } from "@/components/ui/card"
 import { useVendor, type Vendor } from "@/contexts/vendor-context"
 import { useToast } from "@/hooks/use-toast"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
+import { StatsCards } from "@/components/ui/stats-card"
+import vendorApi from "@/lib/vendorApi"
 
 export default function VendorsPage() {
   const { vendors, isLoading: contextLoading, addVendor, updateVendor, deleteVendor } = useVendor()
   const { toast } = useToast()
+  const [stats, setStats] = useState<{
+    total: number
+    active: number
+    inactive: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -64,6 +73,22 @@ export default function VendorsPage() {
       return () => clearTimeout(timer)
     }
   }, [contextLoading])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await vendorApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch vendor stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
 
   const openAddDialog = () => {
     setEditingVendor(null)
@@ -175,6 +200,25 @@ export default function VendorsPage() {
           Add Vendor
         </Button>
       </div>
+
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <div className="mb-6">
+          <StatsCards stats={[
+            { label: "Total Vendors", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
+            { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
+            { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
+          ]} />
+        </div>
+      ) : null}
 
       <div className="bg-white rounded-lg border">
         <div className="p-4 border-b">

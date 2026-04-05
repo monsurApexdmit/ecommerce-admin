@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Edit, Trash2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,12 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useStaff, type Role, type Module, type Permission } from "@/contexts/staff-context"
+import { staffRoleApi } from "@/lib/staffApi"
+
+interface BackendPermission {
+    id: number
+    name: string
+}
 
 const modules: Module[] = [
     "Dashboard",
@@ -37,6 +43,24 @@ export default function RolesPage() {
     // Form State
     const [roleName, setRoleName] = useState("")
     const [permissions, setPermissions] = useState<Permission[]>([])
+    const [backendPermissions, setBackendPermissions] = useState<BackendPermission[]>([])
+    const [loadingPermissions, setLoadingPermissions] = useState(false)
+
+    // Load backend permissions when component mounts
+    useEffect(() => {
+        const loadPermissions = async () => {
+            try {
+                setLoadingPermissions(true)
+                const perms = await staffRoleApi.getPermissions()
+                setBackendPermissions(perms || [])
+            } catch (err) {
+                console.error('Failed to load permissions:', err)
+            } finally {
+                setLoadingPermissions(false)
+            }
+        }
+        loadPermissions()
+    }, [])
 
     const filteredRoles = roles.filter((role) =>
         role.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -46,21 +70,60 @@ export default function RolesPage() {
         if (role) {
             setEditingRole(role)
             setRoleName(role.name)
-            // Ensure all modules are present in permissions, defaulting to false if missing
-            const rolePermissions = modules.map(moduleName => {
-                const existing = role.permissions.find(p => p.name === moduleName)
-                return existing || { name: moduleName, read: false, write: false, delete: false }
+
+            // Map backend names to Module names
+            const backendToModule: Record<string, Module> = {
+                'products': 'Products',
+                'categories': 'Categories',
+                'customers': 'Customers',
+                'orders': 'Orders',
+                'staff': 'Staff',
+                'settings': 'Settings',
+                'vendors': 'Vendors',
+                'inventory': 'Inventory',
+                'billing': 'Billing',
+                'reports': 'Reports',
+            }
+
+            // Create a permission map from the role (using Module names as keys, since that's what role.permissions contains)
+            const permissionMap = new Map(role.permissions.map(p => [p.name, p]))
+
+            // Build permission list directly from backend permissions
+            const rolePermissions: Permission[] = backendPermissions.map(backendPerm => {
+                const moduleName = (backendToModule[backendPerm.name] || backendPerm.name) as Module
+                // Look up the permission by Module name, not backend name
+                const existing = permissionMap.get(moduleName)
+                return {
+                    name: moduleName,
+                    read: existing?.read || false,
+                    write: existing?.write || false,
+                    delete: existing?.delete || false,
+                }
             })
             setPermissions(rolePermissions)
         } else {
             setEditingRole(null)
             setRoleName("")
-            setPermissions(modules.map(moduleName => ({
-                name: moduleName,
+            // Initialize with all backend permissions as unchecked
+            const backendToModule: Record<string, string> = {
+                'products': 'Products',
+                'categories': 'Categories',
+                'customers': 'Customers',
+                'orders': 'Orders',
+                'staff': 'Staff',
+                'settings': 'Settings',
+                'vendors': 'Vendors',
+                'inventory': 'Inventory',
+                'billing': 'Billing',
+                'reports': 'Reports',
+            }
+            const rolePermissions: Permission[] = backendPermissions.map(backendPerm => ({
+                name: (backendToModule[backendPerm.name] || backendPerm.name) as Module,
                 read: false,
                 write: false,
-                delete: false
-            })))
+                delete: false,
+            }))
+            setPermissions(rolePermissions)
         }
         setIsDialogOpen(true)
     }
@@ -193,43 +256,51 @@ export default function RolesPage() {
 
                         <div>
                             <h3 className="font-semibold mb-3">Permissions</h3>
-                            <div className="border rounded-lg overflow-hidden">
-                                <table className="w-full">
-                                    <thead className="bg-gray-50 border-b">
-                                        <tr>
-                                            <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Module</th>
-                                            <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Read</th>
-                                            <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Write</th>
-                                            <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Delete</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {permissions.map((permission) => (
-                                            <tr key={permission.name} className="hover:bg-gray-50">
-                                                <td className="py-2 px-4 text-sm font-medium text-gray-900">{permission.name}</td>
-                                                <td className="py-2 px-4 text-center">
-                                                    <Checkbox
-                                                        checked={permission.read}
-                                                        onCheckedChange={(checked) => handlePermissionChange(permission.name, "read", checked as boolean)}
-                                                    />
-                                                </td>
-                                                <td className="py-2 px-4 text-center">
-                                                    <Checkbox
-                                                        checked={permission.write}
-                                                        onCheckedChange={(checked) => handlePermissionChange(permission.name, "write", checked as boolean)}
-                                                    />
-                                                </td>
-                                                <td className="py-2 px-4 text-center">
-                                                    <Checkbox
-                                                        checked={permission.delete}
-                                                        onCheckedChange={(checked) => handlePermissionChange(permission.name, "delete", checked as boolean)}
-                                                    />
-                                                </td>
+                            {loadingPermissions ? (
+                                <div className="space-y-2">
+                                    <Skeleton className="h-10 w-full" />
+                                    <Skeleton className="h-10 w-full" />
+                                    <Skeleton className="h-10 w-full" />
+                                </div>
+                            ) : (
+                                <div className="border rounded-lg overflow-hidden">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 border-b">
+                                            <tr>
+                                                <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Module</th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Read</th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Write</th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Delete</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {permissions.map((permission) => (
+                                                <tr key={permission.name} className="hover:bg-gray-50">
+                                                    <td className="py-2 px-4 text-sm font-medium text-gray-900">{permission.name}</td>
+                                                    <td className="py-2 px-4 text-center">
+                                                        <Checkbox
+                                                            checked={permission.read}
+                                                            onCheckedChange={(checked) => handlePermissionChange(permission.name, "read", checked as boolean)}
+                                                        />
+                                                    </td>
+                                                    <td className="py-2 px-4 text-center">
+                                                        <Checkbox
+                                                            checked={permission.write}
+                                                            onCheckedChange={(checked) => handlePermissionChange(permission.name, "write", checked as boolean)}
+                                                        />
+                                                    </td>
+                                                    <td className="py-2 px-4 text-center">
+                                                        <Checkbox
+                                                            checked={permission.delete}
+                                                            onCheckedChange={(checked) => handlePermissionChange(permission.name, "delete", checked as boolean)}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-2 pt-4 border-t">

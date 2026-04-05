@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown, Users, UserCheck, UserX } from "lucide-react"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Button } from "@/components/ui/button"
@@ -10,11 +10,20 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card } from "@/components/ui/card"
 import Image from "next/image"
 import { useStaff, type Staff } from "@/contexts/staff-context"
+import { StatsCards } from "@/components/ui/stats-card"
+import staffApi from "@/lib/staffApi"
 
 export default function StaffPage() {
   const { staff, roles, isLoading, addStaff, updateStaff, deleteStaff } = useStaff()
+  const [stats, setStats] = useState<{
+    total: number
+    active: number
+    inactive: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedRole, setSelectedRole] = useState("All Roles")
   const [showRoleDropdown, setShowRoleDropdown] = useState(false)
@@ -45,6 +54,22 @@ export default function StaffPage() {
   const handleFilterChange = () => {
     setCurrentPage(1)
   }
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await staffApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch staff stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
 
   const handleTogglePublished = async (id: string) => {
     const member = staff.find((s) => s.id === id)
@@ -107,6 +132,26 @@ export default function StaffPage() {
           Add Staff
         </Button>
       </div>
+
+      {/* Stats */}
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <div className="mb-6">
+          <StatsCards stats={[
+            { label: "Total Staff", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
+            { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
+            { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
+          ]} />
+        </div>
+      ) : null}
 
       {/* Search and Filters */}
       <div className="bg-white rounded-lg border mb-6">

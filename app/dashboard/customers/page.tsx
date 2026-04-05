@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useToast } from "@/hooks/use-toast"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,7 +39,10 @@ import {
   Trash2,
   Plus,
   MoreHorizontal,
-  Edit2
+  Edit2,
+  Users,
+  UserCheck,
+  UserX
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -56,10 +60,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
+import { StatsCards } from "@/components/ui/stats-card"
+import customerApi from "@/lib/customerApi"
 
 export default function CustomersPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const { customers, isLoading, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
+  const [stats, setStats] = useState<{
+    total: number
+    active: number
+    inactive: number
+    individuals: number
+    businesses: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
@@ -91,6 +106,23 @@ export default function CustomersPage() {
     status: "active" as "active" | "inactive",
     notes: ""
   })
+
+  // Fetch stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await customerApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch customer stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
 
   // Filter Logic
   const filteredCustomers = customers
@@ -188,39 +220,60 @@ export default function CustomersPage() {
   const handleSaveCustomer = async () => {
     if (!formData.name || !formData.email) return
 
-    if (editingCustomer) {
-      await updateCustomer(editingCustomer.id, formData)
-    } else {
-      await addCustomer(formData)
+    try {
+      if (editingCustomer) {
+        await updateCustomer(editingCustomer.id, formData)
+        toast({ title: "Success", description: "Customer updated successfully" })
+      } else {
+        await addCustomer(formData)
+        toast({ title: "Success", description: "Customer created successfully" })
+      }
+      setIsAddDialogOpen(false)
+      resetForm()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.response?.data?.message || err.message || "Failed to save customer" })
     }
-    setIsAddDialogOpen(false)
-    resetForm()
   }
 
   const handleDelete = async (id: string) => {
-    await deleteCustomer(id)
-    setSelectedCustomerIds(selectedCustomerIds.filter(sid => sid !== id))
+    try {
+      await deleteCustomer(id)
+      setSelectedCustomerIds(selectedCustomerIds.filter(sid => sid !== id))
+      toast({ title: "Success", description: "Customer deleted successfully" })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.response?.data?.message || err.message || "Failed to delete customer" })
+    }
   }
 
   // Bulk Actions
   const handleBulkDelete = async () => {
-    await Promise.all(selectedCustomerIds.map(id => deleteCustomer(id)))
-    setSelectedCustomerIds([])
+    try {
+      await Promise.all(selectedCustomerIds.map(id => deleteCustomer(id)))
+      setSelectedCustomerIds([])
+      toast({ title: "Success", description: "Customers deleted successfully" })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to delete customers" })
+    }
   }
 
   const handleBulkAction = async () => {
     if (!bulkAction || selectedCustomerIds.length === 0) return
 
-    if (bulkAction === "delete") {
-      await handleBulkDelete()
-    } else if (bulkAction === "active") {
-      await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "active" })))
-    } else if (bulkAction === "inactive") {
-      await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "inactive" })))
+    try {
+      if (bulkAction === "delete") {
+        await handleBulkDelete()
+      } else if (bulkAction === "active") {
+        await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "active" })))
+        toast({ title: "Success", description: "Customers activated successfully" })
+      } else if (bulkAction === "inactive") {
+        await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "inactive" })))
+        toast({ title: "Success", description: "Customers deactivated successfully" })
+      }
+      setIsBulkActionDialogOpen(false)
+      setBulkAction("")
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message || "Bulk action failed" })
     }
-
-    setIsBulkActionDialogOpen(false)
-    setBulkAction("")
   }
 
   // Import/Export
@@ -294,6 +347,29 @@ export default function CustomersPage() {
           <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-600 mt-1">Manage your customer base and view their activity</p>
         </div>
+      </div>
+
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <StatsCards stats={[
+          { label: "Total Customers", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
+          { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
+          { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
+          { label: "Individuals", value: stats.individuals, icon: <Users className="w-5 h-5" />, color: "purple" },
+          { label: "Businesses", value: stats.businesses, icon: <ShoppingBag className="w-5 h-5" />, color: "yellow" },
+        ]} />
+      ) : null}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div></div>
         <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />

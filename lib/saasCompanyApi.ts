@@ -133,10 +133,18 @@ export interface UpdateBillingContactResponse {
 
 export interface CompanyUser {
   id: number;
-  companyId: number;
+  companyId?: number;
   email: string;
   fullName: string;
-  role: 'owner' | 'admin' | 'manager' | 'staff';
+  role?: string;
+  roleId?: number;
+  staffRole?: {
+    id: number;
+    companyId?: number;
+    name: string;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
   status: 'active' | 'invited' | 'inactive';
   joinedDate: string;
   lastLogin?: string;
@@ -156,7 +164,7 @@ export interface GetTeamUsersResponse {
 export interface InviteUserPayload {
   email: string;
   fullName: string;
-  role: 'admin' | 'manager' | 'staff';
+  roleId: number;
 }
 
 export interface InviteUserResponse {

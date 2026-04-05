@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { generateId } from "@/lib/export-import-utils"
 import { useProduct, type Product, type Variant } from "@/contexts/product-context"
+import { productApi } from "@/lib/productApi"
 import { useVendor } from "@/contexts/vendor-context"
 import { useCategory } from "@/contexts/category-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
@@ -58,8 +59,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [uploadedImages, setUploadedImages] = useState<string[]>([])
-  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]) // preview URLs (base64 for new, http for existing)
+  const [imageFiles, setImageFiles] = useState<File[]>([]) // new files only
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]) // existing server URLs
   const [selectedAttributeIds, setSelectedAttributeIds] = useState<string[]>([])
   const [productAttributes, setProductAttributes] = useState<{ id: string; name: string; value: string | string[] }[]>([])
   const [generatedVariants, setGeneratedVariants] = useState<Variant[]>([])
@@ -74,53 +76,75 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     refreshLocations()
 
     if (editingProduct) {
-      setFormData({
-        name: editingProduct.name,
-        description: editingProduct.description,
-        category: editingProduct.category,
-        categoryId: editingProduct.categoryId || "",
-        price: String(editingProduct.price),
-        salePrice: String(editingProduct.salePrice),
-        stock: String(editingProduct.stock),
-        sku: editingProduct.sku,
-        barcode: editingProduct.barcode,
-        vendorId: editingProduct.vendorId || "",
-        receiptNumber: editingProduct.receiptNumber || "",
-        locationId: editingProduct.locationId || editingProduct.inventory?.[0]?.warehouseId || "",
-      })
-      setUploadedImages(editingProduct.image ? [editingProduct.image] : [])
-      setImageFiles([])
-      const variants = editingProduct.variants?.length ? editingProduct.variants : []
-      setGeneratedVariants(variants)
+      // Fetch fresh data from API
+      productApi.getById(parseInt(editingProduct.id)).then(res => {
+        const p = res.data as any
+        const STORAGE = "http://localhost:8005/storage"
 
-      if (editingProduct.attributes?.length && variants.length > 0) {
-        // Reconstruct attribute values from variants' attributes map
-        const reconstructed = editingProduct.attributes.map(a => {
-          // Collect unique values for this attribute across all variants
-          // Match case-insensitively since backend may differ from variant keys
-          const values = Array.from(new Set(
-            variants.flatMap(v => {
-              const key = Object.keys(v.attributes || {}).find(
-                k => k.toLowerCase() === a.name.toLowerCase()
-              )
-              return key ? [v.attributes[key]] : []
-            })
-          ))
-          return { id: a.id, name: a.name, value: values }
+        setFormData({
+          name: p.name || "",
+          description: p.description || "",
+          category: "",
+          categoryId: p.categoryId ? String(p.categoryId) : "",
+          price: String(p.price || ""),
+          salePrice: String(p.salePrice || ""),
+          stock: String(p.stock || ""),
+          sku: p.sku || "",
+          barcode: p.barcode || "",
+          vendorId: p.vendorId ? String(p.vendorId) : "",
+          receiptNumber: p.receiptNumber || "",
+          locationId: p.locationId ? String(p.locationId) : "",
         })
-        setProductAttributes(reconstructed)
-        setSelectedAttributeIds(editingProduct.attributes.map(a => a.id))
-      } else if (editingProduct.attributes?.length) {
-        setProductAttributes(editingProduct.attributes.map(a => ({ ...a, value: Array.isArray(a.value) ? a.value : [] })))
-        setSelectedAttributeIds(editingProduct.attributes.map(a => a.id))
-      } else {
-        setProductAttributes([])
-        setSelectedAttributeIds([])
-      }
+
+        // Images
+        const imageUrls: string[] = []
+        if (p.images?.length) {
+          p.images.forEach((img: any) => imageUrls.push(`${STORAGE}/${img.path}`))
+        } else if (p.image) {
+          imageUrls.push(`${STORAGE}/${p.image}`)
+        }
+        setUploadedImages(imageUrls)
+        setExistingImageUrls(imageUrls)
+        setImageFiles([])
+
+        // Variants
+        const variants: Variant[] = (p.variants || []).map((v: any) => ({
+          id: String(v.id),
+          name: v.name || "",
+          price: v.price || 0,
+          salePrice: v.salePrice || 0,
+          stock: v.stock || 0,
+          sku: v.sku || "",
+          barcode: v.barcode || "",
+          attributes: (() => {
+            const raw = v.attributes
+            if (!raw) return {}
+            if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return {} } }
+            return raw
+          })(),
+        }))
+        setGeneratedVariants(variants)
+
+        // Reconstruct attributes from variant keys
+        if (variants.length > 0) {
+          const allKeys = Array.from(new Set(variants.flatMap((v: Variant) => Object.keys(v.attributes || {}))))
+          const reconstructed = allKeys.map(key => {
+            const values = Array.from(new Set(variants.map((v: Variant) => v.attributes?.[key]).filter(Boolean) as string[]))
+            const globalAttr = globalAttributes.find(a => a.name.toLowerCase() === key.toLowerCase())
+            return { id: globalAttr ? String(globalAttr.id) : key, name: key, value: values }
+          })
+          setProductAttributes(reconstructed)
+          setSelectedAttributeIds(reconstructed.map(a => a.id))
+        } else {
+          setProductAttributes([])
+          setSelectedAttributeIds([])
+        }
+      }).catch(console.error)
     } else {
       setFormData(emptyForm)
       setUploadedImages([])
       setImageFiles([])
+      setExistingImageUrls([])
       setProductAttributes([])
       setSelectedAttributeIds([])
       setGeneratedVariants([])
@@ -191,10 +215,19 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   }
 
   const handleUpdate = async () => {
-    if (!editingProduct || !formData.name || !formData.category || !formData.price || !formData.salePrice || !formData.stock) return
+    if (!editingProduct || !formData.name || !formData.price || !formData.salePrice) return
     let finalStock = Number.parseInt(formData.stock)
     if (generatedVariants.length > 0) finalStock = generatedVariants.reduce((sum, v) => sum + v.stock, 0)
     setIsSaving(true)
+    const keepImages = uploadedImages
+      .filter(u => existingImageUrls.includes(u))
+      .map(u => u.replace('http://localhost:8005/storage/', ''))
+    console.log('UPDATE images debug:', {
+      existingImageUrls,
+      uploadedImages,
+      imageFiles: imageFiles.map(f => f.name),
+      keepImages,
+    })
     try {
       await updateProduct({
         ...editingProduct,
@@ -211,6 +244,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         barcode: formData.barcode,
         image: uploadedImages[0] || editingProduct.image,
         images: imageFiles.length > 0 ? imageFiles : undefined,
+        delete_images: false,
+        keep_images: keepImages,
         vendorId: formData.vendorId || undefined,
         receiptNumber: formData.receiptNumber || undefined,
         attributes: productAttributes,
@@ -248,8 +283,16 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     })
   }
   const removeImage = (index: number) => {
+    const url = uploadedImages[index]
+    // If it's an existing server image, remove from existingImageUrls too
+    if (existingImageUrls.includes(url)) {
+      setExistingImageUrls(prev => prev.filter(u => u !== url))
+    } else {
+      // It's a new file — find its index among new files only
+      const newFileIndex = uploadedImages.slice(0, index).filter(u => !existingImageUrls.includes(u)).length
+      setImageFiles(prev => prev.filter((_, i) => i !== newFileIndex))
+    }
     setUploadedImages(prev => prev.filter((_, i) => i !== index))
-    setImageFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   // Attribute & Variant logic
@@ -512,8 +555,20 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               </div>
 
               {productAttributes.map(attr => {
-                const globalAttr = globalAttributes.find(a => a.id === attr.id)
-                if (!globalAttr) return null
+                const globalAttr = globalAttributes.find(a => a.id === attr.id || a.name.toLowerCase() === attr.name.toLowerCase())
+                if (!globalAttr) {
+                  // Render a simple text display for attributes not in global list
+                  return (
+                    <div key={attr.id} className="flex items-center gap-4">
+                      <Label className="w-24 shrink-0 text-sm font-medium text-gray-700">{attr.name}</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(Array.isArray(attr.value) ? attr.value : [attr.value]).map(val => (
+                          <Badge key={val} className="bg-emerald-600 text-white">{val}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                }
                 return (
                   <div key={attr.id} className="flex items-center gap-4">
                     <Label className="w-24 shrink-0 text-sm font-medium text-gray-700">

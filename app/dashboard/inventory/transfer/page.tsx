@@ -12,6 +12,7 @@ import { useTransfer } from "@/contexts/transfer-context"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { transferApi, type LocationProduct, type LocationProductRaw } from "@/lib/transferApi"
+import { useToast } from "@/hooks/use-toast"
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
@@ -50,6 +51,7 @@ function flattenLocationProducts(raw: LocationProductRaw[]): LocationProduct[] {
 
 export default function StockTransferPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const { warehouses } = useWarehouse()
   const { transfers, loading, addTransfer, cancelTransfer } = useTransfer()
 
@@ -103,6 +105,7 @@ export default function StockTransferPage() {
         quantity: qtyNum,
         notes: notes || undefined,
       })
+      toast({ title: "Success", description: "Transfer created successfully" })
       setFromWarehouse("")
       setToWarehouse("")
       setRawLocationProducts([])
@@ -110,7 +113,7 @@ export default function StockTransferPage() {
       setQuantity("")
       setNotes("")
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Transfer failed")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Transfer failed" })
     } finally {
       setSubmitting(false)
     }
@@ -120,8 +123,9 @@ export default function StockTransferPage() {
     try {
       setCancelling(id)
       await cancelTransfer(id)
+      toast({ title: "Success", description: "Transfer cancelled successfully" })
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to cancel transfer")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to cancel transfer" })
     } finally {
       setCancelling(null)
     }

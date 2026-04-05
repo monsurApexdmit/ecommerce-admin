@@ -76,8 +76,48 @@ export const inventoryApi = {
     page?: number;
     limit?: number;
   }): Promise<InventoryListResponse> => {
-    const response = await api.get('/inventory', { params });
-    return response.data;
+    // Fetch all items by getting all pages if needed
+    // Use per_page parameter (standard REST API pagination parameter)
+    const perPage = params?.limit || 100; // Fetch larger batch size
+    const search = params?.search;
+    const warehouseId = params?.warehouse_id;
+
+    let allItems: InventoryItem[] = [];
+    let page = 1;
+    let hasMore = true;
+    let message = '';
+
+    while (hasMore) {
+      const response = await api.get('/inventory', {
+        params: {
+          page,
+          per_page: perPage,  // Changed from 'limit' to 'per_page'
+          ...(search && { search }),
+          ...(warehouseId && { location_id: warehouseId }),
+        }
+      });
+
+      // Backend returns: { success, message, data: [...items...], meta: { pagination: { total, page, per_page } } }
+      message = response.data.message || '';
+      const items = response.data.data || [];
+      const meta = response.data.meta || {};
+      const pagination = meta.pagination || {};
+
+      allItems = [...allItems, ...items];
+
+      const total = pagination.total || 0;
+      const currentCount = allItems.length;
+      hasMore = currentCount < total;
+      page++;
+    }
+
+    return {
+      message,
+      data: allItems,
+      page: 1,
+      limit: allItems.length,
+      total: allItems.length,
+    };
   },
 };
 

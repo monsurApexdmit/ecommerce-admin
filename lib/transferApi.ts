@@ -126,8 +126,30 @@ export interface LocationProduct {
 
 export const transferApi = {
   getAll: async (): Promise<TransferListResponse> => {
-    const response = await api.get('/transfers');
-    return response.data;
+    try {
+      const response = await api.get('/transfers');
+      // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+      const laravelData = response.data.data || {};
+      return {
+        message: response.data.message || '',
+        data: laravelData.data || [],
+        page: laravelData.current_page || 1,
+        limit: laravelData.per_page || 10,
+        total: laravelData.total || 0,
+      };
+    } catch (error: any) {
+      // Handle 404 - endpoint not implemented in backend
+      if (error.response?.status === 404) {
+        return {
+          message: 'Transfers endpoint not available',
+          data: [],
+          page: 1,
+          limit: 10,
+          total: 0,
+        };
+      }
+      throw error;
+    }
   },
 
   getProductsByLocation: async (locationId: number): Promise<LocationProductsResponse> => {

@@ -28,12 +28,12 @@ interface AttributeContextType {
 const AttributeContext = createContext<AttributeContextType | undefined>(undefined)
 
 // Convert backend response to frontend Attribute interface
-function convertToAttribute(backendAttribute: AttributeResponse): Attribute {
+function convertToAttribute(backendAttribute: any): Attribute {
   return {
     id: backendAttribute.id.toString(),
     name: backendAttribute.name,
-    displayName: backendAttribute.display_name,
-    option: backendAttribute.option_type as "dropdown" | "radio",
+    displayName: backendAttribute.displayName || backendAttribute.display_name,
+    option: (backendAttribute.optionType || backendAttribute.option_type) as "dropdown" | "radio",
     published: backendAttribute.status,
     values: backendAttribute.values ? backendAttribute.values.split(',').map(v => v.trim()).filter(v => v !== '') : [],
     created_at: backendAttribute.created_at,
@@ -73,9 +73,9 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
     try {
       await attributeApi.create({
         name: attribute.name,
-        display_name: attribute.displayName,
-        option_type: attribute.option,
-        values: attribute.values.join(','),
+        displayName: attribute.displayName,
+        optionType: attribute.option,
+        values: typeof attribute.values === 'string' ? attribute.values : attribute.values.join(','),
         status: attribute.published,
       })
 
@@ -95,13 +95,13 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
         updateData.name = updates.name
       }
       if (updates.displayName !== undefined) {
-        updateData.display_name = updates.displayName
+        updateData.displayName = updates.displayName
       }
       if (updates.option !== undefined) {
-        updateData.option_type = updates.option
+        updateData.optionType = updates.option
       }
       if (updates.values !== undefined) {
-        updateData.values = updates.values.join(',')
+        updateData.values = typeof updates.values === 'string' ? updates.values : updates.values.join(',')
       }
       if (updates.published !== undefined) {
         updateData.status = updates.published

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Search, ArrowRightLeft, Printer, QrCode } from "lucide-react"
+import { Search, ArrowRightLeft, Printer, QrCode, Package, Eye, AlertTriangle } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,12 +12,20 @@ import Link from "next/link"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { inventoryApi, type InventoryItem } from "@/lib/inventoryApi"
+import { StatsCards } from "@/components/ui/stats-card"
+import productApi from "@/lib/productApi"
 
 const ITEMS_PER_PAGE = 10
 
 export default function InventoryPage() {
   const { warehouses } = useWarehouse()
   const [items, setItems] = useState<InventoryItem[]>([])
+  const [stats, setStats] = useState<{
+    total: number
+    published: number
+    unpublished: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
@@ -47,6 +55,22 @@ export default function InventoryPage() {
     setCurrentPage(1)
     fetchInventory()
   }, [fetchInventory])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await productApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch product stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
 
   // Client-side pagination
   const totalItems = items.length
@@ -146,6 +170,23 @@ export default function InventoryPage() {
           </Link>
         </div>
       </div>
+
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <StatsCards stats={[
+          { label: "Total Products", value: stats.total, icon: <Package className="w-5 h-5" />, color: "blue" },
+          { label: "Published", value: stats.published, icon: <Eye className="w-5 h-5" />, color: "green" },
+          { label: "Unpublished", value: stats.unpublished, icon: <AlertTriangle className="w-5 h-5" />, color: "yellow" },
+        ]} />
+      ) : null}
 
       <Card className="p-6">
         <div className="flex items-center gap-4 mb-4">

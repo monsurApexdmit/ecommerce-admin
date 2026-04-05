@@ -111,6 +111,7 @@ export interface ProductResponse {
   location?: ProductLocationResponse;
   price: number;
   sale_price: number;
+  salePrice: number;
   stock: number;
   status: string;
   published: boolean;
@@ -165,6 +166,8 @@ export interface CreateProductData {
     attributes?: { [key: string]: string };
   }[];
   images?: File[];
+  delete_images?: boolean;
+  keep_images?: string[]; // existing image paths to keep e.g. ["products/abc.jpg"]
 }
 
 export interface UpdateProductData extends Partial<CreateProductData> {}
@@ -182,14 +185,14 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.stock !== undefined) fd.append('stock', String(data.stock));
   if (data.sku !== undefined && data.sku !== '') fd.append('sku', data.sku);
   if (data.barcode !== undefined && data.barcode !== '') fd.append('barcode', data.barcode);
-  if (data.published !== undefined) fd.append('published', String(data.published));
+  if (data.published !== undefined) fd.append('published', data.published ? 'true' : 'false');
   if (data.receipt_number !== undefined && data.receipt_number !== '') fd.append('receipt_number', data.receipt_number);
 
   if (data.attributes !== undefined) {
-    // Backend expects only an array of attribute IDs: [1, 2]
     const attrIds = data.attributes.map(a => parseInt(a.id));
     fd.append('attributes', JSON.stringify(attrIds));
   }
+
   if (data.variants !== undefined) {
     fd.append('variants', JSON.stringify(data.variants));
   }
@@ -198,7 +201,35 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
     data.images.forEach((file, i) => fd.append(`image[${i}]`, file));
   }
 
+  if (data.delete_images) {
+    fd.append('delete_images', '1');
+  }
+
+  if (data.keep_images !== undefined) {
+    data.keep_images.forEach(path => fd.append('keep_images[]', path));
+  }
+
   return fd;
+}
+
+async function fetchFormData(method: string, url: string, fd: FormData): Promise<any> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const companyId = typeof window !== 'undefined' ? localStorage.getItem('company_id') : null;
+  const fullUrl = `${url}${companyId ? `?company_id=${companyId}` : ''}`;
+
+  const res = await fetch(fullUrl, {
+    method,
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: fd,
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    const err: any = new Error(json.message || 'Request failed');
+    err.response = { status: res.status, data: json };
+    throw err;
+  }
+  return json;
 }
 
 export const productApi = {
@@ -213,7 +244,20 @@ export const productApi = {
     vendor_id?: number;
   }): Promise<ProductListResponse> => {
     const response = await api.get('/products', { params });
-    return response.data;
+    // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      pagination: {
+        total: laravelData.total || 0,
+        page: laravelData.current_page || 1,
+        limit: laravelData.per_page || 10,
+        total_pages: Math.ceil((laravelData.total || 0) / (laravelData.per_page || 10)),
+        has_next: laravelData.current_page < Math.ceil((laravelData.total || 0) / (laravelData.per_page || 10)),
+        has_previous: laravelData.current_page > 1,
+      },
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: ProductResponse }> => {
@@ -223,14 +267,12 @@ export const productApi = {
 
   create: async (data: CreateProductData): Promise<{ message: string; data: ProductResponse }> => {
     const fd = buildFormData(data);
-    const response = await api.post('/products/', fd);
-    return response.data;
+    return fetchFormData('POST', '/api/proxy/products', fd);
   },
 
   update: async (id: number, data: UpdateProductData): Promise<{ message: string; data: ProductResponse }> => {
     const fd = buildFormData(data);
-    const response = await api.put(`/products/${id}`, fd);
-    return response.data;
+    return fetchFormData('PUT', `/api/proxy/products/${id}`, fd);
   },
 
   updateStatus: async (id: number, status: string): Promise<{ message: string; data: ProductResponse }> => {
@@ -243,6 +285,15 @@ export const productApi = {
   delete: async (id: number): Promise<{ message: string }> => {
     const response = await api.delete(`/products/${id}`);
     return response.data;
+  },
+
+  getStats: async (): Promise<{
+    total: number;
+    published: number;
+    unpublished: number;
+  }> => {
+    const response = await api.get('/products/stats');
+    return response.data.data;
   },
 };
 

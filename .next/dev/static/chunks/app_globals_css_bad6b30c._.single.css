@@ -154,7 +154,9 @@
     --color-blue-800: #193cb8;
     --color-blue-900: #1c398e;
     --color-indigo-50: #eef2ff;
+    --color-indigo-100: #e0e7ff;
     --color-indigo-600: #4f39f6;
+    --color-indigo-800: #372aac;
     --color-purple-50: #faf5ff;
     --color-purple-100: #f3e8ff;
     --color-purple-200: #e9d5ff;
@@ -293,7 +295,9 @@
       --color-blue-800: lab(30.2514% 27.7853 -70.2699);
       --color-blue-900: lab(26.1542% 15.7545 -51.5504);
       --color-indigo-50: lab(95.4818% .411302 -6.78529);
+      --color-indigo-100: lab(91.6577% 1.04591 -12.7199);
       --color-indigo-600: lab(38.4009% 52.6132 -92.3857);
+      --color-indigo-800: lab(26.6645% 37.9804 -68.6402);
       --color-purple-50: lab(97.1627% 2.99937 -4.13398);
       --color-purple-100: lab(93.3333% 6.97437 -9.83434);
       --color-purple-200: lab(87.8405% 13.4282 -18.7159);
@@ -1989,6 +1993,12 @@
     margin-block-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-y-reverse)));
   }
 
+  :where(.space-y-1\.5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));
+  }
+
   :where(.space-y-2 > :not(:last-child)) {
     --tw-space-y-reverse: 0;
     margin-block-start: calc(calc(var(--spacing) * 2) * var(--tw-space-y-reverse));
@@ -2537,6 +2547,10 @@
     background-color: var(--color-gray-900);
   }
 
+  .bg-green-50 {
+    background-color: var(--color-green-50);
+  }
+
   .bg-green-100 {
     background-color: var(--color-green-100);
   }
@@ -2551,6 +2565,10 @@
 
   .bg-indigo-50 {
     background-color: var(--color-indigo-50);
+  }
+
+  .bg-indigo-100 {
+    background-color: var(--color-indigo-100);
   }
 
   .bg-input {
@@ -3385,6 +3403,10 @@
 
   .text-indigo-600 {
     color: var(--color-indigo-600);
+  }
+
+  .text-indigo-800 {
+    color: var(--color-indigo-800);
   }
 
   .text-muted-foreground {

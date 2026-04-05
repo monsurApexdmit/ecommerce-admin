@@ -307,7 +307,7 @@ export default function AttributesPage() {
             name: formData.name,
             displayName: formData.displayName,
             option: formData.option,
-            values: valuesArray
+            values: formData.values
           })
           toast({
             title: "Success",
@@ -319,7 +319,7 @@ export default function AttributesPage() {
             displayName: formData.displayName,
             option: formData.option,
             published: true,
-            values: valuesArray
+            values: formData.values
           })
           toast({
             title: "Success",

@@ -113,7 +113,15 @@ export const customerApi = {
     search?: string;
   }): Promise<CustomerListResponse> => {
     const response = await api.get('/customers', { params });
-    return response.data;
+    // Laravel returns { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      total: laravelData.total || 0,
+      page: laravelData.current_page || 1,
+      limit: laravelData.per_page || 10,
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: CustomerResponse }> => {
@@ -134,6 +142,17 @@ export const customerApi = {
   delete: async (id: number): Promise<{ message: string }> => {
     const response = await api.delete(`/customers/${id}`);
     return response.data;
+  },
+
+  getStats: async (): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+    individuals: number;
+    businesses: number;
+  }> => {
+    const response = await api.get('/customers/stats');
+    return response.data.data;
   },
 };
 

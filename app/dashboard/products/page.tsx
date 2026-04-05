@@ -59,11 +59,9 @@ export default function ProductsPage() {
       const matchesSearch =
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.category.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === "all" || product.category === selectedCategory
+      const matchesCategory = selectedCategory === "all" || product.categoryId === selectedCategory
       const matchesVendor = selectedVendor === "all" || product.vendorId === selectedVendor
-      const matchesWarehouse = selectedWarehouse === "all" || (
-        product.inventory && product.inventory.some(i => i.warehouseId === selectedWarehouse && i.quantity > 0)
-      )
+      const matchesWarehouse = selectedWarehouse === "all" || (product.locationId && product.locationId === selectedWarehouse)
       let matchesStatus = true
       if (sortOption === "published") matchesStatus = product.published === true
       else if (sortOption === "unpublished") matchesStatus = product.published === false
@@ -265,7 +263,7 @@ export default function ProductsPage() {
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
               {allCategories.map(cat => (
-                <SelectItem key={cat.id} value={cat.category_name} textValue={cat.category_name}>
+                <SelectItem key={cat.id} value={String(cat.id)} textValue={cat.category_name}>
                   {cat.parent_id !== null ? `  └─ ${cat.category_name}` : cat.category_name}
                 </SelectItem>
               ))}
@@ -396,8 +394,8 @@ export default function ProductsPage() {
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{product.receiptNumber || "-"}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{product.category}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${product.price.toFixed(2)}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${product.salePrice.toFixed(2)}</td>
+                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${(product.price || 0).toFixed(2)}</td>
+                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${(product.salePrice || product.price || 0).toFixed(2)}</td>
                     <td className="py-3 px-4">
                       {product.stock < 5 ? (
                         <div className="flex flex-col gap-0.5">
@@ -511,7 +509,7 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-6 pt-4 border-t">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Category</p>
-                  <p className="font-semibold text-gray-900">{viewingProduct.category || "-"}</p>
+                  <p className="font-semibold text-gray-900">{viewingProduct.category || (viewingProduct.categoryId ? getAllCategoriesFlat().find(c => c.id === viewingProduct.categoryId)?.category_name : null) || "-"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Vendor</p>
@@ -531,11 +529,11 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Price</p>
-                  <p className="font-semibold text-gray-900">${viewingProduct.price.toFixed(2)}</p>
+                  <p className="font-semibold text-gray-900">${(viewingProduct.price ?? 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Sale Price</p>
-                  <p className="font-semibold text-emerald-600">${viewingProduct.salePrice.toFixed(2)}</p>
+                  <p className="font-semibold text-emerald-600">${(viewingProduct.salePrice ?? 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">SKU</p>

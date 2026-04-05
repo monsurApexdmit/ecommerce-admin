@@ -35,14 +35,14 @@ const CategoryContext = createContext<CategoryContextType | undefined>(undefined
 function convertToCategory(backendCategory: CategoryResponse): Category {
   return {
     id: backendCategory.id.toString(),
-    category_name: backendCategory.category_name,
-    parent_id: backendCategory.parent_id?.toString() || null,
+    category_name: backendCategory.categoryName || '',
+    parent_id: backendCategory.parentId?.toString() || null,
     Parent: backendCategory.parent ? convertToCategory(backendCategory.parent) : null,
     Children: backendCategory.children?.map(convertToCategory) || null,
     status: backendCategory.status,
-    created_at: backendCategory.created_at,
-    updated_at: backendCategory.updated_at,
-    deleted_at: backendCategory.deleted_at || null,
+    created_at: backendCategory.createdAt || '',
+    updated_at: backendCategory.updatedAt || '',
+    deleted_at: null,
   }
 }
 
@@ -58,7 +58,7 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       setError(null)
 
       const response = await categoryApi.getAll({
-        view: 'tree',
+        view: 'flat',
         limit: 100,
         include_inactive: true,
       })
@@ -89,8 +89,7 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       // Refresh categories to get updated tree structure
       await refreshCategories()
     } catch (err: any) {
-      console.error('Error creating category:', err)
-      throw new Error(err.response?.data?.error || 'Failed to create category')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create category')
     }
   }
 
@@ -113,8 +112,7 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       // Refresh categories to get updated tree structure
       await refreshCategories()
     } catch (err: any) {
-      console.error('Error updating category:', err)
-      throw new Error(err.response?.data?.error || 'Failed to update category')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to update category')
     }
   }
 
@@ -125,8 +123,7 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       // Refresh categories to get updated tree structure
       await refreshCategories()
     } catch (err: any) {
-      console.error('Error deleting category:', err)
-      throw new Error(err.response?.data?.error || 'Failed to delete category')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete category')
     }
   }
 
