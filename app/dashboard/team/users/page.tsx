@@ -400,7 +400,7 @@ export default function TeamUsersPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
-                      {new Date(u.joinedDate).toLocaleDateString()}
+                      {u.joinedDate ? new Date(u.joinedDate).toLocaleDateString() : "N/A"}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <div className="flex items-center gap-2">
@@ -410,6 +410,7 @@ export default function TeamUsersPage() {
                             variant="ghost"
                             onClick={() => handleResendInvitation(u.id)}
                             className="text-blue-600 hover:bg-blue-50"
+                            title="Resend invitation"
                           >
                             <Send className="w-4 h-4" />
                           </Button>
@@ -420,9 +421,16 @@ export default function TeamUsersPage() {
                             variant="ghost"
                             onClick={() => handleRemoveUser(u.id)}
                             className="text-red-600 hover:bg-red-50"
+                            title="Remove user"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
+                        )}
+                        {u.status !== "invited" && u.id === user?.id && (
+                          <span className="text-xs text-gray-500">Current user</span>
+                        )}
+                        {u.status !== "invited" && u.id !== user?.id && u.role === "owner" && (
+                          <span className="text-xs text-gray-500">Owner</span>
                         )}
                       </div>
                     </td>

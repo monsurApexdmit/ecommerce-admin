@@ -285,134 +285,134 @@ export const saasBillingApi = {
   },
 
   /**
-   * GET /billing/subscription/current
+   * GET /billing/subscription
    * Get current company subscription
    */
   getCurrentSubscription: async () => {
-    const response = await api.get<GetSubscriptionResponse>('/billing/subscription/current');
+    const response = await api.get<GetSubscriptionResponse>('/billing/subscription');
     return response.data;
   },
 
   /**
-   * GET /billing/payments/history?page=1&limit=10
+   * GET /billing/payments
    * Get payment history
    */
   getPaymentHistory: async (page = 1, limit = 10) => {
-    const response = await api.get<GetPaymentHistoryResponse>('/billing/payments/history', {
+    const response = await api.get<GetPaymentHistoryResponse>('/billing/payments', {
       params: { page, limit },
     });
     return response.data;
   },
 
   /**
-   * POST /billing/payments/process
-   * Process payment and create subscription
+   * POST /billing/create-subscription
+   * Create new subscription (process payment)
    */
   processPayment: async (payload: PaymentPayload) => {
-    const response = await api.post<ProcessPaymentResponse>('/billing/payments/process', payload);
+    const response = await api.post<ProcessPaymentResponse>('/billing/create-subscription', payload);
     return response.data;
   },
 
   /**
-   * POST /billing/subscription/upgrade
+   * POST /billing/upgrade
    * Upgrade subscription to higher plan
    */
   upgradeSubscription: async (payload: UpgradeSubscriptionPayload) => {
     const response = await api.post<UpgradeSubscriptionResponse>(
-      '/billing/subscription/upgrade',
+      '/billing/upgrade',
       payload
     );
     return response.data;
   },
 
   /**
-   * POST /billing/subscription/cancel
+   * POST /billing/cancel
    * Cancel subscription
    */
   cancelSubscription: async (payload: CancelSubscriptionPayload) => {
     const response = await api.post<CancelSubscriptionResponse>(
-      '/billing/subscription/cancel',
+      '/billing/cancel',
       payload
     );
     return response.data;
   },
 
   /**
-   * PATCH /billing/subscriptions/auto-renew
-   * Update auto-renewal setting
-   */
-  updateAutoRenew: async (payload: UpdateAutoRenewPayload) => {
-    const response = await api.patch<UpdateAutoRenewResponse>(
-      '/billing/subscriptions/auto-renew',
-      payload
-    );
-    return response.data;
-  },
-
-  /**
-   * POST /billing/subscription/renew
-   * Manually renew expired subscription
+   * POST /billing/renew
+   * Renew expired subscription
    */
   renewSubscription: async (payload: RenewSubscriptionPayload) => {
     const response = await api.post<RenewSubscriptionResponse>(
-      '/billing/subscription/renew',
+      '/billing/renew',
       payload
     );
     return response.data;
   },
 
   /**
-   * POST /billing/payment-methods
-   * Save new payment method
+   * GET /billing/contact
+   * Get billing contact information
+   */
+  getBillingContact: async () => {
+    const response = await api.get('/billing/contact');
+    return response.data;
+  },
+
+  /**
+   * PUT /billing/contact
+   * Update billing contact information
+   */
+  updateBillingContact: async (payload: any) => {
+    const response = await api.put('/billing/contact', payload);
+    return response.data;
+  },
+
+  /**
+   * NOT IMPLEMENTED - Payment Methods
+   * Backend does not have payment method endpoints yet
    */
   savePaymentMethod: async (payload: PaymentMethodPayload) => {
-    const response = await api.post<SavePaymentMethodResponse>('/billing/payment-methods', payload);
-    return response.data;
+    throw new Error('Payment methods API not yet implemented on backend');
   },
 
   /**
-   * GET /billing/payment-methods
-   * Get saved payment methods
+   * NOT IMPLEMENTED - Get Payment Methods
+   * Backend does not have payment method endpoints yet
    */
   getPaymentMethods: async () => {
-    const response = await api.get<GetPaymentMethodsResponse>('/billing/payment-methods');
-    return response.data;
+    throw new Error('Payment methods API not yet implemented on backend');
   },
 
   /**
-   * DELETE /billing/payment-methods/:id
-   * Delete payment method
+   * NOT IMPLEMENTED - Delete Payment Method
+   * Backend does not have payment method endpoints yet
    */
   deletePaymentMethod: async (paymentMethodId: string) => {
-    const response = await api.delete(`/billing/payment-methods/${paymentMethodId}`);
-    return response.data;
+    throw new Error('Payment methods API not yet implemented on backend');
   },
 
   /**
-   * GET /billing/invoices/:id/download
-   * Download invoice PDF
+   * NOT IMPLEMENTED - Download Invoice
+   * Backend does not have invoice download endpoint yet
    */
   downloadInvoice: async (invoiceId: number) => {
-    const response = await api.get<DownloadInvoiceResponse>(`/billing/invoices/${invoiceId}/download`);
-    return response.data;
+    throw new Error('Invoice download API not yet implemented on backend');
   },
 
   /**
-   * GET /billing/trial/info
-   * Get trial information
+   * NOT IMPLEMENTED - Trial Info
+   * Backend does not have trial info endpoint yet
    */
   getTrialInfo: async () => {
-    const response = await api.get<TrialInfoResponse>('/billing/trial/info');
-    return response.data;
+    throw new Error('Trial info API not yet implemented on backend');
   },
 
   /**
-   * POST /billing/trial/extend
-   * Extend trial period (admin only)
+   * NOT IMPLEMENTED - Extend Trial
+   * Backend does not have trial extend endpoint yet
    */
   extendTrial: async (days: number) => {
-    const response = await api.post('/billing/trial/extend', { days });
-    return response.data;
+    throw new Error('Trial extend API not yet implemented on backend');
   },
 };
 

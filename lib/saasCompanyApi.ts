@@ -277,147 +277,147 @@ export interface UpdateCompanySettingsResponse {
 
 export const saasCompanyApi = {
   /**
-   * GET /company/profile
+   * GET /auth/company/profile
    * Get company profile
    */
   getProfile: async () => {
-    const response = await api.get<GetCompanyResponse>('/company/profile');
+    const response = await api.get<GetCompanyResponse>('/auth/company/profile');
     return response.data;
   },
 
   /**
-   * PATCH /company/profile
+   * PUT /auth/company/profile
    * Update company profile
    */
   updateProfile: async (payload: UpdateCompanyPayload) => {
-    const response = await api.patch<UpdateCompanyResponse>('/company/profile', payload);
+    const response = await api.put<UpdateCompanyResponse>('/auth/company/profile', payload);
     return response.data;
   },
 
   /**
-   * GET /company/billing-contact
+   * GET /billing/contact
    * Get billing contact information
    */
   getBillingContact: async () => {
-    const response = await api.get<GetBillingContactResponse>('/company/billing-contact');
+    const response = await api.get<GetBillingContactResponse>('/billing/contact');
     return response.data;
   },
 
   /**
-   * PATCH /company/billing-contact
+   * PUT /billing/contact
    * Update billing contact information
    */
   updateBillingContact: async (payload: BillingContactPayload) => {
-    const response = await api.patch<UpdateBillingContactResponse>(
-      '/company/billing-contact',
+    const response = await api.put<UpdateBillingContactResponse>(
+      '/billing/contact',
       payload
     );
     return response.data;
   },
 
   /**
-   * GET /company/status
+   * GET /auth/company/status
    * Get company subscription and license status
    */
   getStatus: async () => {
-    const response = await api.get<GetCompanyStatusResponse>('/company/status');
+    const response = await api.get<GetCompanyStatusResponse>('/auth/company/status');
     return response.data;
   },
 
   /**
-   * GET /company/settings
+   * GET /auth/company/settings
    * Get company settings (tax, currency, timezone, language)
    */
   getSettings: async () => {
-    const response = await api.get<GetCompanySettingsResponse>('/company/settings');
+    const response = await api.get<GetCompanySettingsResponse>('/auth/company/settings');
     return response.data;
   },
 
   /**
-   * PATCH /company/settings
+   * PUT /auth/company/settings
    * Update company settings
    */
   updateSettings: async (payload: CompanySettingsPayload) => {
-    const response = await api.patch<UpdateCompanySettingsResponse>('/company/settings', payload);
+    const response = await api.put<UpdateCompanySettingsResponse>('/auth/company/settings', payload);
     return response.data;
   },
 
   /**
-   * DELETE /company
+   * DELETE /auth/company
    * Delete entire company and data
    */
   deleteCompany: async (payload: DeleteCompanyPayload) => {
-    const response = await api.delete<DeleteCompanyResponse>('/company', { data: payload });
+    const response = await api.delete<DeleteCompanyResponse>('/auth/company', { data: payload });
     return response.data;
   },
 
   // ============ TEAM MANAGEMENT ============
 
   /**
-   * GET /company/team/users
+   * GET /auth/team
    * Get all team members
    */
   getTeamUsers: async () => {
-    const response = await api.get<GetTeamUsersResponse>('/company/team/users');
+    const response = await api.get<GetTeamUsersResponse>('/auth/team');
     return response.data;
   },
 
   /**
-   * POST /company/team/users/invite
+   * POST /auth/team/invite
    * Invite new team member
    */
   inviteUser: async (payload: InviteUserPayload) => {
-    const response = await api.post<InviteUserResponse>('/company/team/users/invite', payload);
+    const response = await api.post<InviteUserResponse>('/auth/team/invite', payload);
     return response.data;
   },
 
   /**
-   * PATCH /company/team/users/:userId/role
+   * PUT /auth/team/:userId/role
    * Update user role
    */
   updateUserRole: async (userId: number, payload: UpdateUserRolePayload) => {
-    const response = await api.patch<UpdateUserRoleResponse>(
-      `/company/team/users/${userId}/role`,
+    const response = await api.put<UpdateUserRoleResponse>(
+      `/auth/team/${userId}/role`,
       payload
     );
     return response.data;
   },
 
   /**
-   * DELETE /company/team/users/:userId
+   * DELETE /auth/team/:userId
    * Remove team member
    */
   removeUser: async (userId: number) => {
-    const response = await api.delete<RemoveUserResponse>(`/company/team/users/${userId}`);
+    const response = await api.delete<RemoveUserResponse>(`/auth/team/${userId}`);
     return response.data;
   },
 
   /**
-   * GET /company/team/users/:userId
-   * Get user details
+   * GET /auth/team/:userId
+   * Get user details (assumes backend supports this)
    */
   getUser: async (userId: number) => {
     const response = await api.get<{ message: string; data: CompanyUser }>(
-      `/company/team/users/${userId}`
+      `/auth/team/${userId}`
     );
     return response.data;
   },
 
   /**
-   * POST /company/team/users/resend-invitation/:userId
+   * POST /auth/team/:userId/resend-invitation
    * Resend invitation email
    */
   resendInvitation: async (userId: number) => {
-    const response = await api.post(`/company/team/users/resend-invitation/${userId}`);
+    const response = await api.post(`/auth/team/${userId}/resend-invitation`);
     return response.data;
   },
 
   /**
-   * POST /company/team/users/accept-invitation/:token
-   * Accept team invitation
+   * POST /auth/team/invite/accept
+   * Accept team invitation with token
    */
   acceptInvitation: async (token: string) => {
-    const response = await api.post('/company/team/users/accept-invitation', { token });
+    const response = await api.post('/auth/team/invite/accept', { token });
     return response.data;
   },
 };

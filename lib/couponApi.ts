@@ -114,47 +114,22 @@ export const couponApi = {
     limit?: number;
     search?: string;
   }): Promise<CouponListResponse> => {
-    try {
-      const response = await api.get('/coupons', { params });
-      // Laravel returns: { success, message, data: [...], meta: { total, per_page, current_page } }
-      return {
-        message: response.data.message || '',
-        data: Array.isArray(response.data.data) ? response.data.data : [],
-      };
-    } catch (error: any) {
-      // If endpoint not implemented (404), return empty list
-      if (error.response?.status === 404) {
-        return {
-          message: 'Coupons endpoint not yet implemented',
-          data: [],
-        };
-      }
-      throw error;
-    }
+    const response = await api.get('/coupons', { params });
+    // Laravel returns: { success, message, data: [...], meta: { total, per_page, current_page } }
+    return {
+      message: response.data.message || '',
+      data: Array.isArray(response.data.data) ? response.data.data : [],
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: CouponResponse }> => {
-    try {
-      const response = await api.get(`/coupons/${id}`);
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        throw new Error('Coupons endpoint not yet implemented');
-      }
-      throw error;
-    }
+    const response = await api.get(`/coupons/${id}`);
+    return response.data;
   },
 
   create: async (data: CreateCouponData): Promise<{ message: string; data: CouponResponse }> => {
-    try {
-      const response = await api.post('/coupons', data);
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        throw new Error('Coupons endpoint not yet implemented');
-      }
-      throw error;
-    }
+    const response = await api.post('/coupons', data);
+    return response.data;
   },
 
   createWithImage: async (data: CreateCouponData & { image: File }): Promise<{ message: string; data: CouponResponse }> => {
@@ -198,99 +173,63 @@ export const couponApi = {
   },
 
   update: async (id: number, data: UpdateCouponData): Promise<{ message: string; data: CouponResponse }> => {
-    try {
-      console.log('PUT /coupons/' + id, data);
-      const response = await api.put(`/coupons/${id}`, data);
-      return response.data;
-    } catch (error: any) {
-      console.error('update error:', error.response?.status, error.response?.data);
-      if (error.response?.status === 404) {
-        throw new Error('Coupons endpoint not yet implemented');
-      }
-      throw error;
-    }
+    const response = await api.put(`/coupons/${id}`, data);
+    return response.data;
   },
 
-  updateWithImage: async (id: number, data: UpdateCouponData & { image: File }): Promise<{ message: string; data: CouponResponse }> => {
-    try {
-      const formData = new FormData();
-      const { image, ...otherData } = data;
+  updateWithImage: async (id: number, data: UpdateCouponData & { image?: File }): Promise<{ message: string; data: CouponResponse }> => {
+    const formData = new FormData();
+    const { image, ...otherData } = data;
 
-      Object.entries(otherData).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          if (typeof value === 'boolean') {
-            formData.append(key, value ? '1' : '0');
-          } else {
-            formData.append(key, String(value));
-          }
+    Object.entries(otherData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (typeof value === 'boolean') {
+          formData.append(key, value ? '1' : '0');
+        } else {
+          formData.append(key, String(value));
         }
-      });
-
-      if (image) {
-        formData.append('image', image);
       }
+    });
 
-      // Use fetch directly to ensure FormData is sent as multipart/form-data
-      // axios serializes FormData incorrectly in some configurations
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const companyId = typeof window !== 'undefined' ? localStorage.getItem('company_id') : null;
-
-      const url = `/api/proxy/coupons/${id}/with-image${companyId ? `?company_id=${companyId}` : ''}`;
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: formData,
-      });
-
-      const json = await res.json();
-      if (!res.ok) {
-        const err: any = new Error(json.message || 'Update failed');
-        err.response = { status: res.status, data: json };
-        throw err;
-      }
-      return json;
-    } catch (error: any) {
-      console.error('updateWithImage error:', error.response?.status, error.response?.data);
-      throw error;
+    if (image) {
+      formData.append('image', image);
     }
+
+    // Use fetch directly to ensure FormData is sent as multipart/form-data
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const companyId = typeof window !== 'undefined' ? localStorage.getItem('company_id') : null;
+
+    const url = `/api/proxy/coupons/${id}/with-image${companyId ? `?company_id=${companyId}` : ''}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      const err: any = new Error(json.message || 'Update failed');
+      err.response = { status: res.status, data: json };
+      throw err;
+    }
+    return json;
   },
 
   delete: async (id: number): Promise<{ message: string }> => {
-    try {
-      const response = await api.delete(`/coupons/${id}`);
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        throw new Error('Coupons endpoint not yet implemented');
-      }
-      throw error;
-    }
+    const response = await api.delete(`/coupons/${id}`);
+    return response.data;
   },
 
   validate: async (code: string, orderAmount?: number): Promise<{ message: string; data: CouponResponse; discount: number }> => {
-    try {
-      const response = await api.post('/coupons/validate', { code, order_amount: orderAmount });
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        throw new Error('Coupons endpoint not yet implemented');
-      }
-      throw error;
-    }
+    const response = await api.post('/coupons/validate', { code, order_amount: orderAmount });
+    return response.data;
   },
 
   getByCode: async (code: string): Promise<{ message: string; data: CouponResponse }> => {
-    try {
-      const response = await api.get(`/coupons/by-code/${code}`);
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        throw new Error('Coupons endpoint not yet implemented');
-      }
-      throw error;
-    }
+    const response = await api.get(`/coupons/code/${code}`);
+    return response.data;
   },
 };
 

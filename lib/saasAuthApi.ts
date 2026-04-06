@@ -233,29 +233,29 @@ export const saasAuthApi = {
   },
 
   /**
-   * POST /auth/password/forgot
+   * POST /auth/forgot-password
    * Request password reset email
    */
   forgotPassword: async (payload: ForgotPasswordPayload) => {
-    const response = await api.post<ForgotPasswordResponse>('/auth/password/forgot', payload);
+    const response = await api.post<ForgotPasswordResponse>('/auth/forgot-password', payload);
     return response.data;
   },
 
   /**
-   * POST /auth/password/reset
+   * POST /auth/reset-password
    * Reset password with token
    */
   resetPassword: async (payload: ResetPasswordPayload) => {
-    const response = await api.post<ResetPasswordResponse>('/auth/password/reset', payload);
+    const response = await api.post<ResetPasswordResponse>('/auth/reset-password', payload);
     return response.data;
   },
 
   /**
-   * POST /auth/password/change
+   * POST /auth/update-password
    * Change password (authenticated)
    */
   changePassword: async (payload: ChangePasswordPayload) => {
-    const response = await api.post<ChangePasswordResponse>('/auth/password/change', payload);
+    const response = await api.post<ChangePasswordResponse>('/auth/update-password', payload);
     return response.data;
   },
 

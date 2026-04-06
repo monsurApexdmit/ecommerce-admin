@@ -25,13 +25,8 @@ export function TransferProvider({ children }: { children: React.ReactNode }) {
             const res = await transferApi.getAll()
             setTransfers(res.data ?? [])
         } catch (err: any) {
-            // Handle 404 for transfers endpoint (not implemented in backend)
-            if (err.response?.status === 404) {
-                console.warn("Transfers endpoint not available in backend")
-                setTransfers([])
-            } else {
-                console.error("Failed to fetch transfers:", err)
-            }
+            console.error("Failed to fetch transfers:", err)
+            throw err
         } finally {
             setLoading(false)
         }
