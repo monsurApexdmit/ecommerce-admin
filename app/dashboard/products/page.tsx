@@ -2,40 +2,33 @@
 
 import type React from "react"
 import { useState, useMemo } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Edit2, Trash2, Eye, FilePen, Loader2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { Search, Upload, Download, Edit2, Trash2, Eye, FilePen, Plus, Barcode } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
-import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { useProduct, type Product } from "@/contexts/product-context"
 import { useVendor } from "@/contexts/vendor-context"
 import { useCategory } from "@/contexts/category-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { ProductFormDialog } from "./ProductFormDialog"
+import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
+import { ListPage, type Column, type FilterOption, type SortOption, type BulkAction, type Action } from "@/components/ListPage"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct, isLoading } = useProduct()
   const { vendors } = useVendor()
   const { warehouses } = useWarehouse()
   const { categories, getAllCategoriesFlat } = useCategory()
+  const { company } = useSaasAuth()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
@@ -46,38 +39,56 @@ export default function ProductsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-  const [bulkAction, setBulkAction] = useState("")
-  const [bulkStatus, setBulkStatus] = useState("")
-  const [bulkCategory, setBulkCategory] = useState("")
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
+  const [bulkStatusLoading, setBulkStatusLoading] = useState(false)
 
   const allCategories = useMemo(() => getAllCategoriesFlat(), [categories])
 
-  const filteredProducts = useMemo(() => products
-    .filter((product) => {
-      const matchesSearch =
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === "all" || product.categoryId === selectedCategory
-      const matchesVendor = selectedVendor === "all" || product.vendorId === selectedVendor
-      const matchesWarehouse = selectedWarehouse === "all" || (product.locationId && product.locationId === selectedWarehouse)
-      let matchesStatus = true
-      if (sortOption === "published") matchesStatus = product.published === true
-      else if (sortOption === "unpublished") matchesStatus = product.published === false
-      else if (sortOption === "selling") matchesStatus = product.status === "Selling"
-      else if (sortOption === "out-of-stock") matchesStatus = product.status === "Out of Stock"
-      return matchesSearch && matchesCategory && matchesVendor && matchesWarehouse && matchesStatus
-    })
-    .sort((a, b) => {
-      if (sortOption === "low-to-high") return a.salePrice - b.salePrice
-      if (sortOption === "high-to-low") return b.salePrice - a.salePrice
-      if (sortOption === "date-added-asc") return new Date(a.createdAt || "").getTime() - new Date(b.createdAt || "").getTime()
-      if (sortOption === "date-added-desc") return new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime()
-      if (sortOption === "date-updated-asc") return new Date(a.updatedAt || "").getTime() - new Date(b.updatedAt || "").getTime()
-      if (sortOption === "date-updated-desc") return new Date(b.updatedAt || "").getTime() - new Date(a.updatedAt || "").getTime()
-      return 0
-    }), [products, searchQuery, selectedCategory, selectedVendor, selectedWarehouse, sortOption])
+  // Apply filtering and sorting manually
+  const filteredAndSortedProducts = useMemo(() => {
+    let result = products
+      .filter((product) => {
+        const matchesCategory = selectedCategory === "all" || product.categoryId === selectedCategory
+        const matchesVendor = selectedVendor === "all" || (product.vendorId && String(product.vendorId) === selectedVendor)
+
+        // Warehouse matching
+        let matchesWarehouse = false
+
+        if (selectedWarehouse === "all") {
+          // Show all products when "All Warehouses" is selected
+          matchesWarehouse = true
+        } else {
+          // Try to match by location ID first
+          if (product.locationId && String(product.locationId) === selectedWarehouse) {
+            matchesWarehouse = true
+          } else {
+            // Try to match by location name
+            const selectedWh = warehouses.find(w => String(w.id) === selectedWarehouse)
+            if (selectedWh && product.locationName === selectedWh.name) {
+              matchesWarehouse = true
+            }
+          }
+
+          // Also check inventory array for warehouse match
+          if (!matchesWarehouse && product.inventory && product.inventory.length > 0) {
+            matchesWarehouse = product.inventory.some(inv => String(inv.warehouseId) === selectedWarehouse)
+          }
+        }
+
+        return matchesCategory && matchesVendor && matchesWarehouse
+      })
+
+    // Apply sorting
+    if (sortOption && sortOption !== "default") {
+      const sortFn = sortOptions.find(s => s.value === sortOption)?.sortFn
+      if (sortFn) {
+        result.sort(sortFn)
+      }
+    }
+
+    return result
+  }, [products, selectedCategory, selectedVendor, selectedWarehouse, sortOption])
 
   const {
     currentItems: currentProducts,
@@ -86,22 +97,7 @@ export default function ProductsPage() {
     itemsPerPage,
     setCurrentPage,
     handleItemsPerPageChange,
-  } = usePagination(filteredProducts, 10)
-
-  const handleFilterChange = () => setCurrentPage(1)
-
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedProducts(checked ? currentProducts.map(p => p.id) : [])
-  }
-
-  const handleSelectProduct = (productId: string, checked: boolean) => {
-    setSelectedProducts(prev => checked ? [...prev, productId] : prev.filter(id => id !== productId))
-  }
-
-  const handleTogglePublished = async (productId: string) => {
-    const product = products.find(p => p.id === productId)
-    if (product) await updateProduct({ ...product, published: !product.published })
-  }
+  } = usePagination(filteredAndSortedProducts, 10)
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
@@ -113,18 +109,13 @@ export default function ProductsPage() {
     setSelectedProducts(prev => prev.filter(sid => sid !== id))
   }
 
-  const handleBulkDelete = async () => {
-    await Promise.all(selectedProducts.map(id => deleteProduct(id)))
-    setSelectedProducts([])
-  }
-
   const closeDialog = () => {
     setIsAddDialogOpen(false)
     setEditingProduct(null)
   }
 
-  const handleExport = () => {
-    const exportData = filteredProducts.map(product => ({
+  const handleExport = (data: Product[]) => {
+    const exportData = data.map(product => ({
       id: product.id,
       name: product.name,
       category: product.category,
@@ -141,343 +132,263 @@ export default function ProductsPage() {
     exportToCSV(exportData, "products", headers)
   }
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const text = e.target?.result as string
-      const importedData = parseCSV(text)
-      const newProducts = importedData.map(item => ({
-        name: item.name,
-        category: item.category,
-        price: Number(item.price),
-        salePrice: Number(item.sale_price),
-        stock: Number(item.stock),
-        status: (item.status || "Selling") as "Selling" | "Out of Stock" | "Discontinued",
-        published: item.published === "Yes",
-        image: "",
-        sku: item.sku || "",
-        barcode: item.barcode || "",
-        description: item.description || "",
-        vendorId: item.vendor_id || undefined,
-      }))
-      Promise.all(newProducts.map(product => addProduct(product)))
-      setIsImportDialogOpen(false)
+  const handleImport = (callback: (data: any[]) => void) => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".csv"
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const text = e.target?.result as string
+        const importedData = parseCSV(text)
+        const newProducts = importedData.map(item => ({
+          name: item.name,
+          category: item.category,
+          price: Number(item.price),
+          salePrice: Number(item.sale_price),
+          stock: Number(item.stock),
+          status: (item.status || "Selling") as "Selling" | "Out of Stock" | "Discontinued",
+          published: item.published === "Yes",
+          image: "",
+          sku: item.sku || "",
+          barcode: item.barcode || "",
+          description: item.description || "",
+          vendorId: item.vendor_id || undefined,
+        }))
+        Promise.all(newProducts.map(product => addProduct(product)))
+      }
+      reader.readAsText(file)
     }
-    reader.readAsText(file)
+    input.click()
   }
 
-  const handleBulkAction = async () => {
-    if (!bulkAction || selectedProducts.length === 0) return
-    if (bulkAction === "delete") {
-      await handleBulkDelete()
-    } else if (bulkAction === "status" && bulkStatus) {
-      await Promise.all(selectedProducts.map(id => {
-        const product = products.find(p => p.id === id)
-        return product ? updateProduct({ ...product, status: bulkStatus as any }) : Promise.resolve()
-      }))
-      setSelectedProducts([])
-    } else if (bulkAction === "category" && bulkCategory) {
-      await Promise.all(selectedProducts.map(id => {
-        const product = products.find(p => p.id === id)
-        return product ? updateProduct({ ...product, category: bulkCategory }) : Promise.resolve()
-      }))
-      setSelectedProducts([])
-    } else if (bulkAction === "publish") {
-      await Promise.all(selectedProducts.map(id => {
-        const product = products.find(p => p.id === id)
-        return product ? updateProduct({ ...product, published: true }) : Promise.resolve()
-      }))
-      setSelectedProducts([])
-    } else if (bulkAction === "unpublish") {
-      await Promise.all(selectedProducts.map(id => {
-        const product = products.find(p => p.id === id)
-        return product ? updateProduct({ ...product, published: false }) : Promise.resolve()
-      }))
-      setSelectedProducts([])
-    }
-    setIsBulkActionDialogOpen(false)
-    setBulkAction("")
-    setBulkStatus("")
-    setBulkCategory("")
-  }
+  // Define columns for the ListPage
+  const columns: Column[] = [
+    {
+      key: "name",
+      label: "Product Name",
+      width: "min-w-[200px]",
+      render: (value, item: Product) => (
+        <div className="flex items-center gap-3">
+          <img
+            src={item.image || "/placeholder.svg"}
+            alt={item.name}
+            className="w-10 h-10 rounded object-cover flex-shrink-0"
+            onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
+          />
+          <span className="font-medium text-gray-900 truncate">{item.name}</span>
+        </div>
+      ),
+    },
+    { key: "receiptNumber", label: "Receipt No.", width: "min-w-[100px]", render: (v) => v || "-" },
+    { key: "category", label: "Category", width: "min-w-[120px]" },
+    {
+      key: "price",
+      label: "Price",
+      width: "min-w-[90px]",
+      render: (value) => `$${(value || 0).toFixed(2)}`,
+    },
+    {
+      key: "salePrice",
+      label: "Sale Price",
+      width: "min-w-[100px]",
+      render: (value, item: Product) => `$${(value || item.price || 0).toFixed(2)}`,
+    },
+    {
+      key: "stock",
+      label: "Stock",
+      width: "min-w-[80px]",
+      render: (value) => {
+        if (value < 5) {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="font-bold text-orange-600 text-base">{value}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white w-fit tracking-wide uppercase shadow-sm">Low Stock</span>
+            </div>
+          )
+        }
+        return <span className="text-sm text-gray-600">{value}</span>
+      },
+    },
+    {
+      key: "vendorId",
+      label: "Vendor",
+      width: "min-w-[120px]",
+      render: (value, item: Product) =>
+        value ? (
+          <Link href={`/dashboard/vendors/${value}`} className="text-emerald-600 hover:underline truncate">
+            {vendors.find(v => v.id === value)?.name || "Unknown"}
+          </Link>
+        ) : (
+          <span className="text-gray-400">No Vendor</span>
+        ),
+    },
+    {
+      key: "locationName",
+      label: "Location",
+      width: "min-w-[120px]",
+      render: (value, item: Product) =>
+        value || (item.locationId ? warehouses.find(w => String(w.id) === item.locationId)?.name : null) || "-",
+    },
+    {
+      key: "status",
+      label: "Status",
+      width: "min-w-[100px]",
+      render: (value) => <StatusBadge status={value} />,
+    },
+  ]
+
+  // Define filters
+  const filters: FilterOption[] = [
+    {
+      id: "category",
+      label: "Category",
+      value: selectedCategory,
+      onChange: (v) => setSelectedCategory(v),
+      options: allCategories.map(cat => ({
+        value: String(cat.id),
+        label: cat.parent_id !== null ? `  └─ ${cat.category_name}` : cat.category_name,
+      })),
+    },
+    {
+      id: "vendor",
+      label: "Vendor",
+      value: selectedVendor,
+      onChange: (v) => setSelectedVendor(v),
+      options: vendors.map(v => ({
+        value: String(v.id),
+        label: v.name,
+      })),
+    },
+    {
+      id: "warehouse",
+      label: "Warehouse",
+      value: selectedWarehouse,
+      onChange: (v) => setSelectedWarehouse(v),
+      options: warehouses.map(w => ({
+        value: String(w.id),
+        label: w.name,
+      })),
+    },
+  ]
+
+  // Define sort options with custom sort functions
+  const sortOptions: SortOption[] = [
+    { value: "default", label: "Default" },
+    { value: "low-to-high", label: "Low to High", sortFn: (a: Product, b: Product) => a.salePrice - b.salePrice },
+    { value: "high-to-low", label: "High to Low", sortFn: (a: Product, b: Product) => b.salePrice - a.salePrice },
+    { value: "published", label: "Published", sortFn: (a: Product, b: Product) => (b.published ? 1 : 0) - (a.published ? 1 : 0) },
+    { value: "unpublished", label: "Unpublished", sortFn: (a: Product, b: Product) => (a.published ? 1 : 0) - (b.published ? 1 : 0) },
+    { value: "selling", label: "Status - Selling", sortFn: (a: Product, b: Product) => (a.status === "Selling" ? -1 : 0) - (b.status === "Selling" ? -1 : 0) },
+    { value: "out-of-stock", label: "Status - Out of Stock", sortFn: (a: Product, b: Product) => (a.status === "Out of Stock" ? -1 : 0) - (b.status === "Out of Stock" ? -1 : 0) },
+    { value: "date-added-asc", label: "Date Added (Asc)", sortFn: (a: Product, b: Product) => new Date(a.createdAt || "").getTime() - new Date(b.createdAt || "").getTime() },
+    { value: "date-added-desc", label: "Date Added (Desc)", sortFn: (a: Product, b: Product) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime() },
+    { value: "date-updated-asc", label: "Date Updated (Asc)", sortFn: (a: Product, b: Product) => new Date(a.updatedAt || "").getTime() - new Date(b.updatedAt || "").getTime() },
+    { value: "date-updated-desc", label: "Date Updated (Desc)", sortFn: (a: Product, b: Product) => new Date(b.updatedAt || "").getTime() - new Date(a.updatedAt || "").getTime() },
+  ]
+
+  // Define bulk actions
+  const bulkActions: BulkAction[] = [
+    {
+      id: "publish",
+      label: "Publish",
+      onExecute: async (ids) => {
+        await Promise.all(ids.map(id => {
+          const product = products.find(p => p.id === id)
+          return product ? updateProduct({ ...product, published: true }) : Promise.resolve()
+        }))
+      },
+      confirmMessage: "Publish selected products?",
+    },
+    {
+      id: "unpublish",
+      label: "Unpublish",
+      onExecute: async (ids) => {
+        await Promise.all(ids.map(id => {
+          const product = products.find(p => p.id === id)
+          return product ? updateProduct({ ...product, published: false }) : Promise.resolve()
+        }))
+      },
+      confirmMessage: "Unpublish selected products?",
+    },
+    {
+      id: "delete",
+      label: "Delete",
+      onExecute: async (ids) => {
+        await Promise.all(ids.map(id => deleteProduct(id)))
+      },
+      confirmMessage: "Delete selected products? This action cannot be undone.",
+    },
+  ]
+
+  // Define actions
+  const actions: Action[] = [
+    {
+      id: "view",
+      label: "View",
+      icon: <Eye className="w-4 h-4" />,
+      onClick: (item) => setViewingProduct(item),
+    },
+    {
+      id: "edit",
+      label: "Edit",
+      icon: <Edit2 className="w-4 h-4" />,
+      onClick: (item) => handleEdit(item),
+    },
+    {
+      id: "delete",
+      label: "Delete",
+      icon: <Trash2 className="w-4 h-4" />,
+      onClick: (item) => handleDelete(item.id),
+      variant: "destructive",
+    },
+  ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Products</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="text-gray-700 bg-transparent" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button variant="outline" size="sm" className="text-gray-700 bg-transparent" onClick={() => setIsImportDialogOpen(true)}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-orange-600 border-orange-200 bg-orange-50"
-            onClick={() => setIsBulkActionDialogOpen(true)}
-            disabled={selectedProducts.length === 0}
-          >
-            <FilePen className="w-4 h-4 mr-2" />
-            Bulk Action
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-red-600 border-red-200 bg-red-50"
-            onClick={handleBulkDelete}
-            disabled={selectedProducts.length === 0}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Product
-          </Button>
-        </div>
-      </div>
-
-      <Card className="p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search Product"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); handleFilterChange() }}
-              className="pl-10"
-            />
-          </div>
-
-          <Select value={selectedCategory} onValueChange={(v) => { setSelectedCategory(v); handleFilterChange() }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {allCategories.map(cat => (
-                <SelectItem key={cat.id} value={String(cat.id)} textValue={cat.category_name}>
-                  {cat.parent_id !== null ? `  └─ ${cat.category_name}` : cat.category_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedVendor} onValueChange={(v) => { setSelectedVendor(v); handleFilterChange() }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Vendor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Vendors</SelectItem>
-              {vendors.map(vendor => (
-                <SelectItem key={vendor.id} value={vendor.id}>{vendor.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedWarehouse} onValueChange={(v) => { setSelectedWarehouse(v); handleFilterChange() }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Warehouse" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Warehouses</SelectItem>
-              {warehouses.map(w => (
-                <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={sortOption} onValueChange={(v) => { setSortOption(v); handleFilterChange() }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Default</SelectItem>
-              <SelectItem value="low-to-high">Low to High</SelectItem>
-              <SelectItem value="high-to-low">High to Low</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="unpublished">Unpublished</SelectItem>
-              <SelectItem value="selling">Status - Selling</SelectItem>
-              <SelectItem value="out-of-stock">Status - Out of Stock</SelectItem>
-              <SelectItem value="date-added-asc">Date Added (Asc)</SelectItem>
-              <SelectItem value="date-added-desc">Date Added (Desc)</SelectItem>
-              <SelectItem value="date-updated-asc">Date Updated (Asc)</SelectItem>
-              <SelectItem value="date-updated-desc">Date Updated (Desc)</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Button className="bg-emerald-600 hover:bg-emerald-700">Filter</Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearchQuery(""); setSelectedCategory("all"); setSelectedVendor("all")
-              setSelectedWarehouse("all"); setSortOption("default"); handleFilterChange()
-            }}
-          >
-            Reset
-          </Button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  <Checkbox
-                    checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                    onCheckedChange={handleSelectAll}
-                  />
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Product Name</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Receipt No.</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Price</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Sale Price</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Stock</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Vendor</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Location</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">View</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Published</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading
-                ? Array.from({ length: 3 }).map((_, index) => (
-                  <tr key={index} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-4 rounded" /></td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-10 w-10 rounded object-cover" />
-                        <Skeleton className="h-4 w-32" />
-                      </div>
-                    </td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                    <td className="py-3 px-4 text-center"><Skeleton className="h-5 w-5 mx-auto" /></td>
-                    <td className="py-3 px-4 text-center"><Skeleton className="h-6 w-11 rounded-full mx-auto" /></td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <Skeleton className="h-4 w-4" />
-                        <Skeleton className="h-4 w-4" />
-                      </div>
-                    </td>
-                  </tr>
-                ))
-                : currentProducts.map(product => (
-                  <tr key={product.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <Checkbox
-                        checked={selectedProducts.includes(product.id)}
-                        onCheckedChange={(checked) => handleSelectProduct(product.id, checked as boolean)}
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <img src={product.image || "/placeholder.svg"} alt={product.name} className="w-10 h-10 rounded object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }} />
-                        <span className="font-medium text-gray-900">{product.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{product.receiptNumber || "-"}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{product.category}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${(product.price || 0).toFixed(2)}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${(product.salePrice || product.price || 0).toFixed(2)}</td>
-                    <td className="py-3 px-4">
-                      {product.stock < 5 ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-bold text-orange-600 text-base">{product.stock}</span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white w-fit tracking-wide uppercase shadow-sm">Low Stock</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-600">{product.stock}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
-                      {product.vendorId ? (
-                        <Link href={`/dashboard/vendors/${product.vendorId}`} className="text-emerald-600 hover:underline">
-                          {vendors.find(v => v.id === product.vendorId)?.name || "Unknown"}
-                        </Link>
-                      ) : (
-                        <span className="text-gray-400">No Vendor</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
-                      {product.locationName || (product.locationId ? warehouses.find(w => String(w.id) === product.locationId)?.name : null) || "-"}
-                    </td>
-                    <td className="py-3 px-4">
-                      <StatusBadge status={product.status} />
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Button variant="ghost" size="icon" onClick={() => setViewingProduct(product)} className="text-gray-400 hover:text-emerald-600">
-                        <Eye className="w-5 h-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-gray-400 hover:text-blue-600" title="Print Label" asChild>
-                        <Link href={`/dashboard/products/${product.id}/barcode`}>
-                          <Barcode className="w-4 h-4" />
-                        </Link>
-                      </Button>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Switch
-                        checked={product.published}
-                        onCheckedChange={() => handleTogglePublished(product.id)}
-                        className="data-[state=checked]:bg-emerald-600"
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => handleEdit(product)} className="text-gray-400 hover:text-emerald-600">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(product.id)} className="text-gray-400 hover:text-red-600">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No products found</p>
-          </div>
-        )}
-      </Card>
-
-      <PaginationControl
+    <>
+      <ListPage
+        title="Products"
+        data={filteredAndSortedProducts}
+        columns={columns}
+        isLoading={isLoading}
+        searchPlaceholder="Search by name or category..."
+        searchFields={["name", "category"]}
+        filters={filters}
+        sortOptions={sortOptions}
+        onSearch={setSearchQuery}
+        onFilterChange={() => setCurrentPage(1)}
+        actions={actions}
+        onAddClick={() => {
+          if (company?.maxProducts && products.length >= company.maxProducts) {
+            setIsUpgradeModalOpen(true)
+          } else {
+            setIsAddDialogOpen(true)
+          }
+        }}
+        addButtonLabel="Add Product"
+        bulkActions={bulkActions}
+        enableCheckboxes={true}
+        onExport={handleExport}
+        onImport={handleImport}
+        exportFileName="products"
+        pageSize={itemsPerPage}
         currentPage={currentPage}
-        totalPages={totalPages}
+        totalItems={filteredAndSortedProducts.length}
         onPageChange={setCurrentPage}
-        itemsPerPage={itemsPerPage}
-        onItemsPerPageChange={handleItemsPerPageChange}
-        totalItems={filteredProducts.length}
+        onPageSizeChange={handleItemsPerPageChange}
+        emptyMessage="No products found"
       />
 
-      {/* Add / Edit Product Dialog — isolated component to prevent input lag */}
+      {/* Add / Edit Product Dialog */}
       <ProductFormDialog
         open={isAddDialogOpen}
         editingProduct={editingProduct}
         onClose={closeDialog}
       />
 
-      {/* View Product Details */}
+      {/* View Product Details Dialog */}
       <Dialog open={!!viewingProduct} onOpenChange={() => setViewingProduct(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="p-6 border-b">
@@ -509,7 +420,7 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-6 pt-4 border-t">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Category</p>
-                  <p className="font-semibold text-gray-900">{viewingProduct.category || (viewingProduct.categoryId ? getAllCategoriesFlat().find(c => c.id === viewingProduct.categoryId)?.category_name : null) || "-"}</p>
+                  <p className="font-semibold text-gray-900">{viewingProduct.category || (viewingProduct.categoryId ? allCategories.find(c => c.id === viewingProduct.categoryId)?.category_name : null) || "-"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Vendor</p>
@@ -600,86 +511,15 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Import Dialog */}
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Import Products</DialogTitle>
-            <DialogDescription>Upload a CSV file to import products</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>CSV File</Label>
-              <Input type="file" accept=".csv" onChange={handleImport} />
-              <p className="text-sm text-gray-500">
-                Upload a CSV file with columns: Name, Category, Price, Sale Price, Stock, Status, Published, SKU, Barcode, Description
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancel</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Actions Dialog */}
-      <Dialog open={isBulkActionDialogOpen} onOpenChange={setIsBulkActionDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Bulk Actions</DialogTitle>
-            <DialogDescription>Apply actions to {selectedProducts.length} selected product(s)</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Action Type</Label>
-              <Select value={bulkAction} onValueChange={setBulkAction}>
-                <SelectTrigger><SelectValue placeholder="Select action" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="status">Change Status</SelectItem>
-                  <SelectItem value="category">Change Category</SelectItem>
-                  <SelectItem value="publish">Publish</SelectItem>
-                  <SelectItem value="unpublish">Unpublish</SelectItem>
-                  <SelectItem value="delete">Delete</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {bulkAction === "status" && (
-              <div className="space-y-2">
-                <Label>New Status</Label>
-                <Select value={bulkStatus} onValueChange={setBulkStatus}>
-                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Selling">Selling</SelectItem>
-                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                    <SelectItem value="Discontinued">Discontinued</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {bulkAction === "category" && (
-              <div className="space-y-2">
-                <Label>New Category</Label>
-                <Select value={bulkCategory} onValueChange={setBulkCategory}>
-                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                  <SelectContent>
-                    {allCategories.map(cat => (
-                      <SelectItem key={cat.id} value={cat.category_name} textValue={cat.category_name}>
-                        {cat.parent_id !== null ? `  └─ ${cat.category_name}` : cat.category_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsBulkActionDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleBulkAction} className="bg-emerald-600 hover:bg-emerald-700" disabled={!bulkAction}>
-              Apply Action
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      {/* Upgrade Required Modal */}
+      <UpgradeRequiredModal
+        open={isUpgradeModalOpen}
+        onOpenChange={setIsUpgradeModalOpen}
+        title="Product Limit Reached"
+        description={`Your current plan allows up to ${company?.maxProducts} products. Please upgrade to add more.`}
+        limitType="products"
+        currentLimit={company?.maxProducts}
+      />
+    </>
   )
 }
