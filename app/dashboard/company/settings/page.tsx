@@ -36,13 +36,20 @@ export default function CompanySettingsPage() {
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState({
-    companyName: "",
     taxId: "",
     taxIdType: "gst" as "vat" | "ein" | "gst" | "other",
     taxRate: 0,
     currency: "USD",
     timezone: "UTC",
     language: "en",
+    currencySymbolPosition: "before" as "before" | "after",
+    currencyDecimalSeparator: "." as "." | ",",
+    currencyThousandsSeparator: "," as "," | "." | " " | "",
+    currencyDecimalPlaces: 2 as 0 | 1 | 2,
+    weightUnit: "kg" as "kg" | "lb" | "g" | "oz",
+    dimensionUnit: "cm" as "cm" | "in" | "mm",
+    dateFormat: "MM/DD/YYYY" as "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD",
+    timeFormat: "12h" as "12h" | "24h",
   })
 
   useEffect(() => {
@@ -71,13 +78,20 @@ export default function CompanySettingsPage() {
         const settingsResponse = await saasCompanyApi.getSettings()
         setSettings(settingsResponse.data)
         setSettingsForm({
-          companyName: settingsResponse.data.companyName || "",
           taxId: settingsResponse.data.taxId || "",
           taxIdType: (settingsResponse.data.taxIdType as "vat" | "ein" | "gst" | "other") || "gst",
           taxRate: settingsResponse.data.taxRate || 0,
           currency: settingsResponse.data.currency || "USD",
           timezone: settingsResponse.data.timezone || "UTC",
           language: settingsResponse.data.language || "en",
+          currencySymbolPosition: (settingsResponse.data.currencySymbolPosition as any) || "before",
+          currencyDecimalSeparator: (settingsResponse.data.currencyDecimalSeparator as any) || ".",
+          currencyThousandsSeparator: (settingsResponse.data.currencyThousandsSeparator as any) || ",",
+          currencyDecimalPlaces: settingsResponse.data.currencyDecimalPlaces || 2,
+          weightUnit: (settingsResponse.data.weightUnit as any) || "kg",
+          dimensionUnit: (settingsResponse.data.dimensionUnit as any) || "cm",
+          dateFormat: (settingsResponse.data.dateFormat as any) || "MM/DD/YYYY",
+          timeFormat: (settingsResponse.data.timeFormat as any) || "12h",
         })
       } catch (err: any) {
         setError(err.response?.data?.message || "Failed to load company settings")
@@ -122,13 +136,20 @@ export default function CompanySettingsPage() {
 
     try {
       await saasCompanyApi.updateSettings({
-        companyName: settingsForm.companyName,
         taxId: settingsForm.taxId,
         taxIdType: settingsForm.taxIdType,
         taxRate: settingsForm.taxRate,
         currency: settingsForm.currency,
         timezone: settingsForm.timezone,
         language: settingsForm.language,
+        currencySymbolPosition: settingsForm.currencySymbolPosition,
+        currencyDecimalSeparator: settingsForm.currencyDecimalSeparator,
+        currencyThousandsSeparator: settingsForm.currencyThousandsSeparator,
+        currencyDecimalPlaces: settingsForm.currencyDecimalPlaces,
+        weightUnit: settingsForm.weightUnit,
+        dimensionUnit: settingsForm.dimensionUnit,
+        dateFormat: settingsForm.dateFormat,
+        timeFormat: settingsForm.timeFormat,
       })
       setSuccessMessage("Company settings updated successfully")
       setTimeout(() => setSuccessMessage(""), 3000)
@@ -381,6 +402,7 @@ export default function CompanySettingsPage() {
                   <option value="AUD">AUD - Australian Dollar</option>
                   <option value="CAD">CAD - Canadian Dollar</option>
                   <option value="JPY">JPY - Japanese Yen</option>
+                  <option value="BDT">BDT - Bangladeshi Taka</option>
                 </select>
               </div>
               <div>
@@ -404,7 +426,7 @@ export default function CompanySettingsPage() {
           </div>
 
           {/* Language & Localization */}
-          <div>
+          <div className="border-b pb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Localization</h3>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
@@ -422,6 +444,124 @@ export default function CompanySettingsPage() {
                 <option value="ja">日本語 (Japanese)</option>
                 <option value="zh">中文 (Chinese)</option>
               </select>
+            </div>
+          </div>
+
+          {/* Currency Format Settings */}
+          <div className="border-b pb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Currency Format</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Symbol Position</label>
+                <select
+                  value={settingsForm.currencySymbolPosition}
+                  onChange={(e) => handleSettingsChange("currencySymbolPosition", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="before">Before amount (e.g., $1,234.56)</option>
+                  <option value="after">After amount (e.g., 1,234.56 $)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Decimal Separator</label>
+                <select
+                  value={settingsForm.currencyDecimalSeparator}
+                  onChange={(e) => handleSettingsChange("currencyDecimalSeparator", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value=".">Period (.)</option>
+                  <option value=",">Comma (,)</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-6 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Thousands Separator</label>
+                <select
+                  value={settingsForm.currencyThousandsSeparator}
+                  onChange={(e) => handleSettingsChange("currencyThousandsSeparator", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value=",">Comma (,)</option>
+                  <option value=".">Period (.)</option>
+                  <option value=" ">Space</option>
+                  <option value="">None</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Decimal Places</label>
+                <select
+                  value={settingsForm.currencyDecimalPlaces}
+                  onChange={(e) => handleSettingsChange("currencyDecimalPlaces", parseInt(e.target.value) as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="0">0 decimal places</option>
+                  <option value="1">1 decimal place</option>
+                  <option value="2">2 decimal places</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Units of Measurement */}
+          <div className="border-b pb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Units of Measurement</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Weight Unit</label>
+                <select
+                  value={settingsForm.weightUnit}
+                  onChange={(e) => handleSettingsChange("weightUnit", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="kg">Kilogram (kg)</option>
+                  <option value="lb">Pound (lb)</option>
+                  <option value="g">Gram (g)</option>
+                  <option value="oz">Ounce (oz)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Dimension Unit</label>
+                <select
+                  value={settingsForm.dimensionUnit}
+                  onChange={(e) => handleSettingsChange("dimensionUnit", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="cm">Centimeter (cm)</option>
+                  <option value="in">Inch (in)</option>
+                  <option value="mm">Millimeter (mm)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Date & Time Format */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Date & Time Format</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+                <select
+                  value={settingsForm.dateFormat}
+                  onChange={(e) => handleSettingsChange("dateFormat", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="MM/DD/YYYY">MM/DD/YYYY (01/15/2024)</option>
+                  <option value="DD/MM/YYYY">DD/MM/YYYY (15/01/2024)</option>
+                  <option value="YYYY-MM-DD">YYYY-MM-DD (2024-01-15)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
+                <select
+                  value={settingsForm.timeFormat}
+                  onChange={(e) => handleSettingsChange("timeFormat", e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="12h">12-hour (2:30 PM)</option>
+                  <option value="24h">24-hour (14:30)</option>
+                </select>
+              </div>
             </div>
           </div>
 

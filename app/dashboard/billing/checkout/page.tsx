@@ -372,12 +372,15 @@ export default function CheckoutPage() {
 
               {/* Plan Features Checklist */}
               <div className="space-y-2 text-xs text-gray-700">
-                {plan.features.slice(0, 3).map((feature) => (
-                  <div key={feature.id} className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    <span>{feature.name}</span>
-                  </div>
-                ))}
+                {plan.features.slice(0, 3).map((feature, index) => {
+                  const featureName = typeof feature === "string" ? feature : (feature.name || "");
+                  return (
+                    <div key={`${featureName}-${index}`} className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      <span>{featureName}</span>
+                    </div>
+                  );
+                })}
                 {plan.features.length > 3 && (
                   <p className="text-gray-500 ml-6">+ {plan.features.length - 3} more features</p>
                 )}

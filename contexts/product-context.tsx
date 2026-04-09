@@ -11,6 +11,9 @@ export interface Product {
     categoryId?: string     // backend id
     price: number
     salePrice: number
+    costPrice?: number
+    profitMargin?: number
+    marginType?: string
     stock: number
     status: "Selling" | "Out of Stock" | "Discontinued"
     published: boolean
@@ -45,6 +48,9 @@ export interface Variant {
     attributes: { [key: string]: string }
     price: number
     salePrice: number
+    costPrice?: number
+    profitMargin?: number
+    marginType?: string
     stock: number
     sku: string
     barcode?: string
@@ -73,16 +79,20 @@ function convertToProduct(p: ProductResponse): Product {
     const categoryObj = typeof p.category === "object" && p.category !== null ? p.category : null
     // DTO returns camelCase IDs
     const categoryId = categoryObj ? String(categoryObj.id) : ((p as any).categoryId ? String((p as any).categoryId) : undefined)
+    const categoryName = (p as any).categoryName || (categoryObj ? categoryObj.category_name : (p.category as string || ""))
     const vendorId = (p as any).vendorId ? String((p as any).vendorId) : (p.vendor_id ? String(p.vendor_id) : undefined)
     const locationId = (p as any).locationId ? String((p as any).locationId) : (p.location_id ? String(p.location_id) : undefined)
     return {
         id: String(p.id),
         name: p.name,
         description: p.description || "",
-        category: categoryObj ? categoryObj.category_name : (p.category as string || ""),
+        category: categoryName,
         categoryId,
         price: p.price,
         salePrice: p.salePrice ?? p.sale_price,
+        costPrice: (p as any).costPrice ?? p.cost_price,
+        profitMargin: (p as any).profitMargin ?? p.profit_margin,
+        marginType: (p as any).marginType ?? p.margin_type,
         stock: p.stock,
         status: (p.status as Product["status"]) || (p.stock > 0 ? "Selling" : "Out of Stock"),
         published: p.published ?? true,
@@ -131,6 +141,9 @@ function convertToProduct(p: ProductResponse): Product {
             })(),
             price: v.price,
             salePrice: (v as any).salePrice ?? v.sale_price,
+            costPrice: (v as any).costPrice ?? v.cost_price,
+            profitMargin: (v as any).profitMargin ?? v.profit_margin,
+            marginType: (v as any).marginType ?? v.margin_type,
             stock: v.stock,
             sku: v.sku || "",
             barcode: v.barcode,
@@ -177,6 +190,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 location_id: parseInt(product.locationId),
                 price: product.price,
                 sale_price: product.salePrice,
+                cost_price: product.costPrice,
+                profit_margin: product.profitMargin,
+                margin_type: product.marginType,
                 stock: product.stock,
                 published: product.published,
                 sku: product.sku,
@@ -190,6 +206,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                     barcode: v.barcode,
                     price: v.price,
                     sale_price: v.salePrice,
+                    cost_price: v.costPrice,
+                    profit_margin: v.profitMargin,
+                    margin_type: v.marginType,
                     stock: v.stock,
                     attributes: v.attributes,
                 })),
@@ -211,6 +230,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 location_id: product.locationId ? parseInt(product.locationId) : undefined,
                 price: product.price,
                 sale_price: product.salePrice,
+                cost_price: product.costPrice,
+                profit_margin: product.profitMargin,
+                margin_type: product.marginType,
                 stock: product.stock,
                 published: product.published,
                 sku: product.sku,
@@ -227,6 +249,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                         barcode: v.barcode,
                         price: v.price,
                         sale_price: v.salePrice,
+                        cost_price: v.costPrice,
+                        profit_margin: v.profitMargin,
+                        margin_type: v.marginType,
                         stock: v.stock,
                         attributes: v.attributes,
                     }

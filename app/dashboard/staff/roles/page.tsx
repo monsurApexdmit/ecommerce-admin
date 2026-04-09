@@ -137,6 +137,24 @@ export default function RolesPage() {
         }))
     }
 
+    const handleSelectAll = (type: "read" | "write" | "delete") => {
+        const allChecked = permissions.every(p => p[type])
+        setPermissions(prev => prev.map(p => ({ ...p, [type]: !allChecked })))
+    }
+
+    const handleSelectAllForModule = (moduleName: Module) => {
+        const module = permissions.find(p => p.name === moduleName)
+        if (module) {
+            const allChecked = module.read && module.write && module.delete
+            setPermissions(prev => prev.map(p => {
+                if (p.name === moduleName) {
+                    return { ...p, read: !allChecked, write: !allChecked, delete: !allChecked }
+                }
+                return p
+            }))
+        }
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
@@ -268,9 +286,34 @@ export default function RolesPage() {
                                         <thead className="bg-gray-50 border-b">
                                             <tr>
                                                 <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Module</th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Read</th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Write</th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">Delete</th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSelectAll("read")}
+                                                        className="px-2 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold"
+                                                    >
+                                                        Read
+                                                    </button>
+                                                </th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSelectAll("write")}
+                                                        className="px-2 py-1 rounded text-xs bg-green-100 hover:bg-green-200 text-green-700 font-semibold"
+                                                    >
+                                                        Write
+                                                    </button>
+                                                </th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSelectAll("delete")}
+                                                        className="px-2 py-1 rounded text-xs bg-red-100 hover:bg-red-200 text-red-700 font-semibold"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </th>
+                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">All</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
@@ -294,6 +337,15 @@ export default function RolesPage() {
                                                             checked={permission.delete}
                                                             onCheckedChange={(checked) => handlePermissionChange(permission.name, "delete", checked as boolean)}
                                                         />
+                                                    </td>
+                                                    <td className="py-2 px-4 text-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleSelectAllForModule(permission.name)}
+                                                            className="px-2 py-1 rounded text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold"
+                                                        >
+                                                            All
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             ))}

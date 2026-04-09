@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { sellsApi } from "@/lib/sellsApi"
 import { productApi } from "@/lib/productApi"
 import { couponApi, CouponResponse } from "@/lib/couponApi"
+import { BarcodeScanner } from "@/components/pos/barcode-scanner"
 import { toast } from "sonner"
 
 interface CartItem {
@@ -186,7 +187,11 @@ export default function PosPage() {
 
     const filteredProducts = useMemo(() => {
         return products.filter(product => {
-            const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
+            const searchLower = searchQuery.toLowerCase()
+            const matchesSearch =
+                product.name.toLowerCase().includes(searchLower) ||
+                (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+                (product.sku && product.sku.toLowerCase().includes(searchLower))
             const hasStock = selectedWarehouseId ? getAvailableStock(product) > 0 : true
             return matchesSearch && hasStock
         })
@@ -335,6 +340,17 @@ export default function PosPage() {
                         <Input placeholder="Search products..." className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white"
                             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
+
+                    {/* Barcode Scanner - Hidden but active for keyboard input */}
+                    <div className="hidden">
+                        <BarcodeScanner
+                            products={products}
+                            selectedWarehouseId={selectedWarehouseId}
+                            getAvailableStock={getAvailableStock}
+                            onProductScanned={addToCart}
+                        />
+                    </div>
+
                     <div className="w-48">
                         <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
                             <SelectTrigger className="h-10"><SelectValue placeholder="Select Warehouse" /></SelectTrigger>

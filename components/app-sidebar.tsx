@@ -22,6 +22,7 @@ import {
     RotateCcw,
     MapPin,
     Package,
+    Printer,
 } from "lucide-react"
 
 import {
@@ -66,6 +67,7 @@ const navigation = [
             { name: "Categories", href: "/dashboard/categories" },
             { name: "Attributes", href: "/dashboard/attributes" },
             { name: "Coupons", href: "/dashboard/coupons" },
+            { name: "Print Barcode", href: "/dashboard/products/print-barcode" },
         ],
     },
     { name: "Customers", href: "/dashboard/customers", icon: Users },
@@ -104,19 +106,18 @@ const navigation = [
             { name: "Salary Management", href: "/dashboard/staff/salary" },
         ],
     },
-    { name: "Settings", href: "/dashboard/settings", icon: Settings },
     {
-        name: "SaaS Settings",
-        icon: CreditCard,
+        name: "Settings",
+        icon: Settings,
         items: [
             { name: "Company Profile", href: "/dashboard/company/profile" },
             { name: "Company Settings", href: "/dashboard/company/settings" },
             { name: "Billing Contact", href: "/dashboard/company/billing-contact" },
             { name: "Team Members", href: "/dashboard/team/users" },
             { name: "Subscriptions", href: "/dashboard/billing/subscriptions" },
+            { name: "Billing Plans", href: "/dashboard/billing/plans" },
         ],
     },
-    { name: "International", href: "/dashboard/international", icon: Globe },
     {
         name: "Store",
         icon: Store,

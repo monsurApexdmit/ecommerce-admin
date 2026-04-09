@@ -45,36 +45,47 @@ export default function ProductsPage() {
 
   const allCategories = useMemo(() => getAllCategoriesFlat(), [categories])
 
+  const matchesSelectedWarehouse = (product: Product, warehouseId: string) => {
+    if (warehouseId === "all") return true
+
+    if (product.locationId && String(product.locationId) === warehouseId) {
+      return true
+    }
+
+    const selectedWh = warehouses.find(w => String(w.id) === warehouseId)
+    if (selectedWh && product.locationName === selectedWh.name) {
+      return true
+    }
+
+    if (product.inventory && product.inventory.length > 0) {
+      return product.inventory.some(inv => String(inv.warehouseId) === warehouseId)
+    }
+
+    return false
+  }
+
+  // Define sort options with custom sort functions
+  const sortOptions: SortOption[] = [
+    { value: "default", label: "Default" },
+    { value: "low-to-high", label: "Low to High", sortFn: (a: Product, b: Product) => a.salePrice - b.salePrice },
+    { value: "high-to-low", label: "High to Low", sortFn: (a: Product, b: Product) => b.salePrice - a.salePrice },
+    { value: "published", label: "Published", sortFn: (a: Product, b: Product) => (b.published ? 1 : 0) - (a.published ? 1 : 0) },
+    { value: "unpublished", label: "Unpublished", sortFn: (a: Product, b: Product) => (a.published ? 1 : 0) - (b.published ? 1 : 0) },
+    { value: "selling", label: "Status - Selling", sortFn: (a: Product, b: Product) => (a.status === "Selling" ? -1 : 0) - (b.status === "Selling" ? -1 : 0) },
+    { value: "out-of-stock", label: "Status - Out of Stock", sortFn: (a: Product, b: Product) => (a.status === "Out of Stock" ? -1 : 0) - (b.status === "Out of Stock" ? -1 : 0) },
+    { value: "date-added-asc", label: "Date Added (Asc)", sortFn: (a: Product, b: Product) => new Date(a.createdAt || "").getTime() - new Date(b.createdAt || "").getTime() },
+    { value: "date-added-desc", label: "Date Added (Desc)", sortFn: (a: Product, b: Product) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime() },
+    { value: "date-updated-asc", label: "Date Updated (Asc)", sortFn: (a: Product, b: Product) => new Date(a.updatedAt || "").getTime() - new Date(b.updatedAt || "").getTime() },
+    { value: "date-updated-desc", label: "Date Updated (Desc)", sortFn: (a: Product, b: Product) => new Date(b.updatedAt || "").getTime() - new Date(a.updatedAt || "").getTime() },
+  ]
+
   // Apply filtering and sorting manually
   const filteredAndSortedProducts = useMemo(() => {
     let result = products
       .filter((product) => {
         const matchesCategory = selectedCategory === "all" || product.categoryId === selectedCategory
         const matchesVendor = selectedVendor === "all" || (product.vendorId && String(product.vendorId) === selectedVendor)
-
-        // Warehouse matching
-        let matchesWarehouse = false
-
-        if (selectedWarehouse === "all") {
-          // Show all products when "All Warehouses" is selected
-          matchesWarehouse = true
-        } else {
-          // Try to match by location ID first
-          if (product.locationId && String(product.locationId) === selectedWarehouse) {
-            matchesWarehouse = true
-          } else {
-            // Try to match by location name
-            const selectedWh = warehouses.find(w => String(w.id) === selectedWarehouse)
-            if (selectedWh && product.locationName === selectedWh.name) {
-              matchesWarehouse = true
-            }
-          }
-
-          // Also check inventory array for warehouse match
-          if (!matchesWarehouse && product.inventory && product.inventory.length > 0) {
-            matchesWarehouse = product.inventory.some(inv => String(inv.warehouseId) === selectedWarehouse)
-          }
-        }
+        const matchesWarehouse = matchesSelectedWarehouse(product, selectedWarehouse)
 
         return matchesCategory && matchesVendor && matchesWarehouse
       })
@@ -88,7 +99,7 @@ export default function ProductsPage() {
     }
 
     return result
-  }, [products, selectedCategory, selectedVendor, selectedWarehouse, sortOption])
+  }, [products, selectedCategory, selectedVendor, selectedWarehouse, sortOption, warehouses])
 
   const {
     currentItems: currentProducts,
@@ -267,26 +278,12 @@ export default function ProductsPage() {
       label: "Warehouse",
       value: selectedWarehouse,
       onChange: (v) => setSelectedWarehouse(v),
+      predicate: (item, value) => matchesSelectedWarehouse(item as Product, value),
       options: warehouses.map(w => ({
         value: String(w.id),
         label: w.name,
       })),
     },
-  ]
-
-  // Define sort options with custom sort functions
-  const sortOptions: SortOption[] = [
-    { value: "default", label: "Default" },
-    { value: "low-to-high", label: "Low to High", sortFn: (a: Product, b: Product) => a.salePrice - b.salePrice },
-    { value: "high-to-low", label: "High to Low", sortFn: (a: Product, b: Product) => b.salePrice - a.salePrice },
-    { value: "published", label: "Published", sortFn: (a: Product, b: Product) => (b.published ? 1 : 0) - (a.published ? 1 : 0) },
-    { value: "unpublished", label: "Unpublished", sortFn: (a: Product, b: Product) => (a.published ? 1 : 0) - (b.published ? 1 : 0) },
-    { value: "selling", label: "Status - Selling", sortFn: (a: Product, b: Product) => (a.status === "Selling" ? -1 : 0) - (b.status === "Selling" ? -1 : 0) },
-    { value: "out-of-stock", label: "Status - Out of Stock", sortFn: (a: Product, b: Product) => (a.status === "Out of Stock" ? -1 : 0) - (b.status === "Out of Stock" ? -1 : 0) },
-    { value: "date-added-asc", label: "Date Added (Asc)", sortFn: (a: Product, b: Product) => new Date(a.createdAt || "").getTime() - new Date(b.createdAt || "").getTime() },
-    { value: "date-added-desc", label: "Date Added (Desc)", sortFn: (a: Product, b: Product) => new Date(b.createdAt || "").getTime() - new Date(a.createdAt || "").getTime() },
-    { value: "date-updated-asc", label: "Date Updated (Asc)", sortFn: (a: Product, b: Product) => new Date(a.updatedAt || "").getTime() - new Date(b.updatedAt || "").getTime() },
-    { value: "date-updated-desc", label: "Date Updated (Desc)", sortFn: (a: Product, b: Product) => new Date(b.updatedAt || "").getTime() - new Date(a.updatedAt || "").getTime() },
   ]
 
   // Define bulk actions
@@ -330,19 +327,21 @@ export default function ProductsPage() {
       label: "View",
       icon: <Eye className="w-4 h-4" />,
       onClick: (item) => setViewingProduct(item),
+      className: "text-gray-500 hover:text-gray-700 hover:bg-transparent",
     },
     {
       id: "edit",
       label: "Edit",
       icon: <Edit2 className="w-4 h-4" />,
       onClick: (item) => handleEdit(item),
+      className: "text-gray-500 hover:text-gray-700 hover:bg-transparent",
     },
     {
       id: "delete",
       label: "Delete",
       icon: <Trash2 className="w-4 h-4" />,
       onClick: (item) => handleDelete(item.id),
-      variant: "destructive",
+      className: "text-gray-500 hover:text-red-600 hover:bg-transparent",
     },
   ]
 
@@ -357,6 +356,8 @@ export default function ProductsPage() {
         searchFields={["name", "category"]}
         filters={filters}
         sortOptions={sortOptions}
+        sortValue={sortOption}
+        onSortChange={setSortOption}
         onSearch={setSearchQuery}
         onFilterChange={() => setCurrentPage(1)}
         actions={actions}

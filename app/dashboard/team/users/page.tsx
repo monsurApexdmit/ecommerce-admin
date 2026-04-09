@@ -20,6 +20,7 @@ import {
   Calendar,
   Send,
 } from "lucide-react"
+import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 
 export default function TeamUsersPage() {
   const { company, user } = useSaasAuth()
@@ -32,6 +33,7 @@ export default function TeamUsersPage() {
   const [error, setError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
   const [inviting, setInviting] = useState(false)
 
   const [inviteForm, setInviteForm] = useState({
@@ -197,15 +199,20 @@ export default function TeamUsersPage() {
             Manage your team ({users.length}/{maxUsers})
           </p>
         </div>
-        {canAddMore && (
-          <Button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Invite Member
-          </Button>
-        )}
+        <Button
+          onClick={() => {
+            if (canAddMore) {
+              setIsInviteModalOpen(true)
+            } else {
+              setIsUpgradeModalOpen(true)
+            }
+          }}
+          className="bg-emerald-600 hover:bg-emerald-700"
+          disabled={!canAddMore && maxUsers > 0}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Invite Member
+        </Button>
       </div>
 
       {/* Error Message */}
@@ -490,6 +497,16 @@ export default function TeamUsersPage() {
           </div>
         </div>
       </Card>
+
+      {/* Upgrade Required Modal - User Limit */}
+      <UpgradeRequiredModal
+        open={isUpgradeModalOpen}
+        onOpenChange={setIsUpgradeModalOpen}
+        title="Team Member Limit Reached"
+        description={`Your current plan allows up to ${maxUsers} team members. Please upgrade to add more.`}
+        limitType="users"
+        currentLimit={maxUsers}
+      />
     </div>
   )
 }

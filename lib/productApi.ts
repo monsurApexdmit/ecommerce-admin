@@ -52,6 +52,9 @@ export interface ProductVariantResponse {
   barcode?: string;
   price: number;
   sale_price: number;
+  cost_price?: number;
+  profit_margin?: number;
+  margin_type?: string;
   stock: number;
   attributes?: { [key: string]: string };
 }
@@ -107,11 +110,19 @@ export interface ProductResponse {
   name: string;
   description: string;
   category: string | ProductCategoryResponse;
+  categoryId?: number;
+  categoryName?: string;
   location_id?: number;
   location?: ProductLocationResponse;
   price: number;
   sale_price: number;
   salePrice: number;
+  cost_price?: number;
+  costPrice?: number;
+  profit_margin?: number;
+  profitMargin?: number;
+  margin_type?: string;
+  marginType?: string;
   stock: number;
   status: string;
   published: boolean;
@@ -148,6 +159,9 @@ export interface CreateProductData {
   location_id: number;
   price: number;
   sale_price: number;
+  cost_price?: number;
+  profit_margin?: number;
+  margin_type?: string;
   stock: number;
   published?: boolean;
   sku?: string;
@@ -162,6 +176,9 @@ export interface CreateProductData {
     barcode?: string;
     price: number;
     sale_price: number;
+    cost_price?: number;
+    profit_margin?: number;
+    margin_type?: string;
     stock: number;
     attributes?: { [key: string]: string };
   }[];
@@ -182,6 +199,9 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.location_id !== undefined) fd.append('location_id', String(data.location_id));
   if (data.price !== undefined) fd.append('price', String(data.price));
   if (data.sale_price !== undefined) fd.append('sale_price', String(data.sale_price));
+  if (data.cost_price !== undefined) fd.append('cost_price', String(data.cost_price));
+  if (data.profit_margin !== undefined) fd.append('profit_margin', String(data.profit_margin));
+  if (data.margin_type !== undefined) fd.append('margin_type', data.margin_type);
   if (data.stock !== undefined) fd.append('stock', String(data.stock));
   if (data.sku !== undefined && data.sku !== '') fd.append('sku', data.sku);
   if (data.barcode !== undefined && data.barcode !== '') fd.append('barcode', data.barcode);

@@ -116,6 +116,13 @@ export interface Company {
   subscriptionEndDate?: string;
   createdAt: string;
   updatedAt: string;
+  // Plan and feature info
+  planId?: number;
+  planName?: string;
+  planFeatures?: string[];
+  maxUsers?: number;
+  maxProducts?: number;
+  maxBranches?: number;
 }
 
 export interface User {

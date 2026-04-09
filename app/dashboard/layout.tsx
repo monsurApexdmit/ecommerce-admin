@@ -33,7 +33,6 @@ import {
   ChevronDown,
   ChevronRight,
   UserPlus,
-  Globe,
   Store,
   FileText,
   Grid3x3,
@@ -56,6 +55,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
+import { CustomerSupportMessenger } from "@/components/customer-support-messenger"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -91,10 +91,9 @@ const navigation = [
       { name: "Salary Management", href: "/dashboard/staff/salary" },
     ],
   },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
   {
-    name: "SaaS Settings",
-    icon: CreditCard,
+    name: "Settings",
+    icon: Settings,
     submenu: [
       { name: "Company Profile", href: "/dashboard/company/profile" },
       { name: "Company Settings", href: "/dashboard/company/settings" },
@@ -103,7 +102,6 @@ const navigation = [
       { name: "Subscriptions", href: "/dashboard/billing/subscriptions" },
     ],
   },
-  { name: "International", href: "/dashboard/international", icon: Globe, hasArrow: true },
   { name: "Store", href: "/dashboard/store", icon: Store, hasArrow: true },
   { name: "Pages", href: "/dashboard/pages", icon: FileText, hasArrow: true },
 ]
@@ -295,6 +293,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       </SidebarProvider>
                         </Suspense>
                         <Toaster />
+                        <CustomerSupportMessenger />
                               </OrderProvider>
                             </ShipmentProvider>
                           </ShippingAddressProvider>

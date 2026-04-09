@@ -47,9 +47,9 @@ api.interceptors.response.use(
 // ============ TYPE DEFINITIONS ============
 
 export interface PlanFeature {
-  id: number;
-  name: string;
-  description: string;
+  id?: number;
+  name?: string;
+  description?: string;
 }
 
 export interface Plan {
@@ -57,15 +57,16 @@ export interface Plan {
   name: string;
   description: string;
   price: number;
-  currency: string;
-  billingPeriod: 'monthly' | 'yearly';
-  durationDays: number;
-  isPopular: boolean;
+  currency?: string;
+  billingPeriod?: 'monthly' | 'yearly';
+  durationDays?: number;
+  isPopular?: boolean;
+  isFeatured?: boolean;
   maxUsers: number | null;
   maxBranches: number | null;
   maxProducts: number | null;
-  features: PlanFeature[];
-  createdAt: string;
+  features: (PlanFeature | string)[];
+  createdAt?: string;
 }
 
 export interface GetPlansResponse {
@@ -73,6 +74,17 @@ export interface GetPlansResponse {
   data: {
     plans: Plan[];
   };
+}
+
+export interface UpdatePlanPayload {
+  name?: string;
+  description?: string;
+  price?: number;       // dollars (backend converts to cents)
+  maxUsers?: number;
+  maxProducts?: number;
+  maxBranches?: number;
+  features?: string[];
+  isFeatured?: boolean;
 }
 
 export interface Subscription {
@@ -281,6 +293,15 @@ export const saasBillingApi = {
    */
   getPlans: async () => {
     const response = await api.get<GetPlansResponse>('/billing/plans');
+    return response.data;
+  },
+
+  /**
+   * PUT /billing/plans/{id}
+   * Update a subscription plan
+   */
+  updatePlan: async (planId: number, payload: UpdatePlanPayload) => {
+    const response = await api.put<{ data: Plan }>(`/billing/plans/${planId}`, payload);
     return response.data;
   },
 

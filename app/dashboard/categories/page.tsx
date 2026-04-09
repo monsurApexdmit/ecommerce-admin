@@ -345,7 +345,6 @@ export default function CategoriesPage() {
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
                  {!parentsOnly && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PARENT</th>}
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PUBLISHED</th>
@@ -357,7 +356,6 @@ export default function CategoriesPage() {
                 ? Array.from({ length: 5 }).map((_, index) => (
                     <tr key={index} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4"><Skeleton className="h-4 w-4 rounded" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
                       <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
                        {!parentsOnly && <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>}
                       <td className="py-3 px-4"><Skeleton className="h-6 w-11 rounded-full" /></td>
@@ -374,7 +372,6 @@ export default function CategoriesPage() {
                           className="rounded border-gray-300"
                         />
                       </td>
-                      <td className="py-3 px-4 text-gray-600 text-xs">{category.id.substring(0, 6)}...</td>
                       <td className="py-3 px-4 text-gray-900 font-medium">{category.category_name}</td>
                       {!parentsOnly && (
                           <td className="py-3 px-4 text-gray-500 text-sm">

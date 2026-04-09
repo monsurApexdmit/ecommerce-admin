@@ -240,25 +240,39 @@ export interface DeleteCompanyResponse {
 }
 
 export interface CompanySettingsPayload {
-  companyName?: string;
   taxId?: string;
   taxIdType?: 'vat' | 'ein' | 'gst' | 'other';
   taxRate?: number;
   currency?: string;
   timezone?: string;
   language?: string;
+  currencySymbolPosition?: 'before' | 'after';
+  currencyDecimalSeparator?: '.' | ',';
+  currencyThousandsSeparator?: ',' | '.' | ' ' | '';
+  currencyDecimalPlaces?: 0 | 1 | 2;
+  weightUnit?: 'kg' | 'lb' | 'g' | 'oz';
+  dimensionUnit?: 'cm' | 'in' | 'mm';
+  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  timeFormat?: '12h' | '24h';
 }
 
 export interface CompanySettings {
   id: number;
   companyId: number;
-  companyName: string;
   taxId?: string;
   taxIdType?: string;
   taxRate: number;
   currency: string;
   timezone: string;
   language: string;
+  currencySymbolPosition?: 'before' | 'after';
+  currencyDecimalSeparator?: '.' | ',';
+  currencyThousandsSeparator?: ',' | '.' | ' ' | '';
+  currencyDecimalPlaces?: 0 | 1 | 2;
+  weightUnit?: 'kg' | 'lb' | 'g' | 'oz';
+  dimensionUnit?: 'cm' | 'in' | 'mm';
+  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  timeFormat?: '12h' | '24h';
   createdAt: string;
   updatedAt: string;
 }
@@ -271,6 +285,13 @@ export interface GetCompanySettingsResponse {
 export interface UpdateCompanySettingsResponse {
   message: string;
   data: CompanySettings;
+}
+
+function unwrapData<T>(payload: T | { data: T }): T {
+  if (payload && typeof payload === 'object' && 'data' in (payload as object)) {
+    return (payload as { data: T }).data;
+  }
+  return payload as T;
 }
 
 // ============ API METHODS ============
@@ -329,8 +350,12 @@ export const saasCompanyApi = {
    * Get company settings (tax, currency, timezone, language)
    */
   getSettings: async () => {
-    const response = await api.get<GetCompanySettingsResponse>('/auth/company/settings');
-    return response.data;
+    const response = await api.get<GetCompanySettingsResponse | CompanySettings>('/auth/company/settings');
+    const settings = unwrapData<CompanySettings>(response.data);
+    return {
+      message: 'Company settings loaded',
+      data: settings,
+    };
   },
 
   /**
@@ -338,8 +363,12 @@ export const saasCompanyApi = {
    * Update company settings
    */
   updateSettings: async (payload: CompanySettingsPayload) => {
-    const response = await api.put<UpdateCompanySettingsResponse>('/auth/company/settings', payload);
-    return response.data;
+    const response = await api.put<UpdateCompanySettingsResponse | CompanySettings>('/auth/company/settings', payload);
+    const settings = unwrapData<CompanySettings>(response.data);
+    return {
+      message: 'Company settings updated',
+      data: settings,
+    };
   },
 
   /**

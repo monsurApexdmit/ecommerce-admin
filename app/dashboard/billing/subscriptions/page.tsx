@@ -4,20 +4,41 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { saasBillingApi, type Subscription, type PaymentRecord } from "@/lib/saasBillingApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AlertCircle, Loader, Download, RefreshCw, CreditCard, Calendar } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { AlertCircle, Loader, Download, RefreshCw, CreditCard, Calendar, Toggle2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils/subscriptionUtils"
 
 export default function SubscriptionsPage() {
   const router = useRouter()
   const { company } = useSaasAuth()
+  const { toast } = useToast()
 
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [payments, setPayments] = useState<PaymentRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [renewalLoading, setRenewalLoading] = useState(false)
+  const [cancelLoading, setCancelLoading] = useState(false)
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [autoRenewToggleLoading, setAutoRenewToggleLoading] = useState(false)
 
   useEffect(() => {
     const loadData = async () => {
@@ -70,16 +91,83 @@ export default function SubscriptionsPage() {
         currentPeriodEnd: response.data.currentPeriodEnd,
         status: "active",
       })
+      toast({ title: "Success", description: "Subscription renewed successfully" })
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to renew subscription")
+      toast({ title: "Error", description: "Failed to renew subscription", variant: "destructive" })
     } finally {
       setRenewalLoading(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!subscription) return
+
+    setCancelLoading(true)
+    try {
+      await saasBillingApi.cancelSubscription({
+        subscriptionId: subscription.id,
+        reason: cancelReason,
+      })
+
+      setSubscription({
+        ...subscription,
+        status: "cancelled",
+      })
+      setIsCancelDialogOpen(false)
+      setCancelReason("")
+      toast({ title: "Success", description: "Subscription cancelled successfully. Your access continues until the end of the billing period." })
+    } catch (err: any) {
+      toast({ title: "Error", description: err.response?.data?.message || "Failed to cancel subscription", variant: "destructive" })
+    } finally {
+      setCancelLoading(false)
+    }
+  }
+
+  const handleAutoRenewToggle = async () => {
+    if (!subscription) return
+
+    setAutoRenewToggleLoading(true)
+    try {
+      const newAutoRenew = !subscription.autoRenew
+      const response = await saasBillingApi.renewSubscription({
+        subscriptionId: subscription.id,
+        autoRenew: newAutoRenew,
+      })
+
+      setSubscription({
+        ...subscription,
+        autoRenew: newAutoRenew,
+      })
+      toast({
+        title: "Success",
+        description: newAutoRenew ? "Auto-renewal enabled" : "Auto-renewal disabled"
+      })
+    } catch (err: any) {
+      toast({ title: "Error", description: "Failed to update auto-renewal setting", variant: "destructive" })
+    } finally {
+      setAutoRenewToggleLoading(false)
     }
   }
 
   const handleDownloadInvoice = (invoiceUrl: string | undefined) => {
     if (invoiceUrl) {
       window.open(invoiceUrl, "_blank")
+    }
+  }
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case "active":
+        return "bg-emerald-100 text-emerald-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
+      case "expired":
+        return "bg-gray-100 text-gray-800"
+      case "past_due":
+        return "bg-orange-100 text-orange-800"
+      default:
+        return "bg-gray-100 text-gray-800"
     }
   }
 
@@ -114,13 +202,15 @@ export default function SubscriptionsPage() {
 
       {/* Current Subscription */}
       {subscription ? (
-        <Card className="p-8 border-emerald-200">
+        <Card className={`p-8 border-2 ${subscription.status === "active" ? "border-emerald-200" : "border-red-200"}`}>
           <div className="flex items-start justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-1">{subscription.planName} Plan</h2>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-emerald-600 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-emerald-700">Active</span>
+                <div className={`w-3 h-3 rounded-full ${subscription.status === "active" ? "bg-emerald-600 animate-pulse" : "bg-red-600"}`}></div>
+                <span className={`text-sm font-medium px-2 py-1 rounded ${getStatusColor(subscription.status)}`}>
+                  {subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
+                </span>
               </div>
             </div>
             <div className="text-right">
@@ -131,7 +221,7 @@ export default function SubscriptionsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-2 gap-6 mb-8">
             {/* Current Period */}
             <div>
               <p className="text-sm text-gray-600 mb-1">Current Period</p>
@@ -148,14 +238,29 @@ export default function SubscriptionsPage() {
                 {new Date(subscription.nextBillingDate).toLocaleDateString()}
               </p>
             </div>
+          </div>
 
-            {/* Auto-Renewal */}
+          {/* Auto-Renewal Toggle */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Auto-Renewal</p>
-              <p className="font-semibold text-gray-900">
-                {subscription.autoRenew ? "✓ Enabled" : "✗ Disabled"}
+              <p className="font-semibold text-gray-900">Auto-Renewal</p>
+              <p className="text-sm text-gray-600">
+                {subscription.autoRenew
+                  ? "Your subscription will automatically renew on the next billing date"
+                  : "Your subscription will expire and not renew automatically"}
               </p>
             </div>
+            <button
+              onClick={handleAutoRenewToggle}
+              disabled={autoRenewToggleLoading}
+              className={`px-4 py-2 rounded font-medium transition-colors ${
+                subscription.autoRenew
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {autoRenewToggleLoading ? "Updating..." : subscription.autoRenew ? "Enabled" : "Disabled"}
+            </button>
           </div>
 
           {/* Actions */}
@@ -163,7 +268,7 @@ export default function SubscriptionsPage() {
             <Button onClick={() => router.push("/dashboard/billing/plans")} className="bg-emerald-600 hover:bg-emerald-700">
               Upgrade Plan
             </Button>
-            <Button variant="outline" onClick={handleRenew} disabled={renewalLoading}>
+            <Button variant="outline" onClick={handleRenew} disabled={renewalLoading || subscription.status !== "active"}>
               {renewalLoading ? (
                 <>
                   <Loader className="w-4 h-4 mr-2 animate-spin" />
@@ -176,8 +281,13 @@ export default function SubscriptionsPage() {
                 </>
               )}
             </Button>
-            <Button variant="outline" className="text-red-600 hover:bg-red-50 hover:border-red-200">
-              Cancel Subscription
+            <Button
+              variant="outline"
+              onClick={() => setIsCancelDialogOpen(true)}
+              disabled={subscription.status === "cancelled"}
+              className="text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {subscription.status === "cancelled" ? "Cancelled" : "Cancel Subscription"}
             </Button>
           </div>
         </Card>
@@ -286,6 +396,59 @@ export default function SubscriptionsPage() {
           </div>
         </div>
       </Card>
+
+      {/* Cancel Subscription Dialog */}
+      <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Subscription</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel your subscription? Your access will continue until{" "}
+              {subscription && new Date(subscription.currentPeriodEnd).toLocaleDateString()}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-900 mb-2 block">
+                Reason for cancellation (optional)
+              </label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="too_expensive">Too expensive</SelectItem>
+                  <SelectItem value="missing_features">Missing features</SelectItem>
+                  <SelectItem value="switching_products">Switching to another product</SelectItem>
+                  <SelectItem value="poor_support">Poor customer support</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)}>
+              Keep Subscription
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={cancelLoading}
+            >
+              {cancelLoading ? (
+                <>
+                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Cancel Subscription"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

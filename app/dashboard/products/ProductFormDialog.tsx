@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Trash2, CloudUpload } from "lucide-react"
+import { Trash2, CloudUpload, Copy, Check } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { generateId } from "@/lib/export-import-utils"
@@ -26,6 +26,7 @@ import { useVendor } from "@/contexts/vendor-context"
 import { useCategory } from "@/contexts/category-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useAttribute } from "@/contexts/attribute-context"
+import { useToast } from "@/hooks/use-toast"
 
 interface ProductFormDialogProps {
   open: boolean
@@ -40,6 +41,9 @@ const emptyForm = {
   categoryId: "",
   price: "",
   salePrice: "",
+  costPrice: "",
+  profitMargin: "",
+  marginType: "percentage",
   stock: "",
   sku: "",
   barcode: "",
@@ -54,6 +58,21 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const { warehouses, refreshLocations } = useWarehouse()
   const { categories, getAllCategoriesFlat, refreshCategories } = useCategory()
   const { attributes: globalAttributes, isLoading: attributesLoading } = useAttribute()
+  const { toast } = useToast()
+  const [barcodeCopied, setBarcodeCopied] = useState(false)
+
+  // Generate random barcode code (PROD-XXXXXXXX-XXXX format)
+  const generateBarcodeCode = useCallback(() => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    const randomStr = (len: number) => {
+      let result = ''
+      for (let i = 0; i < len; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length))
+      }
+      return result
+    }
+    return `PROD-${randomStr(8)}-${randomStr(4)}`
+  }, [])
 
   const [formData, setFormData] = useState(emptyForm)
   const [isSaving, setIsSaving] = useState(false)
@@ -88,6 +107,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           categoryId: p.categoryId ? String(p.categoryId) : "",
           price: String(p.price || ""),
           salePrice: String(p.salePrice || ""),
+          costPrice: String(p.costPrice || p.cost_price || ""),
+          profitMargin: String(p.profitMargin || p.profit_margin || ""),
+          marginType: p.marginType || p.margin_type || "percentage",
           stock: String(p.stock || ""),
           sku: p.sku || "",
           barcode: p.barcode || "",
@@ -141,15 +163,18 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         }
       }).catch(console.error)
     } else {
-      setFormData(emptyForm)
+      // Auto-generate barcode for new product
+      const newBarcode = generateBarcodeCode()
+      setFormData({ ...emptyForm, barcode: newBarcode })
       setUploadedImages([])
       setImageFiles([])
       setExistingImageUrls([])
       setProductAttributes([])
       setSelectedAttributeIds([])
       setGeneratedVariants([])
+      setBarcodeCopied(false)
     }
-  }, [open, editingProduct])
+  }, [open, editingProduct, generateBarcodeCode])
 
   // Auto-select first warehouse when no location selected
   useEffect(() => {
@@ -166,6 +191,21 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
       setFormData(prev => ({ ...prev, stock: String(totalStock) }))
     }
   }, [generatedVariants])
+
+  // Auto-calculate sale price from cost price and profit margin
+  useEffect(() => {
+    const cost = parseFloat(formData.costPrice)
+    const margin = parseFloat(formData.profitMargin)
+    if (!isNaN(cost) && !isNaN(margin) && cost >= 0 && margin >= 0) {
+      let sale: number
+      if (formData.marginType === 'percentage') {
+        sale = cost + (cost * margin / 100)
+      } else {
+        sale = cost + margin
+      }
+      setFormData(prev => ({ ...prev, salePrice: sale.toFixed(2) }))
+    }
+  }, [formData.costPrice, formData.profitMargin, formData.marginType])
 
   const set = useCallback((field: keyof typeof emptyForm, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -191,6 +231,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         locationId: formData.locationId || String(warehouses[0]?.id || ""),
         price: Number.parseFloat(formData.price),
         salePrice: Number.parseFloat(formData.salePrice),
+        costPrice: formData.costPrice ? Number.parseFloat(formData.costPrice) : undefined,
+        profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
+        marginType: formData.marginType || "percentage",
         stock: finalStock,
         status: finalStock > 0 ? "Selling" : "Out of Stock",
         published: true,
@@ -238,6 +281,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         locationId: formData.locationId || editingProduct.locationId || String(warehouses[0]?.id || ""),
         price: Number.parseFloat(formData.price),
         salePrice: Number.parseFloat(formData.salePrice),
+        costPrice: formData.costPrice ? Number.parseFloat(formData.costPrice) : undefined,
+        profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
+        marginType: formData.marginType || "percentage",
         stock: finalStock,
         status: finalStock > 0 ? "Selling" : "Out of Stock",
         sku: formData.sku,
@@ -409,13 +455,57 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="barcode">Product Barcode</Label>
-              <Input
-                id="barcode"
-                value={formData.barcode}
-                onChange={(e) => set("barcode", e.target.value)}
-                placeholder="Product Barcode"
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="barcode">
+                  Product Barcode
+                  {!editingProduct && <Badge className="ml-2 bg-emerald-600">Auto-Generated</Badge>}
+                </Label>
+                {formData.barcode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(formData.barcode)
+                      setBarcodeCopied(true)
+                      toast({ title: 'Copied', description: 'Barcode copied to clipboard' })
+                      setTimeout(() => setBarcodeCopied(false), 2000)
+                    }}
+                    className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700"
+                  >
+                    {barcodeCopied ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="barcode"
+                  value={formData.barcode}
+                  onChange={(e) => set("barcode", e.target.value)}
+                  placeholder="Product Barcode"
+                  className="font-mono text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newBarcode = generateBarcodeCode()
+                    set("barcode", newBarcode)
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  Regenerate
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -487,7 +577,69 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="salePrice">Sale Price</Label>
+              <Label htmlFor="costPrice">Cost Price</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                <Input
+                  id="costPrice"
+                  type="number"
+                  value={formData.costPrice}
+                  onChange={(e) => set("costPrice", e.target.value)}
+                  placeholder="0"
+                  className="pl-7"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Profit Margin Type</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => set("marginType", "percentage")}
+                  className={`flex-1 px-3 py-2 rounded border transition-colors ${
+                    formData.marginType === "percentage"
+                      ? "bg-emerald-100 border-emerald-500 text-emerald-900"
+                      : "bg-gray-100 border-gray-300 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  % Percentage
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set("marginType", "flat")}
+                  className={`flex-1 px-3 py-2 rounded border transition-colors ${
+                    formData.marginType === "flat"
+                      ? "bg-emerald-100 border-emerald-500 text-emerald-900"
+                      : "bg-gray-100 border-gray-300 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  $ Flat
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="profitMargin">
+                Profit Margin {formData.marginType === "percentage" ? "(%)" : "($)"}
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                  {formData.marginType === "percentage" ? "%" : "$"}
+                </span>
+                <Input
+                  id="profitMargin"
+                  type="number"
+                  value={formData.profitMargin}
+                  onChange={(e) => set("profitMargin", e.target.value)}
+                  placeholder="0"
+                  className="pl-7"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="salePrice">Sale Price (Auto-calculated)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
                 <Input
@@ -500,6 +652,11 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                   disabled={generatedVariants.length > 0}
                 />
               </div>
+              {formData.costPrice && formData.profitMargin && (
+                <p className="text-xs text-gray-600 mt-1">
+                  {formData.costPrice} + {formData.profitMargin}{formData.marginType === "percentage" ? "%" : ""} = ${formData.salePrice}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

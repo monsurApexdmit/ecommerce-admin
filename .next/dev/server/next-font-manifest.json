@@ -3,13 +3,13 @@
     "[project]/app/auth/login/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/billing/plans/page": [
+    "[project]/app/auth/signup/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/billing/subscriptions/page": [
+    "[project]/app/dashboard/attributes/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/company/billing-contact/page": [
+    "[project]/app/dashboard/categories/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/company/profile/page": [
@@ -18,13 +18,37 @@
     "[project]/app/dashboard/company/settings/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
+    "[project]/app/dashboard/customers/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
     "[project]/app/dashboard/international/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/orders/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/orders/shipments/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/team/users/page": [
+    "[project]/app/dashboard/products/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/products/print-barcode/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/settings/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/staff/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/staff/roles/page": [
+      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
+    ],
+    "[project]/app/dashboard/staff/salary/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/page": [

@@ -117,6 +117,14 @@ export interface RegionalSettings {
   language: string;
   currency: string;
   timezone: string;
+  currencySymbolPosition?: 'before' | 'after';
+  currencyDecimalSeparator?: '.' | ',';
+  currencyThousandsSeparator?: ',' | '.' | ' ' | '';
+  currencyDecimalPlaces?: 0 | 1 | 2;
+  weightUnit?: 'kg' | 'lb' | 'g' | 'oz';
+  dimensionUnit?: 'cm' | 'in' | 'mm';
+  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  timeFormat?: '12h' | '24h';
 }
 
 export interface NotificationSettings {

@@ -247,11 +247,21 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const canAccessFeature = (featureName: string): boolean => {
-    // Implementation depends on subscription plan
-    // This is a placeholder - actual implementation should check company's plan
-    if (company?.status === "active" || company?.status === "trial") {
+    // Expired or suspended accounts cannot access any features
+    if (company?.status === "expired" || company?.status === "suspended") {
+      return false
+    }
+
+    // Trial and active accounts can access features based on their plan
+    if (company?.status === "trial" || company?.status === "active") {
+      // If plan features are available, check them
+      if (company?.planFeatures && Array.isArray(company.planFeatures)) {
+        return company.planFeatures.includes(featureName)
+      }
+      // If no plan features yet (shouldn't happen), allow access
       return true
     }
+
     return false
   }
 
