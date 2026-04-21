@@ -634,6 +634,10 @@
     visibility: hidden;
   }
 
+  .visible {
+    visibility: visible;
+  }
+
   .sr-only {
     clip-path: inset(50%);
     white-space: nowrap;
@@ -656,6 +660,10 @@
 
   .relative {
     position: relative;
+  }
+
+  .static {
+    position: static;
   }
 
   .sticky {
@@ -1972,6 +1980,10 @@
     grid-template-columns: 0 1fr;
   }
 
+  .grid-cols-\[2rem_2\.5rem_1fr_8rem_10rem_6rem_7rem\] {
+    grid-template-columns: 2rem 2.5rem 1fr 8rem 10rem 6rem 7rem;
+  }
+
   .grid-rows-\[auto_auto\] {
     grid-template-rows: auto auto;
   }
@@ -2062,6 +2074,10 @@
 
   .gap-4 {
     gap: calc(var(--spacing) * 4);
+  }
+
+  .gap-5 {
+    gap: calc(var(--spacing) * 5);
   }
 
   .gap-6 {
@@ -4563,6 +4579,12 @@
   @media (hover: hover) {
     .hover\:border-emerald-500:hover {
       border-color: var(--color-emerald-500);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:border-gray-200:hover {
+      border-color: var(--color-gray-200);
     }
   }
 

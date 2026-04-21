@@ -58,7 +58,7 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashtar Admin</h1>
+          <h1 className="text-2xl font-bold text-gray-900">SAAS Inventory</h1>
           <p className="text-sm text-gray-600 mt-2">Sign in to your account</p>
         </div>
 

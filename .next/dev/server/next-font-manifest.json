@@ -3,25 +3,13 @@
     "[project]/app/auth/login/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/auth/signup/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/attributes/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
     "[project]/app/dashboard/categories/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/company/profile/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/company/settings/page": [
+    "[project]/app/dashboard/coupons/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/customers/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/international/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/dashboard/orders/page": [
@@ -36,19 +24,13 @@
     "[project]/app/dashboard/products/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/products/print-barcode/page": [
+    "[project]/app/dashboard/shipping-methods/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/settings/page": [
+    "[project]/app/dashboard/store/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/staff/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/staff/roles/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/staff/salary/page": [
+    "[project]/app/dashboard/store/shipping-addresses/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/page": [

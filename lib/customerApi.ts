@@ -47,6 +47,22 @@ api.interceptors.response.use(
   }
 );
 
+export interface CustomerAddress {
+  id: number;
+  customerId: number | null;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  addressType: string;
+  isDefault: boolean;
+}
+
 export interface CustomerResponse {
   id: number;
   userId: number;
@@ -142,6 +158,53 @@ export const customerApi = {
   delete: async (id: number): Promise<{ message: string }> => {
     const response = await api.delete(`/customers/${id}`);
     return response.data;
+  },
+
+  getAddresses: async (customerId: number): Promise<CustomerAddress[]> => {
+    const response = await api.get('/shipping-addresses', { params: { customer_id: customerId } });
+    return response.data.data || [];
+  },
+
+  createAddress: async (data: {
+    customerId: number;
+    fullName: string;
+    phone?: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    addressType?: string;
+    isDefault?: boolean;
+  }): Promise<CustomerAddress> => {
+    const response = await api.post('/shipping-addresses', data);
+    return response.data.data;
+  },
+
+  updateAddress: async (id: number, data: Partial<{
+    fullName: string;
+    phone: string;
+    addressLine1: string;
+    addressLine2: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    addressType: string;
+    isDefault: boolean;
+  }>): Promise<CustomerAddress> => {
+    const response = await api.put(`/shipping-addresses/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteAddress: async (id: number): Promise<void> => {
+    await api.delete(`/shipping-addresses/${id}`);
+  },
+
+  setDefaultAddress: async (id: number): Promise<CustomerAddress> => {
+    const response = await api.patch(`/shipping-addresses/${id}/set-default`);
+    return response.data.data;
   },
 
   getStats: async (): Promise<{

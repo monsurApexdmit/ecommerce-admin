@@ -123,6 +123,7 @@ const navigation = [
         icon: Store,
         items: [
             { name: "Store Settings", href: "/dashboard/store" },
+            { name: "Shipping Methods", href: "/dashboard/shipping-methods" },
             { name: "Shipping Addresses", href: "/dashboard/store/shipping-addresses" },
         ],
     },
@@ -142,7 +143,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <ShieldCheck className="size-5" />
                     </div>
                     <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                        <span className="font-bold text-xl">ADMIN</span>
+                        <span className="font-bold text-xl">SAAS Inventory</span>
                     </div>
                 </div>
             </SidebarHeader>
