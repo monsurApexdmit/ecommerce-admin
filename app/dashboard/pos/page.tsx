@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, ShoppingCart, RotateCcw, Percent, Ticket } from "lucide-react"
+import { Search, ShoppingCart, RotateCcw, Percent, Ticket, LayoutGrid, Grid2X2, List } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -70,6 +70,7 @@ export default function PosPage() {
     const [shipping] = useState(0)
     const [invoiceNo, setInvoiceNo] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [viewMode, setViewMode] = useState<"2col" | "4col" | "list">("4col")
 
     useEffect(() => {
         if (selectedWarehouseId) return
@@ -331,9 +332,9 @@ export default function PosPage() {
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)] gap-0 overflow-hidden">
+        <div data-pos-page="" className="flex flex-col h-full gap-0 overflow-hidden">
             {/* Top Navigation Bar */}
-            <div className="bg-white border-b shadow-sm">
+            <div className="bg-white border-b shadow-sm overflow-hidden">
                 <div className="flex items-center gap-4 px-6 py-3">
                     <div className="relative flex-1 max-w-lg">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -362,52 +363,128 @@ export default function PosPage() {
                         </Select>
                     </div>
                 </div>
+            </div>
 
-                {/* Horizontal Category Tabs */}
-                <div className="border-t bg-gray-50/50 px-6 overflow-x-auto">
-                    <ScrollArea className="w-full">
-                        <div className="flex gap-2 py-3">
+            {/* Main Content - Category Sidebar + Products + Cart */}
+            <div className="flex gap-3 flex-1 overflow-hidden p-3 min-w-0">
+
+                {/* Category Sidebar */}
+                <div className="w-36 shrink-0 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
+                    <div className="px-3 py-2.5 border-b bg-gray-50/50">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Categories</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div className="flex flex-col gap-0.5 p-2">
                             {categories.map(cat => (
-                                <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setSelectedCategory(cat.id)}
                                     className={cn(
-                                        "px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all shrink-0",
+                                        "w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all",
                                         selectedCategory === cat.id
-                                            ? "bg-emerald-600 text-white shadow-md"
-                                            : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600"
+                                            ? "bg-emerald-600 text-white shadow-sm"
+                                            : "text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
                                     )}
                                 >
                                     {cat.name}
                                 </button>
                             ))}
                         </div>
-                    </ScrollArea>
+                    </div>
                 </div>
-            </div>
 
-            {/* Main Content - Products & Cart Side by Side */}
-            <div className="flex gap-4 flex-1 overflow-hidden p-4">
-                {/* Product Grid - 60% width */}
-                <div className="flex-1 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
+                {/* Product Grid */}
+                <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
+                    {/* View Toggle Header */}
+                    <div className="flex items-center justify-between px-4 py-2 border-b bg-gray-50/50 shrink-0">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            {filteredProducts.length} Products
+                        </p>
+                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                            <button
+                                onClick={() => setViewMode("2col")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "2col" ? "bg-white shadow-sm text-emerald-600" : "text-gray-400 hover:text-gray-600")}
+                                title="2 columns"
+                            >
+                                <Grid2X2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode("4col")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "4col" ? "bg-white shadow-sm text-emerald-600" : "text-gray-400 hover:text-gray-600")}
+                                title="4 columns"
+                            >
+                                <LayoutGrid className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode("list")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "list" ? "bg-white shadow-sm text-emerald-600" : "text-gray-400 hover:text-gray-600")}
+                                title="List view"
+                            >
+                                <List className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                     <div className="flex-1 min-h-0">
                         <ScrollArea className="h-full p-4 bg-gray-50/30">
                             {productsLoading ? (
                                 <div className="flex items-center justify-center h-64 text-gray-400"><p>Loading products...</p></div>
                             ) : filteredProducts.length > 0 ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
-                                    {filteredProducts.map(product => (
-                                        <PosProductCard
-                                            key={product.id}
-                                            product={{ ...product, stock: getAvailableStock(product) }}
-                                            onAddToCart={(product) => {
-                                                if (product.variants && product.variants.length > 0) {
-                                                    setSelectedProductForVariant(product)
-                                                } else {
-                                                    addToCart(product)
-                                                }
-                                            }}
-                                        />
-                                    ))}
-                                </div>
+                                viewMode === "list" ? (
+                                    <div className="flex flex-col gap-2 pb-4">
+                                        {filteredProducts.map(product => {
+                                            const stock = getAvailableStock(product)
+                                            return (
+                                                <button
+                                                    key={product.id}
+                                                    onClick={() => {
+                                                        if (product.variants && product.variants.length > 0) {
+                                                            setSelectedProductForVariant(product)
+                                                        } else {
+                                                            addToCart(product)
+                                                        }
+                                                    }}
+                                                    disabled={stock === 0}
+                                                    className={cn(
+                                                        "flex items-center gap-3 w-full text-left p-3 rounded-lg border bg-white hover:border-emerald-300 hover:bg-emerald-50/40 transition-all",
+                                                        stock === 0 && "opacity-50 cursor-not-allowed"
+                                                    )}
+                                                >
+                                                    <img
+                                                        src={product.image || "/placeholder.svg"}
+                                                        alt={product.name}
+                                                        className="w-12 h-12 rounded-lg object-cover shrink-0 bg-gray-100"
+                                                        onError={e => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-gray-900 truncate text-sm">{product.name}</p>
+                                                        <p className="text-xs text-gray-500">{product.category}</p>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <p className="font-bold text-emerald-600 text-sm">${(product.salePrice || product.price).toFixed(2)}</p>
+                                                        <p className="text-xs text-gray-400">{stock} in stock</p>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className={cn("grid gap-3 pb-4", viewMode === "2col" ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4")}>
+                                        {filteredProducts.map(product => (
+                                            <PosProductCard
+                                                key={product.id}
+                                                product={{ ...product, stock: getAvailableStock(product) }}
+                                                large={viewMode === "2col"}
+                                                onAddToCart={(product) => {
+                                                    if (product.variants && product.variants.length > 0) {
+                                                        setSelectedProductForVariant(product)
+                                                    } else {
+                                                        addToCart(product)
+                                                    }
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                )
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-64 text-gray-500">
                                     <Search className="w-12 h-12 mb-2 opacity-20" />
@@ -419,7 +496,7 @@ export default function PosPage() {
                 </div>
 
                 {/* Cart - 40% width */}
-                <div className="w-[40%] min-w-[380px] flex flex-col bg-white rounded-xl border shadow-sm h-full overflow-hidden">
+                <div className="w-80 xl:w-96 shrink-0 flex flex-col bg-white rounded-xl border shadow-sm h-full overflow-hidden">
                 <div className="p-4 border-b bg-gray-50/50">
                     <CustomerCombobox value={selectedCustomerId}
                         onValueChange={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name) }} />
@@ -433,8 +510,8 @@ export default function PosPage() {
                             <p className="text-sm font-medium">Your cart is empty</p>
                         </div>
                     ) : (
-                        <ScrollArea className="h-full p-3">
-                            <div className="space-y-3 pb-4">
+                        <ScrollArea className="h-full">
+                            <div className="space-y-3 p-3 pr-4 pb-4">
                                 {cart.map(item => (
                                     <PosCartItem key={item.id} item={item} onVerifyQuantity={updateQuantity} onRemove={removeFromCart} />
                                 ))}
@@ -523,14 +600,14 @@ export default function PosPage() {
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-semibold text-gray-900">{coupon.code}</p>
-                                            <p className="text-sm text-gray-600">{coupon.campaign_name}</p>
+                                            <p className="text-sm text-gray-600">{coupon.campaignName}</p>
                                         </div>
                                         <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
                                             {coupon.type === 'percentage' ? `${coupon.discount}%` : `$${coupon.discount}`}
                                         </Badge>
                                     </div>
-                                    {coupon.min_order_amount > 0 && (
-                                        <p className="text-xs text-gray-500 mt-1">Min order: ${coupon.min_order_amount}</p>
+                                    {coupon.minOrderAmount > 0 && (
+                                        <p className="text-xs text-gray-500 mt-1">Min order: ${coupon.minOrderAmount}</p>
                                     )}
                                 </button>
                             ))}

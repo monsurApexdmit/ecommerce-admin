@@ -23,6 +23,8 @@ import {
     MapPin,
     Package,
     Printer,
+    Bell,
+    Headphones,
 } from "lucide-react"
 
 import {
@@ -56,6 +58,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
+import { useNotifications } from "@/contexts/notification-context"
 
 const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -124,9 +127,11 @@ const navigation = [
         items: [
             { name: "Store Settings", href: "/dashboard/store" },
             { name: "Shipping Methods", href: "/dashboard/shipping-methods" },
+            { name: "Payment Methods", href: "/dashboard/payment-methods" },
             { name: "Shipping Addresses", href: "/dashboard/store/shipping-addresses" },
         ],
     },
+    { name: "Support", href: "/dashboard/support", icon: Headphones },
     { name: "Pages", href: "/dashboard/pages", icon: FileText },
 ]
 
@@ -134,6 +139,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const pathname = usePathname()
     const { logout } = useAuth()
     const { state } = useSidebar()
+    const { unreadCount } = useNotifications()
 
     return (
         <Sidebar collapsible="icon" {...props} className="border-r border-border">
@@ -245,6 +251,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 </SidebarMenuItem>
                             )
                         })}
+
+                        {/* Notifications — always visible with live badge */}
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                asChild
+                                tooltip="Notifications"
+                                isActive={pathname === "/dashboard/notifications"}
+                                className="text-gray-700 hover:bg-gray-100 hover:text-gray-900 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-700"
+                            >
+                                <Link href="/dashboard/notifications" className="flex items-center gap-2">
+                                    <Bell />
+                                    <span>Notifications</span>
+                                    {unreadCount > 0 && (
+                                        <span className="ml-auto min-w-5 h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </span>
+                                    )}
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
                     </SidebarMenu>
                 </SidebarGroup>
             </SidebarContent>

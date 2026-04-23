@@ -1,16 +1,16 @@
 "use client"
 
 import { Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import type { Product } from "@/contexts/product-context"
 
 interface PosProductCardProps {
     product: Product
     onAddToCart: (product: Product) => void
+    large?: boolean
 }
 
-export function PosProductCard({ product, onAddToCart }: PosProductCardProps) {
+export function PosProductCard({ product, onAddToCart, large }: PosProductCardProps) {
     const isOutOfStock = product.stock <= 0
 
     return (
@@ -18,7 +18,7 @@ export function PosProductCard({ product, onAddToCart }: PosProductCardProps) {
             className={`overflow-hidden cursor-pointer group hover:shadow-md hover:ring-1 hover:ring-emerald-500 transition-all h-full flex flex-col ${isOutOfStock ? 'opacity-75' : ''}`}
             onClick={() => !isOutOfStock && onAddToCart(product)}
         >
-            <div className="relative h-[100px] w-full bg-gray-100 overflow-hidden">
+            <div className={`relative w-full bg-gray-100 overflow-hidden ${large ? 'h-[160px]' : 'h-[100px]'}`}>
                 <img
                     src={product.image || "/placeholder.svg"}
                     alt={product.name}
@@ -32,13 +32,13 @@ export function PosProductCard({ product, onAddToCart }: PosProductCardProps) {
                     </div>
                 )}
             </div>
-            <div className="p-2.5 flex flex-col flex-1 gap-1.5">
-                <h3 className="font-medium text-gray-700 text-xs leading-snug line-clamp-2 min-h-[2.5em]" title={product.name}>
+            <div className={`flex flex-col flex-1 gap-1.5 ${large ? 'p-3' : 'p-2.5'}`}>
+                <h3 className={`font-medium text-gray-700 leading-snug line-clamp-2 min-h-[2.5em] ${large ? 'text-sm' : 'text-xs'}`} title={product.name}>
                     {product.name}
                 </h3>
                 <div className="mt-auto pt-1 space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <p className="font-bold text-emerald-600 text-sm">
+                        <p className={`font-bold text-emerald-600 ${large ? 'text-base' : 'text-sm'}`}>
                             ${(product.salePrice || product.price || 0).toFixed(2)}
                         </p>
                         <div className="h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

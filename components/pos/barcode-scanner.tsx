@@ -12,7 +12,6 @@ import { toast } from 'sonner'
 interface BarcodeScannerProps {
   products: Product[]
   selectedWarehouseId: string
-  getStock: (product: Product, variant?: Variant) => number
   getAvailableStock: (product: Product, variant?: Variant) => number
   onProductScanned: (product: Product, variant?: Variant) => void
 }

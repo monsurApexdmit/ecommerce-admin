@@ -156,7 +156,7 @@ export default function ShipmentsPage() {
       setStats({
         total: Number(s?.total ?? 0),
         pending: Number(s?.pending ?? 0),
-        inTransit: Number(s?.in_transit ?? 0),
+        inTransit: Number(s?.inTransit ?? s?.in_transit ?? 0),
         delivered: Number(s?.delivered ?? 0),
         failed: Number(s?.failed ?? 0),
       })
