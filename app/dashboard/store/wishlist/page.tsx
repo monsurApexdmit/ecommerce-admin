@@ -7,6 +7,7 @@ import { StatsCards } from "@/components/ui/stats-card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import wishlistApi, { type WishlistAnalytics } from "@/lib/wishlistApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 function TrendBar({ count, max }: { count: number; max: number }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0
@@ -34,6 +35,7 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 }
 
 export default function WishlistAnalyticsPage() {
+  const { formatCurrency } = useCompanySettings()
   const [data, setData] = useState<WishlistAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -117,7 +119,7 @@ export default function WishlistAnalyticsPage() {
                           </Badge>
                         )}
                         <span className="text-xs text-gray-500">
-                          ${Number(p.salePrice ?? p.price).toFixed(2)}
+                          {formatCurrency(Number(p.salePrice ?? p.price))}
                         </span>
                       </div>
                     </div>

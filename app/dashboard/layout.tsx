@@ -4,6 +4,7 @@ import type React from "react"
 import { Suspense } from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { StaffProvider } from "@/contexts/staff-context"
 import { VendorProvider } from "@/contexts/vendor-context"
@@ -26,6 +27,7 @@ import {
   Bell,
   ChevronDown,
   Trash2,
+  ExternalLink,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -40,12 +42,14 @@ import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/s
 import { AppSidebar } from "@/components/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { CustomerSupportMessenger } from "@/components/customer-support-messenger"
+import { CompanySettingsProvider } from "@/contexts/company-settings-context"
 
 
 function NotificationBell() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const { notifications, unreadCount, deleteNotification } = useNotifications()
+  const { notifications, unreadCount, markAsRead, deleteNotification } = useNotifications()
+  const router = useRouter()
 
   const recent = notifications.slice(0, 5)
 
@@ -54,12 +58,16 @@ function NotificationBell() {
     stock_alert: 'bg-orange-500',
     payment: 'bg-blue-500',
     system: 'bg-gray-500',
+    support: 'bg-blue-500',
+    review: 'bg-amber-500',
   }
   const typeLabels: Record<string, string> = {
     order: 'New Order',
     stock_alert: 'Stock Alert',
     payment: 'Payment',
     system: 'System',
+    support: 'Support',
+    review: 'Product Review',
   }
 
   function getRelativeTime(dateStr: string) {
@@ -80,6 +88,18 @@ function NotificationBell() {
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [open])
+
+  const handleNotificationClick = async (id: number, actionUrl?: string | null) => {
+    if (!notifications.find(notification => notification.id === id)?.readAt) {
+      await markAsRead(id)
+    }
+
+    setOpen(false)
+
+    if (actionUrl) {
+      router.push(actionUrl)
+    }
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -109,20 +129,29 @@ function NotificationBell() {
             ) : recent.map((n) => (
               <div
                 key={n.id}
-                className={`flex items-start gap-3 p-3 hover:bg-gray-50 transition-colors ${!n.readAt ? 'bg-emerald-50/40' : ''}`}
+                className={`group flex items-start gap-3 p-3 hover:bg-gray-50 transition-colors ${!n.readAt ? 'bg-emerald-50/40' : ''}`}
               >
                 <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${!n.readAt ? 'bg-emerald-500' : 'bg-transparent'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900 leading-snug line-clamp-2">{n.message}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium text-white ${typeColors[n.type] ?? 'bg-gray-500'}`}>
-                      {typeLabels[n.type] ?? n.type}
-                    </span>
-                    <span className="text-xs text-gray-400">{getRelativeTime(n.createdAt)}</span>
-                  </div>
-                </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); deleteNotification(n.id) }}
+                  type="button"
+                  onClick={() => void handleNotificationClick(n.id, n.actionUrl)}
+                  className="flex flex-1 items-start gap-3 min-w-0 text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 leading-snug line-clamp-2">{n.message}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium text-white ${typeColors[n.type] ?? 'bg-gray-500'}`}>
+                        {typeLabels[n.type] ?? n.type}
+                      </span>
+                      <span className="text-xs text-gray-400">{getRelativeTime(n.createdAt)}</span>
+                      {n.actionUrl && (
+                        <ExternalLink className="w-3 h-3 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); void deleteNotification(n.id) }}
                   className="text-red-400 hover:text-red-600 shrink-0 mt-0.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -148,6 +177,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const userEmail = user?.email || ""
 
   return (
+    <CompanySettingsProvider>
     <NotificationProvider>
     <VendorProvider>
       <CategoryProvider>
@@ -238,5 +268,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </CategoryProvider>
     </VendorProvider>
     </NotificationProvider>
+    </CompanySettingsProvider>
   )
 }

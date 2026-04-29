@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Barcode, Search, Trash2, Printer, RotateCcw, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useCompanySettings } from '@/contexts/company-settings-context'
 
 // ============ TYPES ============
 
@@ -66,6 +67,7 @@ const LABEL_FIELDS = [
 // ============ PAGE COMPONENT ============
 
 export default function PrintBarcodePage() {
+  const { formatCurrency } = useCompanySettings()
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ProductResponse[]>([])
@@ -209,11 +211,11 @@ export default function PrintBarcodePage() {
         html += `<div class="barcode-code">${barcodeValue}</div>`
 
         if (labelSettings.showPrice) {
-          html += `<div class="price" style="font-size:${fontSizes.price}px">$${price}</div>`
+          html += `<div class="price" style="font-size:${fontSizes.price}px">${formatCurrency(Number(price))}</div>`
         }
 
         if (labelSettings.showPromoPrice) {
-          html += `<div class="promo-price" style="font-size:${fontSizes.promoPrice}px">Sale: $${price}</div>`
+          html += `<div class="promo-price" style="font-size:${fontSizes.promoPrice}px">Sale: ${formatCurrency(Number(price))}</div>`
         }
 
         html += '</div>'
@@ -420,7 +422,7 @@ export default function PrintBarcodePage() {
                           <td className="py-3 px-3">
                             <Input
                               readOnly
-                              value={`$${getPrice(item.product).toFixed(2)}`}
+                              value={formatCurrency(getPrice(item.product))}
                               className="w-24 bg-gray-100 text-gray-600 text-xs"
                             />
                           </td>

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface Sell {
     invoiceNo: string
@@ -131,6 +132,7 @@ const initialSells: Sell[] = [
 
 export default function SellsPage() {
     const searchParams = useSearchParams()
+    const { formatCurrency } = useCompanySettings()
     const [sells, setSells] = useState<Sell[]>(initialSells)
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -418,8 +420,8 @@ export default function SellsPage() {
                     <td>1</td>
                     <td>Fresh Mustard Oil</td>
                     <td style="text-align: center;">1</td>
-                    <td style="text-align: right;">$${(sell.amount - 60).toFixed(2)}</td>
-                    <td class="amount-red">$${(sell.amount - 60).toFixed(2)}</td>
+                    <td style="text-align: right;">${formatCurrency(sell.amount - 60)}</td>
+                    <td class="amount-red">${formatCurrency(sell.amount - 60)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -431,15 +433,15 @@ export default function SellsPage() {
                 </div>
                 <div class="summary-item">
                   <h3>Shipping Cost</h3>
-                  <p style="color: #6b7280;">$60.00</p>
+                  <p style="color: #6b7280;">${formatCurrency(60)}</p>
                 </div>
                 <div class="summary-item">
                   <h3>Discount</h3>
-                  <p style="color: #6b7280;">$0.00</p>
+                  <p style="color: #6b7280;">${formatCurrency(0)}</p>
                 </div>
                 <div class="summary-item">
                   <h3>Total Amount</h3>
-                  <p class="total-amount">$${sell.amount.toFixed(2)}</p>
+                  <p class="total-amount">${formatCurrency(sell.amount)}</p>
                 </div>
               </div>
             </div>
@@ -764,10 +766,10 @@ export default function SellsPage() {
                                             <td className="py-5 px-4 text-sm text-gray-900">Fresh Mustard Oil</td>
                                             <td className="py-5 px-4 text-sm text-center text-gray-900">1</td>
                                             <td className="py-5 px-4 text-sm text-right text-gray-900">
-                                                ${(selectedSell.amount - 60).toFixed(2)}
+                                                {formatCurrency(selectedSell.amount - 60)}
                                             </td>
                                             <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">
-                                                ${(selectedSell.amount - 60).toFixed(2)}
+                                                {formatCurrency(selectedSell.amount - 60)}
                                             </td>
                                         </tr>
                                     </tbody>
@@ -783,15 +785,15 @@ export default function SellsPage() {
                                     </div>
                                     <div>
                                         <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Shipping Cost</h3>
-                                        <p className="text-base font-semibold text-gray-600">$60.00</p>
+                                        <p className="text-base font-semibold text-gray-600">{formatCurrency(60)}</p>
                                     </div>
                                     <div>
                                         <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Discount</h3>
-                                        <p className="text-base font-semibold text-gray-600">$0.00</p>
+                                        <p className="text-base font-semibold text-gray-600">{formatCurrency(0)}</p>
                                     </div>
                                     <div>
                                         <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Total Amount</h3>
-                                        <p className="text-2xl font-bold text-red-600">${selectedSell.amount.toFixed(2)}</p>
+                                        <p className="text-2xl font-bold text-red-600">{formatCurrency(selectedSell.amount)}</p>
                                     </div>
                                 </div>
                             </div>

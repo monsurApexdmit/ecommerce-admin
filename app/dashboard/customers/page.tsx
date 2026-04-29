@@ -68,6 +68,7 @@ import {
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 import { StatsCards } from "@/components/ui/stats-card"
 import customerApi from "@/lib/customerApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 const emptyAddrForm = {
   fullName: "", phone: "", addressLine1: "", addressLine2: "",
@@ -285,6 +286,7 @@ export default function CustomersPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { customers, isLoading, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
+  const { formatCurrency } = useCompanySettings()
   const [stats, setStats] = useState<{
     total: number
     active: number
@@ -769,7 +771,7 @@ export default function CustomersPage() {
                         </Link>
                       </td>
                       <td className="py-3 px-4">
-                        <p className="font-semibold text-gray-900">${(customer.totalSpent || 0).toFixed(2)}</p>
+                        <p className="font-semibold text-gray-900">{formatCurrency(customer.totalSpent || 0)}</p>
                       </td>
                       <td className="py-3 px-4">
                          <StatusBadge status={customer.status === "active" ? "Active" : "Inactive"} />
@@ -881,11 +883,11 @@ export default function CustomersPage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-500">Total Spent:</span>
-                          <span className="font-medium text-emerald-600">${(selectedCustomer.totalSpent || 0).toFixed(2)}</span>
+                          <span className="font-medium text-emerald-600">{formatCurrency(selectedCustomer.totalSpent || 0)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-500">Store Credit:</span>
-                          <span className="font-medium">${(selectedCustomer.storeCredit || 0).toFixed(2)}</span>
+                          <span className="font-medium">{formatCurrency(selectedCustomer.storeCredit || 0)}</span>
                         </div>
                       </div>
                     </Card>

@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { ArrowLeft, MapPin, Trash2, Plus, Check } from "lucide-react"
 import Link from "next/link"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ export default function CheckoutPage() {
   const { cart, getCartTotal, removeFromCart, clearCart, createOrder } = useOrder()
   const { addresses, getAddressesByCustomer, getDefaultAddress } = useShippingAddress()
   const { customers } = useCustomer()
+  const { formatCurrency } = useCompanySettings()
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("")
   const [customerName, setCustomerName] = useState("")
@@ -363,11 +365,11 @@ export default function CheckoutPage() {
                     <div className="flex-1">
                       <p className="font-medium text-sm">{item.productName}</p>
                       <p className="text-xs text-gray-500">
-                        ${item.price.toFixed(2)} × {item.quantity}
+                        {formatCurrency(item.price)} × {item.quantity}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm">${(item.price * item.quantity).toFixed(2)}</p>
+                      <p className="font-semibold text-sm">{formatCurrency(item.price * item.quantity)}</p>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -418,24 +420,24 @@ export default function CheckoutPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>{formatCurrency(subtotal)}</span>
                 </div>
                 {shippingCost > 0 && (
                   <div className="flex justify-between text-sm">
                     <span>Shipping:</span>
-                    <span>${shippingCost.toFixed(2)}</span>
+                    <span>{formatCurrency(shippingCost)}</span>
                   </div>
                 )}
                 {discount > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600">
                     <span>Discount:</span>
-                    <span>-${discount.toFixed(2)}</span>
+                    <span>-{formatCurrency(discount)}</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total:</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>{formatCurrency(total)}</span>
                 </div>
               </div>
 

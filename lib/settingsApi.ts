@@ -98,11 +98,28 @@ export interface BusinessSettings {
   logoUrl?: string;
   bannerUrl?: string;
   website?: string;
+  auraShopHero?: AuraShopHeroSettings;
   socialLinks?: {
     facebook?: string;
     instagram?: string;
     twitter?: string;
   };
+}
+
+export interface AuraShopHeroSlide {
+  imagePath?: string;
+  tag: string;
+  title: string;
+  subtitle: string;
+  cta: string;
+  link: string;
+  gradient: string;
+  enabled: boolean;
+}
+
+export interface AuraShopHeroSettings {
+  autoplayMs: number;
+  slides: AuraShopHeroSlide[];
 }
 
 export interface StoreHours {
@@ -261,6 +278,15 @@ export const settingsApi = {
     const formData = new FormData();
     formData.append('file', file);
     const response = await api.post('/settings/upload-banner', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  uploadStorefrontImage: async (file: File): Promise<{ message: string; data: { imagePath: string; imageUrl: string } }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/settings/upload-storefront-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;

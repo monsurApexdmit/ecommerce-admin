@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,9 @@ import Swal from "sweetalert2"
 export default function EditProfilePage() {
   const { user } = useSaasAuth()
   const userEmail = user?.email || ""
-  const [name, setName] = useState("Admin User")
+  const userName = user?.fullName || ""
+  const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "N/A"
+  const [name, setName] = useState(userName || "")
   const [email, setEmail] = useState(userEmail || "")
   const [avatar, setAvatar] = useState("/admin-avatar.jpg")
   const [currentPassword, setCurrentPassword] = useState("")
@@ -21,6 +23,11 @@ export default function EditProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setName(userName || "")
+    setEmail(userEmail || "")
+  }, [userName, userEmail])
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault()
@@ -166,6 +173,16 @@ export default function EditProfilePage() {
                       placeholder="Enter your email"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Input
+                    id="role"
+                    value={userRole}
+                    readOnly
+                    className="bg-gray-50 text-gray-700"
+                  />
                 </div>
 
                 <div className="pt-2">

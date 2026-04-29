@@ -113,6 +113,8 @@ const navigation = [
         name: "Settings",
         icon: Settings,
         items: [
+            { name: "Store Settings", href: "/dashboard/settings" },
+            { name: "Aura Shop", href: "/dashboard/settings/aura-shop" },
             { name: "Company Profile", href: "/dashboard/company/profile" },
             { name: "Company Settings", href: "/dashboard/company/settings" },
             { name: "Billing Contact", href: "/dashboard/company/billing-contact" },

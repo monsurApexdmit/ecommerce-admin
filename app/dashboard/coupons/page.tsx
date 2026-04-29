@@ -13,6 +13,7 @@ import { exportToCSV } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { couponApi, type CouponResponse } from "@/lib/couponApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 type FormData = {
   campaign_name: string
@@ -41,9 +42,9 @@ function isExpired(endDate: string): boolean {
   return new Date(endDate) < new Date()
 }
 
-function formatDiscount(coupon: CouponResponse): string {
+function formatDiscount(coupon: CouponResponse, fmt: (n: number) => string): string {
   const val = coupon.discount ?? 0
-  return coupon.type === "percentage" ? `${val}%` : `$${val}`
+  return coupon.type === "percentage" ? `${val}%` : fmt(val)
 }
 
 function formatDate(dateStr: string): string {
@@ -65,6 +66,7 @@ function toInputDate(dateStr: string): string {
 }
 
 export default function CouponsPage() {
+  const { formatCurrency } = useCompanySettings()
   const [coupons, setCoupons] = useState<CouponResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -263,7 +265,7 @@ const handleAddCoupon = async () => {
       id: coupon.id,
       campaign_name: coupon.campaignName,
       code: coupon.code,
-      discount: formatDiscount(coupon),
+      discount: formatDiscount(coupon, formatCurrency),
       status: coupon.status ? "Active" : "Inactive",
       start_date: formatDate(coupon.startDate),
       end_date: formatDate(coupon.endDate),
@@ -531,7 +533,7 @@ const handleAddCoupon = async () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-700">{coupon.code}</td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{formatDiscount(coupon)}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{formatDiscount(coupon, formatCurrency)}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => handleToggleStatus(coupon)}

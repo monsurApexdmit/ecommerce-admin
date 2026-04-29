@@ -9,30 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useStaff, type Role, type Module, type Permission } from "@/contexts/staff-context"
+import { useStaff, PERMISSION_MODULES, type Role, type Module, type Permission } from "@/contexts/staff-context"
 import { staffRoleApi } from "@/lib/staffApi"
 
 interface BackendPermission {
     id: number
     name: string
 }
-
-const modules: Module[] = [
-    "Dashboard",
-    "Products",
-    "Categories",
-    "Attributes",
-    "Coupons",
-    "Customers",
-    "Orders",
-    "POS",
-    "Sells",
-    "Staff",
-    "Settings",
-    "International",
-    "Store",
-    "Pages",
-]
 
 export default function RolesPage() {
     const { roles, rolesLoading, addRole, updateRole, deleteRole } = useStaff()
@@ -66,64 +49,38 @@ export default function RolesPage() {
         role.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
+    const buildPermissionRows = (rolePermissions: Permission[] = []) => {
+        const permissionMap = new Map(rolePermissions.map((permission) => [permission.name, permission]))
+
+        const backendSorted = [...backendPermissions].sort((a, b) => {
+            const indexA = PERMISSION_MODULES.indexOf(a.name as Module)
+            const indexB = PERMISSION_MODULES.indexOf(b.name as Module)
+            const normalizedA = indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA
+            const normalizedB = indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB
+            if (normalizedA !== normalizedB) return normalizedA - normalizedB
+            return a.name.localeCompare(b.name)
+        })
+
+        return backendSorted.map((backendPerm) => {
+            const existing = permissionMap.get(backendPerm.name as Module)
+            return {
+                name: backendPerm.name as Module,
+                read: existing?.read || false,
+                write: existing?.write || false,
+                delete: existing?.delete || false,
+            }
+        })
+    }
+
     const handleOpenDialog = (role?: Role) => {
         if (role) {
             setEditingRole(role)
             setRoleName(role.name)
-
-            // Map backend names to Module names
-            const backendToModule: Record<string, Module> = {
-                'products': 'Products',
-                'categories': 'Categories',
-                'customers': 'Customers',
-                'orders': 'Orders',
-                'staff': 'Staff',
-                'settings': 'Settings',
-                'vendors': 'Vendors',
-                'inventory': 'Inventory',
-                'billing': 'Billing',
-                'reports': 'Reports',
-            }
-
-            // Create a permission map from the role (using Module names as keys, since that's what role.permissions contains)
-            const permissionMap = new Map(role.permissions.map(p => [p.name, p]))
-
-            // Build permission list directly from backend permissions
-            const rolePermissions: Permission[] = backendPermissions.map(backendPerm => {
-                const moduleName = (backendToModule[backendPerm.name] || backendPerm.name) as Module
-                // Look up the permission by Module name, not backend name
-                const existing = permissionMap.get(moduleName)
-                return {
-                    name: moduleName,
-                    read: existing?.read || false,
-                    write: existing?.write || false,
-                    delete: existing?.delete || false,
-                }
-            })
-            setPermissions(rolePermissions)
+            setPermissions(buildPermissionRows(role.permissions))
         } else {
             setEditingRole(null)
             setRoleName("")
-            // Initialize with all backend permissions as unchecked
-            const backendToModule: Record<string, string> = {
-                'products': 'Products',
-                'categories': 'Categories',
-                'customers': 'Customers',
-                'orders': 'Orders',
-                'staff': 'Staff',
-                'settings': 'Settings',
-                'vendors': 'Vendors',
-                'inventory': 'Inventory',
-                'billing': 'Billing',
-                'reports': 'Reports',
-            }
-            const rolePermissions: Permission[] = backendPermissions.map(backendPerm => ({
-                name: (backendToModule[backendPerm.name] || backendPerm.name) as Module,
-                read: false,
-                write: false,
-                delete: false,
-            }))
-            setPermissions(rolePermissions)
+            setPermissions(buildPermissionRows())
         }
         setIsDialogOpen(true)
     }

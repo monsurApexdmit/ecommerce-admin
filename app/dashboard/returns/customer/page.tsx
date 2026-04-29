@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { customerReturnsApi, CustomerReturnResponse } from "@/lib/customerReturnsApi"
 import { sellsApi } from "@/lib/sellsApi"
 import { useCustomer } from "@/contexts/customer-context"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -91,6 +92,7 @@ const defaultFormData = {
 export default function CustomerReturnsPage() {
   const { customers } = useCustomer()
   const { toast } = useToast()
+  const { formatCurrency } = useCompanySettings()
 
   const [returns, setReturns] = useState<CustomerReturnResponse[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, completed: 0, total_refund_amount: 0 })
@@ -200,7 +202,7 @@ export default function CustomerReturnsPage() {
         ret.returnNumber ?? ret.id,
         ret.customerName ?? ret.customerId,
         ret.orderNumber ?? "N/A",
-        `$${fmt(ret.totalAmount)}`,
+        formatCurrency(Number(fmt(ret.totalAmount))),
         ret.status,
         formatDate(ret.createdAt),
       ]),
@@ -349,7 +351,7 @@ export default function CustomerReturnsPage() {
           { label: "Pending", value: stats.pending, color: "text-yellow-600" },
           { label: "Approved", value: stats.approved, color: "text-green-600" },
           { label: "Rejected", value: stats.rejected, color: "text-red-600" },
-          { label: "Total Refunds", value: `$${fmt(stats.total_refund_amount)}`, color: "text-blue-600" },
+          { label: "Total Refunds", value: formatCurrency(stats.total_refund_amount), color: "text-blue-600" },
         ].map((s) => (
           <Card key={s.label} className="p-4">
             <div className="flex items-center justify-between">

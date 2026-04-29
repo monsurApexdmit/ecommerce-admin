@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, type ChangeEvent } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Headphones, Search, Trash2, MessageSquare,
   AlertCircle, Clock, CheckCircle2, XCircle,
-  Loader2, Send, RefreshCw, Plus,
+  Loader2, Send, RefreshCw, Plus, Paperclip, Mic, Square,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -52,15 +53,6 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString()
 }
 
-function hasNewIncomingMessage(previous: SupportTicket | null, next: SupportTicket): boolean {
-  if (!previous) return false
-
-  return next.messages.some((message) => {
-    if (message.senderType !== "customer") return false
-    return !previous.messages.some((existing) => existing.id === message.id)
-  })
-}
-
 const STATUS_CONFIG: Record<TicketStatus, { label: string; color: string; icon: any }> = {
   open:        { label: "Open",        color: "bg-blue-100 text-blue-700",    icon: AlertCircle },
   in_progress: { label: "In Progress", color: "bg-yellow-100 text-yellow-700", icon: Clock },
@@ -89,6 +81,50 @@ function StatusBadge({ status }: { status: TicketStatus }) {
   )
 }
 
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AttachmentList({ attachments }: { attachments: SupportMessage["attachments"] }) {
+  if (attachments.length === 0) return null
+
+  return (
+    <div className="mt-2 space-y-2">
+      {attachments.map((attachment) => (
+        <div key={attachment.id} className="overflow-hidden rounded-xl border border-black/10 bg-white/80">
+          {attachment.isImage ? (
+            <a href={attachment.url} target="_blank" rel="noreferrer">
+              <img src={attachment.url} alt={attachment.name} className="max-h-48 w-full object-cover" />
+            </a>
+          ) : attachment.isAudio ? (
+            <div className="p-3">
+              <p className="mb-2 text-xs font-medium">{attachment.name}</p>
+              <audio controls className="w-full">
+                <source src={attachment.url} type={attachment.mimeType} />
+              </audio>
+            </div>
+          ) : (
+            <a
+              href={attachment.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-between gap-3 p-3 text-xs hover:bg-black/5"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-gray-900">{attachment.name}</p>
+                <p className="text-gray-500">{formatFileSize(attachment.sizeBytes)}</p>
+              </div>
+              <span className="text-emerald-700">Open</span>
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Chat Panel ────────────────────────────────────────────────────
 function ChatPanel({ ticketId, onTicketUpdate }: {
   ticketId: number
@@ -97,13 +133,20 @@ function ChatPanel({ ticketId, onTicketUpdate }: {
   const { toast } = useToast()
   const [ticket, setTicket] = useState<SupportTicket | null>(null)
   const [reply, setReply] = useState("")
+  const [attachments, setAttachments] = useState<File[]>([])
   const [sending, setSending] = useState(false)
+  const [recording, setRecording] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [updatingPriority, setUpdatingPriority] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const optimisticIds = useRef<Set<number>>(new Set())
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const ticketRef = useRef<SupportTicket | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const canReply = ticket?.status === "open" || ticket?.status === "in_progress"
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior })
@@ -112,6 +155,12 @@ function ChatPanel({ ticketId, onTicketUpdate }: {
   useEffect(() => {
     ticketRef.current = ticket
   }, [ticket])
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+    }
+  }, [])
 
   // Initial load
   useEffect(() => {
@@ -153,6 +202,10 @@ function ChatPanel({ ticketId, onTicketUpdate }: {
         const next = { ...current, status }
         setTicket(next)
         onTicketUpdate(next)
+        if (status === "resolved" || status === "closed") {
+          setReply("")
+          setAttachments([])
+        }
       },
       onPriorityUpdated: (id, priority) => {
         if (id !== ticketId) return
@@ -167,63 +220,92 @@ function ChatPanel({ ticketId, onTicketUpdate }: {
     })
   }, [ticketId, onTicketUpdate, scrollToBottom, toast])
 
-  useEffect(() => {
-    let cancelled = false
-
-    const interval = setInterval(async () => {
-      try {
-        const latest = await supportApi.get(ticketId)
-        if (cancelled) return
-
-        if (hasNewIncomingMessage(ticketRef.current, latest)) {
-          playNotificationSound()
-          toast({ title: "Customer replied", description: "New message on ticket" })
-        }
-
-        setTicket(latest)
-        onTicketUpdate(latest)
-      } catch {}
-    }, 60000)
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [ticketId, onTicketUpdate, toast])
-
   useEffect(() => { scrollToBottom() }, [ticket?.messages.length])
 
   const sendReply = async () => {
-    if (!reply.trim() || !ticket) return
-    setSending(true)
     const body = reply.trim()
+    if ((!body && attachments.length === 0) || !ticket || !canReply) return
+    setSending(true)
     const optimisticId = Date.now()
-    const optimistic: SupportMessage = {
-      id: optimisticId,
-      ticketId: ticket.id,
-      customerId: null,
-      body,
-      senderType: "staff",
-      senderName: "Support Team",
-      createdAt: new Date().toISOString(),
+    if (body && attachments.length === 0) {
+      const optimistic: SupportMessage = {
+        id: optimisticId,
+        ticketId: ticket.id,
+        customerId: null,
+        body,
+        senderType: "staff",
+        senderName: "Support Team",
+        createdAt: new Date().toISOString(),
+        attachments: [],
+      }
+      optimisticIds.current.add(optimisticId)
+      setTicket((prev) => prev ? { ...prev, messages: [...prev.messages, optimistic] } : prev)
     }
-    optimisticIds.current.add(optimisticId)
-    setTicket((prev) => prev ? { ...prev, messages: [...prev.messages, optimistic] } : prev)
     setReply("")
+    setAttachments([])
     scrollToBottom()
 
     try {
-      const updated = await supportApi.reply(ticket.id, body)
+      const updated = await supportApi.reply(ticket.id, { body, attachments })
       setTicket(updated)
       onTicketUpdate(updated)
     } catch {
       setTicket((prev) => prev ? { ...prev, messages: prev.messages.filter((m) => m.id !== optimisticId) } : prev)
       setReply(body)
+      setAttachments(attachments)
       toast({ variant: "destructive", title: "Failed to send reply" })
     } finally {
       optimisticIds.current.delete(optimisticId)
       setSending(false)
       textareaRef.current?.focus()
+    }
+  }
+
+  const handleFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files || [])
+    if (selected.length === 0) return
+    setAttachments((prev) => [...prev, ...selected].slice(0, 5))
+    event.target.value = ""
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, currentIndex) => currentIndex !== index))
+  }
+
+  const toggleRecording = async () => {
+    if (recording) {
+      recorderRef.current?.stop()
+      recorderRef.current = null
+      setRecording(false)
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      audioChunksRef.current = []
+      const recorder = new MediaRecorder(stream)
+      recorderRef.current = recorder
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" })
+        const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm"
+        const file = new File([blob], `voice-message-${Date.now()}.${extension}`, { type: blob.type || "audio/webm" })
+        setAttachments((prev) => [...prev, file].slice(0, 5))
+        stream.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
+
+      recorder.start()
+      setRecording(true)
+    } catch {
+      toast({ variant: "destructive", title: "Microphone access failed" })
     }
   }
 
@@ -322,7 +404,8 @@ function ChatPanel({ ticketId, onTicketUpdate }: {
                 ? "bg-emerald-600 text-white rounded-br-sm"
                 : "bg-gray-100 text-gray-900 rounded-bl-sm"
             }`}>
-              {msg.body}
+              {msg.body ? <p>{msg.body}</p> : null}
+              <AttachmentList attachments={msg.attachments} />
             </div>
             <span className="text-xs text-gray-400 px-1">
               {msg.senderName ?? (msg.senderType === "staff" ? "Support Team" : "Customer")}
@@ -334,28 +417,68 @@ function ChatPanel({ ticketId, onTicketUpdate }: {
       </div>
 
       {/* Reply input */}
-      <div className="shrink-0 border-t p-3 bg-gray-50">
-        <div className="flex gap-2 items-end">
-          <textarea
-            ref={textareaRef}
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply() } }}
-            rows={1}
-            placeholder="Reply to customer… (Enter to send)"
-            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30 max-h-28 overflow-y-auto"
-            style={{ minHeight: "42px" }}
-          />
-          <Button
-            onClick={sendReply}
-            disabled={sending || !reply.trim()}
-            className="shrink-0 w-10 h-10 p-0 bg-emerald-600 hover:bg-emerald-700"
-          >
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </Button>
+      {canReply ? (
+        <div className="shrink-0 border-t p-3 bg-gray-50">
+          {attachments.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachments.map((file, index) => (
+                <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs text-gray-700 border">
+                  <span className="max-w-40 truncate">{file.name}</span>
+                  <button type="button" onClick={() => removeAttachment(index)} className="text-gray-400 hover:text-red-500">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 items-end">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.txt,.csv,.xls,.xlsx,.doc,.docx,audio/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="shrink-0 w-10 h-10 p-0"
+            >
+              <Paperclip className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              variant={recording ? "destructive" : "outline"}
+              onClick={toggleRecording}
+              className="shrink-0 w-10 h-10 p-0"
+            >
+              {recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </Button>
+            <textarea
+              ref={textareaRef}
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply() } }}
+              rows={1}
+              placeholder="Reply to customer… (Enter to send)"
+              className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30 max-h-28 overflow-y-auto"
+              style={{ minHeight: "42px" }}
+            />
+            <Button
+              onClick={sendReply}
+              disabled={sending || (!reply.trim() && attachments.length === 0)}
+              className="shrink-0 w-10 h-10 p-0 bg-emerald-600 hover:bg-emerald-700"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1 ml-1">Shift+Enter for new line. Attach up to 5 files or record a voice note.</p>
         </div>
-        <p className="text-xs text-gray-400 mt-1 ml-1">Shift+Enter for new line</p>
-      </div>
+      ) : (
+        <div className="shrink-0 border-t p-4 bg-gray-50 text-center">
+          <p className="text-xs text-gray-500">This ticket is {ticket.status}. Reply is disabled.</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -474,6 +597,8 @@ function TicketListSidebar({ tickets, selectedId, onSelect, loading, search, onS
 
 // ── Main Page ─────────────────────────────────────────────────────
 export default function SupportPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [stats, setStats] = useState<TicketStats | null>(null)
@@ -483,6 +608,11 @@ export default function SupportPage() {
   const [priorityFilter, setPriorityFilter] = useState("all")
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
+  // Track whether the initial ?ticket= param has been applied to avoid URL-sync loop
+  const initialTicketApplied = useRef(false)
+
+  const requestedTicketId = Number(searchParams.get("ticket"))
+  const hasRequestedTicket = Number.isFinite(requestedTicketId) && requestedTicketId > 0
 
   const fetchTickets = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -508,12 +638,44 @@ export default function SupportPage() {
   useEffect(() => { fetchTickets() }, [fetchTickets])
   useEffect(() => { fetchStats() }, [fetchStats])
 
-  // Select first ticket automatically
+  // Honor ?ticket=... on first load; after that, follow user selection.
   useEffect(() => {
-    if (tickets.length > 0 && selectedId === null) {
+    if (tickets.length === 0) {
+      setSelectedId(null)
+      return
+    }
+
+    // On first load: if URL has ?ticket=X, select that ticket and mark it applied.
+    if (!initialTicketApplied.current) {
+      initialTicketApplied.current = true
+      if (hasRequestedTicket) {
+        const matchingTicket = tickets.find((ticket) => ticket.id === requestedTicketId)
+        if (matchingTicket) {
+          setSelectedId(matchingTicket.id)
+          return
+        }
+      }
+      // No URL ticket or ticket not found — select first
       setSelectedId(tickets[0].id)
+      return
+    }
+
+    // After initial load: keep selection valid (e.g. after delete or filter change)
+    if (selectedId === null || !tickets.some((ticket) => ticket.id === selectedId)) {
+      setSelectedId(tickets[0]?.id ?? null)
     }
   }, [tickets])
+
+  // Sync selected ticket into URL (only when user changes selection, not on initial load)
+  useEffect(() => {
+    if (selectedId === null) return
+    // Skip if URL already reflects the selected ticket
+    if (searchParams.get("ticket") === String(selectedId)) return
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("ticket", String(selectedId))
+    router.replace(`/dashboard/support?${params.toString()}`, { scroll: false })
+  }, [selectedId])
 
   useEffect(() => {
     const companyId = getCompanyId()
@@ -529,13 +691,16 @@ export default function SupportPage() {
           playNotificationSound()
         }
 
-        supportApi.get(ticketId).then((updated) => {
-          setTickets((prev) => {
-            const exists = prev.some((ticket) => ticket.id === updated.id)
-            if (!exists) return [updated, ...prev]
-            return prev.map((ticket) => ticket.id === updated.id ? updated : ticket)
-          })
-        }).catch(() => {})
+        setTickets((prev) => {
+          const existing = prev.find((ticket) => ticket.id === ticketId)
+          if (!existing) return prev
+
+          const merged: SupportTicket = existing.messages.some((entry) => entry.id === message.id)
+            ? existing
+            : { ...existing, messages: [...existing.messages, message] }
+
+          return [merged, ...prev.filter((ticket) => ticket.id !== ticketId)]
+        })
       },
       onStatusUpdated: (ticketId, status) => {
         setTickets((prev) => prev.map((ticket) => ticket.id === ticketId ? { ...ticket, status } : ticket))
@@ -547,21 +712,15 @@ export default function SupportPage() {
     })
   }, [fetchStats])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchTickets(true)
-      fetchStats()
-    }, 60000)
-
-    return () => clearInterval(interval)
-  }, [fetchStats, fetchTickets])
-
   const handleDelete = async (id: number) => {
     setDeleting(id)
     try {
       await supportApi.delete(id)
-      setTickets((prev) => prev.filter((t) => t.id !== id))
-      if (selectedId === id) setSelectedId(tickets.find((t) => t.id !== id)?.id ?? null)
+      const remainingTickets = tickets.filter((t) => t.id !== id)
+      setTickets(remainingTickets)
+      if (selectedId === id) {
+        setSelectedId(remainingTickets[0]?.id ?? null)
+      }
       fetchStats()
       toast({ title: "Ticket deleted" })
     } catch {

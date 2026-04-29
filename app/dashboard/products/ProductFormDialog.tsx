@@ -75,6 +75,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   }, [])
 
   const [formData, setFormData] = useState(emptyForm)
+  const [isHotDeal, setIsHotDeal] = useState(false)
+  const [isBestSeller, setIsBestSeller] = useState(false)
+  const [isFeatured, setIsFeatured] = useState(false)
+  const [dealLabel, setDealLabel] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -117,6 +121,11 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           receiptNumber: p.receiptNumber || "",
           locationId: p.locationId ? String(p.locationId) : "",
         })
+
+        setIsHotDeal(p.isHotDeal ?? p.is_hot_deal ?? false)
+        setIsBestSeller(p.isBestSeller ?? p.is_best_seller ?? false)
+        setIsFeatured(p.isFeatured ?? p.is_featured ?? false)
+        setDealLabel(p.dealLabel ?? p.deal_label ?? "")
 
         // Images
         const imageUrls: string[] = []
@@ -173,6 +182,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
       setSelectedAttributeIds([])
       setGeneratedVariants([])
       setBarcodeCopied(false)
+      setIsHotDeal(false)
+      setIsBestSeller(false)
+      setIsFeatured(false)
+      setDealLabel("")
     }
   }, [open, editingProduct, generateBarcodeCode])
 
@@ -237,6 +250,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         stock: finalStock,
         status: finalStock > 0 ? "Selling" : "Out of Stock",
         published: true,
+        isHotDeal,
+        isBestSeller,
+        isFeatured,
+        dealLabel: dealLabel || undefined,
         image: uploadedImages[0] || "",
         images: imageFiles,
         sku: formData.sku,
@@ -286,6 +303,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         marginType: formData.marginType || "percentage",
         stock: finalStock,
         status: finalStock > 0 ? "Selling" : "Out of Stock",
+        isHotDeal,
+        isBestSeller,
+        isFeatured,
+        dealLabel: dealLabel || undefined,
         sku: formData.sku,
         barcode: formData.barcode,
         image: uploadedImages[0] || editingProduct.image,
@@ -814,6 +835,44 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                 </table>
               </div>
             )}
+          </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-lg font-medium">Deal & Promotion Tags</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label htmlFor="hotDeal" className="font-medium">Hot Deal</Label>
+                  <p className="text-xs text-muted-foreground">Show in hot deals section</p>
+                </div>
+                <Switch id="hotDeal" checked={isHotDeal} onCheckedChange={setIsHotDeal} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label htmlFor="bestSeller" className="font-medium">Best Seller</Label>
+                  <p className="text-xs text-muted-foreground">Mark as best seller</p>
+                </div>
+                <Switch id="bestSeller" checked={isBestSeller} onCheckedChange={setIsBestSeller} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label htmlFor="featured" className="font-medium">Featured</Label>
+                  <p className="text-xs text-muted-foreground">Show in featured section</p>
+                </div>
+                <Switch id="featured" checked={isFeatured} onCheckedChange={setIsFeatured} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dealLabel">Deal Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="dealLabel"
+                value={dealLabel}
+                onChange={(e) => setDealLabel(e.target.value)}
+                placeholder="e.g. Flash Sale, Limited Offer, 40% Off"
+                maxLength={50}
+              />
+              <p className="text-xs text-muted-foreground">Overrides auto badge on the storefront. Leave blank to use tag name.</p>
+            </div>
           </div>
 
           <div className="space-y-2">

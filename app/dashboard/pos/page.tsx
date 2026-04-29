@@ -28,6 +28,7 @@ import { productApi } from "@/lib/productApi"
 import { couponApi, CouponResponse } from "@/lib/couponApi"
 import { BarcodeScanner } from "@/components/pos/barcode-scanner"
 import { toast } from "sonner"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface CartItem {
     id: string
@@ -45,6 +46,7 @@ export default function PosPage() {
     const { warehouses, defaultWarehouse } = useWarehouse()
     const { getAllCategoriesFlat } = useCategory()
     const { getCustomerById } = useCustomer()
+    const { taxRate, formatCurrency, formatTaxLabel } = useCompanySettings()
 
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedCategory, setSelectedCategory] = useState("all")
@@ -286,7 +288,7 @@ export default function PosPage() {
     }
 
     const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0)
-    const tax = subtotal * 0.1
+    const tax = subtotal * (taxRate / 100)
     const totalDiscount = discount + couponDiscount
     const total = Math.max(0, subtotal + tax + shipping - totalDiscount)
 
@@ -460,7 +462,7 @@ export default function PosPage() {
                                                         <p className="text-xs text-gray-500">{product.category}</p>
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <p className="font-bold text-emerald-600 text-sm">${(product.salePrice || product.price).toFixed(2)}</p>
+                                                        <p className="font-bold text-emerald-600 text-sm">{formatCurrency(product.salePrice || product.price)}</p>
                                                         <p className="text-xs text-gray-400">{stock} in stock</p>
                                                     </div>
                                                 </button>
@@ -522,7 +524,7 @@ export default function PosPage() {
                 <div className="grid grid-cols-3 gap-2 p-3 border-t bg-gray-50/30">
                     <Button variant="outline" size="sm" className="h-9 gap-2 text-gray-600 border-dashed" onClick={() => setIsDiscountModalOpen(true)}>
                         <Percent className="w-3.5 h-3.5" />
-                        Discount {discount > 0 && `($${discount.toFixed(2)})`}
+                        Discount {discount > 0 && `(${formatCurrency(discount)})`}
                     </Button>
                     <Button
                         variant="outline"
@@ -547,21 +549,21 @@ export default function PosPage() {
                 </div>
                 <div className="p-4 bg-gray-50 border-t space-y-3">
                     <div className="space-y-1 text-sm text-gray-600">
-                        <div className="flex justify-between"><span>Subtotal</span><span className="font-medium font-mono">${subtotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>Tax (10%)</span><span className="font-medium font-mono">${tax.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>Subtotal</span><span className="font-medium font-mono">{formatCurrency(subtotal)}</span></div>
+                        <div className="flex justify-between"><span>{formatTaxLabel()}</span><span className="font-medium font-mono">{formatCurrency(tax)}</span></div>
                         {discount > 0 && (
                             <div className="flex justify-between text-emerald-600">
-                                <span>Manual Discount</span><span className="font-medium font-mono">-${discount.toFixed(2)}</span>
+                                <span>Manual Discount</span><span className="font-medium font-mono">-{formatCurrency(discount)}</span>
                             </div>
                         )}
                         {couponDiscount > 0 && (
                             <div className="flex justify-between text-blue-600">
-                                <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-${couponDiscount.toFixed(2)}</span>
+                                <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-{formatCurrency(couponDiscount)}</span>
                             </div>
                         )}
                         <div className="pt-2 border-t mt-2 flex justify-between items-end text-gray-900">
                             <span className="font-bold text-lg">Total</span>
-                            <span className="font-bold text-3xl text-emerald-600">${total.toFixed(2)}</span>
+                            <span className="font-bold text-3xl text-emerald-600">{formatCurrency(total)}</span>
                         </div>
                     </div>
                     <Button className="w-full h-14 text-lg font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 active:scale-[0.98] transition-all"
@@ -603,11 +605,11 @@ export default function PosPage() {
                                             <p className="text-sm text-gray-600">{coupon.campaignName}</p>
                                         </div>
                                         <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
-                                            {coupon.type === 'percentage' ? `${coupon.discount}%` : `$${coupon.discount}`}
+                                            {coupon.type === 'percentage' ? `${coupon.discount}%` : formatCurrency(coupon.discount)}
                                         </Badge>
                                     </div>
                                     {coupon.minOrderAmount > 0 && (
-                                        <p className="text-xs text-gray-500 mt-1">Min order: ${coupon.minOrderAmount}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Min order: {formatCurrency(Number(coupon.minOrderAmount ?? 0))}</p>
                                     )}
                                 </button>
                             ))}
@@ -630,6 +632,7 @@ export default function PosPage() {
             </AlertDialog>
 
             <SuccessModal open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen} onClose={handleSuccessClose}
+                formatCurrency={formatCurrency} taxLabel={formatTaxLabel()}
                 orderDetails={{ cart, subtotal, tax, discount, total, customer: selectedCustomerName, invoiceNo }} />
 
             {/* Variant Modal */}
@@ -652,7 +655,7 @@ export default function PosPage() {
                                         <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-emerald-600">${variant.salePrice || variant.price}</p>
+                                        <p className="font-bold text-emerald-600">{formatCurrency(Number(variant.salePrice || variant.price || 0))}</p>
                                         <Badge variant="outline" className={variantStock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
                                             {variantStock > 0 ? `${variantStock} in stock` : "Out of stock"}
                                         </Badge>

@@ -7,16 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { Building2, Mail, Phone, MapPin, Bell, Lock, Globe, Clock, CreditCard, DollarSign, Upload, AlertCircle, Loader2 } from "lucide-react"
-import Swal from "sweetalert2"
-import { settingsApi, AllSettings } from "@/lib/settingsApi"
+import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2 } from "lucide-react"
+import { settingsApi } from "@/lib/settingsApi"
 import { toast } from "sonner"
 
 export default function SettingsPage() {
-  const { user } = useSaasAuth()
-  const userEmail = user?.email || ""
-
   // Loading state
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -42,33 +37,10 @@ export default function SettingsPage() {
   const [logoUrl, setLogoUrl] = useState("")
   const [bannerUrl, setBannerUrl] = useState("")
 
-  // Tax Settings (CRITICAL for POS)
-  const [defaultTaxRate, setDefaultTaxRate] = useState(10)
-  const [taxInclusivePrice, setTaxInclusivePrice] = useState(false)
-  const [enableGSTTracking, setEnableGSTTracking] = useState(false)
-  const [enableTaxExemption, setEnableTaxExemption] = useState(false)
-  const [defaultShippingTax, setDefaultShippingTax] = useState(0)
-
-  // Shipping Settings
-  const [enableShipping, setEnableShipping] = useState(true)
-  const [defaultShippingCost, setDefaultShippingCost] = useState(5.99)
-  const [freeShippingThreshold, setFreeShippingThreshold] = useState(50)
-
-  // Payment Settings
-  const [enableCash, setEnableCash] = useState(true)
-  const [enableCard, setEnableCard] = useState(true)
-  const [enableOnline, setEnableOnline] = useState(false)
-  const [cardProcessingFee, setCardProcessingFee] = useState(2.9)
-
   // Notification Settings
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [orderNotifications, setOrderNotifications] = useState(true)
   const [marketingEmails, setMarketingEmails] = useState(false)
-
-  // Regional Settings
-  const [language, setLanguage] = useState("en-US")
-  const [currency, setCurrency] = useState("USD")
-  const [timezone, setTimezone] = useState("America/New_York")
 
   // Store Hours
   const [storeHours, setStoreHours] = useState({
@@ -80,11 +52,6 @@ export default function SettingsPage() {
     saturday: { open: "10:00", close: "15:00", isOpen: true },
     sunday: { open: "", close: "", isOpen: false },
   })
-
-  // Security
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
 
   // Load settings on mount
   useEffect(() => {
@@ -119,37 +86,10 @@ export default function SettingsPage() {
         setBannerUrl(data.business.bannerUrl || "")
       }
 
-      if (data.tax) {
-        setDefaultTaxRate(data.tax.defaultTaxRate || 10)
-        setTaxInclusivePrice(data.tax.taxInclusivePrice || false)
-        setEnableGSTTracking(data.tax.enableGSTTracking || false)
-        setEnableTaxExemption(data.tax.enableTaxExemption || false)
-        setDefaultShippingTax(data.tax.defaultShippingTax || 0)
-      }
-
-      if (data.shipping) {
-        setEnableShipping(data.shipping.enableShipping || true)
-        setDefaultShippingCost(data.shipping.defaultShippingCost || 5.99)
-        setFreeShippingThreshold(data.shipping.freeShippingThreshold || 50)
-      }
-
-      if (data.payment) {
-        setEnableCash(data.payment.enableCash || true)
-        setEnableCard(data.payment.enableCard || true)
-        setEnableOnline(data.payment.enableOnline || false)
-        setCardProcessingFee(data.payment.cardProcessingFee || 2.9)
-      }
-
       if (data.notifications) {
         setEmailNotifications(data.notifications.emailNotifications || true)
         setOrderNotifications(data.notifications.orderNotifications || true)
         setMarketingEmails(data.notifications.marketingEmails || false)
-      }
-
-      if (data.regional) {
-        setLanguage(data.regional.language || "en-US")
-        setCurrency(data.regional.currency || "USD")
-        setTimezone(data.regional.timezone || "America/New_York")
       }
 
       if (data.storeHours) {
@@ -201,59 +141,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleSaveTax = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updateTax({
-        defaultTaxRate,
-        taxInclusivePrice,
-        enableGSTTracking,
-        gstNumber,
-        enableTaxExemption,
-        defaultShippingTax,
-      })
-      toast.success("Tax settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleSaveShipping = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updateShipping({
-        enableShipping,
-        defaultShippingCost,
-        freeShippingThreshold,
-        shippingMethods: [],
-      })
-      toast.success("Shipping settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleSavePayment = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updatePayment({
-        enableCash,
-        enableCard,
-        enableOnline,
-        cardProcessingFee,
-      })
-      toast.success("Payment settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   const handleSaveNotifications = async () => {
     try {
       setIsSaving(true)
@@ -263,22 +150,6 @@ export default function SettingsPage() {
         marketingEmails,
       })
       toast.success("Notification settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleSaveRegional = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updateRegional({
-        language,
-        currency,
-        timezone,
-      })
-      toast.success("Regional settings saved successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
@@ -324,33 +195,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match!")
-      return
-    }
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters!")
-      return
-    }
-    try {
-      setIsSaving(true)
-      await settingsApi.changePassword({
-        currentPassword,
-        newPassword,
-        confirmPassword,
-      })
-      toast.success("Password changed successfully!")
-      setCurrentPassword("")
-      setNewPassword("")
-      setConfirmPassword("")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to change password")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   const handleStoreHourChange = (day: string, field: string, value: string | boolean) => {
     setStoreHours(prev => ({
       ...prev,
@@ -373,7 +217,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">Manage your store information, tax, shipping, and account preferences</p>
+        <p className="text-gray-600 mt-1">Manage your store information, notifications, and operating hours</p>
       </div>
 
       {/* Business Information */}
@@ -662,242 +506,6 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {/* Tax & Compliance Settings - CRITICAL FOR POS */}
-      <Card className="p-6 border-emerald-200 bg-emerald-50/30">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-            <AlertCircle className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Tax & Compliance</h2>
-            <p className="text-sm text-gray-600">Configure tax rates for POS and orders</p>
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          {/* Tax Rate Slider */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <Label className="font-semibold">Default Tax Rate</Label>
-              <span className="text-2xl font-bold text-emerald-600">{defaultTaxRate}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="25"
-              step="0.5"
-              value={defaultTaxRate}
-              onChange={(e) => setDefaultTaxRate(parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-            />
-            <p className="text-xs text-gray-600">This rate applies to all products by default (0-25%)</p>
-          </div>
-
-          {/* Tax Inclusive Toggle */}
-          <div className="flex items-center justify-between py-3 border-t border-b">
-            <div>
-              <p className="font-medium">Tax Inclusive Pricing</p>
-              <p className="text-sm text-gray-600">Include tax in displayed product prices?</p>
-            </div>
-            <Switch checked={taxInclusivePrice} onCheckedChange={setTaxInclusivePrice} />
-          </div>
-
-          {/* GST Tracking */}
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Enable GST/VAT Tracking</p>
-              <p className="text-sm text-gray-600">Track GST separately for compliance</p>
-            </div>
-            <Switch checked={enableGSTTracking} onCheckedChange={setEnableGSTTracking} />
-          </div>
-
-          {/* Tax Exemption */}
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <p className="font-medium">Allow Tax Exemption</p>
-              <p className="text-sm text-gray-600">Allow some customers to be tax-exempt</p>
-            </div>
-            <Switch checked={enableTaxExemption} onCheckedChange={setEnableTaxExemption} />
-          </div>
-
-          {/* Shipping Tax */}
-          <div className="space-y-2 pt-4 border-t">
-            <Label htmlFor="shippingTax">Shipping Tax Rate (%)</Label>
-            <Input
-              id="shippingTax"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value={defaultShippingTax}
-              onChange={(e) => setDefaultShippingTax(parseFloat(e.target.value))}
-              placeholder="0"
-            />
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSaveTax}
-              disabled={isSaving}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Tax Settings"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Shipping Settings */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-            <DollarSign className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Shipping Settings</h2>
-            <p className="text-sm text-gray-600">Configure shipping costs and options</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Enable Shipping</p>
-              <p className="text-sm text-gray-600">Allow shipping for orders</p>
-            </div>
-            <Switch checked={enableShipping} onCheckedChange={setEnableShipping} />
-          </div>
-
-          {enableShipping && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="defaultShippingCost">Default Shipping Cost ($)</Label>
-                  <Input
-                    id="defaultShippingCost"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={defaultShippingCost}
-                    onChange={(e) => setDefaultShippingCost(parseFloat(e.target.value))}
-                    placeholder="5.99"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="freeShippingThreshold">Free Shipping Over ($)</Label>
-                  <Input
-                    id="freeShippingThreshold"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={freeShippingThreshold}
-                    onChange={(e) => setFreeShippingThreshold(parseFloat(e.target.value))}
-                    placeholder="50.00"
-                  />
-                  <p className="text-xs text-gray-600">Customers get free shipping over this amount</p>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSaveShipping}
-              disabled={isSaving}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Payment Settings */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-            <CreditCard className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Payment Settings</h2>
-            <p className="text-sm text-gray-600">Configure payment methods and fees</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Accept Cash</p>
-              <p className="text-sm text-gray-600">Allow cash payments (for POS)</p>
-            </div>
-            <Switch checked={enableCash} onCheckedChange={setEnableCash} />
-          </div>
-
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Accept Card/Credit Card</p>
-              <p className="text-sm text-gray-600">Allow card-based payments</p>
-            </div>
-            <Switch checked={enableCard} onCheckedChange={setEnableCard} />
-          </div>
-
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Accept Online Payment</p>
-              <p className="text-sm text-gray-600">Enable online payments (UPI, etc.)</p>
-            </div>
-            <Switch checked={enableOnline} onCheckedChange={setEnableOnline} />
-          </div>
-
-          <div className="space-y-2 pt-2">
-            <Label htmlFor="cardFee">Card Processing Fee (%)</Label>
-            <Input
-              id="cardFee"
-              type="number"
-              min="0"
-              max="10"
-              step="0.1"
-              value={cardProcessingFee}
-              onChange={(e) => setCardProcessingFee(parseFloat(e.target.value))}
-              placeholder="2.9"
-            />
-            <p className="text-xs text-gray-600">Percentage fee added to card transactions</p>
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSavePayment}
-              disabled={isSaving}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
       {/* Store Hours */}
       <Card className="p-6">
         <div className="flex items-center gap-3 mb-6">
@@ -1017,160 +625,6 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {/* Regional Settings - Enhanced */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
-            <Globe className="w-5 h-5 text-orange-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Regional Settings</h2>
-            <p className="text-sm text-gray-600">Set your language, currency, and timezone</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="language">Language</Label>
-            <select
-              id="language"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="es-ES">Spanish</option>
-              <option value="fr-FR">French</option>
-              <option value="de-DE">German</option>
-              <option value="ar-AE">Arabic</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="currency">Currency</Label>
-            <select
-              id="currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="INR">INR (₹)</option>
-              <option value="AED">AED (د.إ)</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="timezone">Timezone</Label>
-            <select
-              id="timezone"
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="America/New_York">America/New_York (EST)</option>
-              <option value="America/Chicago">America/Chicago (CST)</option>
-              <option value="America/Denver">America/Denver (MST)</option>
-              <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-              <option value="Europe/London">Europe/London (GMT)</option>
-              <option value="Europe/Paris">Europe/Paris (CET)</option>
-              <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-              <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-              <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex justify-end pt-4">
-          <Button
-            onClick={handleSaveRegional}
-            disabled={isSaving}
-            className="bg-orange-600 hover:bg-orange-700"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Settings"
-            )}
-          </Button>
-        </div>
-      </Card>
-
-      {/* Security Settings */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-            <Lock className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Security Settings</h2>
-            <p className="text-sm text-gray-600">Change your password and security preferences</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Current Email</Label>
-            <Input value={userEmail || ""} disabled className="bg-gray-50" />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-            />
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleChangePassword}
-              disabled={isSaving}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Changing...
-                </>
-              ) : (
-                "Change Password"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
     </div>
   )
 }

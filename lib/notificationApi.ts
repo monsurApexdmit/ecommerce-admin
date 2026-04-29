@@ -37,7 +37,7 @@ api.interceptors.response.use(
   }
 );
 
-export type NotificationType = 'order' | 'stock_alert' | 'payment' | 'system';
+export type NotificationType = 'order' | 'stock_alert' | 'payment' | 'system' | 'support' | 'review';
 export type NotificationPriority = 'low' | 'medium' | 'high';
 
 export interface NotificationResponse {

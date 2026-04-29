@@ -3,25 +3,47 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { staffApi, staffRoleApi, salaryPaymentApi, type StaffResponse, type SalaryPaymentResponse, type StaffRoleResponse } from "@/lib/staffApi"
 
-export type Module =
-    | "Dashboard"
-    | "Products"
-    | "Categories"
-    | "Attributes"
-    | "Coupons"
-    | "Customers"
-    | "Orders"
-    | "POS"
-    | "Sells"
-    | "Staff"
-    | "Settings"
-    | "International"
-    | "Store"
-    | "Pages"
-    | "Vendors"
-    | "Inventory"
-    | "Billing"
-    | "Reports"
+export const PERMISSION_MODULES = [
+    "Dashboard",
+    "Products",
+    "Categories",
+    "Attributes",
+    "Coupons",
+    "Print Barcode",
+    "Customers",
+    "Orders",
+    "Shipments",
+    "Vendors",
+    "POS",
+    "Sells",
+    "Inventory",
+    "Transfers",
+    "Customer Returns",
+    "Vendor Returns",
+    "Staff",
+    "Role & Permission",
+    "Salary Management",
+    "Settings",
+    "Aura Shop",
+    "Company Profile",
+    "Company Settings",
+    "Billing Contact",
+    "Team Members",
+    "Subscriptions",
+    "Billing Plans",
+    "Store",
+    "Shipping Methods",
+    "Payment Methods",
+    "Shipping Addresses",
+    "Store Locations",
+    "Store Wishlist",
+    "Pages",
+    "International",
+    "Notifications",
+    "Support",
+] as const
+
+export type Module = typeof PERMISSION_MODULES[number]
 
 export type Action = "read" | "write" | "delete"
 
@@ -112,26 +134,11 @@ function convertToStaff(s: StaffResponse): Staff {
 }
 
 function convertToRole(r: StaffRoleResponse): Role {
-    // Map backend permission names to frontend Module names
-    // Use 1:1 mapping now since we added new Module types
-    const permissionToModule: Record<string, Module> = {
-        'products': 'Products',
-        'categories': 'Categories',
-        'customers': 'Customers',
-        'orders': 'Orders',
-        'staff': 'Staff',
-        'settings': 'Settings',
-        'vendors': 'Vendors',
-        'inventory': 'Inventory',
-        'billing': 'Billing',
-        'reports': 'Reports',
-    }
-
     return {
         id: r.id.toString(),
         name: r.name,
         permissions: (r.permissions || []).map(p => ({
-            name: permissionToModule[p.name] || (p.name as Module),
+            name: p.name as Module,
             read: p.read,
             write: p.write,
             delete: p.delete,
@@ -170,7 +177,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             setStaff(response.data.map(convertToStaff))
         } catch (err: any) {
             console.error('Error fetching staff:', err)
-            setError(err.response?.data?.error || 'Failed to fetch staff')
+            setError(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch staff')
         } finally {
             setIsLoading(false)
         }
@@ -262,43 +269,12 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
 
     const addRole = async (role: Omit<Role, 'id'>) => {
         try {
-            // Get all permissions from backend to map names to IDs
             const permissions = await staffRoleApi.getPermissions()
-
-            // Ensure permissions is an array
             const permArray = Array.isArray(permissions) ? permissions : []
-
-            // Create map of backend permission names to IDs
             const permissionMap = new Map(
                 permArray.map((p: any) => [p.name, p.id])
             )
-
-            // Map frontend module names to backend permission names
-            const moduleToPermission: Record<string, string> = {
-                'Dashboard': 'products',
-                'Products': 'products',
-                'Categories': 'categories',
-                'Attributes': 'categories',
-                'Coupons': 'products',
-                'Customers': 'customers',
-                'Orders': 'orders',
-                'POS': 'orders',
-                'Sells': 'orders',
-                'Staff': 'staff',
-                'Settings': 'settings',
-                'International': 'settings',
-                'Store': 'products',
-                'Pages': 'products',
-                'Vendors': 'vendors',
-                'Inventory': 'inventory',
-                'Billing': 'billing',
-                'Reports': 'reports',
-            }
-
-            // Build permissions for ALL backend permissions
             const permissionsMap = new Map<number, any>()
-
-            // First, initialize all backend permissions as false
             permArray.forEach((p: any) => {
                 permissionsMap.set(p.id, {
                     permissionId: p.id,
@@ -308,12 +284,10 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 })
             })
 
-            // Then, override with form permissions using merge logic
             role.permissions.forEach(p => {
-                const backendName = moduleToPermission[p.name]
-                const id = permissionMap.get(backendName)
+                const id = permissionMap.get(p.name)
                 if (id && permissionsMap.has(id)) {
-                    const existing = permissionsMap.get(id)!
+                    const existing = permissionsMap.get(id)
                     permissionsMap.set(id, {
                         permissionId: id,
                         read: existing.read || p.read,
@@ -338,43 +312,12 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
 
     const updateRole = async (role: Role) => {
         try {
-            // Get all permissions from backend to map names to IDs
             const permissions = await staffRoleApi.getPermissions()
-
-            // Ensure permissions is an array
             const permArray = Array.isArray(permissions) ? permissions : []
-
-            // Create map of backend permission names to IDs
             const permissionMap = new Map(
                 permArray.map((p: any) => [p.name, p.id])
             )
-
-            // Map frontend module names to backend permission names
-            const moduleToPermission: Record<string, string> = {
-                'Dashboard': 'products',
-                'Products': 'products',
-                'Categories': 'categories',
-                'Attributes': 'categories',
-                'Coupons': 'products',
-                'Customers': 'customers',
-                'Orders': 'orders',
-                'POS': 'orders',
-                'Sells': 'orders',
-                'Staff': 'staff',
-                'Settings': 'settings',
-                'International': 'settings',
-                'Store': 'products',
-                'Pages': 'products',
-                'Vendors': 'vendors',
-                'Inventory': 'inventory',
-                'Billing': 'billing',
-                'Reports': 'reports',
-            }
-
-            // Build permissions for ALL backend permissions
             const permissionsMap = new Map<number, any>()
-
-            // First, initialize all backend permissions as false
             permArray.forEach((p: any) => {
                 permissionsMap.set(p.id, {
                     permissionId: p.id,
@@ -384,12 +327,10 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 })
             })
 
-            // Then, override with form permissions using merge logic
             role.permissions.forEach(p => {
-                const backendName = moduleToPermission[p.name]
-                const id = permissionMap.get(backendName)
+                const id = permissionMap.get(p.name)
                 if (id && permissionsMap.has(id)) {
-                    const existing = permissionsMap.get(id)!
+                    const existing = permissionsMap.get(id)
                     permissionsMap.set(id, {
                         permissionId: id,
                         read: existing.read || p.read,
@@ -439,7 +380,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             await refreshSalaryPayments()
         } catch (err: any) {
             console.error('Error creating salary payment:', err)
-            throw new Error(err.response?.data?.error || 'Failed to create salary payment')
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create salary payment')
         }
     }
 
@@ -458,7 +399,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             await refreshSalaryPayments()
         } catch (err: any) {
             console.error('Error updating salary payment:', err)
-            throw new Error(err.response?.data?.error || 'Failed to update salary payment')
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to update salary payment')
         }
     }
 
@@ -468,7 +409,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             await refreshSalaryPayments()
         } catch (err: any) {
             console.error('Error deleting salary payment:', err)
-            throw new Error(err.response?.data?.error || 'Failed to delete salary payment')
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete salary payment')
         }
     }
 

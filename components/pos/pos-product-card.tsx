@@ -3,6 +3,7 @@
 import { Plus } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import type { Product } from "@/contexts/product-context"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface PosProductCardProps {
     product: Product
@@ -11,6 +12,7 @@ interface PosProductCardProps {
 }
 
 export function PosProductCard({ product, onAddToCart, large }: PosProductCardProps) {
+    const { formatCurrency } = useCompanySettings()
     const isOutOfStock = product.stock <= 0
 
     return (
@@ -39,7 +41,7 @@ export function PosProductCard({ product, onAddToCart, large }: PosProductCardPr
                 <div className="mt-auto pt-1 space-y-1.5">
                     <div className="flex items-center justify-between">
                         <p className={`font-bold text-emerald-600 ${large ? 'text-base' : 'text-sm'}`}>
-                            ${(product.salePrice || product.price || 0).toFixed(2)}
+                            {formatCurrency(product.salePrice || product.price || 0)}
                         </p>
                         <div className="h-6 w-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Plus className="w-3.5 h-3.5" />

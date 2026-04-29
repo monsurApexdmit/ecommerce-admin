@@ -317,6 +317,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../../app/dashboard/products/[id]/reviews/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/dashboard/products/[id]/reviews">> = Specific
+  const handler = {} as typeof import("../../../app/dashboard/products/[id]/reviews/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../../app/dashboard/products/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/dashboard/products">> = Specific
@@ -357,6 +366,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends AppPageConfig<"/dashboard/sells">> = Specific
   const handler = {} as typeof import("../../../app/dashboard/sells/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../../app/dashboard/settings/aura-shop/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/dashboard/settings/aura-shop">> = Specific
+  const handler = {} as typeof import("../../../app/dashboard/settings/aura-shop/page.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

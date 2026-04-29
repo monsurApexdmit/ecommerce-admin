@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Edit2, Trash2, Eye, FilePen, Loader2 } from "lucide-react"
+import { Edit2, Trash2, Eye, FilePen, Loader2, MessageSquare } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,19 +16,23 @@ import { useCategory } from "@/contexts/category-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { ProductFormDialog } from "./ProductFormDialog"
 import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 import { ListPage, type Column, type FilterOption, type SortOption, type BulkAction, type Action } from "@/components/ListPage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 export default function ProductsPage() {
+  const router = useRouter()
   const { products, addProduct, updateProduct, deleteProduct, isLoading } = useProduct()
   const { vendors } = useVendor()
   const { warehouses } = useWarehouse()
   const { categories, getAllCategoriesFlat } = useCategory()
   const { company } = useSaasAuth()
+  const { formatCurrency } = useCompanySettings()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
@@ -199,13 +203,13 @@ export default function ProductsPage() {
       key: "price",
       label: "Price",
       width: "min-w-[90px]",
-      render: (value) => `$${(value || 0).toFixed(2)}`,
+      render: (value) => formatCurrency(value || 0),
     },
     {
       key: "salePrice",
       label: "Sale Price",
       width: "min-w-[100px]",
-      render: (value, item: Product) => `$${(value || item.price || 0).toFixed(2)}`,
+      render: (value, item: Product) => formatCurrency(value || item.price || 0),
     },
     {
       key: "stock",
@@ -327,6 +331,15 @@ export default function ProductsPage() {
       label: "View",
       icon: <Eye className="w-4 h-4" />,
       onClick: (item) => setViewingProduct(item),
+      className: "text-gray-500 hover:text-gray-700 hover:bg-transparent",
+    },
+    {
+      id: "reviews",
+      label: "Reviews",
+      icon: <MessageSquare className="w-4 h-4" />,
+      onClick: (item) => {
+        router.push(`/dashboard/products/${item.id}/reviews`)
+      },
       className: "text-gray-500 hover:text-gray-700 hover:bg-transparent",
     },
     {

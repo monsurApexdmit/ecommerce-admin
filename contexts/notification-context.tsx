@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { notificationApi, type NotificationResponse } from "@/lib/notificationApi"
+import { subscribeToNotifications } from "@/lib/reverb"
+import { getCompanyId } from "@/lib/utils/apiInterceptor"
 
 interface NotificationContextValue {
   notifications: NotificationResponse[]
@@ -21,7 +23,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationResponse[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastCountRef = useRef<number>(0)
 
   const fetchNotifications = useCallback(async (params?: { page?: number; limit?: number; type?: string; status?: 'read' | 'unread' }) => {
@@ -36,23 +37,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // keep previous state on error
     } finally {
       setLoading(false)
-    }
-  }, [])
-
-  // Silent background poll — fetches full list so both bell and dropdown stay live
-  const silentPoll = useCallback(async () => {
-    try {
-      const res = await notificationApi.getAll({ limit: 50 })
-      const incoming = res.data ?? []
-      const count = res.meta?.unreadCount ?? 0
-      // Only update state if something actually changed
-      if (count !== lastCountRef.current || incoming.length !== 0) {
-        setNotifications(incoming)
-        setUnreadCount(count)
-        lastCountRef.current = count
-      }
-    } catch {
-      // silent — polling must not disrupt the UI
     }
   }, [])
 
@@ -107,14 +91,55 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     })
   }, [notifications])
 
-  // Initial fetch + poll every 10s for live updates
+  const prependOrReplace = useCallback((notification: NotificationResponse) => {
+    setNotifications(prev => {
+      const exists = prev.some(n => n.id === notification.id)
+      if (exists) {
+        return prev.map(n => n.id === notification.id ? notification : n)
+      }
+
+      return [notification, ...prev].slice(0, 50)
+    })
+  }, [])
+
+  // Initial fetch + realtime subscription
   useEffect(() => {
     fetchNotifications()
-    pollRef.current = setInterval(silentPoll, 10000)
+
+    const companyId = getCompanyId()
+    if (!companyId) return
+
+    const unsubscribe = subscribeToNotifications(companyId, {
+      onCreated: (notification, incomingUnreadCount) => {
+        prependOrReplace(notification)
+        setUnreadCount(incomingUnreadCount)
+        lastCountRef.current = incomingUnreadCount
+      },
+      onUpdated: (_action, notification, incomingUnreadCount) => {
+        prependOrReplace(notification)
+        setUnreadCount(incomingUnreadCount)
+        lastCountRef.current = incomingUnreadCount
+      },
+      onReadAll: (notificationIds, incomingUnreadCount) => {
+        setNotifications(prev => prev.map(n => (
+          notificationIds.includes(n.id)
+            ? { ...n, readAt: n.readAt ?? new Date().toISOString() }
+            : n
+        )))
+        setUnreadCount(incomingUnreadCount)
+        lastCountRef.current = incomingUnreadCount
+      },
+      onDeleted: (_action, notificationIds, incomingUnreadCount) => {
+        setNotifications(prev => prev.filter(n => !notificationIds.includes(n.id)))
+        setUnreadCount(incomingUnreadCount)
+        lastCountRef.current = incomingUnreadCount
+      },
+    })
+
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
+      unsubscribe()
     }
-  }, []) // eslint-disable-line
+  }, [fetchNotifications, prependOrReplace])
 
   return (
     <NotificationContext.Provider value={{

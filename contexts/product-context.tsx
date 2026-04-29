@@ -17,6 +17,10 @@ export interface Product {
     stock: number
     status: "Selling" | "Out of Stock" | "Discontinued"
     published: boolean
+    isHotDeal?: boolean
+    isBestSeller?: boolean
+    isFeatured?: boolean
+    dealLabel?: string
     image: string
     images?: File[]         // for upload
     delete_images?: boolean
@@ -96,6 +100,10 @@ function convertToProduct(p: ProductResponse): Product {
         stock: p.stock,
         status: (p.status as Product["status"]) || (p.stock > 0 ? "Selling" : "Out of Stock"),
         published: p.published ?? true,
+        isHotDeal: (p as any).isHotDeal ?? (p as any).is_hot_deal ?? false,
+        isBestSeller: (p as any).isBestSeller ?? (p as any).is_best_seller ?? false,
+        isFeatured: (p as any).isFeatured ?? (p as any).is_featured ?? false,
+        dealLabel: (p as any).dealLabel ?? (p as any).deal_label ?? undefined,
         image: (() => {
             try {
                 // Try images array first (from backend relationship)
@@ -199,6 +207,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 barcode: product.barcode,
                 vendor_id: product.vendorId ? parseInt(product.vendorId) : undefined,
                 receipt_number: product.receiptNumber,
+                is_hot_deal: product.isHotDeal,
+                is_best_seller: product.isBestSeller,
+                is_featured: product.isFeatured,
+                deal_label: product.dealLabel,
                 attributes: product.attributes,
                 variants: product.variants?.map(v => ({
                     name: v.name,
@@ -239,6 +251,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 barcode: product.barcode,
                 vendor_id: product.vendorId ? parseInt(product.vendorId) : undefined,
                 receipt_number: product.receiptNumber,
+                is_hot_deal: product.isHotDeal,
+                is_best_seller: product.isBestSeller,
+                is_featured: product.isFeatured,
+                deal_label: product.dealLabel,
                 attributes: product.attributes,
                 variants: product.variants?.map(v => {
                     const numericId = parseInt(v.id)

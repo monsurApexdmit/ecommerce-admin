@@ -21,6 +21,7 @@ import {
 } from "chart.js"
 import { sellsApi, SellResponse } from "@/lib/sellsApi"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const { vendors } = useVendor()
   const { products } = useProduct()
   const { staff, salaryPayments } = useStaff()
+  const { formatCurrency, currency } = useCompanySettings()
 
   const [recentOrders, setRecentOrders] = useState<SellResponse[]>([])
   const [sellStats, setSellStats] = useState<{
@@ -103,7 +105,7 @@ export default function DashboardPage() {
   const statsCards = [
     {
       name: "Total Revenue",
-      value: sellStats ? `$${sellStats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—",
+      value: sellStats ? formatCurrency(sellStats.totalRevenue) : "—",
       icon: DollarSign,
       bgColor: "bg-emerald-50",
       iconColor: "text-emerald-600",
@@ -165,7 +167,7 @@ export default function DashboardPage() {
       x: { grid: { display: false } },
       y: {
         grid: { color: "rgba(0, 0, 0, 0.05)" },
-        ticks: { callback: (value: number | string) => "$" + value + "k" },
+        ticks: { callback: (value: number | string) => currency + value + "k" },
       },
     },
   }
@@ -214,11 +216,11 @@ export default function DashboardPage() {
           </div>
           <div className="p-4 bg-emerald-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Paid</p>
-            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Due</p>
-            <p className="text-2xl font-bold text-orange-600">${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalDue)}</p>
           </div>
         </div>
       </Card>
@@ -237,15 +239,15 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Monthly Budget</p>
-            <p className="text-2xl font-bold text-gray-900">${totalSalaryBudget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSalaryBudget)}</p>
           </div>
           <div className="p-4 bg-emerald-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Paid This Month</p>
-            <p className="text-2xl font-bold text-emerald-600">${totalSalaryPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalSalaryPaid)}</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Pending</p>
-            <p className="text-2xl font-bold text-orange-600">${totalSalaryPending.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalSalaryPending)}</p>
           </div>
         </div>
       </Card>
@@ -300,7 +302,7 @@ export default function DashboardPage() {
                     <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
                       <td className="py-3 px-2 text-sm font-medium text-gray-900">#{order.invoiceNo}</td>
                       <td className="py-3 px-2 text-sm text-gray-700">{order.customerName}</td>
-                      <td className="py-3 px-2 text-sm font-medium text-gray-900">${Number(order.amount ?? 0).toFixed(2)}</td>
+                      <td className="py-3 px-2 text-sm font-medium text-gray-900">{formatCurrency(Number(order.amount ?? 0))}</td>
                       <td className="py-3 px-2">
                         <StatusBadge status={order.status} />
                       </td>
@@ -345,7 +347,7 @@ export default function DashboardPage() {
               <div className="pt-2 border-t">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Total Revenue</span>
-                  <span className="font-bold text-gray-900">${sellStats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-bold text-gray-900">{formatCurrency(sellStats.totalRevenue)}</span>
                 </div>
               </div>
             </div>

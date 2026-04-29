@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Check, CreditCard, Banknote, Truck, Lock } from "lucide-react"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Card } from "@/components/ui/card"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface CheckoutModalProps {
     open: boolean
@@ -20,6 +21,7 @@ interface CheckoutModalProps {
 export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: CheckoutModalProps) {
     const [paymentMethod, setPaymentMethod] = useState("Cash")
     const [isProcessing, setIsProcessing] = useState(false)
+    const { formatCurrency } = useCompanySettings()
 
     const handleConfirm = () => {
         setIsProcessing(true)
@@ -41,7 +43,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                 {/* Header with Gradient */}
                 <div className="bg-gradient-to-r from-blue-500 to-emerald-500 px-6 py-8 text-center text-white">
                     <p className="text-blue-100 text-sm font-medium mb-2">Total Amount Payable</p>
-                    <p className="text-4xl font-black mb-1">${totalAmount.toFixed(2)}</p>
+                    <p className="text-4xl font-black mb-1">{formatCurrency(totalAmount)}</p>
                     <div className="flex items-center justify-center gap-1 mt-3 text-blue-50 text-xs">
                         <Lock className="w-3 h-3" />
                         <span>Secure Payment</span>

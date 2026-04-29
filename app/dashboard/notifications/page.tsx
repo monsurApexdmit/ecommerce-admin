@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Mail, Trash2, ShoppingCart, AlertTriangle, DollarSign, Settings, CheckCheck, Eye, ExternalLink, Bell, Filter } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Mail, Trash2, ShoppingCart, AlertTriangle, DollarSign, Settings, CheckCheck, Eye, ExternalLink, Bell, Filter, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
 import { useNotifications } from "@/contexts/notification-context"
 import type { NotificationType, NotificationPriority } from "@/lib/notificationApi"
 
@@ -32,6 +32,8 @@ const notificationTypes: Record<NotificationType, { icon: any; color: string; la
   stock_alert: { icon: AlertTriangle, color: 'orange', label: 'Stock Alert' },
   payment: { icon: DollarSign, color: 'blue', label: 'Payment' },
   system: { icon: Settings, color: 'gray', label: 'System' },
+  support: { icon: Mail, color: 'blue', label: 'Support' },
+  review: { icon: Star, color: 'amber', label: 'Product Review' },
 }
 
 const priorityConfig: Record<NotificationPriority, { color: string; label: string }> = {
@@ -45,10 +47,12 @@ const badgeColorMap: Record<string, string> = {
   orange: 'bg-orange-500',
   blue: 'bg-blue-500',
   gray: 'bg-gray-500',
+  amber: 'bg-amber-500',
 }
 
 export default function NotificationsPage() {
   const { notifications, unreadCount, loading, fetchNotifications, markAsRead, markAsUnread, markAllAsRead, deleteNotification, bulkDelete } = useNotifications()
+  const router = useRouter()
 
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [filterStatus, setFilterStatus] = useState("all")
@@ -87,6 +91,18 @@ export default function NotificationsPage() {
   const handleBulkDelete = async () => {
     await bulkDelete(selectedIds)
     setSelectedIds([])
+  }
+
+  const handleNotificationClick = async (id: number, actionUrl?: string | null) => {
+    const notification = notifications.find(item => item.id === id)
+
+    if (notification && !notification.readAt) {
+      await markAsRead(id)
+    }
+
+    if (actionUrl) {
+      router.push(actionUrl)
+    }
   }
 
   const getPriorityBadge = (priority: NotificationPriority) => {
@@ -161,6 +177,8 @@ export default function NotificationsPage() {
                 <SelectItem value="order">Orders</SelectItem>
                 <SelectItem value="stock_alert">Stock Alerts</SelectItem>
                 <SelectItem value="payment">Payments</SelectItem>
+                <SelectItem value="support">Support</SelectItem>
+                <SelectItem value="review">Product Reviews</SelectItem>
                 <SelectItem value="system">System</SelectItem>
               </SelectContent>
             </Select>
@@ -205,15 +223,20 @@ export default function NotificationsPage() {
                       const TypeIcon = typeConfig.icon
                       const isRead = !!n.readAt
                       return (
-                        <tr key={n.id} className={`hover:bg-gray-50 transition-colors ${isRead ? 'bg-gray-50/50 opacity-75' : 'bg-white'}`}>
+                        <tr key={n.id} className={`transition-colors ${isRead ? 'bg-gray-50/50 opacity-75' : 'bg-white'}`}>
                           <td className="px-4 py-4">
                             <Checkbox
                               checked={selectedIds.includes(n.id)}
+                              onClick={(event) => event.stopPropagation()}
                               onCheckedChange={() => setSelectedIds(prev => prev.includes(n.id) ? prev.filter(id => id !== n.id) : [...prev, n.id])}
                             />
                           </td>
                           <td className="px-4 py-4">
-                            <div className="flex items-start gap-3">
+                            <button
+                              type="button"
+                              onClick={() => void handleNotificationClick(n.id, n.actionUrl)}
+                              className="flex w-full items-start gap-3 text-left hover:bg-gray-50 rounded-md p-1 -m-1"
+                            >
                               {!isRead && <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 shrink-0" />}
                               <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${badgeColorMap[typeConfig.color]}`}>
                                 <TypeIcon className="w-4 h-4 text-white" />
@@ -231,27 +254,41 @@ export default function NotificationsPage() {
                                   <span className="text-xs text-gray-500">{getRelativeTime(n.createdAt)}</span>
                                 </div>
                               </div>
-                            </div>
+                            </button>
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex justify-end gap-2">
                               <Button
                                 variant="ghost" size="sm" className="h-8 w-8 p-0"
                                 title={isRead ? "Mark as unread" : "Mark as read"}
-                                onClick={() => isRead ? markAsUnread(n.id) : markAsRead(n.id)}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void (isRead ? markAsUnread(n.id) : markAsRead(n.id))
+                                }}
                               >
                                 {isRead ? <Mail className="w-4 h-4 text-gray-500" /> : <Eye className="w-4 h-4 text-emerald-600" />}
                               </Button>
                               {n.actionUrl && (
-                                <Link href={n.actionUrl}>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View details">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  title="View details"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void handleNotificationClick(n.id, n.actionUrl)
+                                  }}
+                                >
                                     <ExternalLink className="w-4 h-4 text-blue-600" />
-                                  </Button>
-                                </Link>
+                                </Button>
                               )}
                               <Button
                                 variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                title="Delete" onClick={() => deleteNotification(n.id)}
+                                title="Delete"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void deleteNotification(n.id)
+                                }}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>

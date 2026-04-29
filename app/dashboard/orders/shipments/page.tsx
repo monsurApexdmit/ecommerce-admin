@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { shipmentsApi, ShipmentResponse, ShipmentStatus, CreateShipmentData } from "@/lib/shipmentsApi"
 import { sellsApi, SellResponse } from "@/lib/sellsApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 // Ordered progression — status can only move forward
 const STATUS_ORDER: ShipmentStatus[] = [
@@ -88,6 +89,7 @@ const EMPTY_FORM: CreateShipmentData = {
 }
 
 export default function ShipmentsPage() {
+  const { formatCurrency } = useCompanySettings()
   const [shipments, setShipments] = useState<ShipmentResponse[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, failed: 0 })
   const [orders, setOrders] = useState<SellResponse[]>([])
@@ -582,7 +584,7 @@ export default function ShipmentsPage() {
                 </Card>
                 <Card className="p-3 border-l-4 border-l-emerald-500">
                   <p className="text-xs font-semibold text-gray-600 uppercase">Cost</p>
-                  <p className="text-lg font-bold text-emerald-600 mt-1">${Number(viewingShipment.shippingCost ?? 0).toFixed(2)}</p>
+                  <p className="text-lg font-bold text-emerald-600 mt-1">{formatCurrency(Number(viewingShipment.shippingCost ?? 0))}</p>
                 </Card>
               </div>
 

@@ -8,9 +8,11 @@ import { DollarSign, CreditCard, Clock, CheckCircle2, Trash2 } from "lucide-reac
 import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 export default function SalaryManagementPage() {
     const { staff, salaryPayments, isLoading, salaryPaymentsLoading, addSalaryPayment, updateSalaryPayment, deleteSalaryPayment } = useStaff()
+    const { formatCurrency } = useCompanySettings()
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = new Date()
         return `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
@@ -114,7 +116,7 @@ export default function SalaryManagementPage() {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Total Monthly Budget</p>
-                            <p className="text-2xl font-bold text-gray-900">${totalBudget.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalBudget)}</p>
                         </div>
                     </div>
                 </Card>
@@ -126,7 +128,7 @@ export default function SalaryManagementPage() {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Total Paid</p>
-                            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
                         </div>
                     </div>
                 </Card>
@@ -138,7 +140,7 @@ export default function SalaryManagementPage() {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Total Pending</p>
-                            <p className="text-2xl font-bold text-orange-600">${totalPending.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalPending)}</p>
                         </div>
                     </div>
                 </Card>
@@ -209,7 +211,7 @@ export default function SalaryManagementPage() {
                                             </td>
                                             <td className="py-3 px-4 text-sm text-gray-600">{member.role}</td>
                                             <td className="py-3 px-4 text-sm font-semibold text-gray-900">
-                                                ${member.salary.toLocaleString()}
+                                                {formatCurrency(member.salary)}
                                             </td>
                                             <td className="py-3 px-4 text-sm text-gray-600">{member.paymentMethod}</td>
                                             <td className="py-3 px-4">

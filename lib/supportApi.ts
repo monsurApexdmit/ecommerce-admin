@@ -40,12 +40,24 @@ export interface SupportMessage {
   id: number;
   ticketId: number;
   customerId: number | null;
-  body: string;
+  body: string | null;
   senderType: 'customer' | 'staff';
   senderName: string | null;
   createdAt: string;
+  attachments: SupportAttachment[];
 }
 export type { SupportMessage as SupportMessageType };
+
+export interface SupportAttachment {
+  id: number;
+  name: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  type: 'image' | 'file' | 'voice';
+  isImage: boolean;
+  isAudio: boolean;
+}
 
 export interface SupportTicket {
   id: number;
@@ -78,6 +90,25 @@ export interface TicketListResponse {
   meta: { total: number; perPage: number; currentPage: number; lastPage: number };
 }
 
+export interface SupportReplyPayload {
+  body?: string;
+  attachments?: File[];
+}
+
+function buildSupportFormData(payload: SupportReplyPayload) {
+  const formData = new FormData();
+
+  if (payload.body) {
+    formData.append("body", payload.body);
+  }
+
+  payload.attachments?.forEach((file) => {
+    formData.append("attachments[]", file);
+  });
+
+  return formData;
+}
+
 export const supportApi = {
   getAll: async (params?: {
     status?: TicketStatus | 'all';
@@ -104,8 +135,11 @@ export const supportApi = {
     return res.data.data;
   },
 
-  reply: async (id: number, body: string): Promise<SupportTicket> => {
-    const res = await api.post(`/support/tickets/${id}/reply`, { body });
+  reply: async (id: number, payload: string | SupportReplyPayload): Promise<SupportTicket> => {
+    const normalized = typeof payload === "string" ? { body: payload } : payload;
+    const res = await api.post(`/support/tickets/${id}/reply`, buildSupportFormData(normalized), {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
     return res.data.data;
   },
 

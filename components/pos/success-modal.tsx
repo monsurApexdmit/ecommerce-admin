@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface CartItem {
   id: string
@@ -18,6 +19,8 @@ interface SuccessModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onClose: () => void
+  formatCurrency?: (amount: number) => string
+  taxLabel?: string
   orderDetails?: {
     cart: CartItem[]
     subtotal: number
@@ -29,7 +32,10 @@ interface SuccessModalProps {
   }
 }
 
-export function SuccessModal({ open, onOpenChange, onClose, orderDetails }: SuccessModalProps) {
+export function SuccessModal({ open, onOpenChange, onClose, orderDetails, formatCurrency: fmt, taxLabel }: SuccessModalProps) {
+  const { formatCurrency: companyFormatCurrency } = useCompanySettings()
+  const formatCurrency = fmt ?? companyFormatCurrency
+  const taxLabelText = taxLabel ?? "Tax"
 
   const handlePrint = () => {
     if (!orderDetails) return
@@ -61,15 +67,15 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails }: Succ
         ${orderDetails.cart.map(item => `
           <div class="item-row"><div class="item-name">${item.name}</div></div>
           <div class="item-row" style="font-size:11px;color:#333;">
-            <span>${item.quantity} x $${item.price.toFixed(2)}</span>
-            <span>$${(item.price * item.quantity).toFixed(2)}</span>
+            <span>${item.quantity} x ${formatCurrency(item.price)}</span>
+            <span>${formatCurrency(item.price * item.quantity)}</span>
           </div>`).join('')}
       </div>
       <div class="divider"></div>
-      <div class="summary-row"><span>Subtotal</span><span>$${orderDetails.subtotal.toFixed(2)}</span></div>
-      <div class="summary-row"><span>Tax (10%)</span><span>$${orderDetails.tax.toFixed(2)}</span></div>
-      ${orderDetails.discount > 0 ? `<div class="summary-row"><span>Discount</span><span>-$${orderDetails.discount.toFixed(2)}</span></div>` : ''}
-      <div class="total-row"><span>Total</span><span>$${orderDetails.total.toFixed(2)}</span></div>
+      <div class="summary-row"><span>Subtotal</span><span>${formatCurrency(orderDetails.subtotal)}</span></div>
+      <div class="summary-row"><span>${taxLabelText}</span><span>${formatCurrency(orderDetails.tax)}</span></div>
+      ${orderDetails.discount > 0 ? `<div class="summary-row"><span>Discount</span><span>-${formatCurrency(orderDetails.discount)}</span></div>` : ''}
+      <div class="total-row"><span>Total</span><span>${formatCurrency(orderDetails.total)}</span></div>
       <div class="footer"><p>Thank you for shopping!</p><p style="margin-top:5px">Return Policy: 7 days with receipt</p></div>
     </body></html>`
     printWindow.document.open()
@@ -150,21 +156,21 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails }: Succ
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-900">${orderDetails.subtotal.toFixed(2)}</span>
+                  <span className="text-gray-900">{formatCurrency(orderDetails.subtotal)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Tax (10%)</span>
-                  <span className="text-gray-900">${orderDetails.tax.toFixed(2)}</span>
+                  <span className="text-gray-600">{taxLabelText}</span>
+                  <span className="text-gray-900">{formatCurrency(orderDetails.tax)}</span>
                 </div>
                 {orderDetails.discount > 0 && (
                   <div className="flex justify-between text-emerald-600">
                     <span className="font-medium">Discount</span>
-                    <span className="font-medium">-${orderDetails.discount.toFixed(2)}</span>
+                    <span className="font-medium">-{formatCurrency(orderDetails.discount)}</span>
                   </div>
                 )}
                 <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                   <span className="font-bold text-gray-900">Total Amount</span>
-                  <span className="text-2xl font-black text-emerald-600">${orderDetails.total.toFixed(2)}</span>
+                  <span className="text-2xl font-black text-emerald-600">{formatCurrency(orderDetails.total)}</span>
                 </div>
               </div>
             </Card>

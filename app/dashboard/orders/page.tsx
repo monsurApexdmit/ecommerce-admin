@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { StatsCards } from "@/components/ui/stats-card"
 import { sellsApi, SellResponse, SellItem } from "@/lib/sellsApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
 const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
@@ -28,6 +29,8 @@ interface StatsData {
 
 export default function OrdersPage() {
   const searchParams = useSearchParams()
+  const { formatCurrency } = useCompanySettings()
+  const latestFetchIdRef = useRef(0)
   const [orders, setOrders] = useState<SellResponse[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -47,10 +50,17 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const customerParam = searchParams.get("customer")
-    if (customerParam) setSearchQuery(customerParam)
+    if (customerParam) {
+      setSearchQuery(customerParam)
+      setCurrentPage(1)
+      return
+    }
+
+    setSearchQuery("")
   }, [searchParams])
 
   const fetchOrders = useCallback(async () => {
+    const fetchId = ++latestFetchIdRef.current
     setIsLoading(true)
     try {
       const params: Record<string, string | number> = {
@@ -64,13 +74,21 @@ export default function OrdersPage() {
       if (endDate) params.end_date = endDate
 
       const res = await sellsApi.getAll(params)
+      if (fetchId !== latestFetchIdRef.current) {
+        return
+      }
       setOrders(res.data ?? [])
       setTotal(res.total ?? res.data?.length ?? 0)
     } catch (err) {
+      if (fetchId !== latestFetchIdRef.current) {
+        return
+      }
       console.error("Failed to fetch orders:", err)
       setOrders([])
     } finally {
-      setIsLoading(false)
+      if (fetchId === latestFetchIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [currentPage, itemsPerPage, searchQuery, statusFilter, methodFilter, startDate, endDate])
 
@@ -197,15 +215,15 @@ export default function OrdersPage() {
             <td>${i + 1}</td>
             <td>${item.productName}</td>
             <td style="text-align:center;">${item.quantity}</td>
-            <td style="text-align:right;">$${fmt(itemPrice(item))}</td>
-            <td class="amount-red">$${fmt(itemTotal(item))}</td>
+            <td style="text-align:right;">${formatCurrency(itemPrice(item))}</td>
+            <td class="amount-red">${formatCurrency(itemTotal(item))}</td>
           </tr>`).join("")
       : `<tr>
            <td>1</td>
            <td>${order.customerName}</td>
            <td style="text-align:center;">1</td>
-           <td style="text-align:right;">$${fmt(order.amount)}</td>
-           <td class="amount-red">$${fmt(order.amount)}</td>
+           <td style="text-align:right;">${formatCurrency(Number(order.amount))}</td>
+           <td class="amount-red">${formatCurrency(Number(order.amount))}</td>
          </tr>`
 
     const printWindow = window.open("", "_blank")
@@ -291,15 +309,15 @@ export default function OrdersPage() {
                 </div>
                 <div class="summary-item">
                   <h3>Shipping Cost</h3>
-                  <p style="color:#6b7280;">$${fmt(order.shippingCost)}</p>
+                  <p style="color:#6b7280;">${formatCurrency(Number(fmt(order.shippingCost)))}</p>
                 </div>
                 <div class="summary-item">
                   <h3>Discount</h3>
-                  <p style="color:#6b7280;">$${fmt(order.discount)}</p>
+                  <p style="color:#6b7280;">${formatCurrency(Number(fmt(order.discount)))}</p>
                 </div>
                 <div class="summary-item">
                   <h3>Total Amount</h3>
-                  <p class="total-amount">$${fmt(order.amount)}</p>
+                  <p class="total-amount">${formatCurrency(Number(order.amount))}</p>
                 </div>
               </div>
             </div>
@@ -339,7 +357,7 @@ export default function OrdersPage() {
             { label: "Pending", value: stats.pendingOrders, icon: <Clock className="w-5 h-5" />, color: "yellow" },
             { label: "Processing", value: stats.processingOrders, icon: <Package className="w-5 h-5" />, color: "purple" },
             { label: "Delivered", value: stats.deliveredOrders, icon: <CheckCircle className="w-5 h-5" />, color: "green" },
-            { label: "Revenue", value: `$${stats.totalRevenue.toFixed(2)}`, icon: <AlertCircle className="w-5 h-5" />, color: "blue" },
+            { label: "Revenue", value: formatCurrency(stats.totalRevenue), icon: <AlertCircle className="w-5 h-5" />, color: "blue" },
           ]}
         />
       ) : null}
@@ -440,7 +458,7 @@ export default function OrdersPage() {
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-900">{order.customerName}</td>
                     <td className="py-3 px-4 text-sm text-gray-900">{order.method}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">${fmt(order.amount)}</td>
+                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">{formatCurrency(Number(order.amount ?? 0))}</td>
                     <td className="py-3 px-4">
                       <StatusBadge status={order.status} />
                     </td>
@@ -580,8 +598,8 @@ export default function OrdersPage() {
                           <td className="py-5 px-4 text-sm text-gray-900">{i + 1}</td>
                           <td className="py-5 px-4 text-sm text-gray-900">{item.productName}</td>
                           <td className="py-5 px-4 text-sm text-center text-gray-900">{item.quantity}</td>
-                          <td className="py-5 px-4 text-sm text-right text-gray-900">${fmt(itemPrice(item))}</td>
-                          <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">${fmt(itemTotal(item))}</td>
+                          <td className="py-5 px-4 text-sm text-right text-gray-900">{formatCurrency(itemPrice(item))}</td>
+                          <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">{formatCurrency(itemTotal(item))}</td>
                         </tr>
                       ))
                     ) : (
@@ -602,15 +620,15 @@ export default function OrdersPage() {
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Shipping Cost</h3>
-                    <p className="text-base font-semibold text-gray-600">${fmt(selectedOrder.shippingCost)}</p>
+                    <p className="text-base font-semibold text-gray-600">{formatCurrency(Number(selectedOrder.shippingCost ?? 0))}</p>
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Discount</h3>
-                    <p className="text-base font-semibold text-gray-600">${fmt(selectedOrder.discount)}</p>
+                    <p className="text-base font-semibold text-gray-600">{formatCurrency(Number(selectedOrder.discount ?? 0))}</p>
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Total Amount</h3>
-                    <p className="text-2xl font-bold text-red-600">${fmt(selectedOrder.amount)}</p>
+                    <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(selectedOrder.amount ?? 0))}</p>
                   </div>
                 </div>
               </div>

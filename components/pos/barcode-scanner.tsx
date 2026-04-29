@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Barcode, AlertCircle } from 'lucide-react'
 import { type Product, type Variant } from '@/contexts/product-context'
+import { useCompanySettings } from '@/contexts/company-settings-context'
 import { toast } from 'sonner'
 
 interface BarcodeScannerProps {
@@ -22,6 +23,7 @@ export function BarcodeScanner({
   getAvailableStock,
   onProductScanned,
 }: BarcodeScannerProps) {
+  const { formatCurrency } = useCompanySettings()
   const inputRef = useRef<HTMLInputElement>(null)
   const [barcode, setBarcode] = useState('')
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
@@ -194,7 +196,7 @@ export function BarcodeScanner({
                           ))}
                         </div>
                         <span className="text-sm text-gray-600">
-                          ${variant.salePrice || variant.price}
+                          {formatCurrency(Number(variant.salePrice || variant.price || 0))}
                         </span>
                       </div>
                       <div className="text-right">

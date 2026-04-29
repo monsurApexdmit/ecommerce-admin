@@ -2,6 +2,7 @@ import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 import type { SupportMessage, SupportTicket, TicketPriority, TicketStatus } from "@/lib/supportApi";
 import { getCompanyId } from "@/lib/utils/apiInterceptor";
+import type { NotificationResponse } from "@/lib/notificationApi";
 
 const REVERB_ENABLED = process.env.NEXT_PUBLIC_REVERB_ENABLED === "true";
 const REVERB_KEY = process.env.NEXT_PUBLIC_REVERB_APP_KEY || "local-app-key";
@@ -28,6 +29,13 @@ type CompanyHandlers = {
   onMessageSent?: (ticketId: number, message: SupportMessage) => void;
   onStatusUpdated?: (ticketId: number, status: TicketStatus) => void;
   onPriorityUpdated?: (ticketId: number, priority: TicketPriority) => void;
+};
+
+type NotificationHandlers = {
+  onCreated?: (notification: NotificationResponse, unreadCount: number) => void;
+  onUpdated?: (action: "read" | "unread", notification: NotificationResponse, unreadCount: number) => void;
+  onReadAll?: (notificationIds: number[], unreadCount: number) => void;
+  onDeleted?: (action: "delete" | "bulk_delete", notificationIds: number[], unreadCount: number) => void;
 };
 
 function getAuthHeaders(): Record<string, string> {
@@ -133,5 +141,48 @@ export function subscribeToSupportCompany(companyId: number, handlers: CompanyHa
 
   return () => {
     client.leave(`support.company.${companyId}`);
+  };
+}
+
+export function subscribeToNotifications(companyId: number, handlers: NotificationHandlers): () => void {
+  const client = getSupportEcho();
+  if (!client) return () => {};
+
+  const channel = client.private(`notifications.company.${companyId}`);
+
+  if (handlers.onCreated) {
+    channel.listen(".notification.created", (event: { notification: NotificationResponse; unreadCount: number }) => {
+      handlers.onCreated?.(event.notification, event.unreadCount);
+    });
+  }
+
+  if (handlers.onUpdated) {
+    channel.listen(".notification.updated", (event: {
+      action: "read" | "unread";
+      notification: NotificationResponse;
+      unreadCount: number;
+    }) => {
+      handlers.onUpdated?.(event.action, event.notification, event.unreadCount);
+    });
+  }
+
+  if (handlers.onReadAll) {
+    channel.listen(".notifications.read_all", (event: { notificationIds: number[]; unreadCount: number }) => {
+      handlers.onReadAll?.(event.notificationIds, event.unreadCount);
+    });
+  }
+
+  if (handlers.onDeleted) {
+    channel.listen(".notification.deleted", (event: {
+      action: "delete" | "bulk_delete";
+      notificationIds: number[];
+      unreadCount: number;
+    }) => {
+      handlers.onDeleted?.(event.action, event.notificationIds, event.unreadCount);
+    });
+  }
+
+  return () => {
+    client.leave(`notifications.company.${companyId}`);
   };
 }

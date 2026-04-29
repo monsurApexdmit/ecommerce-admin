@@ -15,9 +15,11 @@ import Image from "next/image"
 import { useStaff, type Staff } from "@/contexts/staff-context"
 import { StatsCards } from "@/components/ui/stats-card"
 import staffApi from "@/lib/staffApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 export default function StaffPage() {
   const { staff, roles, isLoading, addStaff, updateStaff, deleteStaff } = useStaff()
+  const { formatCurrency } = useCompanySettings()
   const [stats, setStats] = useState<{
     total: number
     active: number
@@ -298,7 +300,7 @@ export default function StaffPage() {
                         <span className="font-semibold text-gray-900">{member.role}</span>
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-emerald-600">
-                        ${member.salary.toLocaleString()}
+                        {formatCurrency(member.salary)}
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">

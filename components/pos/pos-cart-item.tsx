@@ -3,6 +3,7 @@
 import { Minus, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface CartItem {
     id: string
@@ -20,6 +21,8 @@ interface PosCartItemProps {
 }
 
 export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemProps) {
+    const { formatCurrency } = useCompanySettings()
+
     return (
         <div className="flex gap-2.5 p-2.5 bg-white border rounded-lg group hover:border-emerald-200 transition-colors">
             {/* Image */}
@@ -63,7 +66,7 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
                 {/* Price + Qty controls */}
                 <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-emerald-600">
-                        ${item.price.toFixed(2)}
+                        {formatCurrency(item.price)}
                     </p>
                     <div className="flex items-center gap-1">
                         <Button

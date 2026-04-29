@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Percent, DollarSign } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface DiscountModalProps {
     open: boolean
@@ -18,6 +19,7 @@ interface DiscountModalProps {
 export function DiscountModal({ open, onOpenChange, onApplyDiscount, currentSubtotal }: DiscountModalProps) {
     const [value, setValue] = useState("")
     const [type, setType] = useState<'fixed' | 'percentage'>('fixed')
+    const { formatCurrency } = useCompanySettings()
 
     // Reset when opened
     useEffect(() => {
@@ -74,7 +76,7 @@ export function DiscountModal({ open, onOpenChange, onApplyDiscount, currentSubt
                         </div>
                         {value && (
                             <p className="text-sm text-gray-500 text-right">
-                                Discount: <span className="font-medium text-emerald-600">-${calculatedDiscount().toFixed(2)}</span>
+                                Discount: <span className="font-medium text-emerald-600">-{formatCurrency(calculatedDiscount())}</span>
                             </p>
                         )}
                     </div>

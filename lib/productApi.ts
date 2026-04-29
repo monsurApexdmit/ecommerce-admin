@@ -152,6 +152,50 @@ export interface ProductListResponse {
   };
 }
 
+export interface ProductReviewReplyResponse {
+  body: string;
+  author_name: string;
+  replied_at: string | null;
+}
+
+export interface ProductReviewItemResponse {
+  id: number;
+  product_id: number;
+  customer_id: number | null;
+  customer_name: string;
+  rating: number;
+  comment: string;
+  verified_purchase: boolean;
+  created_at: string | null;
+  reply: ProductReviewReplyResponse | null;
+}
+
+export interface ProductReviewDistributionResponse {
+  stars: number;
+  count: number;
+  percent: number;
+}
+
+export interface ProductReviewSummaryResponse {
+  average_rating: number;
+  review_count: number;
+  distribution: ProductReviewDistributionResponse[];
+}
+
+export interface ProductReviewListResponse {
+  success: boolean;
+  data: {
+    summary: ProductReviewSummaryResponse;
+    reviews: ProductReviewItemResponse[];
+  };
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
 export interface CreateProductData {
   name: string;
   description?: string;
@@ -164,6 +208,10 @@ export interface CreateProductData {
   margin_type?: string;
   stock: number;
   published?: boolean;
+  is_hot_deal?: boolean;
+  is_best_seller?: boolean;
+  is_featured?: boolean;
+  deal_label?: string;
   sku?: string;
   barcode?: string;
   vendor_id?: number;
@@ -206,6 +254,10 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.sku !== undefined && data.sku !== '') fd.append('sku', data.sku);
   if (data.barcode !== undefined && data.barcode !== '') fd.append('barcode', data.barcode);
   if (data.published !== undefined) fd.append('published', data.published ? 'true' : 'false');
+  if (data.is_hot_deal !== undefined) fd.append('is_hot_deal', data.is_hot_deal ? '1' : '0');
+  if (data.is_best_seller !== undefined) fd.append('is_best_seller', data.is_best_seller ? '1' : '0');
+  if (data.is_featured !== undefined) fd.append('is_featured', data.is_featured ? '1' : '0');
+  if (data.deal_label !== undefined) fd.append('deal_label', data.deal_label ?? '');
   if (data.receipt_number !== undefined && data.receipt_number !== '') fd.append('receipt_number', data.receipt_number);
 
   if (data.attributes !== undefined) {
@@ -282,6 +334,26 @@ export const productApi = {
 
   getById: async (id: number): Promise<{ message: string; data: ProductResponse }> => {
     const response = await api.get(`/products/${id}`);
+    return response.data;
+  },
+
+  getReviews: async (id: number, params?: {
+    per_page?: number;
+  }): Promise<ProductReviewListResponse> => {
+    const response = await api.get(`/store/products/${id}/reviews`, { params });
+    return response.data;
+  },
+
+  replyToReview: async (
+    productId: number,
+    reviewId: number,
+    reply: string,
+  ): Promise<{ message: string; data: { id: number; reply: ProductReviewReplyResponse } }> => {
+    const response = await api.post(
+      `/products/${productId}/reviews/${reviewId}/reply`,
+      { reply },
+      { headers: { "Content-Type": "application/json" } },
+    );
     return response.data;
   },
 

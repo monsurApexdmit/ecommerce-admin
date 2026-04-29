@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { productApi } from '@/lib/productApi'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { useCompanySettings } from '@/contexts/company-settings-context'
 import { Loader2, Download, Printer, ArrowLeft, Copy } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
 
@@ -25,6 +26,7 @@ export default function ProductBarcodePage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  const { formatCurrency } = useCompanySettings()
   const barcodeRef = useRef<SVGSVGElement>(null)
 
   const productId = parseInt(params.id as string)
@@ -248,7 +250,7 @@ export default function ProductBarcodePage() {
             <!-- Price - PROMINENT -->
             <div class="price-section">
               <div class="price-label">PRICE</div>
-              <div class="price-value">$${price}</div>
+              <div class="price-value">${formatCurrency(Number(price))}</div>
             </div>
           </div>
 
