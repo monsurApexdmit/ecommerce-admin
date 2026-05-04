@@ -2,10 +2,9 @@
   "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
   "/dashboard/notifications/page": "app/dashboard/notifications/page.js",
   "/dashboard/orders/page": "app/dashboard/orders/page.js",
+  "/dashboard/orders/shipments/page": "app/dashboard/orders/shipments/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/pages/page": "app/dashboard/pages/page.js",
-  "/dashboard/products/page": "app/dashboard/products/page.js",
-  "/dashboard/staff/page": "app/dashboard/staff/page.js",
-  "/dashboard/staff/roles/page": "app/dashboard/staff/roles/page.js",
-  "/dashboard/support/page": "app/dashboard/support/page.js"
+  "/dashboard/pos/page": "app/dashboard/pos/page.js",
+  "/dashboard/support/page": "app/dashboard/support/page.js",
+  "/page": "app/page.js"
 }

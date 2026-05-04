@@ -19,8 +19,8 @@ export default function SalaryManagementPage() {
     })
     // Generate month options (last 12 months)
     const monthOptions = Array.from({ length: 12 }, (_, i) => {
-        const date = new Date()
-        date.setMonth(date.getMonth() - i)
+        const now = new Date()
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
         return `${date.toLocaleString('en-US', { month: 'short' })} ${date.getFullYear()}`
     })
 

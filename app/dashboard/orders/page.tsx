@@ -207,7 +207,9 @@ export default function OrdersPage() {
          <p style="font-size:13px;color:#6b7280;">${order.shippingAddressLine1 ?? ""}${order.shippingAddressLine2 ? ", " + order.shippingAddressLine2 : ""}</p>
          <p style="font-size:13px;color:#6b7280;">${[order.shippingCity, order.shippingState, order.shippingPostalCode].filter(Boolean).join(", ")}</p>
          <p style="font-size:13px;color:#6b7280;">${order.shippingCountry ?? ""}</p>`
-      : `<p style="font-weight:600;">${order.customerName}</p>`
+      : `<p style="font-weight:600;">${order.customerName}</p>
+         ${order.shippingEmail ? `<p style="font-size:13px;color:#6b7280;">${order.shippingEmail}</p>` : ""}
+         ${order.shippingPhone ? `<p style="font-size:13px;color:#6b7280;">${order.shippingPhone}</p>` : ""}`
 
     const itemsHtml = order.items?.length
       ? order.items.map((item, i) => `
@@ -574,7 +576,11 @@ export default function OrdersPage() {
                       {selectedOrder.shippingCountry && <p className="text-xs text-gray-600">{selectedOrder.shippingCountry}</p>}
                     </>
                   ) : (
-                    <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
+                    <>
+                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
+                      {(selectedOrder.shippingEmail) && <p className="text-xs text-gray-600">{selectedOrder.shippingEmail}</p>}
+                      {(selectedOrder.shippingPhone) && <p className="text-xs text-gray-600">{selectedOrder.shippingPhone}</p>}
+                    </>
                   )}
                 </div>
               </div>

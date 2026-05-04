@@ -1,38 +1,52 @@
-[00:00:00.590] Server  WARN     ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-[00:00:00.666] Server  LOG      ✓ Ready in 514ms
-[00:00:00.687] Server  ERROR   (node:318460) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+[00:00:00.925] Server  WARN     ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+[00:00:02.562] Server  LOG      ✓ Ready in 2.4s
+[00:00:10.317] Server  ERROR   (node:273861) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
 (Use `node --trace-warnings ...` to show where the warning was created)
-[00:00:03.612] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:03.795] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:00:03.795] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/support","route":"/dashboard/support"}
-[00:00:03.796] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/support?ticket=13 color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/support","o":"http://localhost:3001/dashboard/support?ticket=13","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777452634622} /_vercel/insights/view
-[00:00:04.997] Server  ERROR   (node:318460) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
-[00:02:25.958] Server  LOG      ✓ Compiled in 220ms
-[00:04:06.031] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/notifications color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/notifications","o":"http://localhost:3001/dashboard/notifications","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777452876725} /_vercel/insights/view
-[00:06:16.814] Server  LOG      ✓ Compiled in 108ms
-[00:06:39.985] Server  LOG      ✓ Compiled in 185ms
-[00:06:47.594] Server  LOG      ✓ Compiled in 64ms
-[00:15:41.831] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/support?ticket=14 color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/support","o":"http://localhost:3001/dashboard/support?ticket=14","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777453572639} /_vercel/insights/view
-[00:16:04.748] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777453595540} /_vercel/insights/view
-[00:17:30.799] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/staff color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/staff","o":"http://localhost:3001/dashboard/staff","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777453681505} /_vercel/insights/view
-[00:17:32.962] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/staff/roles color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/staff/roles","o":"http://localhost:3001/dashboard/staff/roles","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777453683679} /_vercel/insights/view
-[00:17:35.940] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[00:17:35.940] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[00:20:19.190] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/pages color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pages","o":"http://localhost:3001/dashboard/pages","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777453849927} /_vercel/insights/view
-[00:24:17.674] Server  LOG      ✓ Compiled in 169ms
-[00:26:31.948] Server  LOG      ✓ Compiled in 144ms
-[00:33:29.696] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:33:29.952] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
-[00:33:29.952] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/pages","route":"/dashboard/pages"}
-[00:33:29.952] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/pages color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pages","o":"http://localhost:3001/dashboard/pages","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777454640743} /_vercel/insights/view
-[00:35:22.132] Server  LOG      ✓ Compiled in 92ms
-[01:28:22.523] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777457933152} /_vercel/insights/view
-[01:28:26.305] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/products color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/products","o":"http://localhost:3001/dashboard/products","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777457936646} /_vercel/insights/view
-[01:28:31.887] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:28:31.887] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:29:09.328] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:29:09.328] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:29:25.784] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777457996591} /_vercel/insights/view
-[01:29:28.435] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777457999061} /_vercel/insights/view
-[01:29:31.117] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
-[01:29:31.118] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:10.318] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:00:10.554] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:00:10.554] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/","route":"/"}
+[00:00:10.554] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/ color: rgb(120, 120, 120) color: inherit {"dp":"/","o":"http://localhost:3001/","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777888515608} /_vercel/insights/view
+[00:00:11.440] Server  ERROR   (node:273861) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+[00:00:13.586] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777888518566} /_vercel/insights/view
+[00:00:20.441] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/pos color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pos","o":"http://localhost:3001/dashboard/pos","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777888525452} /_vercel/insights/view
+[00:00:22.276] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:22.276] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:28.151] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:28.151] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:40.960] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:40.961] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:50.139] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777888555166} /_vercel/insights/view
+[00:00:52.555] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:00:52.555] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:01:01.164] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders/shipments color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders/shipments","o":"http://localhost:3001/dashboard/orders/shipments","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777888566038} /_vercel/insights/view
+[00:01:55.385] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/pos color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pos","o":"http://localhost:3001/dashboard/pos","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777888620371} /_vercel/insights/view
+[00:09:03.079] Server  LOG      ✓ Compiled in 55ms
+[00:09:13.045] Server  LOG      ✓ Compiled in 56ms
+[00:09:23.950] Server  LOG      ✓ Compiled in 39ms
+[00:23:52.854] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/support color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/support","o":"http://localhost:3001/dashboard/support","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889937789} /_vercel/insights/view
+[00:24:01.775] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/notifications color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/notifications","o":"http://localhost:3001/dashboard/notifications","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889946675} /_vercel/insights/view
+[00:24:03.709] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders?search=INV-17778885459116 color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders?search=INV-17778885459116","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889948716} /_vercel/insights/view
+[00:24:10.216] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:24:10.216] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:24:10.216] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/orders","route":"/dashboard/orders"}
+[00:24:10.216] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders?search=INV-17778885459116 color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders?search=INV-17778885459116","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889955190} /_vercel/insights/view
+[00:24:13.191] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/notifications color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/notifications","o":"http://localhost:3001/dashboard/notifications","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889958094} /_vercel/insights/view
+[00:24:15.242] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders?search=INV-17778858209768 color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders?search=INV-17778858209768","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889960256} /_vercel/insights/view
+[00:24:17.143] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/notifications color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/notifications","o":"http://localhost:3001/dashboard/notifications","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889962100} /_vercel/insights/view
+[00:24:19.443] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:24:19.788] Browser LOG     %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[00:24:19.789] Browser LOG     %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {"path":"/dashboard/notifications","route":"/dashboard/notifications"}
+[00:24:19.789] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/notifications color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/notifications","o":"http://localhost:3001/dashboard/notifications","r":"","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889964665} /_vercel/insights/view
+[00:24:22.971] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders?search=INV-17778857628165 color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders?search=INV-17778857628165","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889967947} /_vercel/insights/view
+[00:24:25.895] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/notifications color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/notifications","o":"http://localhost:3001/dashboard/notifications","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889970871} /_vercel/insights/view
+[00:24:40.116] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard","o":"http://localhost:3001/dashboard","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889985155} /_vercel/insights/view
+[00:24:41.212] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/pos color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/pos","o":"http://localhost:3001/dashboard/pos","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777889986165} /_vercel/insights/view
+[00:24:50.074] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:24:50.074] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:27:35.116] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:27:35.116] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:27:38.848] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:27:38.848] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:27:47.485] Browser LOG     %c[Vercel Web Analytics]%c [view] http://localhost:3001/dashboard/orders color: rgb(120, 120, 120) color: inherit {"dp":"/dashboard/orders","o":"http://localhost:3001/dashboard/orders","sdkn":"@vercel/analytics/next","sdkv":"1.3.1","sv":"0.1.3","ts":1777890172495} /_vercel/insights/view
+[00:27:49.970] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+[00:27:49.970] Browser WARN    Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.

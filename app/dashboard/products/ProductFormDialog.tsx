@@ -61,18 +61,23 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const { toast } = useToast()
   const [barcodeCopied, setBarcodeCopied] = useState(false)
 
+  const randomAlphaNumeric = useCallback((len: number) => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    let result = ""
+    for (let i = 0; i < len; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return result
+  }, [])
+
+  const generateSkuCode = useCallback(() => {
+    return `SKU-${randomAlphaNumeric(8)}`
+  }, [randomAlphaNumeric])
+
   // Generate random barcode code (PROD-XXXXXXXX-XXXX format)
   const generateBarcodeCode = useCallback(() => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    const randomStr = (len: number) => {
-      let result = ''
-      for (let i = 0; i < len; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length))
-      }
-      return result
-    }
-    return `PROD-${randomStr(8)}-${randomStr(4)}`
-  }, [])
+    return `PROD-${randomAlphaNumeric(8)}-${randomAlphaNumeric(4)}`
+  }, [randomAlphaNumeric])
 
   const [formData, setFormData] = useState(emptyForm)
   const [isHotDeal, setIsHotDeal] = useState(false)
@@ -172,9 +177,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         }
       }).catch(console.error)
     } else {
-      // Auto-generate barcode for new product
+      // Auto-generate SKU and barcode for new product
+      const newSku = generateSkuCode()
       const newBarcode = generateBarcodeCode()
-      setFormData({ ...emptyForm, barcode: newBarcode })
+      setFormData({ ...emptyForm, sku: newSku, barcode: newBarcode })
       setUploadedImages([])
       setImageFiles([])
       setExistingImageUrls([])
@@ -187,7 +193,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
       setIsFeatured(false)
       setDealLabel("")
     }
-  }, [open, editingProduct, generateBarcodeCode])
+  }, [open, editingProduct, generateBarcodeCode, generateSkuCode])
 
   // Auto-select first warehouse when no location selected
   useEffect(() => {
@@ -466,20 +472,40 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="sku">Product SKU</Label>
-              <Input
-                id="sku"
-                value={formData.sku}
-                onChange={(e) => set("sku", e.target.value)}
-                placeholder="Product SKU"
-              />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sku">
+                  Product SKU
+                  <Badge className="ml-2 bg-emerald-600">Auto-Generated</Badge>
+                </Label>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  id="sku"
+                  value={formData.sku}
+                  onChange={(e) => set("sku", e.target.value)}
+                  placeholder="Product SKU"
+                  className="font-mono text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const newSku = generateSkuCode()
+                    set("sku", newSku)
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  Regenerate
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="barcode">
                   Product Barcode
-                  {!editingProduct && <Badge className="ml-2 bg-emerald-600">Auto-Generated</Badge>}
+                  <Badge className="ml-2 bg-emerald-600">Auto-Generated</Badge>
                 </Label>
                 {formData.barcode && (
                   <button

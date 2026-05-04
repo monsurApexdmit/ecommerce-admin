@@ -163,6 +163,15 @@ export interface CreateSellData {
   customerEmail?: string;
   customerPhone?: string;
   shippingAddressId?: number;
+  shippingFullName?: string;
+  shippingPhone?: string;
+  shippingEmail?: string;
+  shippingAddressLine1?: string;
+  shippingAddressLine2?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostalCode?: string;
+  shippingCountry?: string;
   method: string;
   amount: number;
   discount?: number;
