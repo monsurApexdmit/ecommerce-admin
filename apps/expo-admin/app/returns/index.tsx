@@ -18,7 +18,8 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   approveCustomerReturn,
   createCustomerReturn,
@@ -77,6 +78,7 @@ const pillStyles = StyleSheet.create({
 type Tab = "customer" | "vendor";
 
 export default function ReturnsScreen() {
+  const { formatCurrency } = useCurrency();
   const [tab, setTab] = useState<Tab>("customer");
 
   return (
@@ -113,6 +115,7 @@ export default function ReturnsScreen() {
 // ─── Customer Returns Tab ─────────────────────────────────────────────────────
 
 function CustomerReturnsTab() {
+  const { formatCurrency } = useCurrency();
   const [returns, setReturns] = useState<CustomerReturn[]>([]);
   const [stats, setStats] = useState<CustomerReturnStats>({ total: 0, pending: 0, approved: 0, rejected: 0, completed: 0, totalRefundAmount: 0 });
   const [loading, setLoading] = useState(true);
@@ -298,6 +301,7 @@ function CustomerReturnsTab() {
 // ─── Vendor Returns Tab ───────────────────────────────────────────────────────
 
 function VendorReturnsTab() {
+  const { formatCurrency } = useCurrency();
   const [returns, setReturns] = useState<VendorReturn[]>([]);
   const [stats, setStats] = useState<VendorReturnStats>({ total: 0, pending: 0, shipped: 0, receivedByVendor: 0, completed: 0, totalCreditAmount: 0 });
   const [loading, setLoading] = useState(true);
@@ -475,6 +479,7 @@ function VendorReturnsTab() {
 function AddCustomerReturnModal({ visible, onClose, onCreated }: {
   visible: boolean; onClose: () => void; onCreated: () => void;
 }) {
+  const { formatCurrency } = useCurrency();
   const [customers, setCustomers] = useState<{ id: number; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: number; name: string } | null>(null);
@@ -732,6 +737,7 @@ function AddCustomerReturnModal({ visible, onClose, onCreated }: {
 function AddVendorReturnModal({ visible, onClose, onCreated }: {
   visible: boolean; onClose: () => void; onCreated: () => void;
 }) {
+  const { formatCurrency } = useCurrency();
   const [vendorsList, setVendorsList] = useState<{ id: number; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedVendor, setSelectedVendor] = useState<{ id: number; name: string } | null>(null);
@@ -975,6 +981,7 @@ function AddVendorReturnModal({ visible, onClose, onCreated }: {
 function CustomerReturnDetailModal({ returnData, onClose, onAction }: {
   returnData: CustomerReturn; onClose: () => void; onAction: () => void;
 }) {
+  const { formatCurrency } = useCurrency();
   const [processing, setProcessing] = useState(false);
 
   const handleApprove = async () => {
@@ -1092,6 +1099,7 @@ function CustomerReturnDetailModal({ returnData, onClose, onAction }: {
 function VendorReturnDetailModal({ returnData, onClose, onAction }: {
   returnData: VendorReturn; onClose: () => void; onAction: (updated: VendorReturn) => void;
 }) {
+  const { formatCurrency } = useCurrency();
   const [processing, setProcessing] = useState(false);
 
   const FLOW = ["pending", "shipped", "received_by_vendor", "completed"] as const;

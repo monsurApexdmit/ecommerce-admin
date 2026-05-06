@@ -10,7 +10,7 @@ import {
 import { useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import { getProducts } from "@/services/products";
 import type { Product } from "@/types/product";
 import { BarcodeGraphic } from "@/components/products/BarcodeGraphic";
@@ -21,6 +21,7 @@ type QueueItem = {
 };
 
 export default function BulkBarcodesScreen() {
+  const { formatCurrency } = useCurrency();
   const navigation = useNavigation();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<Product[]>([]);

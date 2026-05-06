@@ -8,50 +8,93 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2 } from "lucide-react"
-import { settingsApi } from "@/lib/settingsApi"
+import { settingsApi, type StoreHours } from "@/lib/settingsApi"
 import { toast } from "sonner"
+
+type SavingSection = "general" | "business" | "notifications" | "storeHours" | "logo" | "banner" | null
+
+const DEFAULT_GENERAL_SETTINGS = {
+  storeName: "Dashtar Store",
+  storeEmail: "store@dashtar.com",
+  storePhone: "+1 (555) 123-4567",
+  storeAddress: "123 Business St, New York, NY 10001",
+  storeDescription: "Your one-stop shop for all your electronic and accessory needs.",
+}
+
+const DEFAULT_BUSINESS_SETTINGS = {
+  businessName: "Dashtar Store",
+  businessType: "Retail",
+  registrationNumber: "REG-2026-001",
+  gstNumber: "GST-123456789",
+  website: "https://dashtar.com",
+  socialLinks: {
+    facebook: "https://facebook.com/dashtar",
+    instagram: "https://instagram.com/dashtar",
+    twitter: "https://twitter.com/dashtar",
+  },
+  logoUrl: "",
+  bannerUrl: "",
+}
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  emailNotifications: true,
+  orderNotifications: true,
+  marketingEmails: false,
+}
+
+const DEFAULT_STORE_HOURS: StoreHours = {
+  monday: { open: "09:00", close: "17:00", isOpen: true },
+  tuesday: { open: "09:00", close: "17:00", isOpen: true },
+  wednesday: { open: "09:00", close: "17:00", isOpen: true },
+  thursday: { open: "09:00", close: "17:00", isOpen: true },
+  friday: { open: "09:00", close: "17:00", isOpen: true },
+  saturday: { open: "10:00", close: "15:00", isOpen: true },
+  sunday: { open: "", close: "", isOpen: false },
+}
+
+const mergeStoreHours = (storeHours: StoreHours = {}) => {
+  return Object.entries(DEFAULT_STORE_HOURS).reduce<StoreHours>((hours, [day, defaults]) => {
+    const dayHours = storeHours[day] ?? {}
+    hours[day] = {
+      open: dayHours.open ?? defaults.open,
+      close: dayHours.close ?? defaults.close,
+      isOpen: dayHours.isOpen ?? defaults.isOpen,
+    }
+    return hours
+  }, {})
+}
 
 export default function SettingsPage() {
   // Loading state
   const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
+  const [savingSection, setSavingSection] = useState<SavingSection>(null)
 
   // General Settings
-  const [storeName, setStoreName] = useState("Dashtar Store")
-  const [storeEmail, setStoreEmail] = useState("store@dashtar.com")
-  const [storePhone, setStorePhone] = useState("+1 (555) 123-4567")
-  const [storeAddress, setStoreAddress] = useState("123 Business St, New York, NY 10001")
-  const [storeDescription, setStoreDescription] = useState(
-    "Your one-stop shop for all your electronic and accessory needs.",
-  )
+  const [storeName, setStoreName] = useState(DEFAULT_GENERAL_SETTINGS.storeName)
+  const [storeEmail, setStoreEmail] = useState(DEFAULT_GENERAL_SETTINGS.storeEmail)
+  const [storePhone, setStorePhone] = useState(DEFAULT_GENERAL_SETTINGS.storePhone)
+  const [storeAddress, setStoreAddress] = useState(DEFAULT_GENERAL_SETTINGS.storeAddress)
+  const [storeDescription, setStoreDescription] = useState(DEFAULT_GENERAL_SETTINGS.storeDescription)
 
   // Business Settings
-  const [businessName, setBusinessName] = useState("")
-  const [businessType, setBusinessType] = useState("Retail")
-  const [registrationNumber, setRegistrationNumber] = useState("")
-  const [gstNumber, setGstNumber] = useState("")
-  const [website, setWebsite] = useState("")
-  const [facebook, setFacebook] = useState("")
-  const [instagram, setInstagram] = useState("")
-  const [twitter, setTwitter] = useState("")
-  const [logoUrl, setLogoUrl] = useState("")
-  const [bannerUrl, setBannerUrl] = useState("")
+  const [businessName, setBusinessName] = useState(DEFAULT_BUSINESS_SETTINGS.businessName)
+  const [businessType, setBusinessType] = useState(DEFAULT_BUSINESS_SETTINGS.businessType)
+  const [registrationNumber, setRegistrationNumber] = useState(DEFAULT_BUSINESS_SETTINGS.registrationNumber)
+  const [gstNumber, setGstNumber] = useState(DEFAULT_BUSINESS_SETTINGS.gstNumber)
+  const [website, setWebsite] = useState(DEFAULT_BUSINESS_SETTINGS.website)
+  const [facebook, setFacebook] = useState(DEFAULT_BUSINESS_SETTINGS.socialLinks.facebook)
+  const [instagram, setInstagram] = useState(DEFAULT_BUSINESS_SETTINGS.socialLinks.instagram)
+  const [twitter, setTwitter] = useState(DEFAULT_BUSINESS_SETTINGS.socialLinks.twitter)
+  const [logoUrl, setLogoUrl] = useState(DEFAULT_BUSINESS_SETTINGS.logoUrl)
+  const [bannerUrl, setBannerUrl] = useState(DEFAULT_BUSINESS_SETTINGS.bannerUrl)
 
   // Notification Settings
-  const [emailNotifications, setEmailNotifications] = useState(true)
-  const [orderNotifications, setOrderNotifications] = useState(true)
-  const [marketingEmails, setMarketingEmails] = useState(false)
+  const [emailNotifications, setEmailNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS.emailNotifications)
+  const [orderNotifications, setOrderNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS.orderNotifications)
+  const [marketingEmails, setMarketingEmails] = useState(DEFAULT_NOTIFICATION_SETTINGS.marketingEmails)
 
   // Store Hours
-  const [storeHours, setStoreHours] = useState({
-    monday: { open: "09:00", close: "17:00", isOpen: true },
-    tuesday: { open: "09:00", close: "17:00", isOpen: true },
-    wednesday: { open: "09:00", close: "17:00", isOpen: true },
-    thursday: { open: "09:00", close: "17:00", isOpen: true },
-    friday: { open: "09:00", close: "17:00", isOpen: true },
-    saturday: { open: "10:00", close: "15:00", isOpen: true },
-    sunday: { open: "", close: "", isOpen: false },
-  })
+  const [storeHours, setStoreHours] = useState<StoreHours>(mergeStoreHours())
 
   // Load settings on mount
   useEffect(() => {
@@ -61,42 +104,41 @@ export default function SettingsPage() {
   const loadSettings = async () => {
     try {
       setIsLoading(true)
-      const res = await settingsApi.getAll()
+      const [res, hoursRes] = await Promise.all([
+        settingsApi.getAll(),
+        settingsApi.getStoreHours(),
+      ])
       const data = res.data
 
       // Load all settings
-      if (data.general) {
-        setStoreName(data.general.storeName || "")
-        setStoreEmail(data.general.storeEmail || "")
-        setStorePhone(data.general.storePhone || "")
-        setStoreAddress(data.general.storeAddress || "")
-        setStoreDescription(data.general.storeDescription || "")
-      }
+      const general = data.general ?? {}
+      setStoreName(general.storeName ?? DEFAULT_GENERAL_SETTINGS.storeName)
+      setStoreEmail(general.storeEmail ?? DEFAULT_GENERAL_SETTINGS.storeEmail)
+      setStorePhone(general.storePhone ?? DEFAULT_GENERAL_SETTINGS.storePhone)
+      setStoreAddress(general.storeAddress ?? DEFAULT_GENERAL_SETTINGS.storeAddress)
+      setStoreDescription(general.storeDescription ?? DEFAULT_GENERAL_SETTINGS.storeDescription)
 
-      if (data.business) {
-        setBusinessName(data.business.businessName || "")
-        setBusinessType(data.business.businessType || "Retail")
-        setRegistrationNumber(data.business.registrationNumber || "")
-        setGstNumber(data.business.gstNumber || "")
-        setWebsite(data.business.website || "")
-        setFacebook(data.business.socialLinks?.facebook || "")
-        setInstagram(data.business.socialLinks?.instagram || "")
-        setTwitter(data.business.socialLinks?.twitter || "")
-        setLogoUrl(data.business.logoUrl || "")
-        setBannerUrl(data.business.bannerUrl || "")
-      }
+      const business = data.business ?? {}
+      const socialLinks = business.socialLinks ?? {}
+      setBusinessName(business.businessName ?? DEFAULT_BUSINESS_SETTINGS.businessName)
+      setBusinessType(business.businessType ?? DEFAULT_BUSINESS_SETTINGS.businessType)
+      setRegistrationNumber(business.registrationNumber ?? "")
+      setGstNumber(business.gstNumber ?? DEFAULT_BUSINESS_SETTINGS.gstNumber)
+      setWebsite(business.website ?? DEFAULT_BUSINESS_SETTINGS.website)
+      setFacebook(socialLinks.facebook ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.facebook)
+      setInstagram(socialLinks.instagram ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.instagram)
+      setTwitter(socialLinks.twitter ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.twitter)
+      setLogoUrl(business.logoUrl ?? "")
+      setBannerUrl(business.bannerUrl ?? "")
 
-      if (data.notifications) {
-        setEmailNotifications(data.notifications.emailNotifications || true)
-        setOrderNotifications(data.notifications.orderNotifications || true)
-        setMarketingEmails(data.notifications.marketingEmails || false)
-      }
+      const notifications = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(data.notifications ?? {}) }
+      setEmailNotifications(notifications.emailNotifications)
+      setOrderNotifications(notifications.orderNotifications)
+      setMarketingEmails(notifications.marketingEmails)
 
-      if (data.storeHours) {
-        setStoreHours(data.storeHours)
-      }
+      // Load store hours from dedicated endpoint (not included in getAll)
+      setStoreHours(mergeStoreHours(hoursRes.data))
 
-      toast.success("Settings loaded successfully")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to load settings")
     } finally {
@@ -106,7 +148,7 @@ export default function SettingsPage() {
 
   const handleSaveGeneral = async () => {
     try {
-      setIsSaving(true)
+      setSavingSection("general")
       await settingsApi.updateGeneral({
         storeName,
         storeEmail,
@@ -118,13 +160,13 @@ export default function SettingsPage() {
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleSaveBusiness = async () => {
     try {
-      setIsSaving(true)
+      setSavingSection("business")
       await settingsApi.updateBusiness({
         businessName,
         businessType,
@@ -137,13 +179,13 @@ export default function SettingsPage() {
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleSaveNotifications = async () => {
     try {
-      setIsSaving(true)
+      setSavingSection("notifications")
       await settingsApi.updateNotifications({
         emailNotifications,
         orderNotifications,
@@ -153,45 +195,48 @@ export default function SettingsPage() {
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleSaveStoreHours = async () => {
     try {
-      setIsSaving(true)
-      await settingsApi.updateStoreHours(storeHours)
+      setSavingSection("storeHours")
+      const res = await settingsApi.updateStoreHours(mergeStoreHours(storeHours))
+      if (Object.keys(res.data).length > 0) {
+        setStoreHours(mergeStoreHours(res.data))
+      }
       toast.success("Store hours saved successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleUploadLogo = async (file: File) => {
     try {
-      setIsSaving(true)
+      setSavingSection("logo")
       const res = await settingsApi.uploadLogo(file)
       setLogoUrl(res.data.logoUrl)
       toast.success("Logo uploaded successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to upload logo")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleUploadBanner = async (file: File) => {
     try {
-      setIsSaving(true)
+      setSavingSection("banner")
       const res = await settingsApi.uploadBanner(file)
       setBannerUrl(res.data.bannerUrl)
       toast.success("Banner uploaded successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to upload banner")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
@@ -401,10 +446,10 @@ export default function SettingsPage() {
           <div className="flex justify-end pt-4">
             <Button
               onClick={handleSaveBusiness}
-              disabled={isSaving}
+              disabled={savingSection === "business"}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isSaving ? (
+              {savingSection === "business" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
@@ -490,10 +535,10 @@ export default function SettingsPage() {
           <div className="flex justify-end">
             <Button
               onClick={handleSaveGeneral}
-              disabled={isSaving}
+              disabled={savingSection === "general"}
               className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {isSaving ? (
+              {savingSection === "general" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
@@ -554,10 +599,10 @@ export default function SettingsPage() {
         <div className="flex justify-end pt-4">
           <Button
             onClick={handleSaveStoreHours}
-            disabled={isSaving}
+            disabled={savingSection === "storeHours"}
             className="bg-orange-600 hover:bg-orange-700"
           >
-            {isSaving ? (
+            {savingSection === "storeHours" ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Saving...
@@ -609,10 +654,10 @@ export default function SettingsPage() {
           <div className="flex justify-end pt-4">
             <Button
               onClick={handleSaveNotifications}
-              disabled={isSaving}
+              disabled={savingSection === "notifications"}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isSaving ? (
+              {savingSection === "notifications" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...

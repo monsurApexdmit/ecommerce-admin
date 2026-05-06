@@ -20,7 +20,7 @@ import { createSell } from "@/services/pos";
 import { getTaxSettings } from "@/services/settings";
 import { getCustomers } from "@/services/customers";
 import type { Customer } from "@/services/customers";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import { PosProductCard } from "@/components/pos/PosProductCard";
 import { PosCartItem } from "@/components/pos/PosCartItem";
 import { DiscountModal } from "@/components/pos/DiscountModal";
@@ -38,6 +38,7 @@ function cartKey(productId: number, variantId?: number) {
 }
 
 export default function PosTab() {
+  const { formatCurrency } = useCurrency();
   // ── Data ──
   const [products, setProducts]       = useState<Product[]>([]);
   const [categories, setCategories]   = useState<Category[]>([]);
@@ -122,11 +123,16 @@ export default function PosTab() {
   const total         = subtotal - totalDiscount + tax;
 
   // ── Cart helpers ──
+  const calcDisplayPrice = (base: number, offerPrice?: number, offerType?: string) => {
+    if (!offerPrice || offerPrice <= 0) return base;
+    return offerType === "percentage" ? base * (1 - offerPrice / 100) : base - offerPrice;
+  };
+
   const addToCart = useCallback((product: Product, variant?: ProductVariant) => {
     const key = cartKey(product.id, variant ? Number(variant.id) : undefined);
     const price = variant
-      ? (variant.salePrice > 0 ? variant.salePrice : variant.price)
-      : (product.salePrice > 0 ? product.salePrice : product.price);
+      ? calcDisplayPrice(variant.salePrice > 0 ? variant.salePrice : variant.price, variant.offerPrice, variant.offerType)
+      : calcDisplayPrice(product.salePrice > 0 ? product.salePrice : product.price, product.offerPrice, product.offerType);
     const stock = variant ? variant.stock : product.stock;
 
     setCart((prev) => {
@@ -528,7 +534,7 @@ export default function PosTab() {
           <Text style={styles.variantTitle}>{variantProduct?.name}</Text>
           <Text style={styles.variantSubtitle}>Select a variant</Text>
           {variantProduct?.variants.map((v) => {
-            const price = v.salePrice > 0 ? v.salePrice : v.price;
+            const price = calcDisplayPrice(v.salePrice > 0 ? v.salePrice : v.price, v.offerPrice, v.offerType);
             return (
               <Pressable
                 key={v.id}

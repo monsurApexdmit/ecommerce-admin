@@ -16,7 +16,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   createSalaryPayment,
   deleteSalaryPayment,
@@ -48,6 +48,7 @@ const STATUS_COLORS = {
 };
 
 export default function SalaryScreen() {
+  const { formatCurrency } = useCurrency();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [payments, setPayments] = useState<SalaryPayment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -277,6 +278,7 @@ export default function SalaryScreen() {
 }
 
 function SumCard({ label, value, bg, text }: { label: string; value: number; bg: string; text: string }) {
+  const { formatCurrency } = useCurrency();
   return (
     <View style={[sumStyles.card, { backgroundColor: bg }]}>
       <Text style={[sumStyles.value, { color: text }]}>{formatCurrency(value)}</Text>

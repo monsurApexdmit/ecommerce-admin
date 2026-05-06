@@ -14,6 +14,8 @@ export default function OrdersStackLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
+        animation: "fade_from_bottom",
+        animationDuration: 220,
       }}
     />
   );

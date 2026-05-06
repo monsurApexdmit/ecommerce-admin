@@ -66,6 +66,10 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInReleaseBuilds') ?: false).toBoolean()
+def hasReleaseSigning = findProperty("MYAPP_UPLOAD_STORE_FILE") &&
+        findProperty("MYAPP_UPLOAD_STORE_PASSWORD") &&
+        findProperty("MYAPP_UPLOAD_KEY_ALIAS") &&
+        findProperty("MYAPP_UPLOAD_KEY_PASSWORD")
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -101,15 +105,21 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(findProperty("MYAPP_UPLOAD_STORE_FILE"))
+                storePassword findProperty("MYAPP_UPLOAD_STORE_PASSWORD")
+                keyAlias findProperty("MYAPP_UPLOAD_KEY_ALIAS")
+                keyPassword findProperty("MYAPP_UPLOAD_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"

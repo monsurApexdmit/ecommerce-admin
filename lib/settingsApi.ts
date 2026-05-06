@@ -164,13 +164,82 @@ export interface AllSettings {
   updatedAt?: string;
 }
 
+type ApiEnvelope<T> = { message?: string; data: T } | T;
+
+const unwrapData = <T = any>(payload: ApiEnvelope<T>): T => {
+  return ((payload as any)?.data ?? payload ?? {}) as T;
+};
+
+const withMessage = <T>(payload: any, data: T): { message: string; data: T } => ({
+  message: payload?.message ?? 'Settings updated',
+  data,
+});
+
+const normalizeBusiness = (data: any): BusinessSettings => ({
+  ...data,
+  logoUrl: data?.logoUrl ?? data?.logo_url ?? '',
+  bannerUrl: data?.bannerUrl ?? data?.banner_url ?? '',
+  auraShopHero: data?.auraShopHero ?? data?.aura_shop_hero,
+  socialLinks: data?.socialLinks ?? data?.social_links,
+});
+
+const STORE_HOUR_DAYS = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+] as const;
+
+const normalizeStoreHours = (payload: any): StoreHours => {
+  const data = unwrapData<any>(payload);
+  const storeHours = data?.storeHours ?? data?.store_hours ?? data ?? {};
+
+  return STORE_HOUR_DAYS.reduce<StoreHours>((hours, day) => {
+    const dayHours = storeHours?.[day];
+    if (dayHours && typeof dayHours === 'object') {
+      hours[day] = {
+        open: dayHours.open ?? '',
+        close: dayHours.close ?? '',
+        isOpen: Boolean(dayHours.isOpen),
+      };
+    }
+    return hours;
+  }, {});
+};
+
+const normalizeAllSettings = (payload: any): AllSettings => {
+  const data = unwrapData<any>(payload);
+  const business = {
+    ...(data?.business ?? data?.business_settings ?? {}),
+    logoUrl: data?.business?.logoUrl ?? data?.business_settings?.logoUrl ?? data?.logoUrl ?? data?.logo_url,
+    bannerUrl: data?.business?.bannerUrl ?? data?.business_settings?.bannerUrl ?? data?.bannerUrl ?? data?.banner_url,
+  };
+
+  return {
+    ...data,
+    general: data?.general ?? data?.general_settings ?? {},
+    tax: data?.tax ?? data?.tax_settings ?? {},
+    shipping: data?.shipping ?? data?.shipping_settings ?? {},
+    payment: data?.payment ?? data?.payment_settings ?? {},
+    business: normalizeBusiness(business),
+    regional: data?.regional ?? data?.regional_settings ?? {},
+    notifications: data?.notifications ?? data?.notification_settings ?? {},
+    storeHours: normalizeStoreHours(data?.storeHours ?? data?.store_hours ?? {}),
+    createdAt: data?.createdAt ?? data?.created_at,
+    updatedAt: data?.updatedAt ?? data?.updated_at,
+  };
+};
+
 // API Methods
 
 export const settingsApi = {
   // Get all settings
   getAll: async (): Promise<{ message: string; data: AllSettings }> => {
     const response = await api.get('/settings');
-    return response.data;
+    return withMessage(response.data, normalizeAllSettings(response.data));
   },
 
   // Get specific setting sections
@@ -211,7 +280,7 @@ export const settingsApi = {
 
   getStoreHours: async (): Promise<{ message: string; data: StoreHours }> => {
     const response = await api.get('/settings/store-hours');
-    return response.data;
+    return withMessage(response.data, normalizeStoreHours(response.data));
   },
 
   // Update specific sections
@@ -237,7 +306,7 @@ export const settingsApi = {
 
   updateBusiness: async (data: Partial<BusinessSettings>): Promise<{ message: string; data: BusinessSettings }> => {
     const response = await api.patch('/settings/business', data);
-    return response.data;
+    return withMessage(response.data, normalizeBusiness(unwrapData(response.data)));
   },
 
   updateRegional: async (data: Partial<RegionalSettings>): Promise<{ message: string; data: RegionalSettings }> => {
@@ -252,7 +321,7 @@ export const settingsApi = {
 
   updateStoreHours: async (data: StoreHours): Promise<{ message: string; data: StoreHours }> => {
     const response = await api.patch('/settings/store-hours', data);
-    return response.data;
+    return withMessage(response.data, normalizeStoreHours(response.data));
   },
 
   // Security & Files
@@ -271,7 +340,8 @@ export const settingsApi = {
     const response = await api.post('/settings/upload-logo', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    return response.data;
+    const data = unwrapData<any>(response.data);
+    return withMessage(response.data, { logoUrl: data?.logoUrl ?? data?.logo_url ?? '' });
   },
 
   uploadBanner: async (file: File): Promise<{ message: string; data: { bannerUrl: string } }> => {
@@ -280,7 +350,8 @@ export const settingsApi = {
     const response = await api.post('/settings/upload-banner', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    return response.data;
+    const data = unwrapData<any>(response.data);
+    return withMessage(response.data, { bannerUrl: data?.bannerUrl ?? data?.banner_url ?? '' });
   },
 
   uploadStorefrontImage: async (file: File): Promise<{ message: string; data: { imagePath: string; imageUrl: string } }> => {

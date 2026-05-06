@@ -13,7 +13,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   deleteCustomer,
   getCustomerById,
@@ -28,6 +29,7 @@ function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.lengt
 function avatarInitials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
 
 export default function CustomerDetailScreen() {
+  const { formatCurrency } = useCurrency();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [orders, setOrders] = useState<any[]>([]);

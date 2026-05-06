@@ -14,7 +14,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   deleteVendor,
   getVendorById,
@@ -37,6 +38,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function VendorDetailScreen() {
+  const { formatCurrency } = useCurrency();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [returns, setReturns] = useState<VendorReturn[]>([]);

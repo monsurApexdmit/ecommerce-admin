@@ -104,6 +104,8 @@ export default function PosPage() {
                         categoryId: categoryObj ? String(categoryObj.id) : p.category_id ? String(p.category_id) : undefined,
                         price: p.price,
                         salePrice: p.sale_price ?? p.salePrice ?? p.price,
+                        offerPrice: p.offerPrice ?? p.offer_price ?? undefined,
+                        offerType: p.offerType ?? p.offer_type ?? undefined,
                         stock: p.stock,
                         status: p.status || (p.stock > 0 ? "Selling" : "Out of Stock"),
                         published: p.published ?? true,
@@ -136,6 +138,8 @@ export default function PosPage() {
                             attributes: v.attributes || {},
                             price: v.price,
                             salePrice: v.salePrice ?? v.sale_price ?? v.price,
+                            offerPrice: v.offerPrice ?? v.offer_price ?? undefined,
+                            offerType: v.offerType ?? v.offer_type ?? undefined,
                             stock: v.stock,
                             sku: v.sku || "",
                             barcode: v.barcode,
@@ -208,7 +212,19 @@ export default function PosPage() {
         const cartItemId = variant ? `${product.id}-${variant.id}` : product.id
         const existingInCart = cart.find(item => item.id === cartItemId)
         if (availableStock <= 0) { toast.error("Not enough stock!"); return }
-        const price = variant ? (variant.salePrice || variant.price) : (product.salePrice || product.price)
+        const getDisplayPrice = (p: typeof product, v?: typeof variant) => {
+            if (v) {
+                const base = v.salePrice || v.price
+                const offerPrice = v.offerPrice ?? p.offerPrice
+                const offerType = v.offerType ?? p.offerType ?? "percentage"
+                if (offerPrice) return offerType === "percentage" ? base * (1 - offerPrice / 100) : base - offerPrice
+                return base
+            }
+            const base = p.salePrice || p.price
+            if (p.offerPrice) return p.offerType === "percentage" ? base * (1 - p.offerPrice / 100) : base - p.offerPrice
+            return base
+        }
+        const price = getDisplayPrice(product, variant ?? undefined)
         const selectedInventory = variant
             ? variant.inventory?.find(i => i.warehouseId === selectedWarehouseId)
             : product.inventory?.find(i => i.warehouseId === selectedWarehouseId)
@@ -470,7 +486,7 @@ export default function PosPage() {
                                                         <p className="text-xs text-gray-500">{product.category}</p>
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <p className="font-bold text-emerald-600 text-sm">{formatCurrency(product.salePrice || product.price)}</p>
+                                                        <p className="font-bold text-emerald-600 text-sm">{formatCurrency((() => { const b = product.salePrice || product.price; return product.offerPrice ? (product.offerType === "percentage" ? b * (1 - product.offerPrice / 100) : b - product.offerPrice) : b })())}</p>
                                                         <p className="text-xs text-gray-400">{stock} in stock</p>
                                                     </div>
                                                 </button>
@@ -663,7 +679,7 @@ export default function PosPage() {
                                         <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-emerald-600">{formatCurrency(Number(variant.salePrice || variant.price || 0))}</p>
+                                        <p className="font-bold text-emerald-600">{formatCurrency((() => { const b = variant.salePrice || variant.price || 0; const op = variant.offerPrice ?? selectedProductForVariant?.offerPrice; const ot = variant.offerType ?? selectedProductForVariant?.offerType ?? "percentage"; return op ? (ot === "percentage" ? b * (1 - op / 100) : b - op) : b })())}</p>
                                         <Badge variant="outline" className={variantStock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
                                             {variantStock > 0 ? `${variantStock} in stock` : "Out of stock"}
                                         </Badge>

@@ -18,7 +18,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   createVendor,
   deleteVendor,
@@ -32,6 +32,7 @@ function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.lengt
 function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
 
 export default function VendorsScreen() {
+  const { formatCurrency } = useCurrency();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

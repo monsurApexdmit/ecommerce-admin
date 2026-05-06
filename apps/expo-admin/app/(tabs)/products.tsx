@@ -16,7 +16,10 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { NotificationPreviewSheet } from "@/components/notifications/NotificationPreviewSheet";
 import { colors } from "@/constants/theme";
+import { useNotifications } from "@/context/NotificationContext";
+import { resolveNotificationRoute } from "@/lib/notification-routing";
 import { getAttributes, getCategories, getVendors, getWarehouses } from "@/services/catalog";
 import {
   deleteProduct,
@@ -40,6 +43,7 @@ type SortValue =
 
 export default function ProductsTab() {
   const router = useRouter();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
   const [products, setProducts] = useState<Product[]>([]);
   const [stats, setStats] = useState<ProductStats | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -62,7 +66,9 @@ export default function ProductsTab() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
   const [selectedPublished, setSelectedPublished] = useState<string>("");
   const [sortValue, setSortValue] = useState<SortValue>("default");
+  const [notificationVisible, setNotificationVisible] = useState(false);
   const searchActive = search.trim().length > 0;
+  const notificationPreview = useMemo(() => notifications.slice(0, 5), [notifications]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 350);
@@ -150,13 +156,20 @@ export default function ProductsTab() {
     }
   }, [hasNext, loadingMore, loading, loadPage, page]);
 
+  const getEffectivePrice = (p: typeof products[0]) => {
+    const base = p.salePrice > 0 ? p.salePrice : p.price;
+    if (!p.offerPrice || p.offerPrice <= 0) return base;
+    const final = p.offerType === "percentage" ? base * (1 - p.offerPrice / 100) : base - p.offerPrice;
+    return final > 0 && final < base ? final : base;
+  };
+
   const sortedProducts = useMemo(() => {
     const next = [...products];
     switch (sortValue) {
       case "price-asc":
-        return next.sort((a, b) => (a.salePrice || a.price) - (b.salePrice || b.price));
+        return next.sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));
       case "price-desc":
-        return next.sort((a, b) => (b.salePrice || b.price) - (a.salePrice || a.price));
+        return next.sort((a, b) => getEffectivePrice(b) - getEffectivePrice(a));
       case "published":
         return next.sort((a, b) => Number(b.published) - Number(a.published));
       case "unpublished":
@@ -262,6 +275,21 @@ export default function ProductsTab() {
     ]);
   };
 
+  const handleNotificationPress = async (notification: (typeof notifications)[number]) => {
+    setNotificationVisible(false);
+    if (!notification.readAt) {
+      await markAsRead(notification.id);
+    }
+
+    const route = resolveNotificationRoute(notification.actionUrl);
+    if (route) {
+      router.push(route as any);
+      return;
+    }
+
+    router.push("/notifications");
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={[styles.header, searchActive && { paddingTop: 12 }]}>
@@ -274,6 +302,14 @@ export default function ProductsTab() {
           )}
         </View>
         <View style={styles.headerActions}>
+          <Pressable style={styles.notificationButton} onPress={() => setNotificationVisible(true)}>
+            <Ionicons name="notifications-outline" size={20} color={colors.text} />
+            {unreadCount > 0 ? (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           <Pressable style={styles.iconButton} onPress={() => router.push("/products/barcodes")}>
             <Ionicons name="barcode-outline" size={18} color={colors.text} />
           </Pressable>
@@ -494,6 +530,17 @@ export default function ProductsTab() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <NotificationPreviewSheet
+        visible={notificationVisible}
+        notifications={notificationPreview}
+        onClose={() => setNotificationVisible(false)}
+        onPressNotification={(notification) => void handleNotificationPress(notification)}
+        onPressViewAll={() => {
+          setNotificationVisible(false);
+          router.push("/notifications");
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -564,6 +611,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  notificationButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.primaryDark,
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
   },
   iconButton: {
     width: 42,

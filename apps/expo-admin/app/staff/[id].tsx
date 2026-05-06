@@ -13,7 +13,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   deleteStaff,
   getStaffById,
@@ -34,6 +35,7 @@ const SALARY_STATUS_COLORS = {
 };
 
 export default function StaffDetailScreen() {
+  const { formatCurrency } = useCurrency();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [member, setMember] = useState<StaffMember | null>(null);
   const [payments, setPayments] = useState<SalaryPayment[]>([]);

@@ -50,6 +50,8 @@ export interface ProductVariant {
   attributes: Record<string, string>;
   price: number;
   salePrice: number;
+  offerPrice?: number;
+  offerType?: string;
   costPrice?: number;
   profitMargin?: number;
   marginType?: string;
@@ -109,6 +111,8 @@ export interface Product {
   categoryId?: number;
   price: number;
   salePrice: number;
+  offerPrice?: number;
+  offerType?: string;
   costPrice?: number;
   profitMargin?: number;
   marginType?: string;
@@ -176,6 +180,8 @@ export interface ProductDraft {
   locationId: number;
   price: number;
   salePrice: number;
+  offerPrice?: number;
+  offerType?: string;
   costPrice?: number;
   profitMargin?: number;
   marginType?: string;

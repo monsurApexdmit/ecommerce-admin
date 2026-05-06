@@ -1,8 +1,8 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
+import { useCurrency } from "@/context/CurrencyContext";
 import { getImageUrl } from "@/lib/images";
-import { formatCurrency } from "@/lib/format";
 import type { Product } from "@/types/product";
 
 type ProductListItemProps = {
@@ -28,8 +28,16 @@ export function ProductListItem({
   onLongPress,
   onMenuPress,
 }: ProductListItemProps) {
+  const { formatCurrency } = useCurrency();
   const imageUrl = getImageUrl(product.image);
-  const price = product.salePrice > 0 ? product.salePrice : product.price;
+  const basePrice = product.salePrice > 0 ? product.salePrice : product.price;
+  const offerFinal = product.offerPrice && product.offerPrice > 0
+    ? (product.offerType === "percentage"
+        ? basePrice * (1 - product.offerPrice / 100)
+        : basePrice - product.offerPrice)
+    : null;
+  const price = offerFinal !== null && offerFinal > 0 && offerFinal < basePrice ? offerFinal : basePrice;
+  const hasOffer = price < basePrice;
   const accent = STATUS_ACCENT[product.status] ?? colors.border;
 
   return (
@@ -76,6 +84,9 @@ export function ProductListItem({
           {/* Price + Stock + SKU */}
           <View style={styles.metaRow}>
             <Text style={styles.price}>{formatCurrency(price)}</Text>
+            {hasOffer && (
+              <Text style={styles.priceOriginal}>{formatCurrency(basePrice)}</Text>
+            )}
             <View style={styles.stockBadge}>
               <Ionicons name="layers-outline" size={11} color={colors.muted} />
               <Text style={styles.stockText}>Stock {product.stock ?? 0}</Text>
@@ -199,6 +210,12 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: 14,
     fontWeight: "800",
+    flexShrink: 0,
+  },
+  priceOriginal: {
+    color: colors.muted,
+    fontSize: 12,
+    textDecorationLine: "line-through",
     flexShrink: 0,
   },
   category: {

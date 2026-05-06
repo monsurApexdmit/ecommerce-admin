@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import { getActiveCoupons } from "@/services/pos";
 import type { Coupon } from "@/types/pos";
 
@@ -24,6 +24,7 @@ type Props = {
 };
 
 export function CouponModal({ visible, subtotal, appliedCoupon, onApply, onRemove, onClose }: Props) {
+  const { formatCurrency } = useCurrency();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(false);
 

@@ -35,7 +35,12 @@ export default function LoginScreen() {
     try {
       await signIn({ email: email.trim(), password });
     } catch (error: any) {
-      Alert.alert("Login failed", error?.response?.data?.message ?? "Unable to sign in. Check your credentials.");
+      const message =
+        error?.response?.data?.message ??
+        (error?.request && !error?.response
+          ? "Unable to reach the server. Check that your phone and backend are on the same network and that the API URL uses your PC LAN IP."
+          : "Unable to sign in. Check your credentials.");
+      Alert.alert("Login failed", message);
     }
   };
 

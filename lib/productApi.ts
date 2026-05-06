@@ -117,6 +117,10 @@ export interface ProductResponse {
   price: number;
   sale_price: number;
   salePrice: number;
+  offer_price?: number;
+  offerPrice?: number;
+  offer_type?: string;
+  offerType?: string;
   cost_price?: number;
   costPrice?: number;
   profit_margin?: number;
@@ -203,6 +207,8 @@ export interface CreateProductData {
   location_id: number;
   price: number;
   sale_price: number;
+  offer_price?: number;
+  offer_type?: string;
   cost_price?: number;
   profit_margin?: number;
   margin_type?: string;
@@ -247,6 +253,8 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.location_id !== undefined) fd.append('location_id', String(data.location_id));
   if (data.price !== undefined) fd.append('price', String(data.price));
   if (data.sale_price !== undefined) fd.append('sale_price', String(data.sale_price));
+  if (data.offer_price !== undefined) fd.append('offer_price', String(data.offer_price));
+  if (data.offer_type !== undefined) fd.append('offer_type', data.offer_type);
   if (data.cost_price !== undefined) fd.append('cost_price', String(data.cost_price));
   if (data.profit_margin !== undefined) fd.append('profit_margin', String(data.profit_margin));
   if (data.margin_type !== undefined) fd.append('margin_type', data.margin_type);

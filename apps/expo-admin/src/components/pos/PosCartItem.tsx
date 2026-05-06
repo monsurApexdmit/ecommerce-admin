@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import type { CartItem } from "@/types/pos";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
 };
 
 export function PosCartItem({ item, onIncrement, onDecrement, onRemove }: Props) {
+  const { formatCurrency } = useCurrency();
   return (
     <View style={styles.row}>
       <View style={styles.left}>

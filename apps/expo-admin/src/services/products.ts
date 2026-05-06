@@ -97,6 +97,10 @@ type ProductResponse = {
   price?: number | string | null;
   sale_price?: number | string | null;
   salePrice?: number | string | null;
+  offer_price?: number | string | null;
+  offerPrice?: number | string | null;
+  offer_type?: string | null;
+  offerType?: string | null;
   cost_price?: number | string | null;
   costPrice?: number | string | null;
   profit_margin?: number | string | null;
@@ -113,6 +117,8 @@ type ProductResponse = {
   barcode_code?: string | null;
   vendor_id?: number | null;
   vendorId?: number | null;
+  vendor_name?: string | null;
+  vendorName?: string | null;
   vendor?: { id: number; name?: string | null } | null;
   receipt_number?: string | null;
   receiptNumber?: string | null;
@@ -129,6 +135,8 @@ type ProductResponse = {
   inventory?: ProductInventoryResponse[] | null;
   created_at?: string | null;
   updated_at?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 type ProductReviewReplyResponse = {
@@ -326,6 +334,10 @@ function normalizeProduct(product: ProductResponse): Product {
     categoryId: categoryId ?? undefined,
     price,
     salePrice,
+    offerPrice: product.offerPrice ?? product.offer_price
+      ? toNumber(product.offerPrice ?? product.offer_price) || undefined
+      : undefined,
+    offerType: product.offerType ?? product.offer_type ?? undefined,
     costPrice:
       product.costPrice ?? product.cost_price ? toNumber(product.costPrice ?? product.cost_price) : undefined,
     profitMargin:
@@ -347,14 +359,14 @@ function normalizeProduct(product: ProductResponse): Product {
     barcode: product.barcode_code ?? product.barcode ?? undefined,
     receiptNumber: product.receiptNumber ?? product.receipt_number ?? undefined,
     vendorId: product.vendorId ?? product.vendor_id ?? undefined,
-    vendorName: product.vendor?.name ?? undefined,
+    vendorName: product.vendor?.name ?? product.vendorName ?? product.vendor_name ?? undefined,
     locationId,
     locationName: product.location?.name ?? undefined,
     attributes: normalizeAttributes(product.attributes),
     variants: normalizeVariants(product.variants),
     inventory: normalizeInventory(product.inventory),
-    createdAt: product.created_at ?? undefined,
-    updatedAt: product.updated_at ?? undefined,
+    createdAt: product.createdAt ?? product.created_at ?? undefined,
+    updatedAt: product.updatedAt ?? product.updated_at ?? undefined,
   };
 }
 
@@ -368,6 +380,14 @@ function buildFormData(draft: ProductDraft) {
   formData.append("price", String(draft.price));
   formData.append("sale_price", String(draft.salePrice));
   formData.append("stock", String(draft.stock));
+
+  if (draft.offerPrice !== undefined && draft.offerPrice > 0) {
+    formData.append("offer_price", String(draft.offerPrice));
+    formData.append("offer_type", draft.offerType ?? "percentage");
+  } else {
+    formData.append("offer_price", "");
+    formData.append("offer_type", "");
+  }
 
   if (draft.costPrice !== undefined) formData.append("cost_price", String(draft.costPrice));
   if (draft.profitMargin !== undefined) formData.append("profit_margin", String(draft.profitMargin));

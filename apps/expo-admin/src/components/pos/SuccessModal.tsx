@@ -1,7 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import type { CompletedSale } from "@/types/pos";
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
 };
 
 export function SuccessModal({ visible, sale, onNewOrder }: Props) {
+  const { formatCurrency } = useCurrency();
   if (!sale) return null;
 
   return (

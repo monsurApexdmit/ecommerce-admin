@@ -280,7 +280,7 @@ export default function TicketDetailScreen() {
 
   if (loading || !ticket) {
     return (
-      <SafeAreaView style={s.root} edges={["top"]}>
+      <SafeAreaView style={s.root} edges={["top", "bottom"]}>
         <View style={s.center}><ActivityIndicator color={colors.primaryDark} size="large" /></View>
       </SafeAreaView>
     );

@@ -2,7 +2,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { getImageUrl } from "@/lib/images";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import type { Product } from "@/types/product";
 
 type Props = {
@@ -12,9 +12,13 @@ type Props = {
 };
 
 export function PosProductCard({ product, cartQty, onAdd }: Props) {
+  const { formatCurrency } = useCurrency();
   const outOfStock = product.stock <= 0 && product.variants.length === 0;
   const imageUrl = getImageUrl(product.image);
-  const price = product.salePrice > 0 ? product.salePrice : product.price;
+  const basePrice = product.salePrice > 0 ? product.salePrice : product.price;
+  const price = product.offerPrice && product.offerPrice > 0
+    ? (product.offerType === "percentage" ? basePrice * (1 - product.offerPrice / 100) : basePrice - product.offerPrice)
+    : basePrice;
 
   return (
     <Pressable

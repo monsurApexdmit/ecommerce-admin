@@ -42,8 +42,11 @@ export default function MoreTab() {
     {
       title: "Store",
       items: [
-        { icon: "layers-outline",             label: "Inventory",  route: "/inventory",  iconBg: "#eff6ff" },
-        { icon: "people-outline",             label: "Customers",  route: "/customers",  iconBg: "#ecfdf5" },
+        { icon: "cube-outline",               label: "Products",   route: "/(tabs)/products", iconBg: "#ecfdf5" },
+        { icon: "receipt-outline",            label: "Orders",     route: "/(tabs)/orders",   iconBg: "#eff6ff" },
+        { icon: "cart-outline",               label: "POS",        route: "/(tabs)/pos",      iconBg: "#ecfeff" },
+        { icon: "layers-outline",             label: "Inventory",  route: "/inventory",  iconBg: "#fef9c3" },
+        { icon: "people-outline",             label: "Customers",  route: "/customers",  iconBg: "#f5f3ff" },
         { icon: "storefront-outline",         label: "Vendors",    route: "/vendors",    iconBg: "#fef3c7" },
         { icon: "return-down-back-outline",   label: "Returns",    route: "/returns",    iconBg: "#fce7f3" },
       ],
@@ -126,10 +129,10 @@ export default function MoreTab() {
 
         {/* Quick actions row */}
         <View style={styles.quickRow}>
-          <QuickAction icon="layers-outline" label="Inventory" onPress={() => router.push("/inventory")} />
-          <QuickAction icon="people-outline" label="Customers" onPress={() => router.push("/customers")} />
-          <QuickAction icon="person-outline" label="Staff" onPress={() => router.push("/staff")} />
-          <QuickAction icon="return-down-back-outline" label="Returns" onPress={() => router.push("/returns")} />
+          <QuickAction icon="cube-outline"    label="Products"  onPress={() => router.push("/(tabs)/products" as any)} />
+          <QuickAction icon="receipt-outline" label="Orders"    onPress={() => router.push("/(tabs)/orders" as any)} />
+          <QuickAction icon="cart-outline"    label="POS"       onPress={() => router.push("/(tabs)/pos" as any)} />
+          <QuickAction icon="people-outline"  label="Customers" onPress={() => router.push("/customers")} />
         </View>
 
         {/* Menu sections */}

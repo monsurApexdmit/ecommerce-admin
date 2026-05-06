@@ -41,6 +41,8 @@ const emptyForm = {
   categoryId: "",
   price: "",
   salePrice: "",
+  offerPrice: "",
+  offerType: "percentage",
   costPrice: "",
   profitMargin: "",
   marginType: "percentage",
@@ -116,6 +118,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           categoryId: p.categoryId ? String(p.categoryId) : "",
           price: String(p.price || ""),
           salePrice: String(p.salePrice || ""),
+          offerPrice: String(p.offerPrice || ""),
+          offerType: p.offerType || "percentage",
           costPrice: String(p.costPrice || p.cost_price || ""),
           profitMargin: String(p.profitMargin || p.profit_margin || ""),
           marginType: p.marginType || p.margin_type || "percentage",
@@ -149,6 +153,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           name: v.name || "",
           price: v.price || 0,
           salePrice: v.salePrice || 0,
+          offerPrice: v.offerPrice || undefined,
+          offerType: v.offerType || undefined,
           stock: v.stock || 0,
           sku: v.sku || "",
           barcode: v.barcode || "",
@@ -226,6 +232,16 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     }
   }, [formData.costPrice, formData.profitMargin, formData.marginType])
 
+  // Sync offer price/type changes to all existing variants
+  useEffect(() => {
+    const newOffer = formData.offerPrice ? Number(formData.offerPrice) : undefined
+    const newOfferType = formData.offerPrice ? formData.offerType : undefined
+    setGeneratedVariants(prev => {
+      if (prev.length === 0) return prev
+      return prev.map(v => ({ ...v, offerPrice: newOffer, offerType: newOfferType }))
+    })
+  }, [formData.offerPrice, formData.offerType])
+
   const set = useCallback((field: keyof typeof emptyForm, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }, [])
@@ -250,6 +266,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         locationId: formData.locationId || String(warehouses[0]?.id || ""),
         price: Number.parseFloat(formData.price),
         salePrice: Number.parseFloat(formData.salePrice),
+        offerPrice: formData.offerPrice ? Number.parseFloat(formData.offerPrice) : undefined,
+        offerType: formData.offerPrice ? formData.offerType : undefined,
         costPrice: formData.costPrice ? Number.parseFloat(formData.costPrice) : undefined,
         profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
         marginType: formData.marginType || "percentage",
@@ -304,6 +322,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         locationId: formData.locationId || editingProduct.locationId || String(warehouses[0]?.id || ""),
         price: Number.parseFloat(formData.price),
         salePrice: Number.parseFloat(formData.salePrice),
+        offerPrice: formData.offerPrice ? Number.parseFloat(formData.offerPrice) : undefined,
+        offerType: formData.offerPrice ? formData.offerType : undefined,
         costPrice: formData.costPrice ? Number.parseFloat(formData.costPrice) : undefined,
         profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
         marginType: formData.marginType || "percentage",
@@ -400,6 +420,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         attributes: variantAttributes,
         price: Number(formData.price) || 0,
         salePrice: Number(formData.salePrice) || 0,
+        offerPrice: formData.offerPrice ? Number(formData.offerPrice) : undefined,
+        offerType: formData.offerPrice ? formData.offerType : undefined,
         stock: Math.floor(Number(formData.stock) / combinations.length) || 0,
         sku: `${formData.sku}-${parts.map((p: string) => p.substring(0, 2).toUpperCase()).join("-")}`,
         inventory: [{ warehouseId: formData.locationId || String(warehouses[0]?.id || ""), quantity: Math.floor(Number(formData.stock) / combinations.length) || 0 }],
@@ -707,6 +729,59 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
             </div>
 
             <div className="space-y-2">
+              <Label>Offer / Discount</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => set("offerType", "percentage")}
+                  className={`px-3 py-2 rounded border text-sm transition-colors ${
+                    formData.offerType === "percentage"
+                      ? "bg-orange-100 border-orange-500 text-orange-900"
+                      : "bg-gray-100 border-gray-300 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  % Off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set("offerType", "flat")}
+                  className={`px-3 py-2 rounded border text-sm transition-colors ${
+                    formData.offerType === "flat"
+                      ? "bg-orange-100 border-orange-500 text-orange-900"
+                      : "bg-gray-100 border-gray-300 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  $ Flat
+                </button>
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                    {formData.offerType === "percentage" ? "%" : "$"}
+                  </span>
+                  <Input
+                    type="number"
+                    value={formData.offerPrice}
+                    onChange={(e) => set("offerPrice", e.target.value)}
+                    placeholder="0 = no offer"
+                    className="pl-7"
+                    min={0}
+                  />
+                </div>
+              </div>
+              {formData.offerPrice && formData.salePrice && (
+                <p className="text-xs text-orange-600 mt-1">
+                  Offer price:{" "}
+                  <strong>
+                    $
+                    {formData.offerType === "percentage"
+                      ? (Number(formData.salePrice) * (1 - Number(formData.offerPrice) / 100)).toFixed(2)
+                      : (Number(formData.salePrice) - Number(formData.offerPrice)).toFixed(2)}
+                  </strong>{" "}
+                  ({formData.offerPrice}{formData.offerType === "percentage" ? "%" : "$"} off ${formData.salePrice})
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="stock">Stock</Label>
               <div className="flex gap-2">
                 <Input
@@ -829,6 +904,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       <th className="p-2 text-left">Variant</th>
                       <th className="p-2 text-left">Price</th>
                       <th className="p-2 text-left">Sale Price</th>
+                      <th className="p-2 text-left">Offer (type + value)</th>
                       <th className="p-2 text-left">Stock</th>
                       <th className="p-2 text-left">SKU</th>
                       <th className="p-2 text-left">Action</th>
@@ -843,6 +919,30 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         </td>
                         <td className="p-2">
                           <Input type="number" className="h-8 w-24" value={variant.salePrice || ''} onChange={(e) => updateVariant(variant.id, 'salePrice', Number(e.target.value))} />
+                        </td>
+                        <td className="p-2">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => updateVariant(variant.id, 'offerType', 'percentage')}
+                                className={`px-1.5 py-1 rounded text-xs border ${(variant.offerType ?? 'percentage') === 'percentage' ? 'bg-orange-100 border-orange-400 text-orange-800' : 'bg-gray-100 border-gray-300 text-gray-600'}`}
+                              >%</button>
+                              <button
+                                type="button"
+                                onClick={() => updateVariant(variant.id, 'offerType', 'flat')}
+                                className={`px-1.5 py-1 rounded text-xs border ${variant.offerType === 'flat' ? 'bg-orange-100 border-orange-400 text-orange-800' : 'bg-gray-100 border-gray-300 text-gray-600'}`}
+                              >$</button>
+                              <Input type="number" className="h-7 w-16 text-xs" placeholder="0" value={variant.offerPrice || ''} onChange={(e) => updateVariant(variant.id, 'offerPrice', Number(e.target.value) || undefined)} />
+                            </div>
+                            {variant.offerPrice ? (
+                              <span className="text-xs text-orange-600">
+                                =${(variant.offerType ?? 'percentage') === 'percentage'
+                                  ? (variant.salePrice * (1 - variant.offerPrice / 100)).toFixed(2)
+                                  : (variant.salePrice - variant.offerPrice).toFixed(2)}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="p-2">
                           <Input type="number" className="h-8 w-24" value={variant.stock || ''} onChange={(e) => updateVariant(variant.id, 'stock', Number(e.target.value))} />

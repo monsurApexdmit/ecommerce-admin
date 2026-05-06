@@ -1,21 +1,9 @@
 {
   "app": {
-    "[project]/app/dashboard/notifications/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/orders/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/orders/shipments/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
     "[project]/app/dashboard/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
-    "[project]/app/dashboard/pos/page": [
-      "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
-    ],
-    "[project]/app/dashboard/support/page": [
+    "[project]/app/dashboard/products/page": [
       "static/media/cf514f5d0007dafa-s.p.417aa1a2.woff2"
     ],
     "[project]/app/page": [

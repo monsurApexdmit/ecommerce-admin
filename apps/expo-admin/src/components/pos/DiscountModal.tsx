@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 
 type DiscountType = "percentage" | "fixed";
 
@@ -24,6 +24,7 @@ type Props = {
 };
 
 export function DiscountModal({ visible, subtotal, currentDiscount, onApply, onClose }: Props) {
+  const { formatCurrency } = useCurrency();
   const [type, setType] = useState<DiscountType>("percentage");
   const [value, setValue] = useState("");
   const inputRef = useRef<TextInput>(null);

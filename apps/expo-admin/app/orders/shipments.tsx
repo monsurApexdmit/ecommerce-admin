@@ -12,10 +12,11 @@ import {
   View,
 } from "react-native";
 import { useNavigation } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   createShipment,
   getOrderByInvoice,
@@ -71,12 +72,14 @@ const emptyDraft: CreateShipmentDraft = {
 
 export default function ShipmentsScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const { formatCurrency } = useCurrency();
   const [shipments, setShipments]       = useState<Shipment[]>([]);
   const [stats, setStats]               = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, failed: 0 });
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
   const [searchQuery, setSearchQuery]   = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<ShipmentStatus | "">("");
   const [page, setPage]                 = useState(1);
   const [hasNext, setHasNext]           = useState(false);
   const [loadingMore, setLoadingMore]   = useState(false);
@@ -132,8 +135,13 @@ export default function ShipmentsScreen() {
     setStatusVisible(true);
   };
 
-  const statusOptions = useMemo(() => allowedNextStatuses(selectedShipment?.status ?? "pending"), [selectedShipment?.status]);
   const searchActive = searchQuery.trim().length > 0;
+  const compactHeader = searchActive || statusFilter !== "";
+  const statusOptions = useMemo(() => allowedNextStatuses(selectedShipment?.status ?? "pending"), [selectedShipment?.status]);
+  const visibleShipments = useMemo(
+    () => (statusFilter ? shipments.filter((item) => item.status === statusFilter) : shipments),
+    [shipments, statusFilter],
+  );
 
   const statCards = [
     { label: "Total",      value: stats.total,      bg: "#f1f5f9", text: colors.text },
@@ -143,13 +151,12 @@ export default function ShipmentsScreen() {
     { label: "Failed",     value: stats.failed,     bg: "#fee2e2", text: "#991b1b" },
   ];
 
-  return (
-    <SafeAreaView style={s.root} edges={["top"]}>
-      {/* Header */}
-      <View style={[s.header, searchQuery && { paddingTop: 10 }]}>
+  const listHeader = (
+    <>
+      <View style={[s.header, compactHeader && { paddingTop: 10 }]}>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Shipments</Text>
-          {!searchQuery && <Text style={s.subtitle}>Track deliveries and update status</Text>}
+          {!compactHeader && <Text style={s.subtitle}>Track deliveries and update status</Text>}
         </View>
         <Pressable style={s.createBtn} onPress={openCreate}>
           <Ionicons name="add" size={18} color="#fff" />
@@ -157,7 +164,6 @@ export default function ShipmentsScreen() {
         </Pressable>
       </View>
 
-      {/* Search */}
       <View style={s.searchRow}>
         <View style={s.searchWrap}>
           <Ionicons name="search" size={16} color={colors.muted} />
@@ -170,8 +176,7 @@ export default function ShipmentsScreen() {
         </View>
       </View>
 
-      {/* Stat chips — hidden while searching */}
-      {!searchActive && (
+      {!compactHeader && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.statScroll} contentContainerStyle={s.statRow}>
           {statCards.map((c) => (
             <View key={c.label} style={[s.statChip, { backgroundColor: c.bg }]}>
@@ -182,30 +187,32 @@ export default function ShipmentsScreen() {
         </ScrollView>
       )}
 
-      {/* Status filter tabs */}
-      {!searchActive && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
-          {["", ...shipmentFlow].map((value) => {
-            const label = value ? value.replace(/_/g, " ") : "All";
-            const active = value === statusFilter;
-            const dot = value ? statusDot(value) : colors.muted;
-            return (
-              <Pressable key={label} style={[s.tab, active && s.tabActive]} onPress={() => setStatusFilter(value)}>
-                {value ? <View style={[s.tabDot, { backgroundColor: dot }]} /> : null}
-                <Text style={[s.tabText, active && s.tabTextActive]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
+        {["", ...shipmentFlow].map((value) => {
+          const label = value ? value.replace(/_/g, " ") : "All";
+          const active = value === statusFilter;
+          const dot = value ? statusDot(value) : colors.muted;
+          return (
+            <Pressable key={label} style={[s.tab, active && s.tabActive]} onPress={() => setStatusFilter(value as ShipmentStatus | "")}>
+              {value ? <View style={[s.tabDot, { backgroundColor: dot }]} /> : null}
+              <Text style={[s.tabText, active && s.tabTextActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </>
+  );
 
-      {/* List */}
+  return (
+    <SafeAreaView style={s.root} edges={["top"]}>
       {loading ? (
         <View style={s.center}><ActivityIndicator color={colors.primaryDark} size="large" /></View>
       ) : (
         <FlatList
-          data={shipments}
+          style={s.list}
+          data={visibleShipments}
           keyExtractor={(item) => String(item.id)}
+          ListHeaderComponent={listHeader}
           renderItem={({ item }) => {
             const dot = statusDot(item.status);
             return (
@@ -258,17 +265,17 @@ export default function ShipmentsScreen() {
               <Text style={s.emptyText}>Adjust filters or create a new shipment.</Text>
             </View>
           }
-          contentContainerStyle={s.listContent}
+          contentContainerStyle={[s.listContent, visibleShipments.length === 0 && s.listContentEmpty]}
         />
       )}
 
       {/* ── Create Modal ── */}
-      <Modal visible={createVisible} transparent animationType="slide" onRequestClose={() => setCreateVisible(false)}>
+      <Modal visible={createVisible} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setCreateVisible(false)}>
         <Pressable style={s.backdrop} onPress={() => setCreateVisible(false)}>
           <Pressable style={s.sheet} onPress={() => undefined}>
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>Create Shipment</Text>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: Math.max(insets.bottom, 12) }}>
               <LabeledInput label="Invoice number" value={invoiceLookup} onChangeText={setInvoiceLookup} placeholder="#INV-1001" />
               <Pressable style={s.lookupBtn} onPress={async () => {
                 const found = await getOrderByInvoice(invoiceLookup);
@@ -315,96 +322,105 @@ export default function ShipmentsScreen() {
       </Modal>
 
       {/* ── View Details Modal ── */}
-      <Modal visible={viewVisible} transparent animationType="slide" onRequestClose={() => setViewVisible(false)}>
-        <Pressable style={s.backdrop} onPress={() => setViewVisible(false)}>
-          <Pressable style={s.sheet} onPress={() => undefined}>
+      <Modal visible={viewVisible} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setViewVisible(false)}>
+        <View style={s.backdrop}>
+          <Pressable style={s.backdropTouchable} onPress={() => setViewVisible(false)} />
+          <View style={s.detailSheet}>
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>Shipment Details</Text>
             {selectedShipment ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 8 }}>
-                {/* Status banner */}
-                <View style={[s.statusBanner, { backgroundColor: (STATUS_COLOR[selectedShipment.status]?.bg ?? "#f1f5f9") }]}>
-                  <View style={[s.statusBannerDot, { backgroundColor: statusDot(selectedShipment.status) }]} />
-                  <Text style={[s.statusBannerText, { color: STATUS_COLOR[selectedShipment.status]?.text ?? colors.text }]}>
-                    {selectedShipment.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </Text>
-                </View>
-
-                {/* Info cards */}
-                <View style={s.infoCard}>
-                  <Text style={s.infoCardTitle}>Order Info</Text>
-                  <InfoRow icon="receipt-outline" label="Order" value={`#${selectedShipment.sell?.invoiceNo ?? selectedShipment.sellId}`} />
-                  <InfoRow icon="person-outline" label="Customer" value={selectedShipment.sell?.customerName ?? "—"} />
-                </View>
-
-                <View style={s.infoCard}>
-                  <Text style={s.infoCardTitle}>Delivery Info</Text>
-                  <InfoRow icon="barcode-outline" label="Tracking" value={selectedShipment.trackingNumber || "—"} />
-                  <InfoRow icon="car-outline" label="Carrier" value={selectedShipment.carrier || "—"} />
-                  <InfoRow icon="navigate-outline" label="Method" value={selectedShipment.shippingMethod || "—"} />
-                  <InfoRow icon="cash-outline" label="Cost" value={formatCurrency(Number(selectedShipment.shippingCost ?? 0))} />
-                </View>
-
-                <View style={s.infoCard}>
-                  <Text style={s.infoCardTitle}>Timeline</Text>
-                  <InfoRow icon="send-outline" label="Shipped" value={formatDateTime(selectedShipment.shippedAt || selectedShipment.createdAt)} />
-                  <InfoRow icon="calendar-outline" label="Estimated" value={formatDateTime(selectedShipment.estimatedDelivery)} />
-                  <InfoRow icon="checkmark-circle-outline" label="Delivered" value={formatDateTime(selectedShipment.deliveredAt)} />
-                </View>
-
-                {selectedShipment.notes ? (
-                  <View style={s.notesCard}>
-                    <Ionicons name="document-text-outline" size={14} color={colors.muted} />
-                    <Text style={s.notesText}>{selectedShipment.notes}</Text>
+              <View style={s.detailSheetBody}>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 12, paddingBottom: 16 }}
+                  nestedScrollEnabled
+                >
+                  {/* Status banner */}
+                  <View style={[s.statusBanner, { backgroundColor: (STATUS_COLOR[selectedShipment.status]?.bg ?? "#f1f5f9") }]}>
+                    <View style={[s.statusBannerDot, { backgroundColor: statusDot(selectedShipment.status) }]} />
+                    <Text style={[s.statusBannerText, { color: STATUS_COLOR[selectedShipment.status]?.text ?? colors.text }]}>
+                      {selectedShipment.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </Text>
                   </View>
-                ) : null}
 
-                {(selectedShipment.trackingHistory ?? []).length > 0 ? (
-                  <View style={{ gap: 8 }}>
-                    <Text style={s.historyTitle}>Tracking History</Text>
-                    {(selectedShipment.trackingHistory ?? []).map((event, idx) => {
-                      const dot = statusDot(event.status);
-                      return (
-                        <View key={event.id} style={s.historyItem}>
-                          <View style={s.historyLine}>
-                            <View style={[s.historyDot, { backgroundColor: dot }]} />
-                            {idx < (selectedShipment.trackingHistory ?? []).length - 1 && <View style={s.historyConnector} />}
-                          </View>
-                          <View style={s.historyContent}>
-                            <View style={s.historyHeader}>
-                              <Text style={[s.historyStatus, { color: dot }]}>
-                                {event.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                              </Text>
-                              <Text style={s.historyTime}>{formatDateTime(event.eventTime)}</Text>
+                  {/* Info cards */}
+                  <View style={s.infoCard}>
+                    <Text style={s.infoCardTitle}>Order Info</Text>
+                    <InfoRow icon="receipt-outline" label="Order" value={`#${selectedShipment.sell?.invoiceNo ?? selectedShipment.sellId}`} />
+                    <InfoRow icon="person-outline" label="Customer" value={selectedShipment.sell?.customerName ?? "—"} />
+                  </View>
+
+                  <View style={s.infoCard}>
+                    <Text style={s.infoCardTitle}>Delivery Info</Text>
+                    <InfoRow icon="barcode-outline" label="Tracking" value={selectedShipment.trackingNumber || "—"} />
+                    <InfoRow icon="car-outline" label="Carrier" value={selectedShipment.carrier || "—"} />
+                    <InfoRow icon="navigate-outline" label="Method" value={selectedShipment.shippingMethod || "—"} />
+                    <InfoRow icon="cash-outline" label="Cost" value={formatCurrency(Number(selectedShipment.shippingCost ?? 0))} />
+                  </View>
+
+                  <View style={s.infoCard}>
+                    <Text style={s.infoCardTitle}>Timeline</Text>
+                    <InfoRow icon="send-outline" label="Shipped" value={formatDateTime(selectedShipment.shippedAt || selectedShipment.createdAt)} />
+                    <InfoRow icon="calendar-outline" label="Estimated" value={formatDateTime(selectedShipment.estimatedDelivery)} />
+                    <InfoRow icon="checkmark-circle-outline" label="Delivered" value={formatDateTime(selectedShipment.deliveredAt)} />
+                  </View>
+
+                  {selectedShipment.notes ? (
+                    <View style={s.notesCard}>
+                      <Ionicons name="document-text-outline" size={14} color={colors.muted} />
+                      <Text style={s.notesText}>{selectedShipment.notes}</Text>
+                    </View>
+                  ) : null}
+
+                  {(selectedShipment.trackingHistory ?? []).length > 0 ? (
+                    <View style={{ gap: 8 }}>
+                      <Text style={s.historyTitle}>Tracking History</Text>
+                      {(selectedShipment.trackingHistory ?? []).map((event, idx) => {
+                        const dot = statusDot(event.status);
+                        return (
+                          <View key={event.id} style={s.historyItem}>
+                            <View style={s.historyLine}>
+                              <View style={[s.historyDot, { backgroundColor: dot }]} />
+                              {idx < (selectedShipment.trackingHistory ?? []).length - 1 && <View style={s.historyConnector} />}
                             </View>
-                            {event.location ? <Text style={s.historyMeta}><Ionicons name="location-outline" size={11} /> {event.location}</Text> : null}
-                            {event.description ? <Text style={s.historyDesc}>{event.description}</Text> : null}
+                            <View style={s.historyContent}>
+                              <View style={s.historyHeader}>
+                                <Text style={[s.historyStatus, { color: dot }]}>
+                                  {event.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                                </Text>
+                                <Text style={s.historyTime}>{formatDateTime(event.eventTime)}</Text>
+                              </View>
+                              {event.location ? <Text style={s.historyMeta}><Ionicons name="location-outline" size={11} /> {event.location}</Text> : null}
+                              {event.description ? <Text style={s.historyDesc}>{event.description}</Text> : null}
+                            </View>
                           </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                ) : null}
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </ScrollView>
 
-                <Pressable style={s.updateStatusBtn} onPress={() => { setViewVisible(false); if (selectedShipment) openStatusUpdate(selectedShipment); }}>
-                  <Ionicons name="refresh-outline" size={16} color="#fff" />
-                  <Text style={s.updateStatusBtnText}>Update Status</Text>
-                </Pressable>
-              </ScrollView>
+                <View style={[s.detailActionBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                  <Pressable style={s.updateStatusBtn} onPress={() => { setViewVisible(false); if (selectedShipment) openStatusUpdate(selectedShipment); }}>
+                    <Ionicons name="refresh-outline" size={16} color="#fff" />
+                    <Text style={s.updateStatusBtnText}>Update Status</Text>
+                  </Pressable>
+                </View>
+              </View>
             ) : (
               <View style={s.center}><ActivityIndicator color={colors.primaryDark} /></View>
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       {/* ── Status Update Modal ── */}
-      <Modal visible={statusVisible} transparent animationType="slide" onRequestClose={() => setStatusVisible(false)}>
+      <Modal visible={statusVisible} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setStatusVisible(false)}>
         <Pressable style={s.backdrop} onPress={() => setStatusVisible(false)}>
           <Pressable style={s.sheet} onPress={() => undefined}>
             <View style={s.sheetHandle} />
             <Text style={s.sheetTitle}>Update Status</Text>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: Math.max(insets.bottom, 12) }}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.statusChips}>
                 {statusOptions.map((status) => {
                   const active = statusDraft.status === status;
@@ -588,8 +604,10 @@ const s = StyleSheet.create({
   tabTextActive: { color: colors.primaryDark },
 
   // List
+  list: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { padding: 12, paddingTop: 8, paddingBottom: 32 },
+  listContentEmpty: { flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: "center" },
   empty: { alignItems: "center", gap: 10, paddingTop: 80 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },
@@ -607,8 +625,23 @@ const s = StyleSheet.create({
   updateBtnText: { color: colors.primaryDark, fontSize: 12, fontWeight: "700" },
 
   // Modal sheet
-  backdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.4)", justifyContent: "flex-end" },
-  sheet: { maxHeight: "90%", backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32, gap: 14 },
+  backdrop: { flex: 1, backgroundColor: "rgba(241,245,249,0.76)", justifyContent: "flex-end" },
+  backdropTouchable: { ...StyleSheet.absoluteFillObject },
+  sheet: { maxHeight: "90%", backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 12, gap: 14 },
+  detailSheet: {
+    height: "90%",
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    gap: 14,
+  },
+  detailSheetBody: { flex: 1, minHeight: 0, gap: 12 },
+  detailActionBar: {
+    paddingTop: 8,
+    backgroundColor: colors.surface,
+  },
   sheetHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, marginBottom: 6 },
   sheetTitle: { color: colors.text, fontSize: 20, fontWeight: "800" },
   sheetActions: { flexDirection: "row", gap: 10, marginTop: 6 },

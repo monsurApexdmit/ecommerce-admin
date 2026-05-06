@@ -18,7 +18,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   createCustomer,
   deleteCustomer,
@@ -38,6 +38,7 @@ const AVATAR_COLORS = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf
 function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.length]; }
 
 export default function CustomersScreen() {
+  const { formatCurrency } = useCurrency();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,6 +245,7 @@ function CustomerCard({ customer, onPress, onDelete }: {
   onPress: () => void;
   onDelete: () => void;
 }) {
+  const { formatCurrency } = useCurrency();
   const bg = avatarColor(customer.id);
   return (
     <Pressable style={cardStyles.card} onPress={onPress}>

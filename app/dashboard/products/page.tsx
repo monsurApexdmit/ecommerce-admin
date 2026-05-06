@@ -183,69 +183,83 @@ export default function ProductsPage() {
   const columns: Column[] = [
     {
       key: "name",
-      label: "Product Name",
-      width: "min-w-[200px]",
+      label: "Product",
+      width: "min-w-[180px] max-w-[220px]",
       render: (value, item: Product) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <img
             src={item.image || "/placeholder.svg"}
             alt={item.name}
-            className="w-10 h-10 rounded object-cover flex-shrink-0"
+            className="w-9 h-9 rounded object-cover flex-shrink-0"
             onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
           />
-          <span className="font-medium text-gray-900 truncate">{item.name}</span>
+          <div className="min-w-0">
+            <p className="font-medium text-gray-900 truncate text-sm">{item.name}</p>
+            <p className="text-xs text-gray-400 truncate">{item.category}</p>
+          </div>
         </div>
       ),
     },
-    { key: "receiptNumber", label: "Receipt No.", width: "min-w-[100px]", render: (v) => v || "-" },
-    { key: "category", label: "Category", width: "min-w-[120px]" },
     {
       key: "price",
       label: "Price",
       width: "min-w-[90px]",
-      render: (value) => formatCurrency(value || 0),
+      render: (value) => <span className="text-sm text-gray-600">{formatCurrency(value || 0)}</span>,
     },
     {
       key: "salePrice",
-      label: "Sale Price",
-      width: "min-w-[100px]",
-      render: (value, item: Product) => formatCurrency(value || item.price || 0),
+      label: "Pricing",
+      width: "min-w-[130px]",
+      render: (value, item: Product) => {
+        const offerFinal = item.offerPrice
+          ? (item.offerType === "percentage" ? item.salePrice * (1 - item.offerPrice / 100) : item.salePrice - item.offerPrice)
+          : null
+        return (
+          <div className="flex flex-col gap-0">
+            {offerFinal ? (
+              <>
+                <span className="font-bold text-orange-600 text-sm">{formatCurrency(offerFinal)}</span>
+                <span className="text-xs text-gray-400 line-through">{formatCurrency(item.salePrice)}</span>
+                <span className="text-[10px] text-orange-500">{item.offerType === "percentage" ? `${item.offerPrice}% off` : `${formatCurrency(item.offerPrice!)} off`}</span>
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-emerald-600 text-sm">{formatCurrency(item.salePrice || item.price)}</span>
+                {item.price > item.salePrice && <span className="text-xs text-gray-400 line-through">{formatCurrency(item.price)}</span>}
+              </>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: "stock",
       label: "Stock",
       width: "min-w-[80px]",
-      render: (value) => {
-        if (value < 5) {
-          return (
-            <div className="flex flex-col gap-0.5">
-              <span className="font-bold text-orange-600 text-base">{value}</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white w-fit tracking-wide uppercase shadow-sm">Low Stock</span>
-            </div>
-          )
-        }
-        return <span className="text-sm text-gray-600">{value}</span>
-      },
+      render: (value) => value < 5 ? (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-bold text-orange-600">{value}</span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500 text-white w-fit uppercase">Low</span>
+        </div>
+      ) : <span className="text-sm text-gray-600">{value}</span>,
     },
     {
       key: "vendorId",
       label: "Vendor",
-      width: "min-w-[120px]",
-      render: (value, item: Product) =>
+      width: "min-w-[110px]",
+      render: (value) =>
         value ? (
-          <Link href={`/dashboard/vendors/${value}`} className="text-emerald-600 hover:underline truncate">
+          <Link href={`/dashboard/vendors/${value}`} className="text-emerald-600 hover:underline text-xs truncate block max-w-[100px]">
             {vendors.find(v => v.id === value)?.name || "Unknown"}
           </Link>
-        ) : (
-          <span className="text-gray-400">No Vendor</span>
-        ),
+        ) : <span className="text-gray-400 text-xs">—</span>,
     },
     {
       key: "locationName",
       label: "Location",
-      width: "min-w-[120px]",
+      width: "min-w-[100px]",
       render: (value, item: Product) =>
-        value || (item.locationId ? warehouses.find(w => String(w.id) === item.locationId)?.name : null) || "-",
+        <span className="text-xs text-gray-600">{value || (item.locationId ? warehouses.find(w => String(w.id) === item.locationId)?.name : null) || "—"}</span>,
     },
     {
       key: "status",
@@ -404,124 +418,161 @@ export default function ProductsPage() {
 
       {/* View Product Details Dialog */}
       <Dialog open={!!viewingProduct} onOpenChange={() => setViewingProduct(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="p-6 border-b">
-            <DialogTitle className="text-2xl">Product Details</DialogTitle>
-          </DialogHeader>
-          {viewingProduct && (
-            <div className="space-y-6 p-6 overflow-y-auto flex-1">
-              <div className="flex items-start gap-6">
-                <img
-                  src={viewingProduct.image || "/placeholder.svg"}
-                  alt={viewingProduct.name}
-                  className="w-32 h-32 rounded-lg object-cover border"
-                />
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">{viewingProduct.name}</h3>
-                    <p className="text-sm text-gray-600">{viewingProduct.description}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex px-3 py-1 text-sm font-medium rounded-full bg-emerald-100 text-emerald-700">
-                      {viewingProduct.status}
-                    </span>
-                    <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${viewingProduct.published ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}`}>
-                      {viewingProduct.published ? "Published" : "Draft"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-6 pt-4 border-t">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Category</p>
-                  <p className="font-semibold text-gray-900">{viewingProduct.category || (viewingProduct.categoryId ? allCategories.find(c => c.id === viewingProduct.categoryId)?.category_name : null) || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Vendor</p>
-                  <p className="font-semibold text-gray-900">
-                    {viewingProduct.vendorId ? (vendors.find(v => v.id === viewingProduct.vendorId)?.name || viewingProduct.vendorId) : "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Location</p>
-                  <p className="font-semibold text-gray-900">
-                    {viewingProduct.locationName || (viewingProduct.locationId ? warehouses.find(w => String(w.id) === viewingProduct.locationId)?.name : null) || "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Stock</p>
-                  <p className="font-semibold text-gray-900">{viewingProduct.stock} units</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Price</p>
-                  <p className="font-semibold text-gray-900">${(viewingProduct.price ?? 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Sale Price</p>
-                  <p className="font-semibold text-emerald-600">${(viewingProduct.salePrice ?? 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">SKU</p>
-                  <p className="font-semibold text-gray-900">{viewingProduct.sku || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Barcode</p>
-                  <p className="font-semibold text-gray-900">{viewingProduct.barcode || "-"}</p>
-                </div>
-                {viewingProduct.receiptNumber && (
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Receipt Number</p>
-                    <p className="font-semibold text-gray-900">{viewingProduct.receiptNumber}</p>
-                  </div>
-                )}
-              </div>
-              {viewingProduct.variants && viewingProduct.variants.length > 0 && (
-                <div className="mt-6 border-t pt-4">
-                  <h4 className="text-lg font-semibold mb-3">Variants</h4>
-                  <div className="rounded-md border overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b">
-                        <tr>
-                          <th className="p-2 text-left">Variant</th>
-                          <th className="p-2 text-left">SKU</th>
-                          <th className="p-2 text-left">Product Price</th>
-                          <th className="p-2 text-left">Sale Price</th>
-                          <th className="p-2 text-left">Stock</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {viewingProduct.variants.map(variant => (
-                          <tr key={variant.id} className="border-b last:border-0 hover:bg-gray-50 bg-white">
-                            <td className="p-2 font-medium">{variant.name}</td>
-                            <td className="p-2 text-gray-600">{variant.sku}</td>
-                            <td className="p-2 font-medium">${variant.price}</td>
-                            <td className="p-2 font-medium text-emerald-600">${variant.salePrice || variant.price}</td>
-                            <td className="p-2">
-                              {variant.stock > 0 ? (
-                                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">{variant.stock} in stock</Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50">Out of stock</Badge>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogTitle className="sr-only">Product Details</DialogTitle>
+          {viewingProduct && (() => {
+            const offerFinal = viewingProduct.offerPrice
+              ? (viewingProduct.offerType === "percentage"
+                  ? viewingProduct.salePrice * (1 - viewingProduct.offerPrice / 100)
+                  : viewingProduct.salePrice - viewingProduct.offerPrice)
+              : null
+            return (
+              <>
+                {/* Hero header */}
+                <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
+                  <div className="flex items-start gap-5">
+                    <div className="relative shrink-0">
+                      <img
+                        src={viewingProduct.image || "/placeholder.svg"}
+                        alt={viewingProduct.name}
+                        className="w-24 h-24 rounded-xl object-cover border-2 border-white/20 shadow-lg"
+                      />
+                      {viewingProduct.isHotDeal && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">HOT</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{viewingProduct.category || "—"}</p>
+                      <h3 className="text-2xl font-bold text-white mb-2 leading-tight">{viewingProduct.name}</h3>
+                      {viewingProduct.description && <p className="text-sm text-slate-300 line-clamp-2">{viewingProduct.description}</p>}
+                      <div className="flex items-center gap-2 mt-3 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full ${viewingProduct.status === "Selling" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : viewingProduct.status === "Out of Stock" ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-gray-500/20 text-gray-300 border border-gray-500/30"}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${viewingProduct.status === "Selling" ? "bg-emerald-400" : viewingProduct.status === "Out of Stock" ? "bg-red-400" : "bg-gray-400"}`} />
+                          {viewingProduct.status}
+                        </span>
+                        <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${viewingProduct.published ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" : "bg-gray-500/20 text-gray-300 border border-gray-500/30"}`}>
+                          {viewingProduct.published ? "Published" : "Draft"}
+                        </span>
+                        {viewingProduct.isBestSeller && <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">Best Seller</span>}
+                        {viewingProduct.isFeatured && <span className="inline-flex px-2.5 py-1 text-xs font-semibold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">Featured</span>}
+                      </div>
+                    </div>
+                    {/* Price block */}
+                    <div className="shrink-0 text-right">
+                      {offerFinal ? (
+                        <>
+                          <p className="text-2xl font-black text-orange-400">{formatCurrency(offerFinal)}</p>
+                          <p className="text-sm text-slate-400 line-through">{formatCurrency(viewingProduct.salePrice)}</p>
+                          <span className="inline-block mt-1 bg-orange-500/20 text-orange-300 border border-orange-500/30 text-xs font-bold px-2 py-0.5 rounded-full">
+                            {viewingProduct.offerType === "percentage" ? `${viewingProduct.offerPrice}% OFF` : `${formatCurrency(viewingProduct.offerPrice!)} OFF`}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-2xl font-black text-emerald-400">{formatCurrency(viewingProduct.salePrice)}</p>
+                          {viewingProduct.price > viewingProduct.salePrice && <p className="text-sm text-slate-400 line-through">{formatCurrency(viewingProduct.price)}</p>}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-          <DialogFooter className="p-6 border-t">
-            <Button variant="outline" onClick={() => setViewingProduct(null)}>Close</Button>
-            <Button
-              onClick={() => { if (viewingProduct) { setViewingProduct(null); handleEdit(viewingProduct) } }}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Edit Product
-            </Button>
-          </DialogFooter>
+
+                <div className="overflow-y-auto flex-1">
+                  {/* Info grid */}
+                  <div className="p-6 grid grid-cols-3 gap-4">
+                    {[
+                      { label: "Category", value: viewingProduct.category || allCategories.find(c => c.id === viewingProduct.categoryId)?.category_name || "—" },
+                      { label: "Vendor", value: viewingProduct.vendorId ? (vendors.find(v => v.id === viewingProduct.vendorId)?.name || viewingProduct.vendorId) : "—" },
+                      { label: "Location", value: viewingProduct.locationName || warehouses.find(w => String(w.id) === viewingProduct.locationId)?.name || "—" },
+                      { label: "Stock", value: `${viewingProduct.stock} units`, highlight: viewingProduct.stock < 5 ? "red" : viewingProduct.stock < 20 ? "amber" : "green" },
+                      { label: "SKU", value: viewingProduct.sku || "—", mono: true },
+                      { label: "Barcode", value: viewingProduct.barcode || "—", mono: true },
+                      { label: "List Price", value: formatCurrency(viewingProduct.price) },
+                      { label: "Sale Price", value: formatCurrency(viewingProduct.salePrice), highlight: "green" },
+                      ...(viewingProduct.offerPrice ? [{ label: "Offer Price", value: formatCurrency(offerFinal!), sub: viewingProduct.offerType === "percentage" ? `${viewingProduct.offerPrice}% off` : `${formatCurrency(viewingProduct.offerPrice!)} off`, highlight: "orange" as const }] : []),
+                      ...(viewingProduct.receiptNumber ? [{ label: "Receipt No.", value: viewingProduct.receiptNumber, mono: true }] : []),
+                    ].map(({ label, value, highlight, mono, sub }) => (
+                      <div key={label} className="bg-gray-50 rounded-xl p-3.5 border border-gray-100">
+                        <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">{label}</p>
+                        <p className={`font-bold text-sm ${mono ? "font-mono" : ""} ${highlight === "green" ? "text-emerald-600" : highlight === "red" ? "text-red-600" : highlight === "amber" ? "text-amber-600" : highlight === "orange" ? "text-orange-600" : "text-gray-900"}`}>
+                          {value}
+                        </p>
+                        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Variants */}
+                  {viewingProduct.variants && viewingProduct.variants.length > 0 && (
+                    <div className="px-6 pb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Variants</h4>
+                        <span className="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{viewingProduct.variants.length}</span>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
+                        <table className="w-full text-sm min-w-[520px]">
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-[22%]">Variant</th>
+                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-[28%]">SKU</th>
+                              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">Price</th>
+                              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">Sale</th>
+                              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">Offer</th>
+                              <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">Stock</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {viewingProduct.variants.map((variant, idx) => {
+                              const vOffer = variant.offerPrice ?? viewingProduct.offerPrice
+                              const vOfferType = variant.offerType ?? viewingProduct.offerType ?? "percentage"
+                              const vBase = variant.salePrice || variant.price
+                              const vFinal = vOffer ? (vOfferType === "percentage" ? vBase * (1 - vOffer / 100) : vBase - vOffer) : null
+                              return (
+                                <tr key={variant.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                                  <td className="px-3 py-2.5 font-semibold text-gray-800 text-xs">{variant.name}</td>
+                                  <td className="px-3 py-2.5 font-mono text-[11px] text-gray-400 truncate max-w-0">{variant.sku || "—"}</td>
+                                  <td className="px-3 py-2.5 text-right text-xs text-gray-500">{formatCurrency(variant.price)}</td>
+                                  <td className="px-3 py-2.5 text-right text-xs font-semibold text-emerald-600">{formatCurrency(variant.salePrice || variant.price)}</td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    {vFinal ? (
+                                      <div>
+                                        <span className="font-bold text-orange-600 text-xs">{formatCurrency(vFinal)}</span>
+                                        <span className="block text-[10px] text-gray-400 leading-tight">{vOfferType === "percentage" ? `${vOffer}% off` : `${formatCurrency(vOffer!)} off`}</span>
+                                      </div>
+                                    ) : <span className="text-gray-300 text-xs">—</span>}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    {variant.stock > 0
+                                      ? <span className="inline-flex items-center justify-center gap-1 w-full">
+                                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                                          <span className="text-xs font-bold text-emerald-700">{variant.stock}</span>
+                                        </span>
+                                      : <span className="inline-flex items-center justify-center gap-1 w-full">
+                                          <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                                          <span className="text-xs font-bold text-red-600">0</span>
+                                        </span>}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter className="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setViewingProduct(null)}>Close</Button>
+                  <Button
+                    onClick={() => { if (viewingProduct) { setViewingProduct(null); handleEdit(viewingProduct) } }}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Edit Product
+                  </Button>
+                </DialogFooter>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 

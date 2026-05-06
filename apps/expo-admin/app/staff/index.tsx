@@ -18,7 +18,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   createStaff,
   deleteStaff,
@@ -32,6 +32,7 @@ function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.lengt
 function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
 
 export default function StaffScreen() {
+  const { formatCurrency } = useCurrency();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -208,6 +209,7 @@ export default function StaffScreen() {
 function StatChip({ label, value, bg, text, isCurrency }: {
   label: string; value: number; bg: string; text: string; isCurrency?: boolean;
 }) {
+  const { formatCurrency } = useCurrency();
   return (
     <View style={[statStyles.chip, { backgroundColor: bg }]}>
       <Text style={[statStyles.value, { color: text }]} numberOfLines={1}>

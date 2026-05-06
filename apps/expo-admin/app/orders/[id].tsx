@@ -16,7 +16,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import { printInvoice, shareInvoicePdf } from "@/lib/invoice";
 import {
   deleteOrder,
@@ -58,6 +59,7 @@ function fulfillmentStatusTone(status?: string): "neutral" | "success" | "warnin
 }
 
 export default function OrderDetailScreen() {
+  const { formatCurrency } = useCurrency();
   const params = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);

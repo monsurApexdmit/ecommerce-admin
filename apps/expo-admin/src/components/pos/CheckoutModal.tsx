@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import type { CompletedSale, PaymentMethod } from "@/types/pos";
 
 type Props = {
@@ -39,6 +39,7 @@ export function CheckoutModal({
   visible, total, subtotal, discount, couponDiscount, tax,
   customerName, itemCount, onConfirm, onClose, submitting,
 }: Props) {
+  const { formatCurrency } = useCurrency();
   const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [tendered, setTendered] = useState("");
   const inputRef = useRef<TextInput>(null);

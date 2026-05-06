@@ -9,12 +9,13 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { colors } from "@/constants/theme";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import { getProductById } from "@/services/products";
 import type { Product } from "@/types/product";
 import { BarcodeGraphic } from "@/components/products/BarcodeGraphic";
 
 export default function ProductBarcodeScreen() {
+  const { formatCurrency } = useCurrency();
   const params = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const [product, setProduct] = useState<Product | null>(null);

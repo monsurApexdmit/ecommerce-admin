@@ -16,7 +16,15 @@ export default function ProductsStackLayout() {
         headerTintColor: colors.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.background },
+        animation: "fade_from_bottom",
+        animationDuration: 220,
       }}
-    />
+    >
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="[id]/edit" options={{ headerShown: false }} />
+      <Stack.Screen name="[id]/reviews" options={{ headerShown: false }} />
+      <Stack.Screen name="[id]/barcode" options={{ headerShown: false }} />
+    </Stack>
   );
 }

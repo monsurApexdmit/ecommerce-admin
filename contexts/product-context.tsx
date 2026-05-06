@@ -11,6 +11,8 @@ export interface Product {
     categoryId?: string     // backend id
     price: number
     salePrice: number
+    offerPrice?: number
+    offerType?: string
     costPrice?: number
     profitMargin?: number
     marginType?: string
@@ -52,6 +54,8 @@ export interface Variant {
     attributes: { [key: string]: string }
     price: number
     salePrice: number
+    offerPrice?: number
+    offerType?: string
     costPrice?: number
     profitMargin?: number
     marginType?: string
@@ -94,6 +98,8 @@ function convertToProduct(p: ProductResponse): Product {
         categoryId,
         price: p.price,
         salePrice: p.salePrice ?? p.sale_price,
+        offerPrice: (p as any).offerPrice ?? (p as any).offer_price ?? undefined,
+        offerType: (p as any).offerType ?? (p as any).offer_type ?? undefined,
         costPrice: (p as any).costPrice ?? p.cost_price,
         profitMargin: (p as any).profitMargin ?? p.profit_margin,
         marginType: (p as any).marginType ?? p.margin_type,
@@ -149,6 +155,8 @@ function convertToProduct(p: ProductResponse): Product {
             })(),
             price: v.price,
             salePrice: (v as any).salePrice ?? v.sale_price,
+            offerPrice: (v as any).offerPrice ?? (v as any).offer_price ?? undefined,
+            offerType: (v as any).offerType ?? (v as any).offer_type ?? undefined,
             costPrice: (v as any).costPrice ?? v.cost_price,
             profitMargin: (v as any).profitMargin ?? v.profit_margin,
             marginType: (v as any).marginType ?? v.margin_type,
@@ -198,6 +206,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 location_id: parseInt(product.locationId),
                 price: product.price,
                 sale_price: product.salePrice,
+                offer_price: product.offerPrice,
+                offer_type: product.offerType,
                 cost_price: product.costPrice,
                 profit_margin: product.profitMargin,
                 margin_type: product.marginType,
@@ -218,6 +228,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                     barcode: v.barcode,
                     price: v.price,
                     sale_price: v.salePrice,
+                    offer_price: v.offerPrice,
+                    offer_type: v.offerType,
                     cost_price: v.costPrice,
                     profit_margin: v.profitMargin,
                     margin_type: v.marginType,
@@ -242,6 +254,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 location_id: product.locationId ? parseInt(product.locationId) : undefined,
                 price: product.price,
                 sale_price: product.salePrice,
+                offer_price: product.offerPrice,
+                offer_type: product.offerType,
                 cost_price: product.costPrice,
                 profit_margin: product.profitMargin,
                 margin_type: product.marginType,
@@ -265,6 +279,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                         barcode: v.barcode,
                         price: v.price,
                         sale_price: v.salePrice,
+                        offer_price: v.offerPrice,
+                        offer_type: v.offerType,
                         cost_price: v.costPrice,
                         profit_margin: v.profitMargin,
                         margin_type: v.marginType,

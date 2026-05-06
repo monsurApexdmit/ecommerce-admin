@@ -30,6 +30,8 @@ export function generateVariantDrafts(input: {
   attributes: ProductAttributeSelection[];
   basePrice: number;
   baseSalePrice: number;
+  baseOfferPrice?: number;
+  baseOfferType?: string;
   totalStock: number;
   baseSku?: string;
   locationId?: number;
@@ -59,6 +61,8 @@ export function generateVariantDrafts(input: {
       attributes,
       price: input.basePrice,
       salePrice: input.baseSalePrice,
+      offerPrice: input.baseOfferPrice,
+      offerType: input.baseOfferType,
       stock: baseStock,
       sku: input.baseSku ? `${input.baseSku}-${skuSuffix}` : skuSuffix,
       barcode: generateBarcodeCode(),

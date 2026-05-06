@@ -73,6 +73,8 @@ export default function SupportScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   const searchActive = search.trim().length > 0;
+  const filteredState = statusFilter !== "all";
+  const compactHeader = searchActive || filteredState;
 
   useEffect(() => { navigation.setOptions({ title: "Support" }); }, [navigation]);
 
@@ -184,17 +186,15 @@ export default function SupportScreen() {
     { label: "Closed",      value: stats.closed,      bg: "#f1f5f9", text: "#64748b" },
   ] : [];
 
-  return (
-    <SafeAreaView style={s.root} edges={["top"]}>
-      {/* Header */}
-      <View style={[s.header, searchActive && { paddingTop: 10 }]}>
+  const listHeader = (
+    <>
+      <View style={[s.header, compactHeader && { paddingTop: 10 }]}>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Support</Text>
-          {!searchActive && <Text style={s.subtitle}>Manage customer support tickets</Text>}
+          {!compactHeader && <Text style={s.subtitle}>Manage customer support tickets</Text>}
         </View>
       </View>
 
-      {/* Search */}
       <View style={s.searchRow}>
         <View style={s.searchWrap}>
           <Ionicons name="search" size={16} color={colors.muted} />
@@ -213,8 +213,7 @@ export default function SupportScreen() {
         </View>
       </View>
 
-      {/* Stat chips */}
-      {!searchActive && statCards.length > 0 && (
+      {!compactHeader && statCards.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.statScroll} contentContainerStyle={s.statRow}>
           {statCards.map((c) => (
             <View key={c.label} style={[s.statChip, { backgroundColor: c.bg }]}>
@@ -225,27 +224,33 @@ export default function SupportScreen() {
         </ScrollView>
       )}
 
-      {/* Status filter tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
-        {STATUS_FILTERS.map(({ value, label }) => {
-          const active = value === statusFilter;
-          const dot = value !== "all" ? STATUS_COLOR[value].dot : colors.muted;
-          return (
-            <Pressable key={value} style={[s.tab, active && s.tabActive]} onPress={() => setStatusFilter(value)}>
-              {value !== "all" && <View style={[s.tabDot, { backgroundColor: dot }]} />}
-              <Text style={[s.tabText, active && s.tabTextActive]}>{label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {!searchActive && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
+          {STATUS_FILTERS.map(({ value, label }) => {
+            const active = value === statusFilter;
+            const dot = value !== "all" ? STATUS_COLOR[value].dot : colors.muted;
+            return (
+              <Pressable key={value} style={[s.tab, active && s.tabActive]} onPress={() => setStatusFilter(value)}>
+                {value !== "all" && <View style={[s.tabDot, { backgroundColor: dot }]} />}
+                <Text style={[s.tabText, active && s.tabTextActive]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+    </>
+  );
 
-      {/* List */}
+  return (
+    <SafeAreaView style={s.root} edges={["top", "bottom"]}>
       {loading ? (
         <View style={s.center}><ActivityIndicator color={colors.primaryDark} size="large" /></View>
       ) : (
         <FlatList
+          style={s.list}
           data={tickets}
           keyExtractor={(item) => String(item.id)}
+          ListHeaderComponent={listHeader}
           renderItem={({ item }) => {
             const sc = STATUS_COLOR[item.status];
             const priorityDot = PRIORITY_DOT[item.priority];
@@ -299,7 +304,7 @@ export default function SupportScreen() {
               <Text style={s.emptyText}>Adjust filters or check back later.</Text>
             </View>
           }
-          contentContainerStyle={s.listContent}
+          contentContainerStyle={[s.listContent, tickets.length === 0 && s.listContentEmpty]}
         />
       )}
     </SafeAreaView>
@@ -330,8 +335,10 @@ const s = StyleSheet.create({
   tabText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   tabTextActive: { color: colors.primaryDark },
 
+  list: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { padding: 14, paddingTop: 8, paddingBottom: 32 },
+  listContentEmpty: { flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: "center" },
   empty: { alignItems: "center", gap: 10, paddingTop: 80 },
   emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },

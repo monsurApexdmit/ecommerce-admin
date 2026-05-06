@@ -20,7 +20,8 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { useCurrency } from "@/context/CurrencyContext";
 import { deleteOrder, getOrders, getOrderStats, updateOrderStatus } from "@/services/order-service";
 import type { Order, OrderStats } from "@/types/order";
 import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
@@ -30,6 +31,7 @@ type MethodFilter = "" | "Cash" | "Card" | "Online";
 
 export default function OrdersTab() {
   const router = useRouter();
+  const { formatCurrency } = useCurrency();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
   const [loading, setLoading] = useState(true);

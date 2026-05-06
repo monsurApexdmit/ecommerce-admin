@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { CurrencyProvider } from "@/context/CurrencyContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { PushNotificationProvider } from "@/context/PushNotificationProvider";
 import { colors } from "@/constants/theme";
@@ -29,7 +30,15 @@ function RootNavigation() {
   return (
     <>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "fade_from_bottom",
+          animationDuration: 220,
+          gestureEnabled: true,
+          gestureDirection: "vertical",
+        }}
+      />
     </>
   );
 }
@@ -38,11 +47,13 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <PushNotificationProvider>
-          <NotificationProvider>
-            <RootNavigation />
-          </NotificationProvider>
-        </PushNotificationProvider>
+        <CurrencyProvider>
+          <PushNotificationProvider>
+            <NotificationProvider>
+              <RootNavigation />
+            </NotificationProvider>
+          </PushNotificationProvider>
+        </CurrencyProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
