@@ -25,6 +25,9 @@ export interface User {
   status: "active" | "invited" | "inactive";
   joinedDate: string;
   lastLogin?: string;
+  /** null = full access (owner/admin). Object = per-module flags. */
+  permissions: Record<string, { read: boolean; write: boolean; delete: boolean }> | null;
+  roleId?: number | null;
 }
 
 export interface LoginPayload {

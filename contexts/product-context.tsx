@@ -32,6 +32,7 @@ export interface Product {
     createdAt?: string
     updatedAt?: string
     vendorId?: string
+    vendorName?: string
     locationId?: string     // backend location/warehouse id
     locationName?: string   // display name
     receiptNumber?: string
@@ -89,6 +90,7 @@ function convertToProduct(p: ProductResponse): Product {
     const categoryId = categoryObj ? String(categoryObj.id) : ((p as any).categoryId ? String((p as any).categoryId) : undefined)
     const categoryName = (p as any).categoryName || (categoryObj ? categoryObj.category_name : (p.category as string || ""))
     const vendorId = (p as any).vendorId ? String((p as any).vendorId) : (p.vendor_id ? String(p.vendor_id) : undefined)
+    const vendorName = (p as any).vendorName ?? undefined
     const locationId = (p as any).locationId ? String((p as any).locationId) : (p.location_id ? String(p.location_id) : undefined)
     return {
         id: String(p.id),
@@ -136,6 +138,7 @@ function convertToProduct(p: ProductResponse): Product {
         createdAt: p.created_at,
         updatedAt: p.updated_at,
         vendorId,
+        vendorName,
         locationId,
         locationName: p.location?.name,
         receiptNumber: (p as any).receiptNumber || p.receipt_number || undefined,
@@ -183,8 +186,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
             const res = await productApi.getAll({ limit: 200 })
             setProducts((res.data ?? []).map(convertToProduct))
         } catch (err: any) {
-            console.error("Failed to fetch products:", err)
-            setError(err.response?.data?.error || "Failed to fetch products")
+            if (err.response?.status !== 403) {
+                console.error("Failed to fetch products:", err)
+                setError(err.response?.data?.error || "Failed to fetch products")
+            }
         } finally {
             setIsLoading(false)
         }

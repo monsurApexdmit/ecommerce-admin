@@ -57,8 +57,10 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
       const convertedAttributes = response.data.map(convertToAttribute)
       setAttributes(convertedAttributes)
     } catch (err: any) {
-      console.error('Error fetching attributes:', err)
-      setError(err.response?.data?.error || 'Failed to fetch attributes')
+      if (err.response?.status !== 403) {
+        console.error('Error fetching attributes:', err)
+        setError(err.response?.data?.error || 'Failed to fetch attributes')
+      }
     } finally {
       setIsLoading(false)
     }

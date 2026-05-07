@@ -6,6 +6,8 @@ import { ProductForm } from "@/components/products/ProductForm";
 import { colors } from "@/constants/theme";
 import { getProductById } from "@/services/products";
 import type { Product } from "@/types/product";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 export default function EditProductScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -30,6 +32,9 @@ export default function EditProductScreen() {
 
     void load();
   }, [params.id]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Products')) return <AccessDenied />;
 
   return (
     <Screen>

@@ -14,6 +14,8 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { StatsCards } from "@/components/ui/stats-card"
 import { sellsApi, SellResponse, SellItem } from "@/lib/sellsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
 const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
@@ -28,6 +30,7 @@ interface StatsData {
 }
 
 export default function OrdersPage() {
+  const { canRead } = useSaasAuth()
   const searchParams = useSearchParams()
   const { formatCurrency } = useCompanySettings()
   const latestFetchIdRef = useRef(0)
@@ -108,6 +111,8 @@ export default function OrdersPage() {
     fetchOrders()
     fetchStats()
   }, [fetchOrders, fetchStats])
+
+  if (!canRead('Orders')) return <AccessDenied />
 
   const handleStatusChange = async (id: number, newStatus: SellResponse["status"]) => {
     setUpdatingStatus(id)

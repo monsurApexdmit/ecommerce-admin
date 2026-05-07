@@ -78,8 +78,10 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       const response = await customerApi.getAll({ limit: 100 })
       setCustomers(response.data.map(convertToCustomer))
     } catch (err: any) {
-      console.error('Error fetching customers:', err)
-      setError(err.response?.data?.error || 'Failed to fetch customers')
+      if (err.response?.status !== 403) {
+        console.error('Error fetching customers:', err)
+        setError(err.response?.data?.error || 'Failed to fetch customers')
+      }
     } finally {
       setIsLoading(false)
     }

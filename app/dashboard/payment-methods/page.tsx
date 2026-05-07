@@ -38,6 +38,8 @@ import {
   ArrowUpDown,
 } from "lucide-react"
 import paymentMethodApi, { type PaymentMethod, type PaymentMethodPayload } from "@/lib/paymentMethodApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const ICON_OPTIONS = [
   { value: "banknote",    label: "Banknote (Cash)",   Icon: Banknote },
@@ -54,15 +56,23 @@ function MethodIcon({ icon, className }: { icon: string | null; className?: stri
   return <Icon className={className} />
 }
 
+const GATEWAY_OPTIONS = [
+  { value: "cod",        label: "Cash on Delivery (manual)" },
+  { value: "sslcommerz", label: "SSLCommerz (bKash, Nagad, Rocket, Cards)" },
+  { value: "portwallet", label: "PortWallet (Cards, Mobile Banking)" },
+]
+
 const emptyForm: PaymentMethodPayload = {
   name: "",
   description: "",
   icon: "banknote",
+  gateway_type: "cod",
   isActive: true,
   sortOrder: 0,
 }
 
 export default function PaymentMethodsPage() {
+  const { canRead } = useSaasAuth()
   const { toast } = useToast()
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,6 +97,8 @@ export default function PaymentMethodsPage() {
 
   useEffect(() => { load() }, [])
 
+  if (!canRead('Payment Methods')) return <AccessDenied />
+
   const openAdd = () => {
     setEditing(null)
     setForm({ ...emptyForm, sortOrder: methods.length + 1 })
@@ -99,6 +111,7 @@ export default function PaymentMethodsPage() {
       name: m.name,
       description: m.description ?? "",
       icon: m.icon ?? "banknote",
+      gateway_type: m.gateway_type ?? "cod",
       isActive: m.isActive,
       sortOrder: m.sortOrder,
     })
@@ -295,6 +308,25 @@ export default function PaymentMethodsPage() {
                 onChange={(e) => f("description", e.target.value)}
                 placeholder="Pay when your order arrives"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Gateway Type</Label>
+              <Select value={form.gateway_type ?? "cod"} onValueChange={(v) => f("gateway_type", v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GATEWAY_OPTIONS.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(form.gateway_type === "sslcommerz" || form.gateway_type === "portwallet") && (
+                <p className="text-xs text-amber-600">
+                  Credentials configured in Settings → Payment Gateways
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

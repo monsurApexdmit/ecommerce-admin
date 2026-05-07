@@ -259,6 +259,8 @@ function normalizeVariants(items?: ProductVariantResponse[] | null): ProductVari
             ? toNumber(variant.profitMargin ?? variant.profit_margin)
             : undefined,
         marginType: variant.marginType ?? variant.margin_type ?? undefined,
+        offerPrice: variant.offerPrice ?? variant.offer_price ? toNumber(variant.offerPrice ?? variant.offer_price) || undefined : undefined,
+        offerType: variant.offerType ?? variant.offer_type ?? undefined,
         stock: toNumber(variant.stock),
         sku: variant.sku ?? "",
         barcode: variant.barcode ?? undefined,
@@ -422,6 +424,8 @@ function buildFormData(draft: ProductDraft) {
           barcode: variant.barcode,
           price: variant.price,
           sale_price: variant.salePrice,
+          offer_price: variant.offerPrice ?? null,
+          offer_type: variant.offerPrice ? (variant.offerType ?? "percentage") : null,
           cost_price: variant.costPrice,
           profit_margin: variant.profitMargin,
           margin_type: variant.marginType,

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { saasBillingApi, type Plan, type UpdatePlanPayload } from "@/lib/saasBillingApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { AlertCircle, Loader, Check, Zap, ChevronDown, ChevronUp, Edit, X } from "lucide-react"
 import {
   Dialog,
@@ -19,7 +20,7 @@ import { useToast } from "@/hooks/use-toast"
 
 export default function PlansPage() {
   const router = useRouter()
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
   const { toast } = useToast()
 
   const [plans, setPlans] = useState<Plan[]>([])
@@ -56,6 +57,8 @@ export default function PlansPage() {
 
     loadPlans()
   }, [])
+
+  if (!canRead('Billing Plans')) return <AccessDenied />
 
   const handleSelectPlan = (plan: Plan) => {
     router.push(`/dashboard/billing/checkout?planId=${plan.id}`)

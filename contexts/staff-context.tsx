@@ -67,12 +67,14 @@ export interface Staff {
     contact: string
     joiningDate: string
     role: string
+    staffRoleId?: number | null
     status: "Active" | "Inactive"
     published: boolean
     avatar: string
     salary: number
     bankAccount?: string
     paymentMethod?: "Bank Transfer" | "Cash" | "Check"
+    password?: string
 }
 
 export interface SalaryPayment {
@@ -176,8 +178,10 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             const response = await staffApi.getAll({ limit: 100 })
             setStaff(response.data.map(convertToStaff))
         } catch (err: any) {
-            console.error('Error fetching staff:', err)
-            setError(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch staff')
+            if (err.response?.status !== 403) {
+                console.error('Error fetching staff:', err)
+                setError(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch staff')
+            }
         } finally {
             setIsLoading(false)
         }
@@ -189,7 +193,9 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             const response = await staffRoleApi.getAll({ limit: 100 })
             setRoles(response.data.map(convertToRole))
         } catch (err: any) {
-            console.error('Error fetching staff roles:', err)
+            if (err.response?.status !== 403) {
+                console.error('Error fetching staff roles:', err)
+            }
         } finally {
             setRolesLoading(false)
         }
@@ -201,7 +207,9 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             const response = await salaryPaymentApi.getAll({ limit: 1000 })
             setSalaryPayments(response.data.map(convertToSalaryPayment))
         } catch (err: any) {
-            console.error('Error fetching salary payments:', err)
+            if (err.response?.status !== 403) {
+                console.error('Error fetching salary payments:', err)
+            }
         } finally {
             setSalaryPaymentsLoading(false)
         }
@@ -227,6 +235,8 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 salary: member.salary,
                 bankAccount: member.bankAccount,
                 paymentMethod: member.paymentMethod,
+                password: member.password,
+                staffRoleId: member.staffRoleId,
             })
             await refreshStaff()
         } catch (err: any) {
@@ -249,6 +259,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 salary: member.salary,
                 bankAccount: member.bankAccount,
                 paymentMethod: member.paymentMethod,
+                staffRoleId: member.staffRoleId,
             })
             await refreshStaff()
         } catch (err: any) {

@@ -11,11 +11,12 @@ import {
   type BillingContactPayload,
 } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { AlertCircle, Loader, Save, MapPin, FileText } from "lucide-react"
 
 export default function BillingContactPage() {
   const router = useRouter()
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
 
   const [billingContact, setBillingContact] = useState<BillingContact | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,6 +64,8 @@ export default function BillingContactPage() {
 
     loadData()
   }, [])
+
+  if (!canRead('Billing Contact')) return <AccessDenied />
 
   const handleChange = (field: keyof BillingContactPayload, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))

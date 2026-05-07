@@ -14,6 +14,8 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { couponApi, type CouponResponse } from "@/lib/couponApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 type FormData = {
   campaign_name: string
@@ -66,6 +68,7 @@ function toInputDate(dateStr: string): string {
 }
 
 export default function CouponsPage() {
+  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
   const [coupons, setCoupons] = useState<CouponResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -95,6 +98,8 @@ export default function CouponsPage() {
   useEffect(() => {
     refreshCoupons()
   }, [])
+
+  if (!canRead('Coupons')) return <AccessDenied />
 
   const filteredCoupons = coupons.filter(
     (coupon) =>

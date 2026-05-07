@@ -16,8 +16,11 @@ import { useStaff, type Staff } from "@/contexts/staff-context"
 import { StatsCards } from "@/components/ui/stats-card"
 import staffApi from "@/lib/staffApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function StaffPage() {
+  const { canRead } = useSaasAuth()
   const { staff, roles, isLoading, addStaff, updateStaff, deleteStaff } = useStaff()
   const { formatCurrency } = useCompanySettings()
   const [stats, setStats] = useState<{
@@ -73,6 +76,8 @@ export default function StaffPage() {
     fetchStats()
   }, [])
 
+  if (!canRead('Staff')) return <AccessDenied />
+
   const handleTogglePublished = async (id: string) => {
     const member = staff.find((s) => s.id === id)
     if (member) {
@@ -114,12 +119,14 @@ export default function StaffPage() {
       contact: formData.get("contact") as string,
       joiningDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
       role: formData.get("role") as string,
+      staffRoleId: formData.get("staffRoleId") ? parseInt(formData.get("staffRoleId") as string) : null,
       status: "Active",
       published: true,
       avatar: "/placeholder.svg?height=40&width=40",
       salary: parseFloat(formData.get("salary") as string) || 0,
       bankAccount: formData.get("bankAccount") as string,
       paymentMethod: (formData.get("paymentMethod") as "Bank Transfer" | "Cash" | "Check") || "Bank Transfer",
+      password: formData.get("password") as string || undefined,
     })
     setIsAddDialogOpen(false)
   }
@@ -493,6 +500,10 @@ export default function StaffPage() {
               <Input name="email" type="email" required />
             </div>
             <div>
+              <Label>Password</Label>
+              <Input name="password" type="password" placeholder="Leave blank to use default (ChangeMe123)" />
+            </div>
+            <div>
               <Label>Contact</Label>
               <Input name="contact" required />
             </div>
@@ -519,6 +530,15 @@ export default function StaffPage() {
               <select name="role" required className="w-full px-3 py-2 border rounded-lg">
                 {roles.map(role => (
                   <option key={role.id} value={role.name}>{role.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Permission Role (optional)</Label>
+              <select name="staffRoleId" className="w-full px-3 py-2 border rounded-lg">
+                <option value="">-- No permission role --</option>
+                {roles.map(role => (
+                  <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
               </select>
             </div>

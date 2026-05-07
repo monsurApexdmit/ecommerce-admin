@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import {
   Dialog,
   DialogContent,
@@ -110,6 +112,7 @@ const getDefaultPresetSlugForTemplate = (template: PageTemplate, currentSlug: st
 }
 
 export default function PagesManagementPage() {
+  const { canRead } = useSaasAuth()
   const { toast } = useToast()
   const [pages, setPages] = useState<ContentPage[]>([])
   const [loading, setLoading] = useState(true)
@@ -156,6 +159,8 @@ export default function PagesManagementPage() {
 
     return 'Policy sections JSON should be an array: [{ "title": "Section title", "paragraphs": ["Paragraph one", "Paragraph two"] }].'
   }, [form.template])
+
+  if (!canRead('Pages')) return <AccessDenied />
 
   const setField = (field: keyof FormState, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }))

@@ -17,8 +17,11 @@ import {
 } from "@/components/ui/dialog"
 import { useWarehouse, type Warehouse } from "@/contexts/warehouse-context"
 import { Badge } from "@/components/ui/badge"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function LocationsPage() {
+  const { canRead } = useSaasAuth()
   const { warehouses, loading, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouse()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
@@ -31,6 +34,8 @@ export default function LocationsPage() {
     contact: "",
     isDefault: false,
   })
+
+  if (!canRead('Store Locations')) return <AccessDenied />
 
   const resetForm = () => {
     setFormData({ name: "", address: "", contact: "", isDefault: false })

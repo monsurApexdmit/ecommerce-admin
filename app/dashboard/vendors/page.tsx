@@ -16,8 +16,11 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatsCards } from "@/components/ui/stats-card"
 import vendorApi from "@/lib/vendorApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function VendorsPage() {
+  const { canRead } = useSaasAuth()
   const { vendors, isLoading: contextLoading, addVendor, updateVendor, deleteVendor } = useVendor()
   const { toast } = useToast()
   const [stats, setStats] = useState<{
@@ -89,6 +92,8 @@ export default function VendorsPage() {
 
     fetchStats()
   }, [])
+
+  if (!canRead('Vendors')) return <AccessDenied />
 
   const openAddDialog = () => {
     setEditingVendor(null)

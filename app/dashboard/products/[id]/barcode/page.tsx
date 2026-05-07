@@ -6,6 +6,8 @@ import { productApi } from '@/lib/productApi'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { useCompanySettings } from '@/contexts/company-settings-context'
+import { useSaasAuth } from '@/contexts/saas-auth-context'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { Loader2, Download, Printer, ArrowLeft, Copy } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
 
@@ -23,6 +25,7 @@ interface Product {
 }
 
 export default function ProductBarcodePage() {
+  const { canRead } = useSaasAuth()
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -73,6 +76,8 @@ export default function ProductBarcodePage() {
       }
     }
   }, [product])
+
+  if (!canRead('Print Barcode')) return <AccessDenied />
 
   const handleDownload = async () => {
     const barcodeCodeToUse = product?.barcode_code || product?.barcode

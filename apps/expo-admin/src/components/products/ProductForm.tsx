@@ -913,12 +913,30 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
                     />
                   </View>
                   <View style={s.rowItem}>
-                    <Text style={[s.fieldLabel, { color: "#c2410c" }]}>Offer price</Text>
-                    <CurrencyInput
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <Text style={[s.fieldLabel, { color: "#c2410c", marginBottom: 0 }]}>Offer price</Text>
+                      <View style={s.segmentPill}>
+                        <Pressable
+                          style={[s.segPillItem, (variant.offerType ?? "percentage") === "percentage" && s.segPillActive]}
+                          onPress={() => updateVariant(variant.id, "offerType", "percentage")}
+                        >
+                          <Text style={[s.segPillText, (variant.offerType ?? "percentage") === "percentage" && s.segPillTextActive]}>%</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[s.segPillItem, variant.offerType === "flat" && s.segPillActive]}
+                          onPress={() => updateVariant(variant.id, "offerType", "flat")}
+                        >
+                          <Text style={[s.segPillText, variant.offerType === "flat" && s.segPillTextActive]}>$</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                    <TextInput
                       value={variant.offerPrice ? String(variant.offerPrice) : ""}
                       onChangeText={(v) => updateVariant(variant.id, "offerPrice", v)}
-                      currency={currency}
+                      keyboardType="decimal-pad"
                       placeholder="0 = none"
+                      placeholderTextColor={colors.muted}
+                      style={s.input}
                     />
                   </View>
                   <View style={s.rowItem}>

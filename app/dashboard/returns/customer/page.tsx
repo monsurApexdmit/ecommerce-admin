@@ -30,6 +30,8 @@ import { Search, Check, X, Eye, Download, RotateCcw, Plus, Trash2 } from "lucide
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
 
@@ -90,6 +92,7 @@ const defaultFormData = {
 }
 
 export default function CustomerReturnsPage() {
+  const { canRead } = useSaasAuth()
   const { customers } = useCustomer()
   const { toast } = useToast()
   const { formatCurrency } = useCompanySettings()
@@ -140,6 +143,8 @@ export default function CustomerReturnsPage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  if (!canRead('Customer Returns')) return <AccessDenied />
 
   const handleViewDetails = async (ret: CustomerReturnResponse) => {
     try {

@@ -7,11 +7,12 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { saasCompanyApi, type CompanyProfile, type CompanySettings } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { AlertCircle, Loader, Save, Building2, Globe, DollarSign, Clock } from "lucide-react"
 
 export default function CompanySettingsPage() {
   const router = useRouter()
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [settings, setSettings] = useState<CompanySettings | null>(null)
@@ -102,6 +103,8 @@ export default function CompanySettingsPage() {
 
     loadData()
   }, [])
+
+  if (!canRead('Company Settings')) return <AccessDenied />
 
   const handleProfileChange = (field: string, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }))

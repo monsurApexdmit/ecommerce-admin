@@ -23,6 +23,8 @@ import {
   type Customer,
 } from "@/services/customers";
 import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 const AVATAR_COLORS = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899"];
 function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.length]; }
@@ -64,6 +66,9 @@ export default function CustomerDetailScreen() {
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Customers')) return <AccessDenied />;
 
   const handleSave = async () => {
     if (!customer) return;

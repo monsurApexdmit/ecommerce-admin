@@ -26,6 +26,8 @@ import {
   getVendors,
   type Vendor,
 } from "@/services/vendors";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 const AVATAR_COLORS = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.length]; }
@@ -68,6 +70,9 @@ export default function VendorsScreen() {
   }, [debouncedSearch]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Vendors')) return <AccessDenied />;
 
   const loadMore = async () => {
     if (loadingMore || vendors.length >= total) return;

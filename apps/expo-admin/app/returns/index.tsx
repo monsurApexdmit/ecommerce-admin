@@ -37,6 +37,8 @@ import {
   type VendorReturn,
   type VendorReturnStats,
 } from "@/services/returns";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import { getProducts } from "@/services/products";
 import { getVendors } from "@/services/vendors";
 import { getCustomers } from "@/services/customers";
@@ -80,6 +82,9 @@ type Tab = "customer" | "vendor";
 export default function ReturnsScreen() {
   const { formatCurrency } = useCurrency();
   const [tab, setTab] = useState<Tab>("customer");
+
+  const { canRead } = useAuth();
+  if (!canRead('Customer Returns')) return <AccessDenied />;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>

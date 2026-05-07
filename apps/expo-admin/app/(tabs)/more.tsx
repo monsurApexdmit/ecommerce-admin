@@ -21,6 +21,7 @@ type MenuItem = {
   color?: string;
   badge?: string;
   iconBg?: string;
+  module?: string; // permission module — undefined = always show
 };
 
 type MenuSection = {
@@ -29,7 +30,7 @@ type MenuSection = {
 };
 
 export default function MoreTab() {
-  const { session, user, signOut } = useAuth();
+  const { session, user, signOut, canRead } = useAuth();
   const { unreadCount } = useNotifications();
 
   const displayName = user?.fullName ?? session?.companyName ?? "User";
@@ -38,36 +39,37 @@ export default function MoreTab() {
   const initial = displayName.charAt(0).toUpperCase();
   const roleTone = ROLE_COLORS[displayRole] ?? { bg: "#f1f5f9", text: "#64748b" };
 
-  const sections: MenuSection[] = [
+  const allSections: MenuSection[] = [
     {
       title: "Store",
       items: [
-        { icon: "cube-outline",               label: "Products",   route: "/(tabs)/products", iconBg: "#ecfdf5" },
-        { icon: "receipt-outline",            label: "Orders",     route: "/(tabs)/orders",   iconBg: "#eff6ff" },
-        { icon: "cart-outline",               label: "POS",        route: "/(tabs)/pos",      iconBg: "#ecfeff" },
-        { icon: "layers-outline",             label: "Inventory",  route: "/inventory",  iconBg: "#fef9c3" },
-        { icon: "people-outline",             label: "Customers",  route: "/customers",  iconBg: "#f5f3ff" },
-        { icon: "storefront-outline",         label: "Vendors",    route: "/vendors",    iconBg: "#fef3c7" },
-        { icon: "return-down-back-outline",   label: "Returns",    route: "/returns",    iconBg: "#fce7f3" },
+        { icon: "cube-outline",             label: "Products",  route: "/(tabs)/products", iconBg: "#ecfdf5", module: "Products" },
+        { icon: "receipt-outline",          label: "Orders",    route: "/(tabs)/orders",   iconBg: "#eff6ff", module: "Orders" },
+        { icon: "cart-outline",             label: "POS",       route: "/(tabs)/pos",      iconBg: "#ecfeff", module: "POS" },
+        { icon: "layers-outline",           label: "Inventory", route: "/inventory",        iconBg: "#fef9c3", module: "Inventory" },
+        { icon: "people-outline",           label: "Customers", route: "/customers",        iconBg: "#f5f3ff", module: "Customers" },
+        { icon: "storefront-outline",       label: "Vendors",   route: "/vendors",          iconBg: "#fef3c7", module: "Vendors" },
+        { icon: "return-down-back-outline", label: "Returns",   route: "/returns",          iconBg: "#fce7f3", module: "Customer Returns" },
       ],
     },
     {
       title: "Staff",
       items: [
-        { icon: "person-outline",  label: "Staff",  route: "/staff",  iconBg: "#ede9fe" },
-        { icon: "cash-outline",    label: "Salary", route: "/salary", iconBg: "#dcfce7" },
+        { icon: "person-outline", label: "Staff",  route: "/staff",  iconBg: "#ede9fe", module: "Staff" },
+        { icon: "cash-outline",   label: "Salary", route: "/salary", iconBg: "#dcfce7", module: "Salary Management" },
       ],
     },
     {
       title: "Account",
       items: [
-        { icon: "headset-outline",        label: "Support",       route: "/support",       iconBg: "#dbeafe" },
-        { icon: "settings-outline",       label: "Settings",      route: "/settings",      iconBg: "#f1f5f9" },
+        { icon: "headset-outline",      label: "Support",       route: "/support",       iconBg: "#dbeafe", module: "Support" },
+        { icon: "settings-outline",     label: "Settings",      route: "/settings",      iconBg: "#f1f5f9", module: "Settings" },
         {
           icon: "notifications-outline",
           label: "Notifications",
           route: "/notifications",
           iconBg: "#fef3c7",
+          module: "Notifications",
           badge: unreadCount > 0 ? (unreadCount > 99 ? "99+" : String(unreadCount)) : undefined,
         },
       ],
@@ -90,6 +92,12 @@ export default function MoreTab() {
       ],
     },
   ];
+
+  // Filter sections — hide items the user cannot read
+  const sections = allSections.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => !item.module || canRead(item.module)),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -127,12 +135,12 @@ export default function MoreTab() {
           </Pressable>
         </View>
 
-        {/* Quick actions row */}
+        {/* Quick actions row — only show permitted modules */}
         <View style={styles.quickRow}>
-          <QuickAction icon="cube-outline"    label="Products"  onPress={() => router.push("/(tabs)/products" as any)} />
-          <QuickAction icon="receipt-outline" label="Orders"    onPress={() => router.push("/(tabs)/orders" as any)} />
-          <QuickAction icon="cart-outline"    label="POS"       onPress={() => router.push("/(tabs)/pos" as any)} />
-          <QuickAction icon="people-outline"  label="Customers" onPress={() => router.push("/customers")} />
+          {canRead("Products")  && <QuickAction icon="cube-outline"    label="Products"  onPress={() => router.push("/(tabs)/products" as any)} />}
+          {canRead("Orders")    && <QuickAction icon="receipt-outline" label="Orders"    onPress={() => router.push("/(tabs)/orders" as any)} />}
+          {canRead("POS")       && <QuickAction icon="cart-outline"    label="POS"       onPress={() => router.push("/(tabs)/pos" as any)} />}
+          {canRead("Customers") && <QuickAction icon="people-outline"  label="Customers" onPress={() => router.push("/customers")} />}
         </View>
 
         {/* Menu sections */}

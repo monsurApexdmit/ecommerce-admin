@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 
-/**
- * SaaS Authentication Middleware
- * Protects dashboard, company, team, and billing routes
- * Redirects unauthenticated users to login
- */
-
 // Routes that don't require authentication
 const publicRoutes = [
   "/",
@@ -15,32 +9,39 @@ const publicRoutes = [
   "/auth/reset-password",
 ]
 
-// Routes that require authentication
-const protectedRoutes = ["/dashboard", "/company", "/team", "/billing"]
+// Routes accessible only by owner or admin
+const OWNER_ADMIN_ONLY = [
+  "/dashboard/billing",
+  "/dashboard/team",
+  "/dashboard/staff/roles",
+  "/dashboard/company",
+]
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Check if route is public
+  // Public routes — no auth needed
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
   )
-
   if (isPublicRoute) {
     return NextResponse.next()
   }
 
-  // Get token from cookies (stored by auth context on login)
+  // Get token from cookies
   const token = request.cookies.get("token")?.value
 
-  // Check if route is protected
-  const isProtectedRoute = protectedRoutes.some(
-    (route) => pathname.startsWith(route)
-  )
-
-  // If accessing protected route without token, redirect to login
-  if (isProtectedRoute && !token) {
+  // Protected routes — must have token
+  if (pathname.startsWith("/dashboard") && !token) {
     return NextResponse.redirect(new URL("/auth/login", request.url))
+  }
+
+  // Owner/admin-only routes — check user_role cookie
+  if (token && OWNER_ADMIN_ONLY.some((path) => pathname.startsWith(path))) {
+    const userRole = request.cookies.get("user_role")?.value ?? ""
+    if (!["owner", "admin"].includes(userRole)) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
   }
 
   return NextResponse.next()
@@ -48,14 +49,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     "/((?!api|_next/static|_next/image|favicon.ico|public).*)",
   ],
 }

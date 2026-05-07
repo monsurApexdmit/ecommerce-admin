@@ -20,6 +20,8 @@ import { getCategories, getVendors, getWarehouses } from "@/services/catalog";
 import { deleteProduct, getProductById, updateProductStatus } from "@/services/products";
 import type { Product } from "@/types/product";
 import type { Category, Vendor, Warehouse } from "@/types/catalog";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 const STATUS_ACCENT: Record<string, { bg: string; text: string; dot: string }> = {
   Selling:      { bg: "#dcfce7", text: "#166534", dot: "#22c55e" },
@@ -63,6 +65,9 @@ export default function ProductDetailScreen() {
     if (!Number.isFinite(productId)) return;
     void load();
   }, [load, productId]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Products')) return <AccessDenied />;
 
   const handleDelete = () => {
     if (!product) return;

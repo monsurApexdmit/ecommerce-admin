@@ -35,11 +35,14 @@ api.interceptors.response.use(
   }
 )
 
+export type PaymentGatewayType = 'cod' | 'sslcommerz' | 'portwallet'
+
 export interface PaymentMethod {
   id: number
   name: string
   description: string | null
   icon: string | null
+  gateway_type: PaymentGatewayType
   isActive: boolean
   sortOrder: number
 }
@@ -48,6 +51,7 @@ export interface PaymentMethodPayload {
   name: string
   description?: string
   icon?: string
+  gateway_type?: PaymentGatewayType
   isActive?: boolean
   sortOrder?: number
 }

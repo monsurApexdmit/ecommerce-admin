@@ -14,6 +14,7 @@ import { useProduct, type Product } from "@/contexts/product-context"
 import { useVendor } from "@/contexts/vendor-context"
 import { useCategory } from "@/contexts/category-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -31,7 +32,7 @@ export default function ProductsPage() {
   const { vendors } = useVendor()
   const { warehouses } = useWarehouse()
   const { categories, getAllCategoriesFlat } = useCategory()
-  const { company } = useSaasAuth()
+  const { company, canRead, canWrite, canDelete } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
 
   const [searchQuery, setSearchQuery] = useState("")
@@ -48,6 +49,8 @@ export default function ProductsPage() {
   const [bulkStatusLoading, setBulkStatusLoading] = useState(false)
 
   const allCategories = useMemo(() => getAllCategoriesFlat(), [categories])
+
+  if (!canRead('Products')) return <AccessDenied />
 
   const matchesSelectedWarehouse = (product: Product, warehouseId: string) => {
     if (warehouseId === "all") return true
@@ -127,6 +130,7 @@ export default function ProductsPage() {
   const closeDialog = () => {
     setIsAddDialogOpen(false)
     setEditingProduct(null)
+    setViewingProduct(null)
   }
 
   const handleExport = (data: Product[]) => {
@@ -247,12 +251,16 @@ export default function ProductsPage() {
       key: "vendorId",
       label: "Vendor",
       width: "min-w-[110px]",
-      render: (value) =>
-        value ? (
+      render: (value, item) => {
+        const name = (item as any).vendorName || vendors.find(v => v.id === value)?.name
+        return value && name ? (
           <Link href={`/dashboard/vendors/${value}`} className="text-emerald-600 hover:underline text-xs truncate block max-w-[100px]">
-            {vendors.find(v => v.id === value)?.name || "Unknown"}
+            {name}
           </Link>
-        ) : <span className="text-gray-400 text-xs">—</span>,
+        ) : value && !name ? (
+          <span className="text-gray-500 text-xs truncate block max-w-[100px]">{name || "—"}</span>
+        ) : <span className="text-gray-400 text-xs">—</span>
+      },
     },
     {
       key: "locationName",
@@ -306,36 +314,38 @@ export default function ProductsPage() {
 
   // Define bulk actions
   const bulkActions: BulkAction[] = [
-    {
-      id: "publish",
-      label: "Publish",
-      onExecute: async (ids) => {
-        await Promise.all(ids.map(id => {
-          const product = products.find(p => p.id === id)
-          return product ? updateProduct({ ...product, published: true }) : Promise.resolve()
-        }))
+    ...(canWrite('Products') ? [
+      {
+        id: "publish",
+        label: "Publish",
+        onExecute: async (ids: string[]) => {
+          await Promise.all(ids.map(id => {
+            const product = products.find(p => p.id === id)
+            return product ? updateProduct({ ...product, published: true }) : Promise.resolve()
+          }))
+        },
+        confirmMessage: "Publish selected products?",
       },
-      confirmMessage: "Publish selected products?",
-    },
-    {
-      id: "unpublish",
-      label: "Unpublish",
-      onExecute: async (ids) => {
-        await Promise.all(ids.map(id => {
-          const product = products.find(p => p.id === id)
-          return product ? updateProduct({ ...product, published: false }) : Promise.resolve()
-        }))
+      {
+        id: "unpublish",
+        label: "Unpublish",
+        onExecute: async (ids: string[]) => {
+          await Promise.all(ids.map(id => {
+            const product = products.find(p => p.id === id)
+            return product ? updateProduct({ ...product, published: false }) : Promise.resolve()
+          }))
+        },
+        confirmMessage: "Unpublish selected products?",
       },
-      confirmMessage: "Unpublish selected products?",
-    },
-    {
+    ] : []),
+    ...(canDelete('Products') ? [{
       id: "delete",
       label: "Delete",
-      onExecute: async (ids) => {
+      onExecute: async (ids: string[]) => {
         await Promise.all(ids.map(id => deleteProduct(id)))
       },
       confirmMessage: "Delete selected products? This action cannot be undone.",
-    },
+    }] : []),
   ]
 
   // Define actions
@@ -356,20 +366,20 @@ export default function ProductsPage() {
       },
       className: "text-gray-500 hover:text-gray-700 hover:bg-transparent",
     },
-    {
+    ...(canWrite('Products') ? [{
       id: "edit",
       label: "Edit",
       icon: <Edit2 className="w-4 h-4" />,
-      onClick: (item) => handleEdit(item),
+      onClick: (item: any) => handleEdit(item),
       className: "text-gray-500 hover:text-gray-700 hover:bg-transparent",
-    },
-    {
+    }] : []),
+    ...(canDelete('Products') ? [{
       id: "delete",
       label: "Delete",
       icon: <Trash2 className="w-4 h-4" />,
-      onClick: (item) => handleDelete(item.id),
+      onClick: (item: any) => handleDelete(item.id),
       className: "text-gray-500 hover:text-red-600 hover:bg-transparent",
-    },
+    }] : []),
   ]
 
   return (
@@ -388,13 +398,13 @@ export default function ProductsPage() {
         onSearch={setSearchQuery}
         onFilterChange={() => setCurrentPage(1)}
         actions={actions}
-        onAddClick={() => {
+        onAddClick={canWrite('Products') ? () => {
           if (company?.maxProducts && products.length >= company.maxProducts) {
             setIsUpgradeModalOpen(true)
           } else {
             setIsAddDialogOpen(true)
           }
-        }}
+        } : undefined}
         addButtonLabel="Add Product"
         bulkActions={bulkActions}
         enableCheckboxes={true}
@@ -418,7 +428,7 @@ export default function ProductsPage() {
 
       {/* View Product Details Dialog */}
       <Dialog open={!!viewingProduct} onOpenChange={() => setViewingProduct(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden" showCloseButton={false}>
           <DialogTitle className="sr-only">Product Details</DialogTitle>
           {viewingProduct && (() => {
             const offerFinal = viewingProduct.offerPrice
@@ -430,6 +440,13 @@ export default function ProductsPage() {
               <>
                 {/* Hero header */}
                 <div className="relative bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
+                  <button
+                    onClick={closeDialog}
+                    className="absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                    aria-label="Close"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                  </button>
                   <div className="flex items-start gap-5">
                     <div className="relative shrink-0">
                       <img
@@ -480,7 +497,7 @@ export default function ProductsPage() {
                   <div className="p-6 grid grid-cols-3 gap-4">
                     {[
                       { label: "Category", value: viewingProduct.category || allCategories.find(c => c.id === viewingProduct.categoryId)?.category_name || "—" },
-                      { label: "Vendor", value: viewingProduct.vendorId ? (vendors.find(v => v.id === viewingProduct.vendorId)?.name || viewingProduct.vendorId) : "—" },
+                      { label: "Vendor", value: viewingProduct.vendorName || vendors.find(v => v.id === viewingProduct.vendorId)?.name || "—" },
                       { label: "Location", value: viewingProduct.locationName || warehouses.find(w => String(w.id) === viewingProduct.locationId)?.name || "—" },
                       { label: "Stock", value: `${viewingProduct.stock} units`, highlight: viewingProduct.stock < 5 ? "red" : viewingProduct.stock < 20 ? "amber" : "green" },
                       { label: "SKU", value: viewingProduct.sku || "—", mono: true },
@@ -562,13 +579,15 @@ export default function ProductsPage() {
 
                 <DialogFooter className="p-4 border-t bg-gray-50 flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setViewingProduct(null)}>Close</Button>
-                  <Button
-                    onClick={() => { if (viewingProduct) { setViewingProduct(null); handleEdit(viewingProduct) } }}
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    Edit Product
-                  </Button>
+                  {canWrite('Products') && (
+                    <Button
+                      onClick={() => { if (viewingProduct) { setViewingProduct(null); handleEdit(viewingProduct) } }}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      <Edit2 className="w-4 h-4 mr-2" />
+                      Edit Product
+                    </Button>
+                  )}
                 </DialogFooter>
               </>
             )

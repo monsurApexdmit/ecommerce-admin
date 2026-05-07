@@ -16,8 +16,11 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { useCategory, type Category } from "@/contexts/category-context"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function CategoriesPage() {
+  const { canRead } = useSaasAuth()
   const { categories: rootCategories, getAllCategoriesFlat, addCategory, updateCategory, deleteCategory } = useCategory()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
@@ -45,6 +48,8 @@ export default function CategoriesPage() {
     }, 1000)
     return () => clearTimeout(timer)
   }, [])
+
+  if (!canRead('Categories')) return <AccessDenied />
 
   // Filter Logic
   // If "Parents Only" is checked, we only search/filter ROOT categories.

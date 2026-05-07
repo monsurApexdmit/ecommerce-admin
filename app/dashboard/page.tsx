@@ -22,10 +22,13 @@ import {
 import { sellsApi, SellResponse } from "@/lib/sellsApi"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
 export default function DashboardPage() {
+  const { canRead } = useSaasAuth()
   const { vendors } = useVendor()
   const { products } = useProduct()
   const { staff, salaryPayments } = useStaff()
@@ -52,11 +55,11 @@ export default function DashboardPage() {
 
         const s = statsRes.data
         setSellStats({
-          totalRevenue: Number(s?.total_revenue ?? 0),
-          totalOrders: Number(s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
-          pendingCount: Number(s?.pending_count ?? 0),
-          processingCount: Number(s?.processing_count ?? 0),
-          deliveredCount: Number(s?.delivered_count ?? 0),
+          totalRevenue: Number(s?.totalRevenue ?? s?.total_revenue ?? 0),
+          totalOrders: Number(s?.totalSells ?? s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
+          pendingCount: Number(s?.pendingOrders ?? s?.pending_count ?? 0),
+          processingCount: Number(s?.processingOrders ?? s?.processing_count ?? 0),
+          deliveredCount: Number(s?.deliveredOrders ?? s?.delivered_count ?? 0),
         })
       } catch {
         // fallback: just use list length
@@ -80,6 +83,8 @@ export default function DashboardPage() {
     }
     fetchDashboardData()
   }, [])
+
+  if (!canRead('Dashboard')) return <AccessDenied />
 
   // Vendor statistics
   const totalVendors = vendors.length

@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useStaff, PERMISSION_MODULES, type Role, type Module, type Permission } from "@/contexts/staff-context"
 import { staffRoleApi } from "@/lib/staffApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 interface BackendPermission {
     id: number
@@ -18,6 +20,7 @@ interface BackendPermission {
 }
 
 export default function RolesPage() {
+    const { canRead } = useSaasAuth()
     const { roles, rolesLoading, addRole, updateRole, deleteRole } = useStaff()
     const [searchQuery, setSearchQuery] = useState("")
     const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -44,6 +47,8 @@ export default function RolesPage() {
         }
         loadPermissions()
     }, [])
+
+    if (!canRead('Role & Permission')) return <AccessDenied />
 
     const filteredRoles = roles.filter((role) =>
         role.name.toLowerCase().includes(searchQuery.toLowerCase())

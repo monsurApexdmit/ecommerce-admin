@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import {
   changePassword,
   getAllSettings,
@@ -46,7 +47,7 @@ const SECTIONS: { key: Section; label: string; icon: string }[] = [
 ];
 
 export default function SettingsScreen() {
-  const { session, signOut } = useAuth();
+  const { session, signOut, canRead } = useAuth();
   const [activeSection, setActiveSection] = useState<Section>("store");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,6 +90,8 @@ export default function SettingsScreen() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  if (!canRead('Settings')) return <AccessDenied />;
 
   const save = async () => {
     setSaving(true);

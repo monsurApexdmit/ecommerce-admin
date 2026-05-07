@@ -29,6 +29,8 @@ import { couponApi, CouponResponse } from "@/lib/couponApi"
 import { BarcodeScanner } from "@/components/pos/barcode-scanner"
 import { toast } from "sonner"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 interface CartItem {
     id: string
@@ -43,6 +45,7 @@ interface CartItem {
 }
 
 export default function PosPage() {
+    const { canRead } = useSaasAuth()
     const { warehouses, defaultWarehouse } = useWarehouse()
     const { getAllCategoriesFlat } = useCategory()
     const { getCustomerById } = useCustomer()
@@ -203,6 +206,8 @@ export default function PosPage() {
             return matchesSearch && hasStock
         })
     }, [products, searchQuery, selectedWarehouseId, cart]) // eslint-disable-line
+
+    if (!canRead('POS')) return <AccessDenied />
 
     const addToCart = (product: Product, variant?: Variant) => {
         if (product.variants && product.variants.length > 0 && !variant) {

@@ -79,12 +79,14 @@ export interface CreateStaffData {
   contact: string;
   joiningDate?: string;
   role?: string;
+  staffRoleId?: number | null;
   status?: 'Active' | 'Inactive';
   published?: boolean;
   avatar?: string;
   salary?: number;
   bankAccount?: string;
   paymentMethod?: string;
+  password?: string;
 }
 
 export interface UpdateStaffData {
@@ -93,6 +95,7 @@ export interface UpdateStaffData {
   contact?: string;
   joiningDate?: string;
   role?: string;
+  staffRoleId?: number | null;
   status?: 'Active' | 'Inactive';
   published?: boolean;
   avatar?: string;

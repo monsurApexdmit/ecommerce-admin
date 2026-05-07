@@ -17,6 +17,8 @@ import { useNotifications } from "@/context/NotificationContext";
 import { colors } from "@/constants/theme";
 import { formatDateTime } from "@/lib/format";
 import { resolveNotificationRoute } from "@/lib/notification-routing";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import {
   type Notification,
   type NotificationType,
@@ -82,6 +84,9 @@ export default function NotificationsScreen() {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }, [filter, notifications]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Notifications')) return <AccessDenied />;
 
   const onRefresh = async () => {
     setRefreshing(true);

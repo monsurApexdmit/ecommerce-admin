@@ -27,6 +27,8 @@ import {
 } from "@/services/order-service";
 import type { CreateShipmentDraft, Order, Shipment, ShipmentStatus } from "@/types/order";
 import { ShipmentStatusPill } from "@/components/orders/OrderStatusPill";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 const shipmentFlow: ShipmentStatus[] = [
   "pending",
@@ -142,6 +144,9 @@ export default function ShipmentsScreen() {
     () => (statusFilter ? shipments.filter((item) => item.status === statusFilter) : shipments),
     [shipments, statusFilter],
   );
+
+  const { canRead } = useAuth();
+  if (!canRead('Shipments')) return <AccessDenied />;
 
   const statCards = [
     { label: "Total",      value: stats.total,      bg: "#f1f5f9", text: colors.text },

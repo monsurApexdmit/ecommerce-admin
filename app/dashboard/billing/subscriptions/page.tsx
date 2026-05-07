@@ -21,13 +21,14 @@ import {
 } from "@/components/ui/select"
 import { saasBillingApi, type Subscription, type PaymentRecord } from "@/lib/saasBillingApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { useToast } from "@/hooks/use-toast"
 import { AlertCircle, Loader, Download, RefreshCw, CreditCard, Calendar, Toggle2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils/subscriptionUtils"
 
 export default function SubscriptionsPage() {
   const router = useRouter()
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
   const { toast } = useToast()
 
   const [subscription, setSubscription] = useState<Subscription | null>(null)
@@ -75,6 +76,8 @@ export default function SubscriptionsPage() {
 
     loadData()
   }, [])
+
+  if (!canRead('Subscriptions')) return <AccessDenied />
 
   const handleRenew = async () => {
     if (!subscription) return

@@ -13,6 +13,8 @@ import { useCurrency } from "@/context/CurrencyContext";
 import { getProductById } from "@/services/products";
 import type { Product } from "@/types/product";
 import { BarcodeGraphic } from "@/components/products/BarcodeGraphic";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 export default function ProductBarcodeScreen() {
   const { formatCurrency } = useCurrency();
@@ -35,6 +37,9 @@ export default function ProductBarcodeScreen() {
 
     void load();
   }, [navigation, params.id]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Print Barcode')) return <AccessDenied />;
 
   if (loading || !product) {
     return (

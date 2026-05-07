@@ -16,6 +16,8 @@ import productApi, {
   type ProductReviewListResponse,
   type ProductReviewSummaryResponse,
 } from "@/lib/productApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 function formatDate(value: string | null) {
   if (!value) return "-"
@@ -37,6 +39,7 @@ function RatingStars({ value }: { value: number }) {
 }
 
 export default function ProductReviewsPage() {
+  const { canRead } = useSaasAuth()
   const params = useParams<{ id: string }>()
   const productId = Number(params.id)
   const { toast } = useToast()
@@ -64,6 +67,8 @@ export default function ProductReviewsPage() {
 
     void loadPageData(true)
   }, [productId])
+
+  if (!canRead('Product Reviews')) return <AccessDenied />
 
   async function loadPageData(showInitialLoader = false) {
     if (showInitialLoader) {

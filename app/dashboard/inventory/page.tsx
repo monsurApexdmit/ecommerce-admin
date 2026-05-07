@@ -14,10 +14,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { inventoryApi, type InventoryItem } from "@/lib/inventoryApi"
 import { StatsCards } from "@/components/ui/stats-card"
 import productApi from "@/lib/productApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const ITEMS_PER_PAGE = 10
 
 export default function InventoryPage() {
+  const { canRead } = useSaasAuth()
   const { warehouses } = useWarehouse()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [stats, setStats] = useState<{
@@ -79,6 +82,8 @@ export default function InventoryPage() {
     const start = (currentPage - 1) * itemsPerPage
     return items.slice(start, start + itemsPerPage)
   }, [items, currentPage, itemsPerPage])
+
+  if (!canRead('Inventory')) return <AccessDenied />
 
   const handleSelectRow = (key: string) => {
     const next = new Set(selectedRows)

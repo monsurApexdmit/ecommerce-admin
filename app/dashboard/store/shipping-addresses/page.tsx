@@ -23,6 +23,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useShippingAddress, ShippingAddress } from "@/contexts/shipping-address-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePagination } from "@/hooks/use-pagination"
@@ -34,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export default function ShippingAddressesPage() {
+  const { canRead } = useSaasAuth()
   const {
     addresses,
     addAddress,
@@ -95,6 +98,8 @@ export default function ShippingAddressesPage() {
     setCurrentPage,
     handleItemsPerPageChange,
   } = usePagination(filteredAddresses, 10)
+
+  if (!canRead('Shipping Addresses')) return <AccessDenied />
 
   const handleSelectAll = () => {
     if (selectedAddressIds.length === currentItems.length) {

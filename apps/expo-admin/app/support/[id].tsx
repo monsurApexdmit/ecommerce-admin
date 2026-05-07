@@ -35,6 +35,8 @@ import {
   replyToTicket,
   updateTicketStatus,
 } from "@/services/support";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import type {
   SupportAttachment,
   SupportMessage,
@@ -247,6 +249,9 @@ export default function TicketDetailScreen() {
   const removeComposerAttachment = useCallback((key: string) => {
     setAttachments((prev) => prev.filter((item) => item.key !== key));
   }, []);
+
+  const { canRead } = useAuth();
+  if (!canRead('Support')) return <AccessDenied />;
 
   const handleSend = async () => {
     const body = reply.trim();

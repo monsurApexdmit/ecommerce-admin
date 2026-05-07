@@ -13,6 +13,10 @@ type AuthContextValue = {
   signIn: (payload: LoginPayload) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  hasPermission: (module: string, action?: "read" | "write" | "delete") => boolean;
+  canRead: (module: string) => boolean;
+  canWrite: (module: string) => boolean;
+  canDelete: (module: string) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -97,6 +101,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrap();
   }, []);
 
+  const hasPermission = (module: string, action: "read" | "write" | "delete" = "read"): boolean => {
+    if (!user) return false;
+    if (user.role === "owner" || user.role === "admin") return true;
+    if (user.permissions === null) return true;
+    return user.permissions?.[module]?.[action] ?? false;
+  };
+
+  const canRead   = (module: string) => hasPermission(module, "read");
+  const canWrite  = (module: string) => hasPermission(module, "write");
+  const canDelete = (module: string) => hasPermission(module, "delete");
+
   const value = useMemo<AuthContextValue>(() => ({
     bootstrapped,
     loading,
@@ -106,6 +121,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signOut,
     refreshProfile,
+    hasPermission,
+    canRead,
+    canWrite,
+    canDelete,
   }), [bootstrapped, loading, session, user, company]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

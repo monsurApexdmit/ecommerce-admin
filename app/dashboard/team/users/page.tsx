@@ -10,6 +10,7 @@ import {
 } from "@/lib/saasCompanyApi"
 import { staffRoleApi, type StaffRoleResponse } from "@/lib/staffApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import {
   AlertCircle,
   Loader,
@@ -23,7 +24,7 @@ import {
 import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 
 export default function TeamUsersPage() {
-  const { company, user } = useSaasAuth()
+  const { company, user, canRead } = useSaasAuth()
 
   const [users, setUsers] = useState<CompanyUser[]>([])
   const [staffRoles, setStaffRoles] = useState<StaffRoleResponse[]>([])
@@ -66,6 +67,8 @@ export default function TeamUsersPage() {
 
     loadData()
   }, [])
+
+  if (!canRead('Team Members')) return <AccessDenied />
 
   const handleInvite = async () => {
     if (!inviteForm.email || !inviteForm.fullName || !inviteForm.roleId) {

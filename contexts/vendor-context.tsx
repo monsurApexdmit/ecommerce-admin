@@ -69,8 +69,10 @@ export function VendorProvider({ children }: { children: React.ReactNode }) {
       const convertedVendors = response.data.map(convertToVendor)
       setVendors(convertedVendors)
     } catch (err: any) {
-      console.error('Error fetching vendors:', err)
-      setError(err.response?.data?.error || 'Failed to fetch vendors')
+      if (err.response?.status !== 403) {
+        console.error('Error fetching vendors:', err)
+        setError(err.response?.data?.error || 'Failed to fetch vendors')
+      }
     } finally {
       setIsLoading(false)
     }

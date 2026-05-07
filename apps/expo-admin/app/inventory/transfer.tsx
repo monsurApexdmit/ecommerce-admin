@@ -28,6 +28,8 @@ import {
 } from "@/services/inventory";
 import { getWarehouses } from "@/services/catalog";
 import type { Warehouse } from "@/types/catalog";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 type Tab = "create" | "history";
 
@@ -78,6 +80,9 @@ export default function TransferScreen() {
   useEffect(() => {
     if (tab === "history") void loadTransfers();
   }, [tab, loadTransfers]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Transfers')) return <AccessDenied />;
 
   const handleSubmit = async () => {
     if (!fromWh || !toWh || !selectedProduct || !quantity) {

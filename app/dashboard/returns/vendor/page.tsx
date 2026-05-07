@@ -5,6 +5,8 @@ import { vendorReturnsApi, VendorReturnResponse, VendorReturnStatus } from "@/li
 import { productApi, ProductResponse, ProductVariantResponse } from "@/lib/productApi"
 import { useVendor } from "@/contexts/vendor-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -87,6 +89,7 @@ const RETURN_REASONS = [
 const ITEMS_PER_PAGE = 10
 
 export default function VendorReturnsPage() {
+  const { canRead } = useSaasAuth()
   const { vendors } = useVendor()
   const { toast } = useToast()
   const { formatCurrency } = useCompanySettings()
@@ -212,6 +215,8 @@ export default function VendorReturnsPage() {
       setVendorProductsLoading(false)
     }
   }, [toast])
+
+  if (!canRead('Vendor Returns')) return <AccessDenied />
 
   const handleSelectProduct = (product: ProductResponse, variant?: ProductVariantResponse) => {
     const unitPrice = variant

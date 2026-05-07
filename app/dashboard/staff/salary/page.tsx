@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { useStaff } from "@/contexts/staff-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DollarSign, CreditCard, Clock, CheckCircle2, Trash2 } from "lucide-react"
@@ -11,12 +13,16 @@ import Link from "next/link"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 
 export default function SalaryManagementPage() {
+    const { canRead } = useSaasAuth()
     const { staff, salaryPayments, isLoading, salaryPaymentsLoading, addSalaryPayment, updateSalaryPayment, deleteSalaryPayment } = useStaff()
     const { formatCurrency } = useCompanySettings()
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = new Date()
         return `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
     })
+
+    if (!canRead('Salary Management')) return <AccessDenied />
+
     // Generate month options (last 12 months)
     const monthOptions = Array.from({ length: 12 }, (_, i) => {
         const now = new Date()

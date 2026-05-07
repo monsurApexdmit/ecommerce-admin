@@ -26,6 +26,8 @@ import { deleteOrder, getOrders, getOrderStats, updateOrderStatus } from "@/serv
 import type { Order, OrderStats } from "@/types/order";
 import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
 import { ProductStatusPill } from "@/components/products/ProductStatusPill";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 type MethodFilter = "" | "Cash" | "Card" | "Online";
 
@@ -121,6 +123,9 @@ export default function OrdersTab() {
     () => Boolean(statusFilter || methodFilter || startDate || endDate),
     [statusFilter, methodFilter, startDate, endDate],
   );
+
+  const { canRead } = useAuth();
+  if (!canRead('Orders')) return <AccessDenied />;
 
   const copyOrderNo = (invoiceNo: string) => {
     void Clipboard.setStringAsync(invoiceNo);

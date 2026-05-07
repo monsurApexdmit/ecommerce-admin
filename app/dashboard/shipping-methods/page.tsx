@@ -38,6 +38,8 @@ import {
   ArrowUpDown,
 } from "lucide-react"
 import shippingMethodApi, { type ShippingMethod, type ShippingMethodPayload } from "@/lib/shippingMethodApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const ICON_OPTIONS = [
   { value: "package",  label: "Package",  Icon: Package },
@@ -64,6 +66,7 @@ const emptyForm: ShippingMethodPayload = {
 }
 
 export default function ShippingMethodsPage() {
+  const { canRead } = useSaasAuth()
   const { toast } = useToast()
   const [methods, setMethods] = useState<ShippingMethod[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,6 +90,8 @@ export default function ShippingMethodsPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  if (!canRead('Shipping Methods')) return <AccessDenied />
 
   const openAdd = () => {
     setEditing(null)

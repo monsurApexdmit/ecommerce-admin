@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { transferApi, type LocationProduct, type LocationProductRaw } from "@/lib/transferApi"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
@@ -50,6 +52,7 @@ function flattenLocationProducts(raw: LocationProductRaw[]): LocationProduct[] {
 }
 
 export default function StockTransferPage() {
+  const { canRead } = useSaasAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { warehouses } = useWarehouse()
@@ -80,6 +83,8 @@ export default function StockTransferPage() {
   }, [fromWarehouse])
 
   const locationProducts = useMemo(() => flattenLocationProducts(rawLocationProducts), [rawLocationProducts])
+
+  if (!canRead('Transfers')) return <AccessDenied />
 
   const selectedItem = locationProducts.find(p =>
     (p.type === 'variant' ? `v-${p.id}` : `p-${p.id}`) === selectedRowKey

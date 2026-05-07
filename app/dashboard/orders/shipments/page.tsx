@@ -18,6 +18,8 @@ import {
 import { shipmentsApi, ShipmentResponse, ShipmentStatus, CreateShipmentData } from "@/lib/shipmentsApi"
 import { sellsApi, SellResponse } from "@/lib/sellsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 // Ordered progression — status can only move forward
 const STATUS_ORDER: ShipmentStatus[] = [
@@ -89,6 +91,7 @@ const EMPTY_FORM: CreateShipmentData = {
 }
 
 export default function ShipmentsPage() {
+  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
   const [shipments, setShipments] = useState<ShipmentResponse[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, failed: 0 })
@@ -171,6 +174,8 @@ export default function ShipmentsPage() {
   }, [currentPage, itemsPerPage, searchQuery, statusFilter])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
+
+  if (!canRead('Shipments')) return <AccessDenied />
 
   const handleViewShipment = async (shipment: ShipmentResponse) => {
     setViewingShipment(shipment)

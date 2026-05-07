@@ -31,6 +31,8 @@ import { BarcodeScannerModal } from "@/components/pos/BarcodeScannerModal";
 import type { Product, ProductVariant } from "@/types/product";
 import type { Category, Warehouse } from "@/types/catalog";
 import type { CartItem, Coupon, CompletedSale, PaymentMethod } from "@/types/pos";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 
 function cartKey(productId: number, variantId?: number) {
@@ -294,6 +296,9 @@ export default function PosTab() {
   };
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
+
+  const { canRead } = useAuth();
+  if (!canRead('POS')) return <AccessDenied />;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

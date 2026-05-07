@@ -17,6 +17,8 @@ import { toast } from "sonner"
 import { ArrowLeft, MapPin, Trash2, Plus, Check } from "lucide-react"
 import Link from "next/link"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,7 @@ import {
 } from "@/components/ui/dialog"
 
 export default function CheckoutPage() {
+  const { canRead } = useSaasAuth()
   const router = useRouter()
   const { cart, getCartTotal, removeFromCart, clearCart, createOrder } = useOrder()
   const { addresses, getAddressesByCustomer, getDefaultAddress } = useShippingAddress()
@@ -68,6 +71,8 @@ export default function CheckoutPage() {
       setSelectedAddressId("")
     }
   }, [selectedCustomerId, useDefaultAddress, customers, getAddressesByCustomer, getDefaultAddress])
+
+  if (!canRead('Checkout')) return <AccessDenied />
 
   const subtotal = getCartTotal()
   const total = subtotal + shippingCost - discount

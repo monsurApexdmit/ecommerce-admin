@@ -69,6 +69,8 @@ import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 import { StatsCards } from "@/components/ui/stats-card"
 import customerApi from "@/lib/customerApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const emptyAddrForm = {
   fullName: "", phone: "", addressLine1: "", addressLine2: "",
@@ -283,6 +285,7 @@ function CustomerAddressesPanel({ customerId, readonly = false }: { customerId: 
 }
 
 export default function CustomersPage() {
+  const { canRead } = useSaasAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { customers, isLoading, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
@@ -343,6 +346,8 @@ export default function CustomersPage() {
 
     fetchStats()
   }, [])
+
+  if (!canRead('Customers')) return <AccessDenied />
 
   // Filter Logic
   const filteredCustomers = customers

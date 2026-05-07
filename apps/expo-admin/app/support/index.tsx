@@ -16,6 +16,7 @@ import { useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import { playIncomingSupportMessageSound } from "@/lib/message-sound";
 import { presentSupportMessageNotification } from "@/lib/mobile-notifications";
 import { subscribeToSupportCompany } from "@/lib/reverb";
@@ -60,7 +61,7 @@ const STATUS_FILTERS: { value: TicketStatus | "all"; label: string }[] = [
 export default function SupportScreen() {
   const navigation = useNavigation();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, canRead } = useAuth();
 
   const [tickets, setTickets]         = useState<SupportTicket[]>([]);
   const [stats, setStats]             = useState<TicketStats | null>(null);
@@ -164,6 +165,8 @@ export default function SupportScreen() {
     if (!hasNext || loadingMore || loading) return;
     try { setLoadingMore(true); await load(page + 1, "append"); } finally { setLoadingMore(false); }
   }, [hasNext, loadingMore, loading, load, page]);
+
+  if (!canRead('Support')) return <AccessDenied />;
 
   const handleDelete = (ticket: SupportTicket) => {
     Alert.alert("Delete Ticket", `Delete #${ticket.ticketNumber}? This cannot be undone.`, [

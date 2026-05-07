@@ -9,12 +9,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { saasCompanyApi, type CompanyProfile } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import { AlertCircle, Loader, Save, Building2 } from "lucide-react"
 import { toast } from "sonner"
 
 export default function CompanyProfilePage() {
   const router = useRouter()
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -64,6 +65,8 @@ export default function CompanyProfilePage() {
 
     loadProfile()
   }, [])
+
+  if (!canRead('Company Profile')) return <AccessDenied />
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }))

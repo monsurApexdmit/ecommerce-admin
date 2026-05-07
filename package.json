@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --port 3001",
+    "dev": "next dev --port 3001 --webpack",
     "dev:https": "NODE_OPTIONS='--dns-result-order=ipv4first' next dev --experimental-https --experimental-https-key ./localhost-key.pem --experimental-https-cert ./localhost.pem --port 3001",
     "lint": "eslint .",
     "start": "next start"

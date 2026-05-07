@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import { useNotifications } from "@/context/NotificationContext";
 import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
 import { getDashboardStats, getRecentOrders } from "@/services/dashboard";
@@ -55,7 +56,7 @@ const QUICK_LINKS: {
 
 export default function DashboardTab() {
   const router = useRouter();
-  const { user, company } = useAuth();
+  const { user, company, canRead } = useAuth();
   const { unreadCount } = useNotifications();
   const { formatCurrency } = useCurrency();
 
@@ -85,6 +86,8 @@ export default function DashboardTab() {
   }, [loadAll]);
 
   const firstName = user?.fullName?.split(" ")[0] ?? "Admin";
+
+  if (!canRead('Dashboard')) return <AccessDenied />;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

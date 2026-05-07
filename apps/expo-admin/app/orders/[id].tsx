@@ -28,6 +28,8 @@ import {
 import type { Order } from "@/types/order";
 import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
 import { ProductStatusPill } from "@/components/products/ProductStatusPill";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 function itemPrice(item: Order["items"][number]) {
   return Number(item.unitPrice ?? item.price ?? 0);
@@ -93,6 +95,9 @@ export default function OrderDetailScreen() {
     if (!Number.isFinite(orderId)) return;
     void load();
   }, [load, orderId]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Orders')) return <AccessDenied />;
 
   const saveNotes = async () => {
     if (!order || notes === (order.notes ?? "")) return;

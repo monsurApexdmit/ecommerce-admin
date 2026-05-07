@@ -66,8 +66,10 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       const convertedCategories = response.data.map(convertToCategory)
       setCategories(convertedCategories)
     } catch (err: any) {
-      console.error('Error fetching categories:', err)
-      setError(err.response?.data?.error || 'Failed to fetch categories')
+      if (err.response?.status !== 403) {
+        console.error('Error fetching categories:', err)
+        setError(err.response?.data?.error || 'Failed to fetch categories')
+      }
     } finally {
       setIsLoading(false)
     }

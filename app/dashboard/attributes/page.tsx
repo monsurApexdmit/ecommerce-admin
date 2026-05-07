@@ -16,8 +16,11 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { useAttribute, type Attribute } from "@/contexts/attribute-context"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function AttributesPage() {
+  const { canRead } = useSaasAuth()
   const { attributes, isLoading: contextLoading, addAttribute, updateAttribute, deleteAttribute } = useAttribute()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
@@ -71,6 +74,8 @@ export default function AttributesPage() {
       return () => clearTimeout(timer)
     }
   }, [contextLoading])
+
+  if (!canRead('Attributes')) return <AccessDenied />
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

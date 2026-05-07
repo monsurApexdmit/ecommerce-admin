@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import wishlistApi, { type WishlistAnalytics } from "@/lib/wishlistApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 function TrendBar({ count, max }: { count: number; max: number }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0
@@ -35,6 +37,7 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 }
 
 export default function WishlistAnalyticsPage() {
+  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
   const [data, setData] = useState<WishlistAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -46,6 +49,8 @@ export default function WishlistAnalyticsPage() {
       .catch(() => setError("Failed to load wishlist analytics"))
       .finally(() => setLoading(false))
   }, [])
+
+  if (!canRead('Store Wishlist')) return <AccessDenied />
 
   const maxProductCount = data?.topProducts[0]?.wishlistCount ?? 1
   const maxCustomerCount = data?.topCustomers[0]?.wishlistCount ?? 1

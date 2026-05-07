@@ -31,6 +31,8 @@ import type { Attribute, Category, Vendor, Warehouse } from "@/types/catalog";
 import type { Product, ProductStats } from "@/types/product";
 import { ProductListItem } from "@/components/products/ProductListItem";
 import { ProductStatusPill } from "@/components/products/ProductStatusPill";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 type SortValue =
   | "default"
@@ -190,6 +192,9 @@ export default function ProductsTab() {
   }, [products, sortValue]);
 
   const selectedCount = selectedIds.length;
+
+  const { canRead } = useAuth();
+  if (!canRead('Products')) return <AccessDenied />;
 
   const handlePressProduct = (product: Product) => {
     if (selectionMode) {

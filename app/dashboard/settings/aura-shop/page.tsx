@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { settingsApi, type AuraShopHeroSlide } from "@/lib/settingsApi"
 import { toast } from "sonner"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const defaultAuraShopHeroSlides: AuraShopHeroSlide[] = [
   {
@@ -55,6 +57,7 @@ const resolveStorefrontPreviewUrl = (imagePath?: string) => {
 }
 
 export default function AuraShopSettingsPage() {
+  const { canRead } = useSaasAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [businessName, setBusinessName] = useState("")
@@ -71,6 +74,8 @@ export default function AuraShopSettingsPage() {
   useEffect(() => {
     loadSettings()
   }, [])
+
+  if (!canRead('Aura Shop')) return <AccessDenied />
 
   const loadSettings = async () => {
     try {

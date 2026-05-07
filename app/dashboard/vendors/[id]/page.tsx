@@ -12,8 +12,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useState } from "react"
 import Link from "next/link"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function VendorDetailsPage() {
+  const { canRead } = useSaasAuth()
   const params = useParams()
   const router = useRouter()
   const vendorId = params.id as string
@@ -37,6 +40,8 @@ export default function VendorDetailsPage() {
     totalPaid: 0,
     amountPayable: 0,
   })
+
+  if (!canRead('Vendors')) return <AccessDenied />
 
   if (!vendor) {
     return (

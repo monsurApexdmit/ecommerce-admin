@@ -59,89 +59,106 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
 import { useNotifications } from "@/contexts/notification-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
 
-const navigation = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+// Each item declares which permission module controls its visibility.
+// module: null = always visible (no permission gate)
+const NAV_CONFIG = [
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "Dashboard" },
     {
         name: "Catalog",
         icon: Grid3x3,
         items: [
-            { name: "Products", href: "/dashboard/products" },
-            { name: "Categories", href: "/dashboard/categories" },
-            { name: "Attributes", href: "/dashboard/attributes" },
-            { name: "Coupons", href: "/dashboard/coupons" },
-            { name: "Print Barcode", href: "/dashboard/products/print-barcode" },
+            { name: "Products",      href: "/dashboard/products",               module: "Products" },
+            { name: "Categories",    href: "/dashboard/categories",             module: "Categories" },
+            { name: "Attributes",    href: "/dashboard/attributes",             module: "Attributes" },
+            { name: "Coupons",       href: "/dashboard/coupons",                module: "Coupons" },
+            { name: "Print Barcode", href: "/dashboard/products/print-barcode", module: "Print Barcode" },
         ],
     },
-    { name: "Customers", href: "/dashboard/customers", icon: Users },
+    { name: "Customers", href: "/dashboard/customers", icon: Users,        module: "Customers" },
     {
         name: "Orders",
         icon: ShoppingCart,
         items: [
-            { name: "All Orders", href: "/dashboard/orders" },
-            { name: "Shipments", href: "/dashboard/orders/shipments" },
+            { name: "All Orders", href: "/dashboard/orders",           module: "Orders" },
+            { name: "Shipments",  href: "/dashboard/orders/shipments", module: "Shipments" },
         ],
     },
-    { name: "Vendors", href: "/dashboard/vendors", icon: Truck },
-    { name: "POS", href: "/dashboard/pos", icon: CreditCard },
+    { name: "Vendors", href: "/dashboard/vendors", icon: Truck, module: "Vendors" },
+    { name: "POS",     href: "/dashboard/pos",     icon: CreditCard, module: "POS" },
     {
         name: "Inventory",
-        icon: Store,
+        icon: Package,
         items: [
-            { name: "Stock Overview", href: "/dashboard/inventory" },
-            { name: "Transfers", href: "/dashboard/inventory/transfer" },
+            { name: "Stock Overview", href: "/dashboard/inventory",         module: "Inventory" },
+            { name: "Transfers",      href: "/dashboard/inventory/transfer", module: "Transfers" },
         ],
     },
     {
         name: "Returns",
         icon: RotateCcw,
         items: [
-            { name: "Customer Returns", href: "/dashboard/returns/customer" },
-            { name: "Vendor Returns", href: "/dashboard/returns/vendor" },
+            { name: "Customer Returns", href: "/dashboard/returns/customer", module: "Customer Returns" },
+            { name: "Vendor Returns",   href: "/dashboard/returns/vendor",   module: "Vendor Returns" },
         ],
     },
     {
         name: "Staff",
         icon: UserPlus,
         items: [
-            { name: "All Staff", href: "/dashboard/staff" },
-            { name: "Role & Permission", href: "/dashboard/staff/roles" },
-            { name: "Salary Management", href: "/dashboard/staff/salary" },
+            { name: "All Staff",         href: "/dashboard/staff",        module: "Staff" },
+            { name: "Role & Permission", href: "/dashboard/staff/roles",  module: "Role & Permission" },
+            { name: "Salary Management", href: "/dashboard/staff/salary", module: "Salary Management" },
         ],
     },
     {
         name: "Settings",
         icon: Settings,
         items: [
-            { name: "Store Settings", href: "/dashboard/settings" },
-            { name: "Aura Shop", href: "/dashboard/settings/aura-shop" },
-            { name: "Company Profile", href: "/dashboard/company/profile" },
-            { name: "Company Settings", href: "/dashboard/company/settings" },
-            { name: "Billing Contact", href: "/dashboard/company/billing-contact" },
-            { name: "Team Members", href: "/dashboard/team/users" },
-            { name: "Subscriptions", href: "/dashboard/billing/subscriptions" },
-            { name: "Billing Plans", href: "/dashboard/billing/plans" },
+            { name: "Store Settings",     href: "/dashboard/settings",                  module: "Settings" },
+            { name: "Aura Shop",          href: "/dashboard/settings/aura-shop",        module: "Aura Shop" },
+            { name: "Company Profile",    href: "/dashboard/company/profile",           module: "Company Profile" },
+            { name: "Company Settings",   href: "/dashboard/company/settings",          module: "Company Settings" },
+            { name: "Billing Contact",    href: "/dashboard/company/billing-contact",   module: "Billing Contact" },
+            { name: "Team Members",       href: "/dashboard/team/users",                module: "Team Members" },
+            { name: "Subscriptions",      href: "/dashboard/billing/subscriptions",     module: "Subscriptions" },
+            { name: "Billing Plans",      href: "/dashboard/billing/plans",             module: "Billing Plans" },
         ],
     },
     {
         name: "Store",
         icon: Store,
         items: [
-            { name: "Store Settings", href: "/dashboard/store" },
-            { name: "Shipping Methods", href: "/dashboard/shipping-methods" },
-            { name: "Payment Methods", href: "/dashboard/payment-methods" },
-            { name: "Shipping Addresses", href: "/dashboard/store/shipping-addresses" },
+            { name: "Store Settings",      href: "/dashboard/store",                      module: "Store" },
+            { name: "Shipping Methods",    href: "/dashboard/shipping-methods",           module: "Shipping Methods" },
+            { name: "Payment Methods",     href: "/dashboard/payment-methods",            module: "Payment Methods" },
+            { name: "Shipping Addresses",  href: "/dashboard/store/shipping-addresses",   module: "Shipping Addresses" },
         ],
     },
-    { name: "Support", href: "/dashboard/support", icon: Headphones },
-    { name: "Pages", href: "/dashboard/pages", icon: FileText },
-]
+    { name: "Support", href: "/dashboard/support", icon: Headphones, module: "Support" },
+    { name: "Pages",   href: "/dashboard/pages",   icon: FileText,   module: "Pages" },
+] as const
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const pathname = usePathname()
     const { logout } = useAuth()
     const { state } = useSidebar()
     const { unreadCount } = useNotifications()
+    const { canRead } = useSaasAuth()
+
+    // Filter navigation: remove items (and group sub-items) user cannot read
+    const visibleNav = NAV_CONFIG.map((item) => {
+        if ("items" in item) {
+            const visibleItems = item.items.filter((sub) => canRead(sub.module))
+            if (visibleItems.length === 0) return null
+            return { ...item, items: visibleItems }
+        }
+        if (!canRead(item.module)) return null
+        return item
+    }).filter(Boolean) as typeof NAV_CONFIG[number][]
+
+    const showNotifications = canRead("Notifications")
 
     return (
         <Sidebar collapsible="icon" {...props} className="border-r border-border">
@@ -159,13 +176,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarContent>
                 <SidebarGroup>
                     <SidebarMenu>
-                        {navigation.map((item) => {
-                            const isActive = item.href ? pathname === item.href : false
-                            const isSubActive = item.items?.some(sub => pathname === sub.href)
+                        {visibleNav.map((item) => {
+                            const isActive = "href" in item && item.href ? pathname === item.href : false
+                            const isSubActive = "items" in item && item.items?.some((sub) => pathname === sub.href)
 
-                            if (item.items) {
-                                // If collapsed, show DropdownMenu
-                                if (state === 'collapsed') {
+                            if ("items" in item) {
+                                if (state === "collapsed") {
                                     return (
                                         <SidebarMenuItem key={item.name}>
                                             <DropdownMenu>
@@ -245,8 +261,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                         isActive={isActive}
                                         className="text-gray-700 hover:bg-gray-100 hover:text-gray-900 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-700"
                                     >
-                                        <Link href={item.href}>
-                                            <item.icon />
+                                        <Link href={"href" in item ? item.href : "#"}>
+                                            {"icon" in item && item.icon && <item.icon />}
                                             <span>{item.name}</span>
                                         </Link>
                                     </SidebarMenuButton>
@@ -254,25 +270,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             )
                         })}
 
-                        {/* Notifications — always visible with live badge */}
-                        <SidebarMenuItem>
-                            <SidebarMenuButton
-                                asChild
-                                tooltip="Notifications"
-                                isActive={pathname === "/dashboard/notifications"}
-                                className="text-gray-700 hover:bg-gray-100 hover:text-gray-900 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-700"
-                            >
-                                <Link href="/dashboard/notifications" className="flex items-center gap-2">
-                                    <Bell />
-                                    <span>Notifications</span>
-                                    {unreadCount > 0 && (
-                                        <span className="ml-auto min-w-5 h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                                            {unreadCount > 99 ? '99+' : unreadCount}
-                                        </span>
-                                    )}
-                                </Link>
-                            </SidebarMenuButton>
-                        </SidebarMenuItem>
+                        {/* Notifications — gated by Notifications permission */}
+                        {showNotifications && (
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    tooltip="Notifications"
+                                    isActive={pathname === "/dashboard/notifications"}
+                                    className="text-gray-700 hover:bg-gray-100 hover:text-gray-900 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-700"
+                                >
+                                    <Link href="/dashboard/notifications" className="flex items-center gap-2">
+                                        <Bell />
+                                        <span>Notifications</span>
+                                        {unreadCount > 0 && (
+                                            <span className="ml-auto min-w-5 h-5 px-1 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                                {unreadCount > 99 ? "99+" : unreadCount}
+                                            </span>
+                                        )}
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        )}
                     </SidebarMenu>
                 </SidebarGroup>
             </SidebarContent>

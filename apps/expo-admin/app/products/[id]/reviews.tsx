@@ -14,6 +14,8 @@ import { colors } from "@/constants/theme";
 import { formatDateTime } from "@/lib/format";
 import { getProductById, getProductReviews, replyToProductReview } from "@/services/products";
 import type { ProductReview, ProductReviewListResult } from "@/types/product";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 export default function ProductReviewsScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -53,6 +55,9 @@ export default function ProductReviewsScreen() {
     if (!Number.isFinite(productId)) return;
     void load();
   }, [load, productId]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Product Reviews')) return <AccessDenied />;
 
   const handleSaveReply = async (review: ProductReview) => {
     const reply = draftReplies[review.id]?.trim();

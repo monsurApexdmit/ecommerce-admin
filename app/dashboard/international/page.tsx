@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { settingsApi, type RegionalSettings } from "@/lib/settingsApi"
 import { DollarSign, Clock, Globe, Ruler, Calendar, Hash, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 const CURRENCY_LIST = [
   { code: "USD", name: "US Dollar" },
@@ -128,6 +130,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 }
 
 export default function InternationalPage() {
+  const { canRead } = useSaasAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -150,6 +153,8 @@ export default function InternationalPage() {
   useEffect(() => {
     loadSettings()
   }, [])
+
+  if (!canRead('International')) return <AccessDenied />
 
   const loadSettings = async () => {
     try {

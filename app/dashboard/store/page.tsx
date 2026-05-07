@@ -3,8 +3,12 @@
 import Link from "next/link"
 import { MapPin, Settings, Heart } from "lucide-react"
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 export default function OnlineStorePage() {
+  const { canRead } = useSaasAuth()
+  if (!canRead('Store')) return <AccessDenied />
   return (
     <div className="space-y-6">
       <div className="mb-6">

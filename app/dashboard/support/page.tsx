@@ -21,6 +21,8 @@ import supportApi, {
   type SupportMessage,
 } from "@/lib/supportApi"
 import { getCompanyId } from "@/lib/utils/apiInterceptor"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 // ── Sound ─────────────────────────────────────────────────────────
 function playNotificationSound() {
@@ -597,6 +599,7 @@ function TicketListSidebar({ tickets, selectedId, onSelect, loading, search, onS
 
 // ── Main Page ─────────────────────────────────────────────────────
 export default function SupportPage() {
+  const { canRead } = useSaasAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
@@ -734,6 +737,8 @@ export default function SupportPage() {
     setTickets((prev) => prev.map((t) => t.id === updated.id ? updated : t))
     fetchStats()
   }, [fetchStats])
+
+  if (!canRead('Support')) return <AccessDenied />
 
   return (
     <div className="space-y-4 h-full flex flex-col">

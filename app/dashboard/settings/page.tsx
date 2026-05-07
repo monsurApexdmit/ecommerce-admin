@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2 } from "lucide-react"
-import { settingsApi, type StoreHours } from "@/lib/settingsApi"
+import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2, CreditCard } from "lucide-react"
+import { settingsApi, type StoreHours, type SSLCommerzConfig, type PortWalletConfig } from "@/lib/settingsApi"
 import { toast } from "sonner"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
-type SavingSection = "general" | "business" | "notifications" | "storeHours" | "logo" | "banner" | null
+type SavingSection = "general" | "business" | "notifications" | "storeHours" | "logo" | "banner" | "gateways" | null
 
 const DEFAULT_GENERAL_SETTINGS = {
   storeName: "Dashtar Store",
@@ -65,6 +67,7 @@ const mergeStoreHours = (storeHours: StoreHours = {}) => {
 }
 
 export default function SettingsPage() {
+  const { canRead } = useSaasAuth()
   // Loading state
   const [isLoading, setIsLoading] = useState(true)
   const [savingSection, setSavingSection] = useState<SavingSection>(null)
@@ -96,10 +99,20 @@ export default function SettingsPage() {
   // Store Hours
   const [storeHours, setStoreHours] = useState<StoreHours>(mergeStoreHours())
 
+  // Payment Gateway Credentials
+  const [sslcommerz, setSslcommerz] = useState<SSLCommerzConfig>({
+    enabled: false, store_id: "", store_passwd: "", sandbox: true,
+  })
+  const [portwallet, setPortwallet] = useState<PortWalletConfig>({
+    enabled: false, app_key: "", app_secret: "", sandbox: true,
+  })
+
   // Load settings on mount
   useEffect(() => {
     loadSettings()
   }, [])
+
+  if (!canRead('Settings')) return <AccessDenied />
 
   const loadSettings = async () => {
     try {
@@ -138,6 +151,11 @@ export default function SettingsPage() {
 
       // Load store hours from dedicated endpoint (not included in getAll)
       setStoreHours(mergeStoreHours(hoursRes.data))
+
+      // Load gateway credentials
+      const payment = data.payment ?? {}
+      if (payment.sslcommerz) setSslcommerz({ ...{ enabled: false, store_id: "", store_passwd: "", sandbox: true }, ...payment.sslcommerz })
+      if (payment.portwallet) setPortwallet({ ...{ enabled: false, app_key: "", app_secret: "", sandbox: true }, ...payment.portwallet })
 
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to load settings")
@@ -178,6 +196,18 @@ export default function SettingsPage() {
       toast.success("Business settings saved successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
+    } finally {
+      setSavingSection(null)
+    }
+  }
+
+  const handleSaveGateways = async () => {
+    try {
+      setSavingSection("gateways")
+      await settingsApi.updatePayment({ sslcommerz, portwallet })
+      toast.success("Gateway credentials saved!")
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to save gateway credentials")
     } finally {
       setSavingSection(null)
     }
@@ -667,6 +697,109 @@ export default function SettingsPage() {
               )}
             </Button>
           </div>
+        </div>
+      </Card>
+
+      {/* Payment Gateway Credentials */}
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+            <CreditCard className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Payment Gateway Credentials</h3>
+            <p className="text-sm text-gray-600">SSLCommerz and PortWallet API keys for online payments</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* SSLCommerz */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">SSLCommerz</p>
+                <p className="text-xs text-gray-500">Covers bKash, Nagad, Rocket, Cards, Net Banking</p>
+              </div>
+              <Switch
+                checked={sslcommerz.enabled}
+                onCheckedChange={(v) => setSslcommerz((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Store ID</Label>
+                <Input
+                  value={sslcommerz.store_id}
+                  onChange={(e) => setSslcommerz((p) => ({ ...p, store_id: e.target.value }))}
+                  placeholder="your_store_id"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Store Password</Label>
+                <Input
+                  type="password"
+                  value={sslcommerz.store_passwd}
+                  onChange={(e) => setSslcommerz((p) => ({ ...p, store_passwd: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={sslcommerz.sandbox}
+                onCheckedChange={(v) => setSslcommerz((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+          </div>
+
+          {/* PortWallet */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">PortWallet</p>
+                <p className="text-xs text-gray-500">Cards and Mobile Banking</p>
+              </div>
+              <Switch
+                checked={portwallet.enabled}
+                onCheckedChange={(v) => setPortwallet((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">App Key</Label>
+                <Input
+                  value={portwallet.app_key}
+                  onChange={(e) => setPortwallet((p) => ({ ...p, app_key: e.target.value }))}
+                  placeholder="your_app_key"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">App Secret</Label>
+                <Input
+                  type="password"
+                  value={portwallet.app_secret}
+                  onChange={(e) => setPortwallet((p) => ({ ...p, app_secret: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={portwallet.sandbox}
+                onCheckedChange={(v) => setPortwallet((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-4">
+          <Button onClick={handleSaveGateways} disabled={savingSection === "gateways"}>
+            {savingSection === "gateways" ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+            ) : "Save Gateway Credentials"}
+          </Button>
         </div>
       </Card>
 

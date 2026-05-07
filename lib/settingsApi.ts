@@ -79,6 +79,20 @@ export interface ShippingSettings {
   shippingMethods: ShippingMethod[];
 }
 
+export interface SSLCommerzConfig {
+  enabled: boolean;
+  store_id: string;
+  store_passwd: string;
+  sandbox: boolean;
+}
+
+export interface PortWalletConfig {
+  enabled: boolean;
+  app_key: string;
+  app_secret: string;
+  sandbox: boolean;
+}
+
 export interface PaymentSettings {
   id?: number;
   enableCash: boolean;
@@ -87,6 +101,8 @@ export interface PaymentSettings {
   stripeKey?: string;
   razorpayKey?: string;
   cardProcessingFee: number;
+  sslcommerz?: SSLCommerzConfig;
+  portwallet?: PortWalletConfig;
 }
 
 export interface BusinessSettings {

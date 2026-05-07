@@ -19,6 +19,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 import {
   createCustomer,
   deleteCustomer,
@@ -103,6 +105,9 @@ export default function CustomersScreen() {
   };
 
   const filtersApplied = Boolean(statusFilter);
+
+  const { canRead } = useAuth();
+  if (!canRead('Customers')) return <AccessDenied />;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>

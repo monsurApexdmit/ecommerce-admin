@@ -13,6 +13,8 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 
 interface Sell {
     invoiceNo: string
@@ -131,6 +133,7 @@ const initialSells: Sell[] = [
 ]
 
 export default function SellsPage() {
+    const { canRead } = useSaasAuth()
     const searchParams = useSearchParams()
     const { formatCurrency } = useCompanySettings()
     const [sells, setSells] = useState<Sell[]>(initialSells)
@@ -182,6 +185,8 @@ export default function SellsPage() {
         setCurrentPage,
         handleItemsPerPageChange,
     } = usePagination(filteredSells, 10)
+
+    if (!canRead('Sells')) return <AccessDenied />
 
     const handleFilterChange = () => {
         setCurrentPage(1)

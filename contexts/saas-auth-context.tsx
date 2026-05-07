@@ -43,6 +43,12 @@ export interface SaasAuthContextType {
   canAccessFeature: (featureName: string) => boolean
   isOwner: () => boolean
   isAdmin: () => boolean
+
+  // Permission helpers
+  hasPermission: (module: string, action?: 'read' | 'write' | 'delete') => boolean
+  canRead: (module: string) => boolean
+  canWrite: (module: string) => boolean
+  canDelete: (module: string) => boolean
 }
 
 const SaasAuthContext = createContext<SaasAuthContextType>({
@@ -65,6 +71,10 @@ const SaasAuthContext = createContext<SaasAuthContextType>({
   canAccessFeature: () => false,
   isOwner: () => false,
   isAdmin: () => false,
+  hasPermission: () => false,
+  canRead: () => false,
+  canWrite: () => false,
+  canDelete: () => false,
 })
 
 export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
@@ -117,8 +127,9 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("token", response.data.token)
       localStorage.setItem("company_id", response.data.companyId.toString())
       localStorage.setItem("user_role", response.data.userRole)
-      // Set cookie for Next.js middleware
+      // Set cookies for Next.js middleware
       document.cookie = `token=${response.data.token}; path=/; max-age=86400; SameSite=Lax`
+      document.cookie = `user_role=${response.data.userRole}; path=/; max-age=86400; SameSite=Lax`
 
       // Update state
       setToken(response.data.token)
@@ -167,6 +178,9 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
       setToken(response.data.token)
       setIsAuthenticated(true)
 
+      // Set user_role cookie for Next.js middleware
+      document.cookie = `user_role=owner; path=/; max-age=86400; SameSite=Lax`
+
       // Create basic user and company objects (will be populated on next fetch)
       setUser({
         id: response.data.userId,
@@ -176,6 +190,7 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
         role: "owner",
         status: "active",
         joinedDate: new Date().toISOString(),
+        permissions: null,
       })
 
       setCompany({
@@ -209,8 +224,9 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("company_id")
     localStorage.removeItem("user_role")
     localStorage.removeItem("trial_days")
-    // Clear cookie for Next.js middleware
+    // Clear cookies for Next.js middleware
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    document.cookie = "user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
 
     setIsAuthenticated(false)
     setUser(null)
@@ -273,6 +289,19 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     return user?.role === "owner" || user?.role === "admin"
   }
 
+  const hasPermission = (module: string, action: 'read' | 'write' | 'delete' = 'read'): boolean => {
+    if (!user) return false
+    // owner/admin bypass all checks
+    if (user.role === 'owner' || user.role === 'admin') return true
+    // null means full access (server-side bypass signal)
+    if (user.permissions === null) return true
+    return user.permissions?.[module]?.[action] ?? false
+  }
+
+  const canRead   = (module: string): boolean => hasPermission(module, 'read')
+  const canWrite  = (module: string): boolean => hasPermission(module, 'write')
+  const canDelete = (module: string): boolean => hasPermission(module, 'delete')
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50">
@@ -304,6 +333,10 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     canAccessFeature,
     isOwner,
     isAdmin,
+    hasPermission,
+    canRead,
+    canWrite,
+    canDelete,
   }
 
   return <SaasAuthContext.Provider value={value}>{children}</SaasAuthContext.Provider>

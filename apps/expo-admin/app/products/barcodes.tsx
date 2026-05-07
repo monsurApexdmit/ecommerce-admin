@@ -14,6 +14,8 @@ import { useCurrency } from "@/context/CurrencyContext";
 import { getProducts } from "@/services/products";
 import type { Product } from "@/types/product";
 import { BarcodeGraphic } from "@/components/products/BarcodeGraphic";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 type QueueItem = {
   product: Product;
@@ -55,6 +57,9 @@ export default function BulkBarcodesScreen() {
       ),
     [queue],
   );
+
+  const { canRead } = useAuth();
+  if (!canRead('Print Barcode')) return <AccessDenied />;
 
   return (
     <View style={styles.container}>

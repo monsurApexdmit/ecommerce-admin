@@ -25,8 +25,9 @@ export function TransferProvider({ children }: { children: React.ReactNode }) {
             const res = await transferApi.getAll()
             setTransfers(res.data ?? [])
         } catch (err: any) {
-            console.error("Failed to fetch transfers:", err)
-            throw err
+            if (err.response?.status !== 403) {
+                console.error("Failed to fetch transfers:", err)
+            }
         } finally {
             setLoading(false)
         }

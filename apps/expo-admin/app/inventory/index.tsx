@@ -17,6 +17,8 @@ import { colors } from "@/constants/theme";
 import { getInventory, type InventoryItem, type InventoryLocation } from "@/services/inventory";
 import { getWarehouses } from "@/services/catalog";
 import type { Warehouse } from "@/types/catalog";
+import { useAuth } from "@/context/AuthContext";
+import { AccessDenied } from "@/components/AccessDenied";
 
 function stockTone(stock: number): { bg: string; text: string; label: string } {
   if (stock <= 0) return { bg: "#fee2e2", text: "#dc2626", label: "Out" };
@@ -65,6 +67,9 @@ export default function InventoryScreen() {
     outOfStock: items.filter((i) => i.stock <= 0).length,
     lowStock: items.filter((i) => i.stock > 0 && i.stock <= 5).length,
   }), [items]);
+
+  const { canRead } = useAuth();
+  if (!canRead('Inventory')) return <AccessDenied />;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>

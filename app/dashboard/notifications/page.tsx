@@ -10,6 +10,8 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Badge } from "@/components/ui/badge"
 import { useNotifications } from "@/contexts/notification-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
 import type { NotificationType, NotificationPriority } from "@/lib/notificationApi"
 
 function getRelativeTime(dateStr: string): string {
@@ -51,6 +53,7 @@ const badgeColorMap: Record<string, string> = {
 }
 
 export default function NotificationsPage() {
+  const { canRead } = useSaasAuth()
   const { notifications, unreadCount, loading, fetchNotifications, markAsRead, markAsUnread, markAllAsRead, deleteNotification, bulkDelete } = useNotifications()
   const router = useRouter()
 
@@ -77,6 +80,8 @@ export default function NotificationsPage() {
   }, [notifications, filterStatus, filterType, sortOrder])
 
   const { currentItems, currentPage, totalPages, itemsPerPage, setCurrentPage, handleItemsPerPageChange } = usePagination(filtered, 10)
+
+  if (!canRead('Notifications')) return <AccessDenied />
 
   const handleSelectAll = () => {
     if (selectedIds.length === currentItems.length && currentItems.length > 0) setSelectedIds([])

@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { productApi, type ProductResponse } from '@/lib/productApi'
 import { useSaasAuth } from '@/contexts/saas-auth-context'
+import { AccessDenied } from '@/components/ui/access-denied'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -100,7 +101,7 @@ export default function PrintBarcodePage() {
   const [selectedPaperSizeId, setSelectedPaperSizeId] = useState('20-per-sheet')
 
   // Auth & UI
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
   const { toast } = useToast()
 
   // ============ HANDLERS ============
@@ -331,6 +332,8 @@ export default function PrintBarcodePage() {
     printWindow.document.write(htmlContent)
     printWindow.document.close()
   }, [printItems, labelSettings, fontSizes, selectedPaperSizeId, company?.name, toast])
+
+  if (!canRead('Print Barcode')) return <AccessDenied />
 
   // ============ JSX ============
 
