@@ -93,6 +93,43 @@ export interface PortWalletConfig {
   sandbox: boolean;
 }
 
+export interface StripeConfig {
+  enabled: boolean;
+  publishable_key: string;
+  secret_key: string;
+  webhook_secret: string;
+}
+
+export interface PayPalConfig {
+  enabled: boolean;
+  client_id: string;
+  client_secret: string;
+  sandbox: boolean;
+}
+
+export interface BkashConfig {
+  enabled: boolean;
+  app_key: string;
+  app_secret: string;
+  username: string;
+  password: string;
+  sandbox: boolean;
+}
+
+export interface NagadConfig {
+  enabled: boolean;
+  merchant_id: string;
+  private_key: string;
+  nagad_public_key: string;
+  sandbox: boolean;
+}
+
+export interface CodShippingDepositConfig {
+  enabled: boolean;
+  gateway: 'sslcommerz' | 'portwallet' | 'bkash' | 'nagad';
+  custom_amount: number; // 0 = use actual shipping cost
+}
+
 export interface PaymentSettings {
   id?: number;
   enableCash: boolean;
@@ -103,6 +140,11 @@ export interface PaymentSettings {
   cardProcessingFee: number;
   sslcommerz?: SSLCommerzConfig;
   portwallet?: PortWalletConfig;
+  stripe?: StripeConfig;
+  paypal?: PayPalConfig;
+  bkash?: BkashConfig;
+  nagad?: NagadConfig;
+  cod_shipping_deposit?: CodShippingDepositConfig;
 }
 
 export interface BusinessSettings {

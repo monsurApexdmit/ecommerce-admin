@@ -42,25 +42,32 @@ export default function DashboardPage() {
     processingCount: number
     deliveredCount: number
   } | null>(null)
+  const [weeklyOrderCounts, setWeeklyOrderCounts] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
   const [ordersLoading, setOrdersLoading] = useState(true)
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [listRes, statsRes] = await Promise.all([
+        const [listRes, statsRes, weeklyRes] = await Promise.all([
           sellsApi.getAll({ limit: 5 }),
           sellsApi.getStats(),
+          sellsApi.getWeeklyOrders(),
         ])
         setRecentOrders(listRes.data ?? [])
 
         const s = statsRes.data
         setSellStats({
-          totalRevenue: Number(s?.totalRevenue ?? s?.total_revenue ?? 0),
-          totalOrders: Number(s?.totalSells ?? s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
-          pendingCount: Number(s?.pendingOrders ?? s?.pending_count ?? 0),
-          processingCount: Number(s?.processingOrders ?? s?.processing_count ?? 0),
-          deliveredCount: Number(s?.deliveredOrders ?? s?.delivered_count ?? 0),
+          totalRevenue: Number(s?.total_revenue ?? 0),
+          totalOrders: Number(s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
+          pendingCount: Number(s?.pending_count ?? 0),
+          processingCount: Number(s?.processing_count ?? 0),
+          deliveredCount: Number(s?.delivered_count ?? 0),
         })
+
+        const counts = weeklyRes?.data
+        if (Array.isArray(counts) && counts.length === 7) {
+          setWeeklyOrderCounts(counts)
+        }
       } catch {
         // fallback: just use list length
         try {
@@ -157,7 +164,7 @@ export default function DashboardPage() {
     datasets: [
       {
         label: "Orders",
-        data: [45, 52, 38, 65, 59, 80, 71],
+        data: weeklyOrderCounts,
         backgroundColor: "rgba(16, 185, 129, 0.8)",
         borderRadius: 6,
       },
@@ -173,6 +180,20 @@ export default function DashboardPage() {
       y: {
         grid: { color: "rgba(0, 0, 0, 0.05)" },
         ticks: { callback: (value: number | string) => currency + value + "k" },
+      },
+    },
+  }
+
+  const ordersChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        grid: { color: "rgba(0, 0, 0, 0.05)" },
+        ticks: { stepSize: 1, callback: (value: number | string) => String(value) },
+        beginAtZero: true,
       },
     },
   }
@@ -269,7 +290,7 @@ export default function DashboardPage() {
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Weekly Orders</h2>
           <div className="h-80">
-            <Bar data={ordersData} options={chartOptions} />
+            <Bar data={ordersData} options={ordersChartOptions} />
           </div>
         </Card>
       </div>

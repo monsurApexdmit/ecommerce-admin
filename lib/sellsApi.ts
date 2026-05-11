@@ -239,6 +239,11 @@ export const sellsApi = {
     return response.data;
   },
 
+  getWeeklyOrders: async (): Promise<{ data: number[] }> => {
+    const response = await api.get('/sells/weekly-orders');
+    return response.data;
+  },
+
   getById: async (id: number): Promise<{ message: string; data: SellResponse }> => {
     const response = await api.get(`/sells/${id}`);
     return response.data;

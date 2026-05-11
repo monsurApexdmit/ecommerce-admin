@@ -60,6 +60,11 @@ const GATEWAY_OPTIONS = [
   { value: "cod",        label: "Cash on Delivery (manual)" },
   { value: "sslcommerz", label: "SSLCommerz (bKash, Nagad, Rocket, Cards)" },
   { value: "portwallet", label: "PortWallet (Cards, Mobile Banking)" },
+  { value: "stripe",     label: "Stripe (Credit / Debit Card)" },
+  { value: "paypal",     label: "PayPal" },
+  { value: "bkash",      label: "bKash (Direct)" },
+  { value: "nagad",      label: "Nagad (Direct)" },
+  { value: "manual",     label: "Manual / Bank Transfer (offline)" },
 ]
 
 const emptyForm: PaymentMethodPayload = {

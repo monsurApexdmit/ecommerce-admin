@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2, CreditCard } from "lucide-react"
-import { settingsApi, type StoreHours, type SSLCommerzConfig, type PortWalletConfig } from "@/lib/settingsApi"
+import { settingsApi, type StoreHours, type SSLCommerzConfig, type PortWalletConfig, type StripeConfig, type PayPalConfig, type BkashConfig, type NagadConfig, type CodShippingDepositConfig } from "@/lib/settingsApi"
 import { toast } from "sonner"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
@@ -106,6 +106,21 @@ export default function SettingsPage() {
   const [portwallet, setPortwallet] = useState<PortWalletConfig>({
     enabled: false, app_key: "", app_secret: "", sandbox: true,
   })
+  const [stripe, setStripe] = useState<StripeConfig>({
+    enabled: false, publishable_key: "", secret_key: "", webhook_secret: "",
+  })
+  const [paypal, setPaypal] = useState<PayPalConfig>({
+    enabled: false, client_id: "", client_secret: "", sandbox: true,
+  })
+  const [bkash, setBkash] = useState<BkashConfig>({
+    enabled: false, app_key: "", app_secret: "", username: "", password: "", sandbox: true,
+  })
+  const [nagad, setNagad] = useState<NagadConfig>({
+    enabled: false, merchant_id: "", private_key: "", nagad_public_key: "", sandbox: true,
+  })
+  const [codDeposit, setCodDeposit] = useState<CodShippingDepositConfig>({
+    enabled: false, gateway: "sslcommerz", custom_amount: 0,
+  })
 
   // Load settings on mount
   useEffect(() => {
@@ -154,8 +169,31 @@ export default function SettingsPage() {
 
       // Load gateway credentials
       const payment = data.payment ?? {}
-      if (payment.sslcommerz) setSslcommerz({ ...{ enabled: false, store_id: "", store_passwd: "", sandbox: true }, ...payment.sslcommerz })
-      if (payment.portwallet) setPortwallet({ ...{ enabled: false, app_key: "", app_secret: "", sandbox: true }, ...payment.portwallet })
+      if (payment.sslcommerz) {
+        const s = payment.sslcommerz
+        setSslcommerz({ enabled: Boolean(s.enabled), store_id: s.store_id ?? "", store_passwd: s.store_passwd ?? "", sandbox: s.sandbox ?? true })
+      }
+      if (payment.portwallet) {
+        const p = payment.portwallet
+        setPortwallet({ enabled: Boolean(p.enabled), app_key: p.app_key ?? "", app_secret: p.app_secret ?? "", sandbox: p.sandbox ?? true })
+      }
+      if (payment.stripe) {
+        const s = payment.stripe
+        setStripe({ enabled: Boolean(s.enabled), publishable_key: s.publishable_key ?? "", secret_key: s.secret_key ?? "", webhook_secret: s.webhook_secret ?? "" })
+      }
+      if (payment.paypal) {
+        const p = payment.paypal
+        setPaypal({ enabled: Boolean(p.enabled), client_id: p.client_id ?? "", client_secret: p.client_secret ?? "", sandbox: p.sandbox ?? true })
+      }
+      if (payment.bkash) {
+        const b = payment.bkash
+        setBkash({ enabled: Boolean(b.enabled), app_key: b.app_key ?? "", app_secret: b.app_secret ?? "", username: b.username ?? "", password: b.password ?? "", sandbox: b.sandbox ?? true })
+      }
+      if (payment.nagad) {
+        const n = payment.nagad
+        setNagad({ enabled: Boolean(n.enabled), merchant_id: n.merchant_id ?? "", private_key: n.private_key ?? "", nagad_public_key: n.nagad_public_key ?? "", sandbox: n.sandbox ?? true })
+      }
+      if (payment.cod_shipping_deposit) setCodDeposit({ ...{ enabled: false, gateway: "sslcommerz" as const, custom_amount: 0 }, ...payment.cod_shipping_deposit })
 
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to load settings")
@@ -204,7 +242,7 @@ export default function SettingsPage() {
   const handleSaveGateways = async () => {
     try {
       setSavingSection("gateways")
-      await settingsApi.updatePayment({ sslcommerz, portwallet })
+      await settingsApi.updatePayment({ sslcommerz, portwallet, stripe, paypal, bkash, nagad, cod_shipping_deposit: codDeposit })
       toast.success("Gateway credentials saved!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save gateway credentials")
@@ -708,7 +746,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Payment Gateway Credentials</h3>
-            <p className="text-sm text-gray-600">SSLCommerz and PortWallet API keys for online payments</p>
+            <p className="text-sm text-gray-600">SSLCommerz, PortWallet, Stripe, and PayPal credentials for online payments</p>
           </div>
         </div>
 
@@ -791,6 +829,246 @@ export default function SettingsPage() {
               />
               <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
             </div>
+          </div>
+
+          {/* Stripe */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">Stripe</p>
+                <p className="text-xs text-gray-500">Credit / Debit Card payments globally</p>
+              </div>
+              <Switch
+                checked={stripe.enabled}
+                onCheckedChange={(v) => setStripe((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Publishable Key</Label>
+                <Input
+                  value={stripe.publishable_key}
+                  onChange={(e) => setStripe((p) => ({ ...p, publishable_key: e.target.value }))}
+                  placeholder="pk_test_..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Secret Key</Label>
+                <Input
+                  type="password"
+                  value={stripe.secret_key}
+                  onChange={(e) => setStripe((p) => ({ ...p, secret_key: e.target.value }))}
+                  placeholder="sk_test_..."
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs">Webhook Secret</Label>
+                <Input
+                  type="password"
+                  value={stripe.webhook_secret}
+                  onChange={(e) => setStripe((p) => ({ ...p, webhook_secret: e.target.value }))}
+                  placeholder="whsec_..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* PayPal */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">PayPal</p>
+                <p className="text-xs text-gray-500">PayPal account and card payments</p>
+              </div>
+              <Switch
+                checked={paypal.enabled}
+                onCheckedChange={(v) => setPaypal((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Client ID</Label>
+                <Input
+                  value={paypal.client_id}
+                  onChange={(e) => setPaypal((p) => ({ ...p, client_id: e.target.value }))}
+                  placeholder="AY..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Client Secret</Label>
+                <Input
+                  type="password"
+                  value={paypal.client_secret}
+                  onChange={(e) => setPaypal((p) => ({ ...p, client_secret: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={paypal.sandbox}
+                onCheckedChange={(v) => setPaypal((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+          </div>
+
+          {/* bKash */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">bKash</p>
+                <p className="text-xs text-gray-500">Direct bKash merchant payments — no SSLCommerz needed</p>
+              </div>
+              <Switch
+                checked={bkash.enabled}
+                onCheckedChange={(v) => setBkash((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">App Key</Label>
+                <Input
+                  value={bkash.app_key}
+                  onChange={(e) => setBkash((p) => ({ ...p, app_key: e.target.value }))}
+                  placeholder="bkash_app_key"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">App Secret</Label>
+                <Input
+                  type="password"
+                  value={bkash.app_secret}
+                  onChange={(e) => setBkash((p) => ({ ...p, app_secret: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Username</Label>
+                <Input
+                  value={bkash.username}
+                  onChange={(e) => setBkash((p) => ({ ...p, username: e.target.value }))}
+                  placeholder="merchant username"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Password</Label>
+                <Input
+                  type="password"
+                  value={bkash.password}
+                  onChange={(e) => setBkash((p) => ({ ...p, password: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={bkash.sandbox}
+                onCheckedChange={(v) => setBkash((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+            {bkash.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">Sandbox Test Credentials</p>
+                <p className="text-amber-600 font-mono">App Key: 4f6o0cjiki2rfm34kfdadl1eqq</p>
+                <p className="text-amber-600 font-mono">App Secret: 2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b</p>
+                <p className="text-amber-600 font-mono">Username: sandboxTokenizedUser02</p>
+                <p className="text-amber-600 font-mono">Password: sandboxTokenizedUser02@12345</p>
+                <p className="text-amber-500 mt-1">⚠ Callback URL must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
+          </div>
+
+          {/* Nagad */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">Nagad</p>
+                <p className="text-xs text-gray-500">Direct Nagad merchant payments — no SSLCommerz needed</p>
+              </div>
+              <Switch
+                checked={nagad.enabled}
+                onCheckedChange={(v) => setNagad((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Merchant ID</Label>
+                <Input
+                  value={nagad.merchant_id}
+                  onChange={(e) => setNagad((p) => ({ ...p, merchant_id: e.target.value }))}
+                  placeholder="686969"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Nagad Public Key (leave blank for sandbox default)</Label>
+                <Input
+                  value={nagad.nagad_public_key}
+                  onChange={(e) => setNagad((p) => ({ ...p, nagad_public_key: e.target.value }))}
+                  placeholder="Nagad-provided RSA public key"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs">Your RSA Private Key (base64, no headers)</Label>
+                <Input
+                  type="password"
+                  value={nagad.private_key}
+                  onChange={(e) => setNagad((p) => ({ ...p, private_key: e.target.value }))}
+                  placeholder="MIIEpAIBAAKCAQEA..."
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={nagad.sandbox}
+                onCheckedChange={(v) => setNagad((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+          </div>
+
+          {/* COD Shipping Deposit */}
+          <div className="border rounded-lg p-4 space-y-4 bg-amber-50 border-amber-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm text-amber-900">COD Shipping Deposit</p>
+                <p className="text-xs text-amber-700">
+                  Require customers to pay shipping cost upfront before Cash on Delivery order is confirmed
+                </p>
+              </div>
+              <Switch
+                checked={codDeposit.enabled}
+                onCheckedChange={(v) => setCodDeposit((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            {codDeposit.enabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Payment Gateway for Deposit</Label>
+                  <select
+                    value={codDeposit.gateway}
+                    onChange={(e) => setCodDeposit((p) => ({ ...p, gateway: e.target.value as "sslcommerz" | "portwallet" | "bkash" | "nagad" }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="sslcommerz">SSLCommerz (bKash, Nagad, Rocket, Cards)</option>
+                    <option value="portwallet">PortWallet (Cards, Mobile Banking)</option>
+                    <option value="bkash">bKash (Direct)</option>
+                    <option value="nagad">Nagad (Direct)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fixed Deposit Amount (BDT) — 0 = use actual shipping cost</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={codDeposit.custom_amount}
+                    onChange={(e) => setCodDeposit((p) => ({ ...p, custom_amount: Number(e.target.value) }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
