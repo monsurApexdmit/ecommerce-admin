@@ -41,6 +41,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "sonner"
 import { CustomerSupportMessenger } from "@/components/customer-support-messenger"
 import { CompanySettingsProvider } from "@/contexts/company-settings-context"
 
@@ -253,6 +254,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       </SidebarProvider>
                         </Suspense>
                         <Toaster />
+                        <SonnerToaster position="top-right" richColors />
                         <CustomerSupportMessenger />
                               </OrderProvider>
                             </ShipmentProvider>

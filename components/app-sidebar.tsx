@@ -25,6 +25,7 @@ import {
     Printer,
     Bell,
     Headphones,
+    Scissors,
 } from "lucide-react"
 
 import {
@@ -134,6 +135,20 @@ const NAV_CONFIG = [
             { name: "Shipping Methods",    href: "/dashboard/shipping-methods",           module: "Shipping Methods" },
             { name: "Payment Methods",     href: "/dashboard/payment-methods",            module: "Payment Methods" },
             { name: "Shipping Addresses",  href: "/dashboard/store/shipping-addresses",   module: "Shipping Addresses" },
+        ],
+    },
+    {
+        name: "Tailor Shop",
+        icon: Scissors,
+        items: [
+            { name: "Dashboard",    href: "/dashboard/tailor",              module: "TailorDashboard" },
+            { name: "Orders",       href: "/dashboard/tailor/orders",       module: "TailorOrders" },
+            { name: "Fabrics",      href: "/dashboard/tailor/fabrics",      module: "TailorFabrics" },
+            { name: "Measurements", href: "/dashboard/tailor/measurements", module: "TailorMeasurements" },
+            { name: "Dorjis",       href: "/dashboard/tailor/dorjis",       module: "TailorDorji" },
+            { name: "Assignments",  href: "/dashboard/tailor/assignments",  module: "TailorOrders" },
+            { name: "Payments",     href: "/dashboard/tailor/payments",     module: "TailorPayments" },
+            { name: "Reports",      href: "/dashboard/tailor/reports",      module: "TailorReports" },
         ],
     },
     { name: "Support", href: "/dashboard/support", icon: Headphones, module: "Support" },

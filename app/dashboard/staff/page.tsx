@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown, Users, UserCheck, UserX } from "lucide-react"
+import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown, Users, UserCheck, UserX, Download } from "lucide-react"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Button } from "@/components/ui/button"

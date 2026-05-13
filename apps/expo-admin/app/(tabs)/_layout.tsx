@@ -9,6 +9,7 @@ const iconMap: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive
   products: { active: "cube", inactive: "cube-outline" },
   pos: { active: "cart", inactive: "cart-outline" },
   orders: { active: "receipt", inactive: "receipt-outline" },
+  tailor: { active: "cut", inactive: "cut-outline" },
   account: { active: "person-circle", inactive: "person-circle-outline" },
   more: { active: "grid", inactive: "grid-outline" },
 };
@@ -75,6 +76,16 @@ export default function TabsLayout() {
             const config = iconMap.orders;
             return <Ionicons name={focused ? config.active : config.inactive} size={size} color={color} />;
           },
+        }}
+      />
+      <Tabs.Screen
+        name="tailor"
+        options={{
+          title: "Tailor",
+          headerShown: false,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "cut" : "cut-outline"} size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen

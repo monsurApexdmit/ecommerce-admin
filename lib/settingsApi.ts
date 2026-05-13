@@ -126,7 +126,7 @@ export interface NagadConfig {
 
 export interface CodShippingDepositConfig {
   enabled: boolean;
-  gateway: 'sslcommerz' | 'portwallet' | 'bkash' | 'nagad';
+  gateway: 'sslcommerz' | 'portwallet' | 'bkash' | 'nagad' | 'stripe' | 'paypal';
   custom_amount: number; // 0 = use actual shipping cost
 }
 

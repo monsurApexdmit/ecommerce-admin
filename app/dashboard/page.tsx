@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { ArrowUpRight, ArrowDownRight, DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
+import { DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
 import { useVendor } from "@/contexts/vendor-context"
 import { useProduct } from "@/contexts/product-context"
 import { useStaff } from "@/contexts/staff-context"
@@ -43,47 +43,66 @@ export default function DashboardPage() {
     deliveredCount: number
   } | null>(null)
   const [weeklyOrderCounts, setWeeklyOrderCounts] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
+  const [monthlyRevenue, setMonthlyRevenue] = useState<number[]>(Array(12).fill(0))
   const [ordersLoading, setOrdersLoading] = useState(true)
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [listRes, statsRes, weeklyRes] = await Promise.all([
+        const [listRes, statsRes, weeklyRes, monthlyRes] = await Promise.all([
           sellsApi.getAll({ limit: 5 }),
           sellsApi.getStats(),
           sellsApi.getWeeklyOrders(),
+          sellsApi.getMonthlyRevenue(),
         ])
         setRecentOrders(listRes.data ?? [])
 
         const s = statsRes.data
         setSellStats({
-          totalRevenue: Number(s?.total_revenue ?? 0),
-          totalOrders: Number(s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
-          pendingCount: Number(s?.pending_count ?? 0),
-          processingCount: Number(s?.processing_count ?? 0),
-          deliveredCount: Number(s?.delivered_count ?? 0),
+          totalRevenue: Number(s?.totalRevenue ?? 0),
+          totalOrders: Number(s?.totalSells ?? listRes.total ?? listRes.data?.length ?? 0),
+          pendingCount: Number(s?.pendingOrders ?? 0),
+          processingCount: Number(s?.processingOrders ?? 0),
+          deliveredCount: Number(s?.deliveredOrders ?? 0),
         })
 
         const counts = weeklyRes?.data
         if (Array.isArray(counts) && counts.length === 7) {
           setWeeklyOrderCounts(counts)
         }
-      } catch {
-        // fallback: just use list length
+
+        const monthly = monthlyRes?.data
+        if (Array.isArray(monthly) && monthly.length === 12) {
+          setMonthlyRevenue(monthly)
+        }
+      } catch (err) {
+        console.error('[Dashboard] fetchDashboardData error:', err)
+        // fallback: try each individually
         try {
           const listRes = await sellsApi.getAll({ limit: 5 })
           setRecentOrders(listRes.data ?? [])
-          const revenue = (listRes.data ?? []).reduce((sum, o) => sum + Number(o.amount ?? 0), 0)
+        } catch { setRecentOrders([]) }
+        try {
+          const statsRes = await sellsApi.getStats()
+          const s = statsRes.data
           setSellStats({
-            totalRevenue: revenue,
-            totalOrders: listRes.total ?? listRes.data?.length ?? 0,
-            pendingCount: 0,
-            processingCount: 0,
-            deliveredCount: 0,
+            totalRevenue: Number(s?.totalRevenue ?? 0),
+            totalOrders: Number(s?.totalSells ?? 0),
+            pendingCount: Number(s?.pendingOrders ?? 0),
+            processingCount: Number(s?.processingOrders ?? 0),
+            deliveredCount: Number(s?.deliveredOrders ?? 0),
           })
-        } catch {
-          setRecentOrders([])
-        }
+        } catch (e) { console.error('[Dashboard] stats fallback failed:', e) }
+        try {
+          const weeklyRes = await sellsApi.getWeeklyOrders()
+          const counts = weeklyRes?.data
+          if (Array.isArray(counts) && counts.length === 7) setWeeklyOrderCounts(counts)
+        } catch {}
+        try {
+          const monthlyRes = await sellsApi.getMonthlyRevenue()
+          const monthly = monthlyRes?.data
+          if (Array.isArray(monthly) && monthly.length === 12) setMonthlyRevenue(monthly)
+        } catch {}
       } finally {
         setOrdersLoading(false)
       }
@@ -149,8 +168,8 @@ export default function DashboardPage() {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     datasets: [
       {
-        label: "Sales",
-        data: [12, 19, 15, 25, 22, 30, 28, 35, 32, 38, 40, 45],
+        label: "Revenue",
+        data: monthlyRevenue,
         borderColor: "rgb(16, 185, 129)",
         backgroundColor: "rgba(16, 185, 129, 0.1)",
         fill: true,
@@ -179,7 +198,8 @@ export default function DashboardPage() {
       x: { grid: { display: false } },
       y: {
         grid: { color: "rgba(0, 0, 0, 0.05)" },
-        ticks: { callback: (value: number | string) => currency + value + "k" },
+        beginAtZero: true,
+        ticks: { callback: (value: number | string) => currency + Number(value).toLocaleString() },
       },
     },
   }

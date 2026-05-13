@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { Search, Plus, Edit2, Trash2, Eye, Users, UserCheck, UserX } from "lucide-react"
+import { Search, Plus, Edit2, Trash2, Eye, Users, UserCheck, UserX, Download, Upload } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,6 +18,7 @@ import { StatsCards } from "@/components/ui/stats-card"
 import vendorApi from "@/lib/vendorApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 
 export default function VendorsPage() {
   const { canRead } = useSaasAuth()
@@ -94,6 +95,50 @@ export default function VendorsPage() {
   }, [])
 
   if (!canRead('Vendors')) return <AccessDenied />
+
+  const handleExportVendors = () => {
+    const headers = ["ID", "Name", "Email", "Phone", "Address", "Status"]
+    const data = vendors.map(v => ({
+      id: v.id,
+      name: v.name,
+      email: v.email ?? "",
+      phone: v.phone ?? "",
+      address: v.address ?? "",
+      status: v.status ?? "active",
+    }))
+    exportToCSV(data, "vendors", headers)
+    toast({ title: `Exported ${data.length} vendors` })
+  }
+
+  const handleImportVendors = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".csv"
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = async (ev) => {
+        try {
+          const rows = parseCSV(ev.target?.result as string)
+          let created = 0
+          for (const row of rows) {
+            if (!row.name?.trim()) continue
+            try {
+              const res = await vendorApi.create({ name: row.name, email: row.email, phone: row.phone, address: row.address })
+              addVendor(res.data as any)
+              created++
+            } catch { /* skip invalid */ }
+          }
+          toast({ title: `Imported ${created} vendors` })
+        } catch {
+          toast({ title: "Failed to parse CSV", variant: "destructive" })
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
 
   const openAddDialog = () => {
     setEditingVendor(null)
@@ -200,10 +245,18 @@ export default function VendorsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
-        <Button size="sm" className="gap-2 bg-emerald-500 hover:bg-emerald-600" onClick={openAddDialog}>
-          <Plus className="w-4 h-4" />
-          Add Vendor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleImportVendors}>
+            <Upload className="w-4 h-4" /> Import
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExportVendors}>
+            <Download className="w-4 h-4" /> Export
+          </Button>
+          <Button size="sm" className="gap-2 bg-emerald-500 hover:bg-emerald-600" onClick={openAddDialog}>
+            <Plus className="w-4 h-4" />
+            Add Vendor
+          </Button>
+        </div>
       </div>
 
       {statsLoading ? (

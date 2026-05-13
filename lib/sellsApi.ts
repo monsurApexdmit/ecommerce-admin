@@ -127,6 +127,9 @@ export interface SellResponse {
   shippingCost?: number;
   status: 'Pending' | 'Processing' | 'Delivered';
   paymentStatus?: string;
+  paymentTransactionId?: string | null;
+  shippingDepositAmount?: number | null;
+  shippingDepositTransactionId?: string | null;
   fulfillmentStatus?: string;
   trackingNumber?: string;
   carrier?: string;
@@ -149,11 +152,14 @@ export interface SellListResponse {
 export interface SellStatsResponse {
   message: string;
   data: {
-    total_sells: number;
-    total_revenue: number;
-    pending_count: number;
-    processing_count: number;
-    delivered_count: number;
+    totalSells: number;
+    totalRevenue: number;
+    totalCost: number;
+    grossProfit: number;
+    gpMarginPercent: number;
+    pendingOrders: number;
+    processingOrders: number;
+    deliveredOrders: number;
   };
 }
 
@@ -241,6 +247,11 @@ export const sellsApi = {
 
   getWeeklyOrders: async (): Promise<{ data: number[] }> => {
     const response = await api.get('/sells/weekly-orders');
+    return response.data;
+  },
+
+  getMonthlyRevenue: async (): Promise<{ data: number[] }> => {
+    const response = await api.get('/sells/monthly-revenue');
     return response.data;
   },
 

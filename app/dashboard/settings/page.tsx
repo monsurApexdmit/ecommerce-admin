@@ -789,6 +789,14 @@ export default function SettingsPage() {
               />
               <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
             </div>
+            {sslcommerz.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">SSLCommerz Sandbox</p>
+                <p className="text-amber-600">Register at <a href="https://developer.sslcommerz.com/registration/" target="_blank" rel="noreferrer" className="underline">developer.sslcommerz.com</a> to get a free sandbox Store ID &amp; Password.</p>
+                <p className="text-amber-600 font-mono">Sandbox URL: https://sandbox.sslcommerz.com</p>
+                <p className="text-amber-500 mt-1">⚠ Callback URLs (success/fail/cancel/IPN) must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
           </div>
 
           {/* PortWallet */}
@@ -829,6 +837,14 @@ export default function SettingsPage() {
               />
               <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
             </div>
+            {portwallet.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">PortWallet Sandbox</p>
+                <p className="text-amber-600">Register at <a href="https://portwallet.com" target="_blank" rel="noreferrer" className="underline">portwallet.com</a> to get sandbox App Key &amp; Secret.</p>
+                <p className="text-amber-600 font-mono">Sandbox URL: https://sandbox.portwallet.com</p>
+                <p className="text-amber-500 mt-1">⚠ Callback URL must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
           </div>
 
           {/* Stripe */}
@@ -871,6 +887,15 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+            {(stripe.secret_key.startsWith("sk_test_") || stripe.secret_key === "") && (
+              <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-blue-700">Stripe Test Mode</p>
+                <p className="text-blue-600">Use <span className="font-mono">pk_test_...</span> / <span className="font-mono">sk_test_...</span> keys from <a href="https://dashboard.stripe.com/test/apikeys" target="_blank" rel="noreferrer" className="underline">dashboard.stripe.com</a></p>
+                <p className="text-blue-600 font-mono">Test card: 4242 4242 4242 4242 · Any future date · Any CVC</p>
+                <p className="text-blue-600 font-mono">Decline card: 4000 0000 0000 0002</p>
+                <p className="text-blue-500 mt-1">⚠ For webhooks: run <span className="font-mono">stripe listen --forward-to localhost:8005/api/gateway/stripe/webhook</span> locally, or use ngrok and register endpoint in Stripe dashboard</p>
+              </div>
+            )}
           </div>
 
           {/* PayPal */}
@@ -911,6 +936,15 @@ export default function SettingsPage() {
               />
               <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
             </div>
+            {paypal.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">PayPal Sandbox</p>
+                <p className="text-amber-600">Get sandbox Client ID &amp; Secret from <a href="https://developer.paypal.com/dashboard/applications/sandbox" target="_blank" rel="noreferrer" className="underline">developer.paypal.com</a> → My Apps &amp; Credentials → Sandbox.</p>
+                <p className="text-amber-600">Create a sandbox buyer account at <a href="https://sandbox.paypal.com" target="_blank" rel="noreferrer" className="underline">sandbox.paypal.com</a> to test payments.</p>
+                <p className="text-amber-600 font-mono">Sandbox API: https://api-m.sandbox.paypal.com</p>
+                <p className="text-amber-500 mt-1">⚠ Return/cancel URLs must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
           </div>
 
           {/* bKash */}
@@ -1026,6 +1060,15 @@ export default function SettingsPage() {
               />
               <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
             </div>
+            {nagad.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">Sandbox Test Credentials (seeded)</p>
+                <p className="text-amber-600 font-mono">Merchant ID: 683002007104225</p>
+                <p className="text-amber-600 font-mono">Private Key: from anovob/laravel-nagad-api example (already in DB)</p>
+                <p className="text-amber-500 mt-1">⚠ Nagad sandbox requires merchant registration at <a href="https://auth.mynagad.com:10900/" target="_blank" rel="noreferrer" className="underline">auth.mynagad.com:10900</a> for a real sandbox account</p>
+                <p className="text-amber-500">⚠ Callback URL must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
           </div>
 
           {/* COD Shipping Deposit */}
@@ -1048,13 +1091,15 @@ export default function SettingsPage() {
                   <Label className="text-xs">Payment Gateway for Deposit</Label>
                   <select
                     value={codDeposit.gateway}
-                    onChange={(e) => setCodDeposit((p) => ({ ...p, gateway: e.target.value as "sslcommerz" | "portwallet" | "bkash" | "nagad" }))}
+                    onChange={(e) => setCodDeposit((p) => ({ ...p, gateway: e.target.value as "sslcommerz" | "portwallet" | "bkash" | "nagad" | "stripe" | "paypal" }))}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="sslcommerz">SSLCommerz (bKash, Nagad, Rocket, Cards)</option>
                     <option value="portwallet">PortWallet (Cards, Mobile Banking)</option>
                     <option value="bkash">bKash (Direct)</option>
                     <option value="nagad">Nagad (Direct)</option>
+                    <option value="stripe">Stripe (Card)</option>
+                    <option value="paypal">PayPal</option>
                   </select>
                 </div>
                 <div className="space-y-1">

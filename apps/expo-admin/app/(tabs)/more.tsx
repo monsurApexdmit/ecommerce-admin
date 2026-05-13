@@ -46,6 +46,7 @@ export default function MoreTab() {
         { icon: "cube-outline",             label: "Products",  route: "/(tabs)/products", iconBg: "#ecfdf5", module: "Products" },
         { icon: "receipt-outline",          label: "Orders",    route: "/(tabs)/orders",   iconBg: "#eff6ff", module: "Orders" },
         { icon: "cart-outline",             label: "POS",       route: "/(tabs)/pos",      iconBg: "#ecfeff", module: "POS" },
+        { icon: "cut-outline",              label: "Tailor Shop", route: "/(tabs)/tailor", iconBg: "#ede9fe", module: "TailorShop" },
         { icon: "layers-outline",           label: "Inventory", route: "/inventory",        iconBg: "#fef9c3", module: "Inventory" },
         { icon: "people-outline",           label: "Customers", route: "/customers",        iconBg: "#f5f3ff", module: "Customers" },
         { icon: "storefront-outline",       label: "Vendors",   route: "/vendors",          iconBg: "#fef3c7", module: "Vendors" },
@@ -139,8 +140,9 @@ export default function MoreTab() {
         <View style={styles.quickRow}>
           {canRead("Products")  && <QuickAction icon="cube-outline"    label="Products"  onPress={() => router.push("/(tabs)/products" as any)} />}
           {canRead("Orders")    && <QuickAction icon="receipt-outline" label="Orders"    onPress={() => router.push("/(tabs)/orders" as any)} />}
-          {canRead("POS")       && <QuickAction icon="cart-outline"    label="POS"       onPress={() => router.push("/(tabs)/pos" as any)} />}
-          {canRead("Customers") && <QuickAction icon="people-outline"  label="Customers" onPress={() => router.push("/customers")} />}
+          {canRead("POS")        && <QuickAction icon="cart-outline"    label="POS"       onPress={() => router.push("/(tabs)/pos" as any)} />}
+          {canRead("TailorShop") && <QuickAction icon="cut-outline"    label="Tailor"    onPress={() => router.push("/(tabs)/tailor" as any)} />}
+          {canRead("Customers")  && <QuickAction icon="people-outline" label="Customers" onPress={() => router.push("/customers")} />}
         </View>
 
         {/* Menu sections */}

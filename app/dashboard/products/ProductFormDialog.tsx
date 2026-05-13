@@ -76,9 +76,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     return `SKU-${randomAlphaNumeric(8)}`
   }, [randomAlphaNumeric])
 
-  // Generate random barcode code (PROD-XXXXXXXX-XXXX format)
   const generateBarcodeCode = useCallback(() => {
-    return `PROD-${randomAlphaNumeric(8)}-${randomAlphaNumeric(4)}`
+    return `P${randomAlphaNumeric(8)}`
   }, [randomAlphaNumeric])
 
   const [formData, setFormData] = useState(emptyForm)

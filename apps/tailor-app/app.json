@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Tailor Manager",
+    "slug": "tailor-manager",
+    "scheme": "tailor-manager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#7c3aed"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      "expo-router"
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#7c3aed"
+      },
+      "package": "com.tailormanager.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.tailormanager.app"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

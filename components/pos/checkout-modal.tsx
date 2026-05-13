@@ -21,20 +21,43 @@ interface CheckoutModalProps {
 export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: CheckoutModalProps) {
     const [paymentMethod, setPaymentMethod] = useState("Cash")
     const [isProcessing, setIsProcessing] = useState(false)
+    const [tenderedInput, setTenderedInput] = useState("")
     const { formatCurrency } = useCompanySettings()
 
+    const tendered = parseFloat(tenderedInput) || 0
+    const change = tendered - totalAmount
+    const isValidCash = paymentMethod !== "Cash" || tendered >= totalAmount
+
+    // Quick cash buttons: round up to nearest sensible denominations
+    const quickAmounts = (() => {
+        const amounts: number[] = []
+        const steps = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+        for (const s of steps) {
+            const val = Math.ceil(totalAmount / s) * s
+            if (!amounts.includes(val) && amounts.length < 4) amounts.push(val)
+        }
+        // always include exact amount first
+        return [totalAmount, ...amounts.filter(a => a !== totalAmount)].slice(0, 4)
+    })()
+
     const handleConfirm = () => {
+        if (!isValidCash) return
         setIsProcessing(true)
-        // Simulate processing
         setTimeout(() => {
             setIsProcessing(false)
             onConfirm(paymentMethod)
             onOpenChange(false)
+            setTenderedInput("")
         }, 1000)
     }
 
+    const handleOpenChange = (v: boolean) => {
+        if (!v) setTenderedInput("")
+        onOpenChange(v)
+    }
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-md p-0 overflow-hidden">
                 <VisuallyHidden asChild>
                     <DialogTitle>Payment Checkout</DialogTitle>
@@ -93,6 +116,46 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                         </RadioGroup>
                     </div>
 
+                    {/* Cash Tendered */}
+                    {paymentMethod === "Cash" && (
+                        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                            <Label className="text-xs font-bold text-gray-700 uppercase tracking-wide">Cash Tendered</Label>
+                            <Input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder={`Min ${formatCurrency(totalAmount)}`}
+                                value={tenderedInput}
+                                onChange={e => setTenderedInput(e.target.value)}
+                                className="text-lg font-bold h-12 bg-white"
+                                autoFocus
+                            />
+                            {/* Quick amount buttons */}
+                            <div className="grid grid-cols-4 gap-2">
+                                {quickAmounts.map(amt => (
+                                    <button
+                                        key={amt}
+                                        type="button"
+                                        onClick={() => setTenderedInput(String(amt))}
+                                        className={`py-2 rounded-lg text-xs font-bold border transition-all ${tenderedInput === String(amt) ? "bg-emerald-600 text-white border-emerald-600" : "bg-gray-50 text-gray-700 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50"}`}
+                                    >
+                                        {formatCurrency(amt)}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Change due */}
+                            {tendered > 0 && (
+                                <div className={`rounded-xl p-3 flex justify-between items-center ${change >= 0 ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
+                                    <span className={`text-sm font-semibold ${change >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                                        {change >= 0 ? "Change Due" : "Amount Short"}
+                                    </span>
+                                    <span className={`text-xl font-black ${change >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                                        {formatCurrency(Math.abs(change))}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Card Details Form */}
                     {paymentMethod === "Card" && (
                         <Card className="p-4 bg-blue-50 border border-blue-200 animate-in fade-in slide-in-from-top-2">
@@ -119,7 +182,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                     <div className="flex gap-3 pt-2">
                         <Button
                             variant="outline"
-                            onClick={() => onOpenChange(false)}
+                            onClick={() => handleOpenChange(false)}
                             disabled={isProcessing}
                             className="flex-1 h-11 border-gray-300"
                         >
@@ -128,7 +191,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                         <Button
                             className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-11 font-bold text-base shadow-lg shadow-emerald-200"
                             onClick={handleConfirm}
-                            disabled={isProcessing}
+                            disabled={isProcessing || !isValidCash}
                         >
                             {isProcessing ? "Processing..." : (
                                 <>

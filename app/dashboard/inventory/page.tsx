@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Search, ArrowRightLeft, Printer, QrCode, Package, Eye, AlertTriangle } from "lucide-react"
+import { Search, ArrowRightLeft, Printer, QrCode, Package, Eye, AlertTriangle, Download, Upload } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,8 @@ import { StatsCards } from "@/components/ui/stats-card"
 import productApi from "@/lib/productApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
+import { toast } from "sonner"
 
 const ITEMS_PER_PAGE = 10
 
@@ -89,6 +91,52 @@ export default function InventoryPage() {
     const next = new Set(selectedRows)
     next.has(key) ? next.delete(key) : next.add(key)
     setSelectedRows(next)
+  }
+
+  const handleExportInventory = () => {
+    const headers = ["Product", "Variant", "SKU", "Barcode", "Type", "Total Stock"]
+    const data = items.map(item => ({
+      product: item.productName,
+      variant: item.variantName ?? "",
+      sku: item.sku ?? "",
+      barcode: item.barcode ?? "",
+      type: item.type,
+      total_stock: item.stock,
+    }))
+    exportToCSV(data, "inventory", headers)
+    toast.success(`Exported ${data.length} inventory items`)
+  }
+
+  const handleImportInventory = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".csv"
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = async (ev) => {
+        try {
+          const rows = parseCSV(ev.target?.result as string)
+          let updated = 0
+          for (const row of rows) {
+            const stock = Number(row.total_stock)
+            const productId = items.find(i => i.sku === row.sku?.trim())?.productId
+            if (!productId || isNaN(stock)) continue
+            try {
+              await productApi.update(productId, { stock })
+              updated++
+            } catch { /* skip invalid */ }
+          }
+          toast.success(`Updated ${updated} items from CSV`)
+          fetchInventory()
+        } catch {
+          toast.error("Failed to parse CSV")
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
   }
 
   const handleSelectAll = () => setSelectedRows(new Set(currentRows.map(rowKey)))
@@ -167,6 +215,12 @@ export default function InventoryPage() {
               Print Selected ({selectedRows.size})
             </Button>
           )}
+          <Button variant="outline" onClick={handleImportInventory} className="gap-2">
+            <Upload className="w-4 h-4" /> Import CSV
+          </Button>
+          <Button variant="outline" onClick={handleExportInventory} className="gap-2">
+            <Download className="w-4 h-4" /> Export CSV
+          </Button>
           <Link href="/dashboard/inventory/transfer">
             <Button className="bg-emerald-600 hover:bg-emerald-700">
               <ArrowRightLeft className="w-4 h-4 mr-2" />

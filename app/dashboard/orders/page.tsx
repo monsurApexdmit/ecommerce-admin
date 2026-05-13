@@ -99,7 +99,14 @@ export default function OrdersPage() {
     setStatsLoading(true)
     try {
       const res = await sellsApi.getStats()
-      setStats(res.data)
+      const d = res.data as Record<string, number>
+      setStats({
+        totalSells:        d.totalSells        ?? d.total_sells        ?? 0,
+        totalRevenue:      d.totalRevenue      ?? d.total_revenue      ?? 0,
+        pendingOrders:     d.pendingOrders     ?? d.pending_count      ?? 0,
+        processingOrders:  d.processingOrders  ?? d.processing_count   ?? 0,
+        deliveredOrders:   d.deliveredOrders   ?? d.delivered_count    ?? 0,
+      })
     } catch (err) {
       console.error("Failed to fetch stats:", err)
     } finally {
@@ -313,10 +320,31 @@ export default function OrdersPage() {
                 <div class="summary-item">
                   <h3>Payment Method</h3>
                   <p>${order.method}</p>
+                  ${(() => {
+                    const ps = order.paymentStatus ?? ''
+                    const isPaid = ps === 'paid'
+                    const isDeposit = ps === 'shipping_deposit_paid'
+                    const isFailed = ps === 'failed' || ps === 'cancelled'
+                    const label = isPaid ? '✓ Paid'
+                      : isDeposit ? '⏳ Deposit Paid'
+                      : isFailed ? '✗ ' + ps
+                      : ps === 'pending_payment' ? '⏳ Awaiting Payment'
+                      : ps ? '⏳ ' + ps : ''
+                    const bg = isPaid ? '#d1fae5' : isDeposit ? '#fef3c7' : isFailed ? '#fee2e2' : '#fef9c3'
+                    const color = isPaid ? '#065f46' : isDeposit ? '#92400e' : isFailed ? '#991b1b' : '#713f12'
+                    return label ? `<span style="display:inline-block;margin-top:6px;padding:3px 10px;background:${bg};color:${color};border-radius:4px;font-size:11px;font-weight:600;">${label}</span>` : ''
+                  })()}
+                  ${order.paymentTransactionId ? `<p style="font-size:10px;color:#6b7280;font-family:monospace;margin-top:4px;word-break:break-all;">Txn: ${order.paymentTransactionId}</p>` : ''}
                 </div>
                 <div class="summary-item">
                   <h3>Shipping Cost</h3>
                   <p style="color:#6b7280;">${formatCurrency(Number(fmt(order.shippingCost)))}</p>
+                  ${Number(order.shippingDepositAmount ?? 0) > 0 ? `
+                    <div style="margin-top:8px;padding:8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;">
+                      <p style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:2px;">Shipping Deposit Paid</p>
+                      <p style="font-size:14px;font-weight:700;color:#b45309;">${formatCurrency(Number(order.shippingDepositAmount))}</p>
+                      ${order.shippingDepositTransactionId ? `<p style="font-size:10px;color:#92400e;font-family:monospace;margin-top:2px;word-break:break-all;">Txn: ${order.shippingDepositTransactionId}</p>` : ''}
+                    </div>` : ''}
                 </div>
                 <div class="summary-item">
                   <h3>Discount</h3>
@@ -325,6 +353,7 @@ export default function OrdersPage() {
                 <div class="summary-item">
                   <h3>Total Amount</h3>
                   <p class="total-amount">${formatCurrency(Number(order.amount))}</p>
+                  ${Number(order.shippingDepositAmount ?? 0) > 0 && order.paymentStatus === 'shipping_deposit_paid' ? `<p style="font-size:11px;color:#6b7280;margin-top:4px;">Remaining on delivery: ${formatCurrency(Number(order.amount) - Number(order.shippingDepositAmount))}</p>` : ''}
                 </div>
               </div>
             </div>
@@ -628,10 +657,38 @@ export default function OrdersPage() {
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Payment Method</h3>
                     <p className="text-base font-semibold text-gray-900">{selectedOrder.method}</p>
+                    {/* Payment status badge */}
+                    {selectedOrder.paymentStatus && (() => {
+                      const ps = selectedOrder.paymentStatus
+                      const isPaid = ps === "paid"
+                      const isDeposit = ps === "shipping_deposit_paid"
+                      return (
+                        <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          isPaid ? "bg-green-100 text-green-700"
+                          : isDeposit ? "bg-amber-100 text-amber-700"
+                          : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {isPaid ? "✓ Paid" : isDeposit ? "⏳ Deposit Paid" : ps === "pending_payment" ? "⏳ Awaiting Payment" : ps === "failed" ? "✗ Failed" : ps === "cancelled" ? "✗ Cancelled" : "⏳ Pending"}
+                        </span>
+                      )
+                    })()}
+                    {selectedOrder.paymentTransactionId && (
+                      <p className="text-[10px] text-gray-500 font-mono mt-1 break-all">Txn: {selectedOrder.paymentTransactionId}</p>
+                    )}
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Shipping Cost</h3>
                     <p className="text-base font-semibold text-gray-600">{formatCurrency(Number(selectedOrder.shippingCost ?? 0))}</p>
+                    {/* Shipping deposit — only when > 0 */}
+                    {selectedOrder.shippingDepositAmount != null && Number(selectedOrder.shippingDepositAmount) > 0 && (
+                      <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-[10px] font-semibold text-amber-700 uppercase">Shipping Deposit Paid</p>
+                        <p className="text-sm font-bold text-amber-700">{formatCurrency(Number(selectedOrder.shippingDepositAmount))}</p>
+                        {selectedOrder.shippingDepositTransactionId && (
+                          <p className="text-[10px] font-mono text-amber-600 break-all mt-0.5">Txn: {selectedOrder.shippingDepositTransactionId}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Discount</h3>
@@ -640,6 +697,9 @@ export default function OrdersPage() {
                   <div>
                     <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Total Amount</h3>
                     <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(selectedOrder.amount ?? 0))}</p>
+                    {selectedOrder.shippingDepositAmount != null && Number(selectedOrder.shippingDepositAmount) > 0 && selectedOrder.paymentStatus === "shipping_deposit_paid" && (
+                      <p className="text-xs text-gray-500 mt-1">Remaining on delivery: {formatCurrency(Number(selectedOrder.amount ?? 0) - Number(selectedOrder.shippingDepositAmount))}</p>
+                    )}
                   </div>
                 </div>
               </div>
