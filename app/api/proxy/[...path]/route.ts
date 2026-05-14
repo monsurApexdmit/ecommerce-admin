@@ -90,11 +90,14 @@ async function proxyRequest(req: NextRequest, params: Params) {
 
   // For multipart, use native fetch instead of axios to preserve the body correctly
   const isMultipart = contentType?.includes('multipart/form-data');
-  if (isMultipart && data) {
+  if (isMultipart) {
     const fetchRes = await fetch(`${BACKEND_URL}${cleanPath}${search}`, {
       method: req.method,
       headers: headers as Record<string, string>,
-      body: data as Buffer,
+      // Use raw stream directly — avoids double-buffering which can corrupt multipart boundary
+      body: data ? new Uint8Array(data as Buffer) : req.body,
+      // @ts-ignore — duplex required for streaming body in Node fetch
+      duplex: 'half',
     });
     const resBody = await fetchRes.arrayBuffer();
     const resContentType = fetchRes.headers.get('content-type') || 'application/octet-stream';
