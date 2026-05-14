@@ -10,7 +10,6 @@ const API_URL = '/api/proxy';
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
 });
 
@@ -26,6 +25,11 @@ api.interceptors.request.use(
         if (!config.params) config.params = {};
         config.params.company_id = companyId;
       }
+    }
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    } else if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
     }
     return config;
   },
@@ -233,10 +237,20 @@ const withMessage = <T>(payload: any, data: T): { message: string; data: T } => 
   data,
 });
 
+export const resolveStorageUrl = (path?: string | null): string => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+
+  const clean = path.replace(/^\/+/, '');
+  if (clean.startsWith('storage/')) return `/api/proxy/${clean}`;
+  if (clean.startsWith('uploads/')) return `/api/proxy/${clean}`;
+  return `/api/proxy/uploads/${clean}`;
+};
+
 const normalizeBusiness = (data: any): BusinessSettings => ({
   ...data,
-  logoUrl: data?.logoUrl ?? data?.logo_url ?? '',
-  bannerUrl: data?.bannerUrl ?? data?.banner_url ?? '',
+  logoUrl: resolveStorageUrl(data?.logoUrl ?? data?.logo_url),
+  bannerUrl: resolveStorageUrl(data?.bannerUrl ?? data?.banner_url),
   auraShopHero: data?.auraShopHero ?? data?.aura_shop_hero,
   socialLinks: data?.socialLinks ?? data?.social_links,
 });
@@ -395,29 +409,23 @@ export const settingsApi = {
   uploadLogo: async (file: File): Promise<{ message: string; data: { logoUrl: string } }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/settings/upload-logo', formData, {
-      headers: { 'Content-Type': undefined },
-    });
+    const response = await api.post('/settings/upload-logo', formData);
     const data = unwrapData<any>(response.data);
-    return withMessage(response.data, { logoUrl: data?.logoUrl ?? data?.logo_url ?? '' });
+    return withMessage(response.data, { logoUrl: resolveStorageUrl(data?.logoUrl ?? data?.logo_url) });
   },
 
   uploadBanner: async (file: File): Promise<{ message: string; data: { bannerUrl: string } }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/settings/upload-banner', formData, {
-      headers: { 'Content-Type': undefined },
-    });
+    const response = await api.post('/settings/upload-banner', formData);
     const data = unwrapData<any>(response.data);
-    return withMessage(response.data, { bannerUrl: data?.bannerUrl ?? data?.banner_url ?? '' });
+    return withMessage(response.data, { bannerUrl: resolveStorageUrl(data?.bannerUrl ?? data?.banner_url) });
   },
 
   uploadStorefrontImage: async (file: File): Promise<{ message: string; data: { imagePath: string; imageUrl: string } }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/settings/upload-storefront-image', formData, {
-      headers: { 'Content-Type': undefined },
-    });
+    const response = await api.post('/settings/upload-storefront-image', formData);
     return response.data;
   },
 };

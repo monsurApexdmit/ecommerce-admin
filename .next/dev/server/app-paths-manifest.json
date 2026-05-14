@@ -1,9 +1,7 @@
 {
   "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
-  "/track/tailor/[token]/page": "app/track/tailor/[token]/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/products/page": "app/dashboard/products/page.js",
-  "/auth/login/page": "app/auth/login/page.js",
-  "/dashboard/tailor/orders/page": "app/dashboard/tailor/orders/page.js",
-  "/dashboard/tailor/reports/page": "app/dashboard/tailor/reports/page.js"
+  "/dashboard/settings/aura-shop/page": "app/dashboard/settings/aura-shop/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js"
 }
