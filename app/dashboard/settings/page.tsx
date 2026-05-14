@@ -78,6 +78,9 @@ export default function SettingsPage() {
   const [storePhone, setStorePhone] = useState(DEFAULT_GENERAL_SETTINGS.storePhone)
   const [storeAddress, setStoreAddress] = useState(DEFAULT_GENERAL_SETTINGS.storeAddress)
   const [storeDescription, setStoreDescription] = useState(DEFAULT_GENERAL_SETTINGS.storeDescription)
+  const [primaryColor, setPrimaryColor] = useState("#6B1A2A")
+  const [accentColor, setAccentColor] = useState("#B8963E")
+  const [backgroundColor, setBackgroundColor] = useState("#F0EBE3")
 
   // Business Settings
   const [businessName, setBusinessName] = useState(DEFAULT_BUSINESS_SETTINGS.businessName)
@@ -145,6 +148,9 @@ export default function SettingsPage() {
       setStorePhone(general.storePhone ?? DEFAULT_GENERAL_SETTINGS.storePhone)
       setStoreAddress(general.storeAddress ?? DEFAULT_GENERAL_SETTINGS.storeAddress)
       setStoreDescription(general.storeDescription ?? DEFAULT_GENERAL_SETTINGS.storeDescription)
+      if (general.primaryColor) setPrimaryColor(general.primaryColor)
+      if (general.accentColor) setAccentColor(general.accentColor)
+      if (general.backgroundColor) setBackgroundColor(general.backgroundColor)
 
       const business = data.business ?? {}
       const socialLinks = business.socialLinks ?? {}
@@ -211,6 +217,9 @@ export default function SettingsPage() {
         storePhone,
         storeAddress,
         storeDescription,
+        primaryColor,
+        accentColor,
+        backgroundColor,
       })
       toast.success("General settings saved successfully!")
     } catch (err: any) {
@@ -598,6 +607,42 @@ export default function SettingsPage() {
               onChange={(e) => setStoreDescription(e.target.value)}
               rows={3}
             />
+          </div>
+
+          {/* Brand Colors */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Brand Colors</Label>
+            <p className="text-xs text-gray-500">These colors are applied to the storefront automatically.</p>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: "Primary Color", value: primaryColor, setter: setPrimaryColor },
+                { label: "Accent Color", value: accentColor, setter: setAccentColor },
+                { label: "Background Color", value: backgroundColor, setter: setBackgroundColor },
+              ].map(({ label, value, setter }) => (
+                <div key={label} className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-600">{label}</label>
+                  <div className="flex items-center gap-2 border rounded-lg px-2 py-1.5">
+                    <input
+                      type="color"
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setter(v)
+                      }}
+                      maxLength={7}
+                      className="w-full text-xs font-mono uppercase bg-transparent outline-none text-gray-700"
+                      placeholder="#000000"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="flex justify-end">

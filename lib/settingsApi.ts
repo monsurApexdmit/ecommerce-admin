@@ -55,6 +55,9 @@ export interface GeneralSettings {
   storePhone: string;
   storeAddress: string;
   storeDescription: string;
+  primaryColor?: string;
+  accentColor?: string;
+  backgroundColor?: string;
 }
 
 export interface TaxSettings {
