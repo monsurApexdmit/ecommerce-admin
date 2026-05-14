@@ -395,7 +395,9 @@ export const settingsApi = {
   uploadLogo: async (file: File): Promise<{ message: string; data: { logoUrl: string } }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/settings/upload-logo', formData);
+    const response = await api.post('/settings/upload-logo', formData, {
+      headers: { 'Content-Type': undefined },
+    });
     const data = unwrapData<any>(response.data);
     return withMessage(response.data, { logoUrl: data?.logoUrl ?? data?.logo_url ?? '' });
   },
@@ -403,7 +405,9 @@ export const settingsApi = {
   uploadBanner: async (file: File): Promise<{ message: string; data: { bannerUrl: string } }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/settings/upload-banner', formData);
+    const response = await api.post('/settings/upload-banner', formData, {
+      headers: { 'Content-Type': undefined },
+    });
     const data = unwrapData<any>(response.data);
     return withMessage(response.data, { bannerUrl: data?.bannerUrl ?? data?.banner_url ?? '' });
   },
@@ -411,7 +415,9 @@ export const settingsApi = {
   uploadStorefrontImage: async (file: File): Promise<{ message: string; data: { imagePath: string; imageUrl: string } }> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post('/settings/upload-storefront-image', formData);
+    const response = await api.post('/settings/upload-storefront-image', formData, {
+      headers: { 'Content-Type': undefined },
+    });
     return response.data;
   },
 };
