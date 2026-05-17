@@ -94,6 +94,13 @@ export default function SettingsPage() {
   const [logoUrl, setLogoUrl] = useState(DEFAULT_BUSINESS_SETTINGS.logoUrl)
   const [bannerUrl, setBannerUrl] = useState(DEFAULT_BUSINESS_SETTINGS.bannerUrl)
 
+  // Promo Banner Settings
+  const [promoBannerEnabled, setPromoBannerEnabled] = useState(false)
+  const [promoBannerTitle, setPromoBannerTitle] = useState("Flash Sale — Up to 60% Off Everything")
+  const [promoBannerSubtitle, setPromoBannerSubtitle] = useState("Limited time offer on thousands of products. Don't miss out!")
+  const [promoBannerCta, setPromoBannerCta] = useState("Shop the Sale")
+  const [promoBannerLink, setPromoBannerLink] = useState("/shop")
+
   // Notification Settings
   const [emailNotifications, setEmailNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS.emailNotifications)
   const [orderNotifications, setOrderNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS.orderNotifications)
@@ -164,6 +171,12 @@ export default function SettingsPage() {
       setTwitter(socialLinks.twitter ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.twitter)
       setLogoUrl(business.logoUrl ?? "")
       setBannerUrl(business.bannerUrl ?? "")
+      const promo = (business.promoBanner ?? {}) as any
+      if (promo.title) setPromoBannerTitle(promo.title)
+      if (promo.subtitle) setPromoBannerSubtitle(promo.subtitle)
+      if (promo.cta) setPromoBannerCta(promo.cta)
+      if (promo.link) setPromoBannerLink(promo.link)
+      if (typeof promo.enabled === "boolean") setPromoBannerEnabled(promo.enabled)
 
       const notifications = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(data.notifications ?? {}) }
       setEmailNotifications(notifications.emailNotifications)
@@ -239,6 +252,13 @@ export default function SettingsPage() {
         gstNumber,
         website,
         socialLinks: { facebook, instagram, twitter },
+        promoBanner: {
+          enabled: promoBannerEnabled,
+          title: promoBannerTitle,
+          subtitle: promoBannerSubtitle,
+          cta: promoBannerCta,
+          link: promoBannerLink,
+        },
       })
       toast.success("Business settings saved successfully!")
     } catch (err: any) {
@@ -516,6 +536,44 @@ export default function SettingsPage() {
                   onChange={(e) => setTwitter(e.target.value)}
                   placeholder="https://twitter.com/..."
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Promo Banner */}
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-sm">Promo Banner</h3>
+                <p className="text-xs text-gray-500">Shown on homepage between hero and products</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-gray-600">{promoBannerEnabled ? "Enabled" : "Disabled"}</span>
+                <button
+                  type="button"
+                  onClick={() => setPromoBannerEnabled(!promoBannerEnabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${promoBannerEnabled ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${promoBannerEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Banner Title</Label>
+                <Input value={promoBannerTitle} onChange={(e) => setPromoBannerTitle(e.target.value)} placeholder="Flash Sale — Up to 60% Off Everything" />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Subtitle</Label>
+                <Input value={promoBannerSubtitle} onChange={(e) => setPromoBannerSubtitle(e.target.value)} placeholder="Limited time offer on thousands of products." />
+              </div>
+              <div className="space-y-1">
+                <Label>CTA Button Text</Label>
+                <Input value={promoBannerCta} onChange={(e) => setPromoBannerCta(e.target.value)} placeholder="Shop the Sale" />
+              </div>
+              <div className="space-y-1">
+                <Label>CTA Link</Label>
+                <Input value={promoBannerLink} onChange={(e) => setPromoBannerLink(e.target.value)} placeholder="/shop" />
               </div>
             </div>
           </div>

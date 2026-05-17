@@ -164,6 +164,7 @@ export interface BusinessSettings {
   bannerUrl?: string;
   website?: string;
   auraShopHero?: AuraShopHeroSettings;
+  promoBanner?: PromoBannerSettings;
   socialLinks?: {
     facebook?: string;
     instagram?: string;
@@ -185,6 +186,14 @@ export interface AuraShopHeroSlide {
 export interface AuraShopHeroSettings {
   autoplayMs: number;
   slides: AuraShopHeroSlide[];
+}
+
+export interface PromoBannerSettings {
+  enabled: boolean;
+  title: string;
+  subtitle: string;
+  cta: string;
+  link: string;
 }
 
 export interface StoreHours {
