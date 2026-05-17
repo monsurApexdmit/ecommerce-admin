@@ -1,7 +1,14 @@
 {
   "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
-  "/_not-found/page": "app/_not-found/page.js",
+  "/auth/login/page": "app/auth/login/page.js",
   "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
   "/dashboard/settings/aura-shop/page": "app/dashboard/settings/aura-shop/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js"
+  "/dashboard/company/profile/page": "app/dashboard/company/profile/page.js",
+  "/dashboard/company/settings/page": "app/dashboard/company/settings/page.js",
+  "/dashboard/company/billing-contact/page": "app/dashboard/company/billing-contact/page.js",
+  "/dashboard/team/users/page": "app/dashboard/team/users/page.js",
+  "/dashboard/billing/subscriptions/page": "app/dashboard/billing/subscriptions/page.js",
+  "/dashboard/billing/plans/page": "app/dashboard/billing/plans/page.js",
+  "/dashboard/products/page": "app/dashboard/products/page.js"
 }
