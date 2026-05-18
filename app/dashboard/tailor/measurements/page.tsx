@@ -17,6 +17,7 @@ import {
 } from "@/lib/tailorApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { toast } from "sonner"
 
 const EMPTY_FORM = {

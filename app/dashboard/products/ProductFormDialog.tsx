@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Trash2, CloudUpload, Copy, Check } from "lucide-react"
+import { Trash2, CloudUpload, Copy, Check, Package, Plus, Minus } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { generateId } from "@/lib/export-import-utils"
@@ -47,6 +47,7 @@ const emptyForm = {
   profitMargin: "",
   marginType: "percentage",
   stock: "",
+  reorderPoint: "",
   sku: "",
   barcode: "",
   vendorId: "",
@@ -94,6 +95,13 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const [selectedAttributeIds, setSelectedAttributeIds] = useState<string[]>([])
   const [productAttributes, setProductAttributes] = useState<{ id: string; name: string; value: string | string[] }[]>([])
   const [generatedVariants, setGeneratedVariants] = useState<Variant[]>([])
+  const [trackingType, setTrackingType] = useState<"none" | "serial" | "batch">("none")
+  const [isBundle, setIsBundle] = useState(false)
+  const [bundlePriceOverride, setBundlePriceOverride] = useState("")
+  const [bundleItems, setBundleItems] = useState<{ productId: number; productName: string; productSku: string; variantId?: number; variantName?: string; quantity: number }[]>([])
+  const [bundleSearch, setBundleSearch] = useState("")
+  const [bundleSearchResults, setBundleSearchResults] = useState<any[]>([])
+  const [bundleSearchLoading, setBundleSearchLoading] = useState(false)
 
   const allCategories = getAllCategoriesFlat()
 
@@ -123,6 +131,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           profitMargin: String(p.profitMargin || p.profit_margin || ""),
           marginType: p.marginType || p.margin_type || "percentage",
           stock: String(p.stock || ""),
+          reorderPoint: String(p.reorderPoint ?? ""),
           sku: p.sku || "",
           barcode: p.barcode || "",
           vendorId: p.vendorId ? String(p.vendorId) : "",
@@ -134,6 +143,17 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         setIsBestSeller(p.isBestSeller ?? p.is_best_seller ?? false)
         setIsFeatured(p.isFeatured ?? p.is_featured ?? false)
         setDealLabel(p.dealLabel ?? p.deal_label ?? "")
+        setTrackingType(p.trackingType ?? "none")
+        setIsBundle(p.isBundle ?? false)
+        setBundlePriceOverride(p.bundlePriceOverride ? String(p.bundlePriceOverride) : "")
+        setBundleItems((p.bundleItems ?? []).map((bi: any) => ({
+          productId: bi.productId,
+          productName: bi.productName || "",
+          productSku: bi.productSku || "",
+          variantId: bi.variantId,
+          variantName: bi.variantName,
+          quantity: bi.quantity || 1,
+        })))
 
         // Images
         const imageUrls: string[] = []
@@ -197,6 +217,12 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
       setIsBestSeller(false)
       setIsFeatured(false)
       setDealLabel("")
+      setTrackingType("none")
+      setIsBundle(false)
+      setBundlePriceOverride("")
+      setBundleItems([])
+      setBundleSearch("")
+      setBundleSearchResults([])
     }
   }, [open, editingProduct, generateBarcodeCode, generateSkuCode])
 
@@ -245,6 +271,41 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     setFormData(prev => ({ ...prev, [field]: value }))
   }, [])
 
+  const searchBundleProducts = useCallback(async (query: string) => {
+    if (!query.trim()) { setBundleSearchResults([]); return }
+    setBundleSearchLoading(true)
+    try {
+      const res = await productApi.getAll({ search: query, limit: 10 })
+      setBundleSearchResults(res.data || [])
+    } catch { setBundleSearchResults([]) }
+    finally { setBundleSearchLoading(false) }
+  }, [])
+
+  const addBundleItem = useCallback((product: any, variant?: any) => {
+    const productId = product.id ? parseInt(product.id) : product.id
+    const variantId = variant?.id ? parseInt(variant.id) : undefined
+    const exists = bundleItems.some(bi => bi.productId === productId && bi.variantId === variantId)
+    if (exists) return
+    setBundleItems(prev => [...prev, {
+      productId,
+      productName: product.name,
+      productSku: product.sku || "",
+      variantId,
+      variantName: variant?.name,
+      quantity: 1,
+    }])
+    setBundleSearch("")
+    setBundleSearchResults([])
+  }, [bundleItems])
+
+  const updateBundleItemQty = useCallback((index: number, qty: number) => {
+    setBundleItems(prev => prev.map((bi, i) => i === index ? { ...bi, quantity: Math.max(1, qty) } : bi))
+  }, [])
+
+  const removeBundleItem = useCallback((index: number) => {
+    setBundleItems(prev => prev.filter((_, i) => i !== index))
+  }, [])
+
   const handleClose = () => {
     setErrorMessage(null)
     onClose()
@@ -271,6 +332,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
         marginType: formData.marginType || "percentage",
         stock: finalStock,
+        reorderPoint: formData.reorderPoint ? Number.parseInt(formData.reorderPoint) : 0,
+        trackingType,
         status: finalStock > 0 ? "Selling" : "Out of Stock",
         published: true,
         isHotDeal,
@@ -286,6 +349,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         attributes: productAttributes,
         variants: generatedVariants,
         inventory: [{ warehouseId: formData.locationId || String(warehouses[0]?.id || ""), quantity: finalStock }],
+        isBundle,
+        bundlePriceOverride: bundlePriceOverride ? Number(bundlePriceOverride) : undefined,
+        bundleItems: isBundle ? bundleItems : [],
       })
       handleClose()
     } catch (err: any) {
@@ -327,6 +393,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
         marginType: formData.marginType || "percentage",
         stock: finalStock,
+        reorderPoint: formData.reorderPoint ? Number.parseInt(formData.reorderPoint) : 0,
+        trackingType,
         status: finalStock > 0 ? "Selling" : "Out of Stock",
         isHotDeal,
         isBestSeller,
@@ -343,6 +411,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         attributes: productAttributes,
         variants: generatedVariants,
         inventory: [{ warehouseId: formData.locationId || editingProduct.locationId || String(warehouses[0]?.id || ""), quantity: finalStock }],
+        isBundle,
+        bundlePriceOverride: bundlePriceOverride ? Number(bundlePriceOverride) : undefined,
+        bundleItems: isBundle ? bundleItems : [],
       })
       handleClose()
     } catch (err: any) {
@@ -810,6 +881,45 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               </div>
               {generatedVariants.length > 0 && <p className="text-xs text-gray-500">Stock is calculated from variants</p>}
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="reorderPoint">Reorder Point</Label>
+              <Input
+                id="reorderPoint"
+                type="number"
+                min="0"
+                value={formData.reorderPoint}
+                onChange={(e) => set("reorderPoint", e.target.value)}
+                placeholder="0 (disabled)"
+              />
+              <p className="text-xs text-gray-500">Get a low stock alert when stock falls to or below this number. Set 0 to disable.</p>
+            </div>
+
+            <div className="space-y-2 col-span-2">
+              <Label>Inventory Tracking Type</Label>
+              <div className="flex gap-2">
+                {(["none", "serial", "batch"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setTrackingType(type)}
+                    className={`flex-1 px-3 py-2 rounded border text-sm transition-colors capitalize ${
+                      trackingType === type
+                        ? "bg-blue-100 border-blue-500 text-blue-900 font-medium"
+                        : "bg-gray-50 border-gray-300 text-gray-600 hover:border-gray-400"
+                    }`}
+                  >
+                    {type === "none" ? "None (default)" : type === "serial" ? "Serial Number" : "Batch / Lot"}
+                  </button>
+                ))}
+              </div>
+              {trackingType === "serial" && (
+                <p className="text-xs text-blue-600">Each unit gets a unique serial number. Stock = count of available serials. Manage serials from the Serial/Batch page.</p>
+              )}
+              {trackingType === "batch" && (
+                <p className="text-xs text-blue-600">Units grouped in batches/lots with expiry dates. Stock = sum of remaining batch quantities. Uses FEFO (First Expired First Out) on sell.</p>
+              )}
+            </div>
           </div>
 
           <div className="space-y-4 border-t pt-4">
@@ -998,6 +1108,125 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               />
               <p className="text-xs text-muted-foreground">Overrides auto badge on the storefront. Leave blank to use tag name.</p>
             </div>
+          </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-medium flex items-center gap-2"><Package className="w-5 h-5 text-emerald-600" /> Bundle / Kit</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Group multiple products into one bundle. Stock = minimum available across child products.</p>
+              </div>
+              <Switch id="isBundle" checked={isBundle} onCheckedChange={setIsBundle} />
+            </div>
+
+            {isBundle && (
+              <div className="space-y-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bundlePriceOverride">Bundle Price Override <span className="text-gray-400 font-normal">(optional — leave blank to use product price)</span></Label>
+                  <div className="relative w-48">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <Input
+                      id="bundlePriceOverride"
+                      type="number"
+                      min="0"
+                      value={bundlePriceOverride}
+                      onChange={(e) => setBundlePriceOverride(e.target.value)}
+                      placeholder="Use product price"
+                      className="pl-7"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Add Child Products</Label>
+                  <div className="relative">
+                    <Input
+                      value={bundleSearch}
+                      onChange={(e) => {
+                        setBundleSearch(e.target.value)
+                        searchBundleProducts(e.target.value)
+                      }}
+                      placeholder="Search products to add..."
+                      className="bg-white"
+                    />
+                    {bundleSearchResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 z-50 bg-white border rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto">
+                        {bundleSearchLoading && <div className="p-2 text-sm text-gray-400">Searching...</div>}
+                        {bundleSearchResults.map((p: any) => (
+                          <div key={p.id} className="border-b last:border-0">
+                            <button
+                              type="button"
+                              onClick={() => addBundleItem(p)}
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-emerald-50 flex items-center justify-between"
+                            >
+                              <span>{p.name} <span className="text-gray-400 text-xs">({p.sku})</span></span>
+                              <span className="text-xs text-gray-500">Stock: {p.stock}</span>
+                            </button>
+                            {p.variants?.length > 0 && p.variants.map((v: any) => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => addBundleItem(p, v)}
+                                className="w-full px-6 py-1.5 text-left text-xs hover:bg-emerald-50 text-gray-600 flex items-center justify-between border-t border-gray-100"
+                              >
+                                <span>└ {v.name}</span>
+                                <span className="text-gray-400">Stock: {v.stock}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {bundleItems.length > 0 && (
+                  <div className="rounded-md border bg-white overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="p-2 text-left">Product</th>
+                          <th className="p-2 text-left">Variant</th>
+                          <th className="p-2 text-center w-28">Qty in Bundle</th>
+                          <th className="p-2 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bundleItems.map((bi, index) => (
+                          <tr key={index} className="border-b last:border-0">
+                            <td className="p-2">
+                              <div className="font-medium">{bi.productName}</div>
+                              <div className="text-xs text-gray-400">{bi.productSku}</div>
+                            </td>
+                            <td className="p-2 text-gray-500 text-xs">{bi.variantName || "—"}</td>
+                            <td className="p-2">
+                              <div className="flex items-center gap-1 justify-center">
+                                <button type="button" onClick={() => updateBundleItemQty(index, bi.quantity - 1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-gray-100"><Minus className="w-3 h-3" /></button>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={bi.quantity}
+                                  onChange={(e) => updateBundleItemQty(index, parseInt(e.target.value) || 1)}
+                                  className="h-7 w-12 text-center text-sm p-1"
+                                />
+                                <button type="button" onClick={() => updateBundleItemQty(index, bi.quantity + 1)} className="w-6 h-6 rounded border flex items-center justify-center hover:bg-gray-100"><Plus className="w-3 h-3" /></button>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <button type="button" onClick={() => removeBundleItem(index)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {bundleItems.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-2">No child products added yet. Search above to add products.</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

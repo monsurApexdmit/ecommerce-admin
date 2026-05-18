@@ -11,6 +11,7 @@ import { tailorApi, TailorDashboardStats, TailorOrder, ORDER_STATUS_LABELS, ORDE
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { toast } from "sonner"
 
 function StatCard({ icon: Icon, label, value, color, href }: {
@@ -36,7 +37,7 @@ export default function TailorDashboardPage() {
   const [stats, setStats] = useState<TailorDashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  if (!canRead("TailorShop")) return <AccessDenied />
+  if (!canRead("TailorDashboard")) return <AccessDenied />
 
   useEffect(() => {
     tailorApi.getDashboard()

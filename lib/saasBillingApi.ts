@@ -292,8 +292,9 @@ export const saasBillingApi = {
    * Get all available subscription plans
    */
   getPlans: async () => {
-    const response = await api.get<GetPlansResponse>('/billing/plans');
-    return response.data;
+    const response = await api.get('/billing/plans');
+    // backend returns { success, message, data: Plan[] }
+    return { data: response.data?.data ?? response.data };
   },
 
   /**

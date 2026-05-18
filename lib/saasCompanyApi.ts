@@ -449,6 +449,28 @@ export const saasCompanyApi = {
     const response = await api.post('/auth/team/invite/accept', { token });
     return response.data;
   },
+
+  /**
+   * GET /auth/company/plan-limits
+   * Returns current plan limits and usage counts
+   */
+  getPlanLimits: async (): Promise<PlanLimits> => {
+    const response = await api.get<{ data: PlanLimits }>('/auth/company/plan-limits');
+    return response.data.data;
+  },
 };
+
+export interface PlanLimits {
+  plan: { id: number; name: string; price: number } | null;
+  maxUsers: number;
+  maxBranches: number;
+  maxProducts: number;
+  currentUsers: number;
+  currentBranches: number;
+  currentProducts: number;
+  canAddUser: boolean;
+  canAddBranch: boolean;
+  canAddProduct: boolean;
+}
 
 export default saasCompanyApi;

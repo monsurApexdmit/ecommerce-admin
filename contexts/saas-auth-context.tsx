@@ -49,6 +49,8 @@ export interface SaasAuthContextType {
   canRead: (module: string) => boolean
   canWrite: (module: string) => boolean
   canDelete: (module: string) => boolean
+  // Plan module check — true if module is included in current plan
+  isPlanModule: (module: string) => boolean
 }
 
 const SaasAuthContext = createContext<SaasAuthContextType>({
@@ -75,6 +77,7 @@ const SaasAuthContext = createContext<SaasAuthContextType>({
   canRead: () => false,
   canWrite: () => false,
   canDelete: () => false,
+  isPlanModule: () => true,
 })
 
 export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
@@ -125,11 +128,21 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
 
       // Store auth data
       localStorage.setItem("token", response.data.token)
-      localStorage.setItem("company_id", response.data.companyId.toString())
+      localStorage.setItem("company_id", (response.data.companyId ?? "").toString())
       localStorage.setItem("user_role", response.data.userRole)
+      localStorage.setItem("userRole", response.data.userRole)
+      localStorage.setItem("userEmail", response.data.userEmail ?? response.data.email ?? "")
       // Set cookies for Next.js middleware
       document.cookie = `token=${response.data.token}; path=/; max-age=86400; SameSite=Lax`
       document.cookie = `user_role=${response.data.userRole}; path=/; max-age=86400; SameSite=Lax`
+
+      // Super admin goes straight to platform, skip getCurrentUser (no company)
+      if (response.data.userRole === "super_admin") {
+        setToken(response.data.token)
+        setIsAuthenticated(true)
+        router.push("/platform")
+        return
+      }
 
       // Update state
       setToken(response.data.token)
@@ -289,10 +302,22 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     return user?.role === "owner" || user?.role === "admin"
   }
 
+  // Returns true if module is included in the company's current plan
+  const isPlanModule = (module: string): boolean => {
+    const modules = company?.planModules
+    // No modules array = no plan assigned yet (trial with no plan) → allow all
+    if (!modules || modules.length === 0) return true
+    return modules.includes(module)
+  }
+
   const hasPermission = (module: string, action: 'read' | 'write' | 'delete' = 'read'): boolean => {
     if (!user) return false
-    // owner/admin bypass all checks
-    if (user.role === 'owner' || user.role === 'admin') return true
+    // owner bypasses both plan gate and RBAC
+    if (user.role === 'owner') return true
+    // Plan gate — module must be in the subscribed plan
+    if (!isPlanModule(module)) return false
+    // admin bypasses RBAC checks (but not plan gate above)
+    if (user.role === 'admin') return true
     // null means full access (server-side bypass signal)
     if (user.permissions === null) return true
     return user.permissions?.[module]?.[action] ?? false
@@ -337,6 +362,7 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     canRead,
     canWrite,
     canDelete,
+    isPlanModule,
   }
 
   return <SaasAuthContext.Provider value={value}>{children}</SaasAuthContext.Provider>

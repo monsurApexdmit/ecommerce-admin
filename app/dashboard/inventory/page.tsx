@@ -16,6 +16,7 @@ import { StatsCards } from "@/components/ui/stats-card"
 import productApi from "@/lib/productApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 import { toast } from "sonner"
 
@@ -85,7 +86,8 @@ export default function InventoryPage() {
     return items.slice(start, start + itemsPerPage)
   }, [items, currentPage, itemsPerPage])
 
-  if (!canRead('Inventory')) return <AccessDenied />
+  const blocked = useModuleGuard('Inventory')
+  if (blocked) return blocked
 
   const handleSelectRow = (key: string) => {
     const next = new Set(selectedRows)
@@ -342,7 +344,19 @@ export default function InventoryPage() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{item.sku}</td>
-                    <td className="py-3 px-4 text-center font-bold text-gray-900">{item.stock}</td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <span className={`font-bold ${item.reorderPoint && item.stock <= item.reorderPoint ? "text-red-600" : "text-gray-900"}`}>
+                          {item.stock}
+                        </span>
+                        {item.reorderPoint && item.stock <= item.reorderPoint ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                            <AlertTriangle className="w-3 h-3" />
+                            Low
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     {warehouses.map(w => {
                       if (selectedWarehouse !== "all" && selectedWarehouse !== String(w.id)) return null
                       const loc = item.inventory?.find(inv => inv.locationId === w.id)

@@ -239,6 +239,11 @@ export interface CreateProductData {
   images?: File[];
   delete_images?: boolean;
   keep_images?: string[]; // existing image paths to keep e.g. ["products/abc.jpg"]
+  reorder_point?: number;
+  tracking_type?: "none" | "serial" | "batch";
+  is_bundle?: boolean;
+  bundle_price_override?: number;
+  bundle_items?: { productId: number; variantId?: number; quantity: number }[];
 }
 
 export interface UpdateProductData extends Partial<CreateProductData> {}
@@ -287,6 +292,16 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
 
   if (data.keep_images !== undefined) {
     data.keep_images.forEach(path => fd.append('keep_images[]', path));
+  }
+
+  if (data.reorder_point !== undefined) fd.append('reorderPoint', String(data.reorder_point));
+  if ((data as any).tracking_type !== undefined) fd.append('trackingType', (data as any).tracking_type);
+  if (data.is_bundle !== undefined) fd.append('isBundle', data.is_bundle ? '1' : '0');
+  if (data.bundle_price_override !== undefined && data.bundle_price_override !== null) {
+    fd.append('bundlePriceOverride', String(data.bundle_price_override));
+  }
+  if (data.bundle_items !== undefined) {
+    fd.append('bundleItems', JSON.stringify(data.bundle_items));
   }
 
   return fd;

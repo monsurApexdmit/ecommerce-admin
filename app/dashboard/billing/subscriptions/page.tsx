@@ -22,6 +22,7 @@ import {
 import { saasBillingApi, type Subscription, type PaymentRecord } from "@/lib/saasBillingApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { AlertCircle, Loader, Download, RefreshCw, CreditCard, Calendar, Toggle2 } from "lucide-react"
 import { formatPrice } from "@/lib/utils/subscriptionUtils"
@@ -77,7 +78,8 @@ export default function SubscriptionsPage() {
     loadData()
   }, [])
 
-  if (!canRead('Subscriptions')) return <AccessDenied />
+  const blocked = useModuleGuard('Subscriptions')
+  if (blocked) return blocked
 
   const handleRenew = async () => {
     if (!subscription) return

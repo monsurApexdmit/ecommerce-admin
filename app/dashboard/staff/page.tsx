@@ -18,6 +18,9 @@ import staffApi from "@/lib/staffApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
+import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 
 export default function StaffPage() {
   const { canRead } = useSaasAuth()
@@ -37,6 +40,8 @@ export default function StaffPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editFormData, setEditFormData] = useState<Staff | null>(null)
+  const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null)
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
 
   const filteredStaff = staff.filter((member) => {
     const matchesSearch =
@@ -74,9 +79,11 @@ export default function StaffPage() {
     }
 
     fetchStats()
+    saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
   }, [])
 
-  if (!canRead('Staff')) return <AccessDenied />
+  const blocked = useModuleGuard('Staff')
+  if (blocked) return blocked
 
   const handleTogglePublished = async (id: string) => {
     const member = staff.find((s) => s.id === id)
@@ -135,8 +142,21 @@ export default function StaffPage() {
     <div>
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">All Staff</h1>
-        <Button onClick={() => setIsAddDialogOpen(true)} className="bg-emerald-500 hover:bg-emerald-600">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">All Staff</h1>
+          {planLimits && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {planLimits.currentUsers} / {planLimits.maxUsers} users used
+              {!planLimits.canAddUser && (
+                <span className="ml-2 text-amber-600 font-medium">· Limit reached</span>
+              )}
+            </p>
+          )}
+        </div>
+        <Button
+          onClick={() => planLimits && !planLimits.canAddUser ? setIsUpgradeModalOpen(true) : setIsAddDialogOpen(true)}
+          className="bg-emerald-500 hover:bg-emerald-600"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add Staff
         </Button>
@@ -553,6 +573,15 @@ export default function StaffPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <UpgradeRequiredModal
+        open={isUpgradeModalOpen}
+        onOpenChange={setIsUpgradeModalOpen}
+        title="User Limit Reached"
+        description={`Your current plan allows up to ${planLimits?.maxUsers} users. Upgrade to add more staff.`}
+        limitType="users"
+        currentLimit={planLimits?.maxUsers}
+      />
     </div>
   )
 }

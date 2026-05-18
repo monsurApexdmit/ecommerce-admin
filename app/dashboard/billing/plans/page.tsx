@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { saasBillingApi, type Plan, type UpdatePlanPayload } from "@/lib/saasBillingApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
-import { AlertCircle, Loader, Check, Zap, ChevronDown, ChevronUp, Edit, X } from "lucide-react"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { AlertCircle, Loader, Check, Zap, ChevronDown, ChevronUp, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -40,7 +41,7 @@ export default function PlansPage() {
       try {
         setLoading(true)
         const response = await saasBillingApi.getPlans()
-        setPlans(response.data?.plans || [])
+        setPlans(Array.isArray(response.data) ? response.data : [])
 
         try {
           const subResponse = await saasBillingApi.getCurrentSubscription()
@@ -58,7 +59,8 @@ export default function PlansPage() {
     loadPlans()
   }, [])
 
-  if (!canRead('Billing Plans')) return <AccessDenied />
+  const blocked = useModuleGuard('Billing Plans')
+  if (blocked) return blocked
 
   const handleSelectPlan = (plan: Plan) => {
     router.push(`/dashboard/billing/checkout?planId=${plan.id}`)
@@ -73,7 +75,7 @@ export default function PlansPage() {
       maxUsers: plan.maxUsers || undefined,
       maxProducts: plan.maxProducts || undefined,
       maxBranches: plan.maxBranches || undefined,
-      features: plan.features.map(f => typeof f === "string" ? f : f.name || "") as string[],
+      features: plan.features.map(f => typeof f === "string" ? f : (f as any).name || "") as string[],
       isFeatured: plan.isFeatured || false,
     })
     setNewFeature("")
@@ -88,34 +90,22 @@ export default function PlansPage() {
   const handleAddFeature = () => {
     if (!newFeature.trim()) return
     const features = editFormData.features || []
-    setEditFormData({
-      ...editFormData,
-      features: [...features, newFeature.trim()],
-    })
+    setEditFormData({ ...editFormData, features: [...features, newFeature.trim()] })
     setNewFeature("")
   }
 
   const handleRemoveFeature = (index: number) => {
     const features = editFormData.features || []
-    setEditFormData({
-      ...editFormData,
-      features: features.filter((_, i) => i !== index),
-    })
+    setEditFormData({ ...editFormData, features: features.filter((_, i) => i !== index) })
   }
 
   const handleSavePlan = async () => {
     if (!editingPlan) return
-
     setEditLoading(true)
     try {
       const response = await saasBillingApi.updatePlan(editingPlan.id, editFormData)
-
-      // Update plans list
       setPlans(plans.map(p => p.id === editingPlan.id ? response.data : p))
-      toast({
-        title: "Success",
-        description: "Plan updated successfully",
-      })
+      toast({ title: "Success", description: "Plan updated successfully" })
       closeEditDialog()
     } catch (err: any) {
       toast({
@@ -131,11 +121,7 @@ export default function PlansPage() {
   const toggleExpand = (planId: number) => {
     setExpandedPlans(prev => {
       const next = new Set(prev)
-      if (next.has(planId)) {
-        next.delete(planId)
-      } else {
-        next.add(planId)
-      }
+      next.has(planId) ? next.delete(planId) : next.add(planId)
       return next
     })
   }
@@ -216,9 +202,7 @@ export default function PlansPage() {
               return (
                 <div
                   key={plan.id}
-                  className={`relative group transition-all duration-300 ${
-                    isPopular ? "md:scale-105" : ""
-                  }`}
+                  className={`relative group transition-all duration-300 ${isPopular ? "md:scale-105" : ""}`}
                 >
                   {/* Popular Badge */}
                   {isPopular && (
@@ -245,7 +229,6 @@ export default function PlansPage() {
                       {/* Header with Name and Edit Button */}
                       <div className="flex items-start justify-between gap-3 mb-4">
                         <div className="flex-1">
-                          {/* Current Plan Badge */}
                           {isCurrent && (
                             <div className="mb-3">
                               <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">
@@ -253,17 +236,8 @@ export default function PlansPage() {
                               </span>
                             </div>
                           )}
-                          {/* Plan Name */}
                           <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">{plan.name}</h3>
                         </div>
-                        {/* Edit Button */}
-                        <button
-                          onClick={() => openEditDialog(plan)}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-gray-900 flex-shrink-0"
-                          title="Edit plan"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
                       </div>
 
                       {/* Description */}
@@ -303,27 +277,21 @@ export default function PlansPage() {
                         <div className="space-y-3 text-sm">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-lg">👥</div>
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {plan.maxUsers === 999999 || !plan.maxUsers ? "Unlimited" : `Up to ${plan.maxUsers}`} Team Members
-                              </p>
-                            </div>
+                            <p className="font-medium text-gray-900">
+                              {plan.maxUsers === 999999 || !plan.maxUsers ? "Unlimited" : `Up to ${plan.maxUsers}`} Team Members
+                            </p>
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-lg">📦</div>
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {plan.maxProducts === 999999 || !plan.maxProducts ? "Unlimited" : `Up to ${plan.maxProducts?.toLocaleString()}`} Products
-                              </p>
-                            </div>
+                            <p className="font-medium text-gray-900">
+                              {plan.maxProducts === 999999 || !plan.maxProducts ? "Unlimited" : `Up to ${plan.maxProducts?.toLocaleString()}`} Products
+                            </p>
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-lg">🏪</div>
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {plan.maxBranches === 999999 || !plan.maxBranches ? "Unlimited" : `Up to ${plan.maxBranches}`} Branches
-                              </p>
-                            </div>
+                            <p className="font-medium text-gray-900">
+                              {plan.maxBranches === 999999 || !plan.maxBranches ? "Unlimited" : `Up to ${plan.maxBranches}`} Branches
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -333,25 +301,24 @@ export default function PlansPage() {
                         <p className="text-xs font-semibold text-gray-500 uppercase mb-4">Features</p>
                         <ul className="space-y-3">
                           {visibleFeatures.map((feature, index) => {
-                            const featureName = typeof feature === "string" ? feature : (feature.name || "");
+                            const featureName = typeof feature === "string" ? feature : ((feature as any).name || "")
                             return (
                               <li key={`${featureName}-${index}`} className="flex items-start gap-3">
                                 <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                                 <span className="text-sm text-gray-700">{featureName}</span>
                               </li>
-                            );
+                            )
                           })}
                         </ul>
 
-                        {/* Expand/Collapse Button */}
                         {plan.features.length > 5 && (
                           <button
                             onClick={() => toggleExpand(plan.id)}
                             className="mt-4 text-emerald-600 text-sm font-medium flex items-center gap-1 hover:underline"
                           >
                             {isExpanded
-                              ? <><ChevronUp size={14}/> Show less</>
-                              : <><ChevronDown size={14}/> + {plan.features.length - 5} more features</>
+                              ? <><ChevronUp size={14} /> Show less</>
+                              : <><ChevronDown size={14} /> + {plan.features.length - 5} more features</>
                             }
                           </button>
                         )}
@@ -359,7 +326,7 @@ export default function PlansPage() {
                     </div>
                   </Card>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
@@ -383,7 +350,6 @@ export default function PlansPage() {
 
           {editingPlan && (
             <div className="space-y-6 py-4">
-              {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Plan Name</label>
                 <Input
@@ -393,7 +359,6 @@ export default function PlansPage() {
                 />
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <textarea
@@ -405,7 +370,6 @@ export default function PlansPage() {
                 />
               </div>
 
-              {/* Price */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Price ($/month)</label>
                 <Input
@@ -417,7 +381,6 @@ export default function PlansPage() {
                 />
               </div>
 
-              {/* Max Users */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Max Team Members (999999 = Unlimited)</label>
                 <Input
@@ -428,7 +391,6 @@ export default function PlansPage() {
                 />
               </div>
 
-              {/* Max Products */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Max Products (999999 = Unlimited)</label>
                 <Input
@@ -439,7 +401,6 @@ export default function PlansPage() {
                 />
               </div>
 
-              {/* Max Branches */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Max Branches (999999 = Unlimited)</label>
                 <Input
@@ -450,7 +411,6 @@ export default function PlansPage() {
                 />
               </div>
 
-              {/* Is Featured */}
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -464,23 +424,18 @@ export default function PlansPage() {
                 </label>
               </div>
 
-              {/* Features */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">Features</label>
                 <div className="space-y-2 mb-3">
                   {(editFormData.features || []).map((feature, index) => (
                     <div key={index} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md">
                       <span className="text-sm text-gray-700">{feature}</span>
-                      <button
-                        onClick={() => handleRemoveFeature(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
+                      <button onClick={() => handleRemoveFeature(index)} className="text-red-600 hover:text-red-700">
                         <X size={16} />
                       </button>
                     </div>
                   ))}
                 </div>
-
                 <div className="flex gap-2">
                   <Input
                     value={newFeature}
@@ -488,34 +443,14 @@ export default function PlansPage() {
                     onKeyDown={(e) => e.key === "Enter" && handleAddFeature()}
                     placeholder="Add new feature..."
                   />
-                  <Button
-                    onClick={handleAddFeature}
-                    variant="outline"
-                    className="whitespace-nowrap"
-                  >
-                    Add
-                  </Button>
+                  <Button onClick={handleAddFeature} variant="outline" className="whitespace-nowrap">Add</Button>
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-3 justify-end pt-4 border-t">
-                <Button variant="outline" onClick={closeEditDialog} disabled={editLoading}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSavePlan}
-                  disabled={editLoading}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {editLoading ? (
-                    <>
-                      <Loader className="w-4 h-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Changes"
-                  )}
+                <Button variant="outline" onClick={closeEditDialog} disabled={editLoading}>Cancel</Button>
+                <Button onClick={handleSavePlan} disabled={editLoading} className="bg-emerald-600 hover:bg-emerald-700">
+                  {editLoading ? <><Loader className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Save Changes"}
                 </Button>
               </div>
             </div>

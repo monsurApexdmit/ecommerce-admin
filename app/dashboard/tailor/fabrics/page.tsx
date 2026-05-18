@@ -16,6 +16,7 @@ import { vendorApi, VendorResponse } from "@/lib/vendorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { toast } from "sonner"
 
 const EMPTY: Partial<TailorFabric> = {
@@ -37,7 +38,7 @@ export default function TailorFabricsPage() {
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
 
-  if (!canRead("TailorFabric")) return <AccessDenied />
+  if (!canRead("TailorFabrics")) return <AccessDenied />
 
   const load = () => {
     setLoading(true)
@@ -100,7 +101,7 @@ export default function TailorFabricsPage() {
           <h1 className="text-2xl font-black text-gray-900">Fabric Inventory</h1>
           <p className="text-sm text-gray-500">{fabrics.length} fabrics</p>
         </div>
-        {canWrite("TailorFabric") && (
+        {canWrite("TailorFabrics") && (
           <Button className="bg-purple-600 hover:bg-purple-700 gap-2" onClick={openNew}>
             <Plus className="w-4 h-4" /> Add Fabric
           </Button>
@@ -183,12 +184,12 @@ export default function TailorFabricsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      {canWrite("TailorFabric") && (
+                      {canWrite("TailorFabrics") && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(f)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
                       )}
-                      {canDelete("TailorFabric") && (
+                      {canDelete("TailorFabrics") && (
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => setDeleteId(f.id)}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>

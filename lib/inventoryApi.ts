@@ -58,6 +58,7 @@ export interface InventoryItem {
   sku: string;
   barcode?: string;
   stock: number;
+  reorderPoint?: number;
   inventory: InventoryLocation[];
 }
 

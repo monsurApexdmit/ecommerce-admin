@@ -47,6 +47,19 @@ export interface Product {
         warehouseId: string
         quantity: number
     }[]
+    reorderPoint?: number
+    trackingType?: "none" | "serial" | "batch"
+    isBundle?: boolean
+    bundlePriceOverride?: number
+    bundleItems?: {
+        id?: number
+        productId: number
+        productName?: string
+        productSku?: string
+        variantId?: number
+        variantName?: string
+        quantity: number
+    }[]
 }
 
 export interface Variant {
@@ -242,6 +255,15 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                     attributes: v.attributes,
                 })),
                 images: product.images,
+                reorder_point: (product as any).reorderPoint,
+                tracking_type: (product as any).trackingType,
+                is_bundle: (product as any).isBundle,
+                bundle_price_override: (product as any).bundlePriceOverride,
+                bundle_items: (product as any).bundleItems?.map((bi: any) => ({
+                    productId: bi.productId,
+                    variantId: bi.variantId,
+                    quantity: bi.quantity,
+                })),
             })
             await refreshProducts()
         } catch (err: any) {
@@ -296,6 +318,15 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 images: product.images,
                 delete_images: product.delete_images,
                 keep_images: product.keep_images,
+                reorder_point: (product as any).reorderPoint,
+                tracking_type: (product as any).trackingType,
+                is_bundle: (product as any).isBundle,
+                bundle_price_override: (product as any).bundlePriceOverride,
+                bundle_items: (product as any).bundleItems?.map((bi: any) => ({
+                    productId: bi.productId,
+                    variantId: bi.variantId,
+                    quantity: bi.quantity,
+                })),
             })
             await refreshProducts()
         } catch (err: any) {

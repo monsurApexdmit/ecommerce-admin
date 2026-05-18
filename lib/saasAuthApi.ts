@@ -120,6 +120,7 @@ export interface Company {
   planId?: number;
   planName?: string;
   planFeatures?: string[];
+  planModules?: string[];
   maxUsers?: number;
   maxProducts?: number;
   maxBranches?: number;
@@ -270,11 +271,11 @@ export const saasAuthApi = {
   },
 
   /**
-   * GET /auth/verify-email/:token
+   * POST /auth/verify-email
    * Verify email with token
    */
   verifyEmail: async (token: string) => {
-    const response = await api.get(`/auth/verify-email/${token}`);
+    const response = await api.post('/auth/verify-email', { token });
     return response.data;
   },
 

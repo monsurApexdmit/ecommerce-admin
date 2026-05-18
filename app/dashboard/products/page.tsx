@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Edit2, Trash2, Eye, FilePen, Loader2, MessageSquare } from "lucide-react"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,7 @@ import { useVendor } from "@/contexts/vendor-context"
 import { useCategory } from "@/contexts/category-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -25,6 +26,7 @@ import { ListPage, type Column, type FilterOption, type SortOption, type BulkAct
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
 
 export default function ProductsPage() {
   const router = useRouter()
@@ -47,10 +49,16 @@ export default function ProductsPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
   const [bulkStatusLoading, setBulkStatusLoading] = useState(false)
+  const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null)
 
   const allCategories = useMemo(() => getAllCategoriesFlat(), [categories])
 
-  if (!canRead('Products')) return <AccessDenied />
+  useEffect(() => {
+    saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
+  }, [])
+
+  const blocked = useModuleGuard('Products')
+  if (blocked) return blocked
 
   const matchesSelectedWarehouse = (product: Product, warehouseId: string) => {
     if (warehouseId === "all") return true
@@ -386,6 +394,7 @@ export default function ProductsPage() {
     <>
       <ListPage
         title="Products"
+        description={planLimits ? `${planLimits.currentProducts} / ${planLimits.maxProducts} products used` : undefined}
         data={filteredAndSortedProducts}
         columns={columns}
         isLoading={isLoading}
@@ -399,7 +408,8 @@ export default function ProductsPage() {
         onFilterChange={() => setCurrentPage(1)}
         actions={actions}
         onAddClick={canWrite('Products') ? () => {
-          if (company?.maxProducts && products.length >= company.maxProducts) {
+          const atLimit = planLimits ? !planLimits.canAddProduct : (company?.maxProducts ? products.length >= company.maxProducts : false)
+          if (atLimit) {
             setIsUpgradeModalOpen(true)
           } else {
             setIsAddDialogOpen(true)

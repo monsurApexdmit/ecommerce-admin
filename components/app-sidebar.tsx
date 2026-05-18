@@ -86,14 +86,22 @@ const NAV_CONFIG = [
             { name: "Shipments",  href: "/dashboard/orders/shipments", module: "Shipments" },
         ],
     },
-    { name: "Vendors", href: "/dashboard/vendors", icon: Truck, module: "Vendors" },
+    {
+        name: "Vendors",
+        icon: Truck,
+        items: [
+            { name: "All Vendors",      href: "/dashboard/vendors",                  module: "Vendors" },
+            { name: "Purchase Orders",  href: "/dashboard/vendors/purchase-orders",  module: "Vendors" },
+        ],
+    },
     { name: "POS",     href: "/dashboard/pos",     icon: CreditCard, module: "POS" },
     {
         name: "Inventory",
         icon: Package,
         items: [
-            { name: "Stock Overview", href: "/dashboard/inventory",         module: "Inventory" },
-            { name: "Transfers",      href: "/dashboard/inventory/transfer", module: "Transfers" },
+            { name: "Stock Overview", href: "/dashboard/inventory",                module: "Inventory" },
+            { name: "Transfers",      href: "/dashboard/inventory/transfer",      module: "Transfers" },
+            { name: "Serial & Batch", href: "/dashboard/inventory/serial-batch",  module: "Inventory" },
         ],
     },
     {
@@ -119,7 +127,6 @@ const NAV_CONFIG = [
         items: [
             { name: "Store Settings",     href: "/dashboard/settings",                  module: "Settings" },
             { name: "Aura Shop",          href: "/dashboard/settings/aura-shop",        module: "Aura Shop" },
-            { name: "Company Profile",    href: "/dashboard/company/profile",           module: "Company Profile" },
             { name: "Company Settings",   href: "/dashboard/company/settings",          module: "Company Settings" },
             { name: "Billing Contact",    href: "/dashboard/company/billing-contact",   module: "Billing Contact" },
             { name: "Team Members",       href: "/dashboard/team/users",                module: "Team Members" },

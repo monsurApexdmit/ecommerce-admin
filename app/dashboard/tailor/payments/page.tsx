@@ -17,6 +17,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { saasCompanyApi, CompanyProfile } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { toast } from "sonner"
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "Mobile Banking", "Card"]

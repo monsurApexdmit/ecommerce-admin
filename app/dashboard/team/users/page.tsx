@@ -11,6 +11,7 @@ import {
 import { staffRoleApi, type StaffRoleResponse } from "@/lib/staffApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import {
   AlertCircle,
   Loader,
@@ -68,7 +69,8 @@ export default function TeamUsersPage() {
     loadData()
   }, [])
 
-  if (!canRead('Team Members')) return <AccessDenied />
+  const blocked = useModuleGuard('Team Members')
+  if (blocked) return blocked
 
   const handleInvite = async () => {
     if (!inviteForm.email || !inviteForm.fullName || !inviteForm.roleId) {
@@ -91,14 +93,23 @@ export default function TeamUsersPage() {
       setInviteForm({ email: "", fullName: "", roleId: 0 })
       setIsInviteModalOpen(false)
 
-      // Reload users
-      const response = await saasCompanyApi.getTeamUsers()
+      // Reload users and limits
+      const [response] = await Promise.all([
+        saasCompanyApi.getTeamUsers(),
+      ])
       setUsers(response.data.users)
+      setMaxUsers(response.data.maxUsers)
       setCanAddMore(response.data.canAddMore)
 
       setTimeout(() => setSuccessMessage(""), 3000)
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to send invitation")
+      const msg = err.response?.data?.error || err.response?.data?.message || "Failed to send invitation"
+      setError(msg)
+      // If limit error, close invite modal and show upgrade prompt
+      if (err.response?.status === 422) {
+        setIsInviteModalOpen(false)
+        setIsUpgradeModalOpen(true)
+      }
     } finally {
       setInviting(false)
     }
