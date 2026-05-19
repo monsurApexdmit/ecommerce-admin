@@ -1,10 +1,9 @@
 {
   "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
-  "/dashboard/billing/plans/page": "app/dashboard/billing/plans/page.js",
-  "/dashboard/tailor/orders/page": "app/dashboard/tailor/orders/page.js",
-  "/dashboard/tailor/payments/page": "app/dashboard/tailor/payments/page.js",
-  "/dashboard/payment-methods/page": "app/dashboard/payment-methods/page.js",
-  "/dashboard/shipping-methods/page": "app/dashboard/shipping-methods/page.js",
-  "/dashboard/store/page": "app/dashboard/store/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js"
+  "/page": "app/page.js",
+  "/dashboard/billing/subscriptions/page": "app/dashboard/billing/subscriptions/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/products/page": "app/dashboard/products/page.js",
+  "/auth/login/page": "app/auth/login/page.js"
 }
