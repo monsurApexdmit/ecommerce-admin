@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2, CreditCard } from "lucide-react"
+import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2, CreditCard, Copy, Check, ExternalLink } from "lucide-react"
 import { settingsApi, type StoreHours, type SSLCommerzConfig, type PortWalletConfig, type StripeConfig, type PayPalConfig, type BkashConfig, type NagadConfig, type CodShippingDepositConfig } from "@/lib/settingsApi"
 import { toast } from "sonner"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -68,7 +68,8 @@ const mergeStoreHours = (storeHours: StoreHours = {}) => {
 }
 
 export default function SettingsPage() {
-  const { canRead } = useSaasAuth()
+  const { canRead, company } = useSaasAuth()
+  const [copiedEnv, setCopiedEnv] = useState(false)
   // Loading state
   const [isLoading, setIsLoading] = useState(true)
   const [savingSection, setSavingSection] = useState<SavingSection>(null)
@@ -1228,6 +1229,57 @@ export default function SettingsPage() {
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
             ) : "Save Gateway Credentials"}
           </Button>
+        </div>
+      </Card>
+
+      {/* Aura Shop Integration */}
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <ExternalLink className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Aura Shop Integration</h2>
+            <p className="text-sm text-gray-500">Connect your storefront to this company</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Your Company ID</p>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-gray-900 font-mono">{company?.id ?? "—"}</span>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-600 mb-2">
+              Paste this into your Aura Shop <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">.env</code> file:
+            </p>
+            <div className="relative">
+              <pre className="bg-gray-900 text-emerald-400 text-sm rounded-lg p-4 font-mono overflow-x-auto pr-12">
+{`VITE_API_BASE_URL=http://localhost:8005/api
+VITE_COMPANY_ID=${company?.id ?? "YOUR_COMPANY_ID"}`}
+              </pre>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`VITE_API_BASE_URL=http://localhost:8005/api\nVITE_COMPANY_ID=${company?.id ?? ""}`)
+                  setCopiedEnv(true)
+                  setTimeout(() => setCopiedEnv(false), 2000)
+                }}
+                className="absolute top-3 right-3 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                title="Copy to clipboard"
+              >
+                {copiedEnv ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+            <p className="text-xs text-blue-700">
+              <strong>Local setup:</strong> Set <code className="font-mono">VITE_COMPANY_ID</code> in aura-shop <code className="font-mono">.env</code> to this value. The store will scope all products, orders and customers to this company automatically.
+            </p>
+          </div>
         </div>
       </Card>
 

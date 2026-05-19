@@ -64,6 +64,7 @@ export interface SellItem {
   totalPrice?: number;
   createdAt?: string;
   updatedAt?: string;
+  bundleItems?: { productId: number; productName: string; qtyPerBundle: number; totalQty: number }[] | null;
 }
 
 export interface SellShipment {

@@ -14,6 +14,7 @@ export interface Company {
   status: "trial" | "active" | "expired" | "suspended";
   trialDaysRemaining?: number;
   licenseType?: "trial" | "paid";
+  planModules?: string[];
 }
 
 export interface User {

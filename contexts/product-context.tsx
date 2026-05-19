@@ -11,8 +11,8 @@ export interface Product {
     categoryId?: string     // backend id
     price: number
     salePrice: number
-    offerPrice?: number
-    offerType?: string
+    offerPrice?: number | null
+    offerType?: string | null
     costPrice?: number
     profitMargin?: number
     marginType?: string
@@ -68,8 +68,8 @@ export interface Variant {
     attributes: { [key: string]: string }
     price: number
     salePrice: number
-    offerPrice?: number
-    offerType?: string
+    offerPrice?: number | null
+    offerType?: string | null
     costPrice?: number
     profitMargin?: number
     marginType?: string
@@ -184,6 +184,19 @@ function convertToProduct(p: ProductResponse): Product {
             warehouseId: String(i.warehouse_id),
             quantity: i.quantity,
         })) || [],
+        reorderPoint: (p as any).reorderPoint ?? (p as any).reorder_point ?? undefined,
+        trackingType: (p as any).trackingType ?? (p as any).tracking_type ?? "none",
+        isBundle: (p as any).isBundle ?? (p as any).is_bundle ?? false,
+        bundlePriceOverride: (p as any).bundlePriceOverride ?? (p as any).bundle_price_override ?? undefined,
+        bundleItems: ((p as any).bundleItems ?? []).map((bi: any) => ({
+            id: bi.id,
+            productId: bi.productId,
+            productName: bi.productName || "",
+            productSku: bi.productSku || "",
+            variantId: bi.variantId,
+            variantName: bi.variantName,
+            quantity: bi.quantity || 1,
+        })),
     }
 }
 

@@ -27,6 +27,7 @@ import { useCategory } from "@/contexts/category-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useAttribute } from "@/contexts/attribute-context"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
 
 interface ProductFormDialogProps {
   open: boolean
@@ -62,6 +63,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const { categories, getAllCategoriesFlat, refreshCategories } = useCategory()
   const { attributes: globalAttributes, isLoading: attributesLoading } = useAttribute()
   const { toast } = useToast()
+  const { isPlanModule } = useSaasAuth()
   const [barcodeCopied, setBarcodeCopied] = useState(false)
 
   const randomAlphaNumeric = useCallback((len: number) => {
@@ -387,8 +389,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         locationId: formData.locationId || editingProduct.locationId || String(warehouses[0]?.id || ""),
         price: Number.parseFloat(formData.price),
         salePrice: Number.parseFloat(formData.salePrice),
-        offerPrice: formData.offerPrice ? Number.parseFloat(formData.offerPrice) : undefined,
-        offerType: formData.offerPrice ? formData.offerType : undefined,
+        offerPrice: formData.offerPrice && Number.parseFloat(formData.offerPrice) > 0 ? Number.parseFloat(formData.offerPrice) : null,
+        offerType: formData.offerPrice && Number.parseFloat(formData.offerPrice) > 0 ? formData.offerType : null,
         costPrice: formData.costPrice ? Number.parseFloat(formData.costPrice) : undefined,
         profitMargin: formData.profitMargin ? Number.parseFloat(formData.profitMargin) : undefined,
         marginType: formData.marginType || "percentage",
@@ -680,6 +682,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               </Select>
             </div>
 
+            {isPlanModule("Vendors") && (
             <div className="space-y-2">
               <Label htmlFor="vendor">Vendor</Label>
               <Select
@@ -698,6 +701,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                 </SelectContent>
               </Select>
             </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="price">Product Price</Label>

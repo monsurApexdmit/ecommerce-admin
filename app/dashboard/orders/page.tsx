@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -226,14 +226,25 @@ export default function OrdersPage() {
          ${order.shippingPhone ? `<p style="font-size:13px;color:#6b7280;">${order.shippingPhone}</p>` : ""}`
 
     const itemsHtml = order.items?.length
-      ? order.items.map((item, i) => `
+      ? order.items.map((item, i) => {
+          const bundleRows = item.bundleItems?.length
+            ? item.bundleItems.map(bi => `
+              <tr style="background:#f9fafb;">
+                <td></td>
+                <td style="padding-left:32px;font-size:12px;color:#6b7280;">↳ ${bi.productName}</td>
+                <td style="text-align:center;font-size:12px;color:#6b7280;">${bi.totalQty}</td>
+                <td style="text-align:right;font-size:12px;color:#9ca3af;">${bi.qtyPerBundle}×${item.quantity}</td>
+                <td></td>
+              </tr>`).join("") : ""
+          return `
           <tr>
             <td>${i + 1}</td>
-            <td>${item.productName}</td>
+            <td>${item.productName}${item.bundleItems?.length ? ' <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-weight:600;">Bundle</span>' : ''}</td>
             <td style="text-align:center;">${item.quantity}</td>
             <td style="text-align:right;">${formatCurrency(itemPrice(item))}</td>
             <td class="amount-red">${formatCurrency(itemTotal(item))}</td>
-          </tr>`).join("")
+          </tr>${bundleRows}`
+        }).join("")
       : `<tr>
            <td>1</td>
            <td>${order.customerName}</td>
@@ -636,13 +647,29 @@ export default function OrdersPage() {
                   <tbody>
                     {selectedOrder.items?.length ? (
                       selectedOrder.items.map((item, i) => (
-                        <tr key={item.id ?? i} className="border-t">
-                          <td className="py-5 px-4 text-sm text-gray-900">{i + 1}</td>
-                          <td className="py-5 px-4 text-sm text-gray-900">{item.productName}</td>
-                          <td className="py-5 px-4 text-sm text-center text-gray-900">{item.quantity}</td>
-                          <td className="py-5 px-4 text-sm text-right text-gray-900">{formatCurrency(itemPrice(item))}</td>
-                          <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">{formatCurrency(itemTotal(item))}</td>
-                        </tr>
+                        <React.Fragment key={item.id ?? i}>
+                          <tr className="border-t">
+                            <td className="py-5 px-4 text-sm text-gray-900">{i + 1}</td>
+                            <td className="py-5 px-4 text-sm text-gray-900">
+                              {item.productName}
+                              {item.bundleItems && item.bundleItems.length > 0 && (
+                                <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-medium">Bundle</span>
+                              )}
+                            </td>
+                            <td className="py-5 px-4 text-sm text-center text-gray-900">{item.quantity}</td>
+                            <td className="py-5 px-4 text-sm text-right text-gray-900">{formatCurrency(itemPrice(item))}</td>
+                            <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">{formatCurrency(itemTotal(item))}</td>
+                          </tr>
+                          {item.bundleItems && item.bundleItems.length > 0 && item.bundleItems.map((bi, j) => (
+                            <tr key={`${item.id}-bi-${j}`} className="bg-gray-50">
+                              <td className="py-2 px-4"></td>
+                              <td className="py-2 px-4 text-xs text-gray-500 pl-8">↳ {bi.productName}</td>
+                              <td className="py-2 px-4 text-xs text-center text-gray-500">{bi.totalQty}</td>
+                              <td className="py-2 px-4 text-xs text-right text-gray-400">{bi.qtyPerBundle}×{item.quantity}</td>
+                              <td className="py-2 px-4"></td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
                       ))
                     ) : (
                       <tr className="border-t">

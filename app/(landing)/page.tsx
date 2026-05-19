@@ -56,20 +56,20 @@ function Navbar() {
             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-gray-900 text-lg">StockFlow</span>
+            <span className={`font-bold text-lg ${scrolled ? "text-gray-900" : "text-white"}`}>StockFlow</span>
           </div>
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">Features</a>
-            <a href="#modules" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">Modules</a>
-            <a href="#pricing" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">Pricing</a>
-            <a href="#testimonials" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">Reviews</a>
+            <a href="#features" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Features</a>
+            <a href="#modules" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Modules</a>
+            <a href="#pricing" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Pricing</a>
+            <a href="#testimonials" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Reviews</a>
           </div>
 
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/auth/login" className="text-sm text-gray-600 hover:text-gray-900 font-medium">Sign In</Link>
+            <Link href="/auth/login" className={`text-sm font-medium transition-colors ${scrolled ? "text-gray-600 hover:text-gray-900" : "text-white/80 hover:text-white"}`}>Sign In</Link>
             <Link
               href="/auth/signup"
               className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
@@ -80,7 +80,7 @@ function Navbar() {
 
           {/* Mobile menu */}
           <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
-            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {open ? <X className={`w-5 h-5 ${scrolled ? "text-gray-900" : "text-white"}`} /> : <Menu className={`w-5 h-5 ${scrolled ? "text-gray-900" : "text-white"}`} />}
           </button>
         </div>
       </div>

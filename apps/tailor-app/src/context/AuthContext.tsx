@@ -17,6 +17,7 @@ type AuthContextValue = {
   canRead: (module: string) => boolean;
   canWrite: (module: string) => boolean;
   canDelete: (module: string) => boolean;
+  isPlanModule: (module: string) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -77,8 +78,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const isPlanModule = (module: string): boolean => {
+    const modules = company?.planModules;
+    if (!modules || modules.length === 0) return true;
+    return modules.includes(module);
+  };
+
   const hasPermission = (module: string, action: "read" | "write" | "delete" = "read") => {
     if (!user) return false;
+    if (user.role === "owner") return true;
+    if (!isPlanModule(module)) return false;
+    if (user.role === "admin") return true;
     if (user.permissions === null) return true;
     return user.permissions?.[module]?.[action] ?? false;
   };
@@ -90,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     canRead: (m) => hasPermission(m, "read"),
     canWrite: (m) => hasPermission(m, "write"),
     canDelete: (m) => hasPermission(m, "delete"),
+    isPlanModule,
   }), [bootstrapped, loading, session, user, company]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

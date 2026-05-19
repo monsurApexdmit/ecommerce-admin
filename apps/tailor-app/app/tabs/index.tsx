@@ -80,7 +80,7 @@ export default function TailorTab() {
     load();
   }, [load]);
 
-  if (!canRead("TailorShop")) return <AccessDenied />;
+  if (!canRead("TailorDashboard")) return <AccessDenied />;
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>

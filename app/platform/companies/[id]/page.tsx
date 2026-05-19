@@ -33,6 +33,8 @@ export default function CompanyDetailPage() {
   const [cancelling, setCancelling] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [actionMsg, setActionMsg] = useState("")
+  const [subdomain, setSubdomain] = useState("")
+  const [savingSubdomain, setSavingSubdomain] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -40,6 +42,7 @@ export default function CompanyDetailPage() {
       platformApi.listPlans(),
     ]).then(([c, p]) => {
       setCompany(c)
+      setSubdomain(c.subdomain ?? "")
       setPlans(p)
     }).catch(() => setError("Failed to load company"))
       .finally(() => setLoading(false))
@@ -76,6 +79,19 @@ export default function CompanyDetailPage() {
       flash("Failed to cancel subscription.")
     } finally {
       setCancelling(false)
+    }
+  }
+
+  const handleSaveSubdomain = async () => {
+    setSavingSubdomain(true)
+    try {
+      const updated = await platformApi.updateCompany(companyId, { subdomain: subdomain.trim() || undefined })
+      setCompany(prev => prev ? { ...prev, subdomain: updated.subdomain } : prev)
+      flash("Store subdomain saved.")
+    } catch {
+      flash("Failed to save subdomain.")
+    } finally {
+      setSavingSubdomain(false)
     }
   }
 
@@ -149,6 +165,37 @@ export default function CompanyDetailPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Store subdomain */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h2 className="font-semibold text-gray-900 mb-1">Aura Store Subdomain</h2>
+            <p className="text-xs text-gray-400 mb-4">Used to route <code className="bg-gray-100 px-1 rounded">subdomain.yourstore.com</code> to this company's store.</p>
+            <div className="flex gap-2 items-center">
+              <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden flex-1">
+                <input
+                  type="text"
+                  value={subdomain}
+                  onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="e.g. acme"
+                  className="flex-1 px-3 py-2 text-sm outline-none bg-white"
+                />
+                <span className="px-3 py-2 bg-gray-50 text-gray-400 text-xs border-l border-gray-200">.localhost:8080</span>
+              </div>
+              <button
+                onClick={handleSaveSubdomain}
+                disabled={savingSubdomain}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+              >
+                {savingSubdomain ? "Saving…" : "Save"}
+              </button>
+            </div>
+            {company.subdomain && (
+              <p className="mt-2 text-xs text-gray-500">
+                Current: <code className="bg-gray-100 px-1 rounded text-emerald-700">{company.subdomain}.localhost:8080</code>
+                {" — add "}<code className="bg-gray-100 px-1 rounded">127.0.0.1 {company.subdomain}.localhost</code>{" to /etc/hosts"}
+              </p>
+            )}
           </div>
 
           {/* Users table */}

@@ -220,6 +220,9 @@ export default function PosPage() {
         const existingInCart = cart.find(item => item.id === cartItemId)
         if (availableStock <= 0) { toast.error("Not enough stock!"); return }
         const getDisplayPrice = (p: typeof product, v?: typeof variant) => {
+            if ((p as any).isBundle && (p as any).bundlePriceOverride) {
+                return (p as any).bundlePriceOverride
+            }
             if (v) {
                 const base = v.salePrice || v.price
                 const offerPrice = v.offerPrice ?? p.offerPrice

@@ -110,8 +110,8 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => {
     purchaseOrderApi.getStats().then(r => setStats(r.data?.data ?? {})).catch(() => {})
-    vendorApi.getAll({ per_page: 200 }).then(r => setVendors(r.data?.data?.data ?? [])).catch(() => {})
-    productApi.getAll({ per_page: 500 }).then(r => setProducts(r.data?.data?.data ?? [])).catch(() => {})
+    vendorApi.getAll({ per_page: 200 }).then(r => setVendors(r.data ?? [])).catch(() => {})
+    productApi.getAll({ limit: 500 }).then(r => setProducts(r.data ?? [])).catch(() => {})
   }, [])
 
   const resetCreate = () => {

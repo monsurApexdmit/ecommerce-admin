@@ -57,6 +57,7 @@ export interface PlatformCompany {
   phone: string | null
   country: string | null
   status: string
+  subdomain: string | null
   usersCount: number
   createdAt: string
   subscription: PlatformSubscription | null
@@ -107,6 +108,11 @@ export const platformApi = {
 
   updateCompanyStatus: async (id: number, status: string): Promise<void> => {
     await api.patch(`/platform/companies/${id}/status`, { status })
+  },
+
+  updateCompany: async (id: number, data: { subdomain?: string }): Promise<PlatformCompany> => {
+    const r = await api.patch(`/platform/companies/${id}`, data)
+    return r.data.data
   },
 
   listCompanyUsers: async (id: number): Promise<PlatformUser[]> => {
