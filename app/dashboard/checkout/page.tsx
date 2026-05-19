@@ -19,6 +19,7 @@ import Link from "next/link"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import {
   Dialog,
   DialogContent,
@@ -72,7 +73,8 @@ export default function CheckoutPage() {
     }
   }, [selectedCustomerId, useDefaultAddress, customers, getAddressesByCustomer, getDefaultAddress])
 
-  if (!canRead('Checkout')) return <AccessDenied />
+  const blocked = useModuleGuard('Checkout')
+  if (blocked) return blocked
 
   const subtotal = getCartTotal()
   const total = subtotal + shippingCost - discount

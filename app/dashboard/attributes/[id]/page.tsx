@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 interface AttributeValue {
   id: string
@@ -59,7 +60,8 @@ export default function AttributeValuesPage() {
     status: true,
   })
 
-  if (!canRead('Attributes')) return <AccessDenied />
+  const blocked = useModuleGuard('Attributes')
+  if (blocked) return blocked
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

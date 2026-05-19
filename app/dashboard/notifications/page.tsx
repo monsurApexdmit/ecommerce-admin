@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { useNotifications } from "@/contexts/notification-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import type { NotificationType, NotificationPriority } from "@/lib/notificationApi"
 
 function getRelativeTime(dateStr: string): string {
@@ -81,7 +82,8 @@ export default function NotificationsPage() {
 
   const { currentItems, currentPage, totalPages, itemsPerPage, setCurrentPage, handleItemsPerPageChange } = usePagination(filtered, 10)
 
-  if (!canRead('Notifications')) return <AccessDenied />
+  const blocked = useModuleGuard('Notifications')
+  if (blocked) return blocked
 
   const handleSelectAll = () => {
     if (selectedIds.length === currentItems.length && currentItems.length > 0) setSelectedIds([])

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useStaff } from "@/contexts/staff-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DollarSign, CreditCard, Clock, CheckCircle2, Trash2 } from "lucide-react"
@@ -21,7 +22,8 @@ export default function SalaryManagementPage() {
         return `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
     })
 
-    if (!canRead('Salary Management')) return <AccessDenied />
+    const blocked = useModuleGuard('Salary Management')
+  if (blocked) return blocked
 
     // Generate month options (last 12 months)
     const monthOptions = Array.from({ length: 12 }, (_, i) => {

@@ -18,6 +18,7 @@ import { useAttribute, type Attribute } from "@/contexts/attribute-context"
 import { useToast } from "@/hooks/use-toast"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 export default function AttributesPage() {
   const { canRead } = useSaasAuth()
@@ -75,7 +76,8 @@ export default function AttributesPage() {
     }
   }, [contextLoading])
 
-  if (!canRead('Attributes')) return <AccessDenied />
+  const blocked = useModuleGuard('Attributes')
+  if (blocked) return blocked
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

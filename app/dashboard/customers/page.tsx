@@ -71,6 +71,7 @@ import customerApi from "@/lib/customerApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const emptyAddrForm = {
   fullName: "", phone: "", addressLine1: "", addressLine2: "",
@@ -347,7 +348,8 @@ export default function CustomersPage() {
     fetchStats()
   }, [])
 
-  if (!canRead('Customers')) return <AccessDenied />
+  const blocked = useModuleGuard('Customers')
+  if (blocked) return blocked
 
   // Filter Logic
   const filteredCustomers = customers

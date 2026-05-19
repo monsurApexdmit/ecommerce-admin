@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 interface Sell {
     invoiceNo: string
@@ -186,7 +187,8 @@ export default function SellsPage() {
         handleItemsPerPageChange,
     } = usePagination(filteredSells, 10)
 
-    if (!canRead('Sells')) return <AccessDenied />
+    const blocked = useModuleGuard('Sells')
+  if (blocked) return blocked
 
     const handleFilterChange = () => {
         setCurrentPage(1)

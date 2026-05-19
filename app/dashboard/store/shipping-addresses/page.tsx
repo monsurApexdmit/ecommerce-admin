@@ -25,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useShippingAddress, ShippingAddress } from "@/contexts/shipping-address-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Search, Plus, Trash2, Edit, MapPin, Star, Home, Briefcase, MoreVertical } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePagination } from "@/hooks/use-pagination"
@@ -99,7 +100,8 @@ export default function ShippingAddressesPage() {
     handleItemsPerPageChange,
   } = usePagination(filteredAddresses, 10)
 
-  if (!canRead('Shipping Addresses')) return <AccessDenied />
+  const blocked = useModuleGuard('Shipping Addresses')
+  if (blocked) return blocked
 
   const handleSelectAll = () => {
     if (selectedAddressIds.length === currentItems.length) {

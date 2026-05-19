@@ -10,6 +10,7 @@ import wishlistApi, { type WishlistAnalytics } from "@/lib/wishlistApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 function TrendBar({ count, max }: { count: number; max: number }) {
   const pct = max > 0 ? Math.round((count / max) * 100) : 0
@@ -50,7 +51,8 @@ export default function WishlistAnalyticsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (!canRead('Store Wishlist')) return <AccessDenied />
+  const blocked = useModuleGuard('Store Wishlist')
+  if (blocked) return blocked
 
   const maxProductCount = data?.topProducts[0]?.wishlistCount ?? 1
   const maxCustomerCount = data?.topCustomers[0]?.wishlistCount ?? 1

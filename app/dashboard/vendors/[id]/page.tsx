@@ -14,6 +14,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 export default function VendorDetailsPage() {
   const { canRead } = useSaasAuth()
@@ -41,7 +42,8 @@ export default function VendorDetailsPage() {
     amountPayable: 0,
   })
 
-  if (!canRead('Vendors')) return <AccessDenied />
+  const blocked = useModuleGuard('Vendors')
+  if (blocked) return blocked
 
   if (!vendor) {
     return (

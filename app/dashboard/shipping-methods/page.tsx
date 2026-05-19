@@ -40,6 +40,7 @@ import {
 import shippingMethodApi, { type ShippingMethod, type ShippingMethodPayload } from "@/lib/shippingMethodApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const ICON_OPTIONS = [
   { value: "package",  label: "Package",  Icon: Package },
@@ -91,7 +92,8 @@ export default function ShippingMethodsPage() {
 
   useEffect(() => { load() }, [])
 
-  if (!canRead('Shipping Methods')) return <AccessDenied />
+  const blocked = useModuleGuard('Shipping Methods')
+  if (blocked) return blocked
 
   const openAdd = () => {
     setEditing(null)

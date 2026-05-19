@@ -12,6 +12,7 @@ import { settingsApi, type StoreHours, type SSLCommerzConfig, type PortWalletCon
 import { toast } from "sonner"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 type SavingSection = "general" | "business" | "notifications" | "storeHours" | "logo" | "banner" | "gateways" | null
 
@@ -137,7 +138,8 @@ export default function SettingsPage() {
     loadSettings()
   }, [])
 
-  if (!canRead('Settings')) return <AccessDenied />
+  const blocked = useModuleGuard('Settings')
+  if (blocked) return blocked
 
   const loadSettings = async () => {
     try {

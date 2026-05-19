@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { saasCompanyApi, type CompanyProfile, type CompanySettings } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { AlertCircle, Loader, Save, Building2, Globe, DollarSign, Clock } from "lucide-react"
 
 export default function CompanySettingsPage() {
@@ -104,7 +105,8 @@ export default function CompanySettingsPage() {
     loadData()
   }, [])
 
-  if (!canRead('Company Settings')) return <AccessDenied />
+  const blocked = useModuleGuard('Company Settings')
+  if (blocked) return blocked
 
   const handleProfileChange = (field: string, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }))

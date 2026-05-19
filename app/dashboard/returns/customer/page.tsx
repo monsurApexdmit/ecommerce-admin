@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
 
@@ -144,7 +145,8 @@ export default function CustomerReturnsPage() {
     fetchData()
   }, [fetchData])
 
-  if (!canRead('Customer Returns')) return <AccessDenied />
+  const blocked = useModuleGuard('Customer Returns')
+  if (blocked) return blocked
 
   const handleViewDetails = async (ret: CustomerReturnResponse) => {
     try {

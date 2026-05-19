@@ -12,6 +12,7 @@ import { settingsApi, type AuraShopHeroSlide } from "@/lib/settingsApi"
 import { toast } from "sonner"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const defaultAuraShopHeroSlides: AuraShopHeroSlide[] = [
   {
@@ -75,7 +76,8 @@ export default function AuraShopSettingsPage() {
     loadSettings()
   }, [])
 
-  if (!canRead('Aura Shop')) return <AccessDenied />
+  const blocked = useModuleGuard('Aura Shop')
+  if (blocked) return blocked
 
   const loadSettings = async () => {
     try {

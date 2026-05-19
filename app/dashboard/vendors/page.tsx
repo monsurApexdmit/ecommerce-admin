@@ -18,6 +18,7 @@ import { StatsCards } from "@/components/ui/stats-card"
 import vendorApi from "@/lib/vendorApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 
 export default function VendorsPage() {
@@ -94,7 +95,8 @@ export default function VendorsPage() {
     fetchStats()
   }, [])
 
-  if (!canRead('Vendors')) return <AccessDenied />
+  const blocked = useModuleGuard('Vendors')
+  if (blocked) return blocked
 
   const handleExportVendors = () => {
     const headers = ["ID", "Name", "Email", "Phone", "Address", "Status"]

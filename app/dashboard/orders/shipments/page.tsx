@@ -20,6 +20,7 @@ import { sellsApi, SellResponse } from "@/lib/sellsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 // Ordered progression — status can only move forward
 const STATUS_ORDER: ShipmentStatus[] = [
@@ -175,7 +176,8 @@ export default function ShipmentsPage() {
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
 
-  if (!canRead('Shipments')) return <AccessDenied />
+  const blocked = useModuleGuard('Shipments')
+  if (blocked) return blocked
 
   const handleViewShipment = async (shipment: ShipmentResponse) => {
     setViewingShipment(shipment)

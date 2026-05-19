@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useCompanySettings } from '@/contexts/company-settings-context'
 import { useSaasAuth } from '@/contexts/saas-auth-context'
 import { AccessDenied } from '@/components/ui/access-denied'
+import { useModuleGuard } from '@/hooks/use-module-guard'
 import { Loader2, Download, Printer, ArrowLeft, Copy } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
 
@@ -77,7 +78,8 @@ export default function ProductBarcodePage() {
     }
   }, [product])
 
-  if (!canRead('Print Barcode')) return <AccessDenied />
+  const blocked = useModuleGuard('Print Barcode')
+  if (blocked) return blocked
 
   const handleDownload = async () => {
     const barcodeCodeToUse = product?.barcode_code || product?.barcode

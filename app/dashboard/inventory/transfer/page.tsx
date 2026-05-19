@@ -15,6 +15,7 @@ import { transferApi, type LocationProduct, type LocationProductRaw } from "@/li
 import { useToast } from "@/hooks/use-toast"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
@@ -84,7 +85,8 @@ export default function StockTransferPage() {
 
   const locationProducts = useMemo(() => flattenLocationProducts(rawLocationProducts), [rawLocationProducts])
 
-  if (!canRead('Transfers')) return <AccessDenied />
+  const blocked = useModuleGuard('Transfers')
+  if (blocked) return blocked
 
   const selectedItem = locationProducts.find(p =>
     (p.type === 'variant' ? `v-${p.id}` : `p-${p.id}`) === selectedRowKey

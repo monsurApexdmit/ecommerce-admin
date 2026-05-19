@@ -24,6 +24,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
@@ -110,7 +111,8 @@ export default function DashboardPage() {
     fetchDashboardData()
   }, [])
 
-  if (!canRead('Dashboard')) return <AccessDenied />
+  const blocked = useModuleGuard('Dashboard')
+  if (blocked) return blocked
 
   // Vendor statistics
   const totalVendors = vendors.length

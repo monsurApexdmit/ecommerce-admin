@@ -8,6 +8,7 @@ import { DollarSign, Clock, Globe, Ruler, Calendar, Hash, Loader2 } from "lucide
 import { toast } from "sonner"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const CURRENCY_LIST = [
   { code: "USD", name: "US Dollar" },
@@ -154,7 +155,8 @@ export default function InternationalPage() {
     loadSettings()
   }, [])
 
-  if (!canRead('International')) return <AccessDenied />
+  const blocked = useModuleGuard('International')
+  if (blocked) return blocked
 
   const loadSettings = async () => {
     try {

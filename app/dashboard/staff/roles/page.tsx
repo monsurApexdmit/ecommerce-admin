@@ -13,6 +13,7 @@ import { useStaff, PERMISSION_MODULES, type Role, type Module, type Permission }
 import { staffRoleApi } from "@/lib/staffApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 interface BackendPermission {
     id: number
@@ -48,7 +49,8 @@ export default function RolesPage() {
         loadPermissions()
     }, [])
 
-    if (!canRead('Role & Permission')) return <AccessDenied />
+    const blocked = useModuleGuard('Role & Permission')
+  if (blocked) return blocked
 
     const filteredRoles = roles.filter((role) =>
         role.name.toLowerCase().includes(searchQuery.toLowerCase())

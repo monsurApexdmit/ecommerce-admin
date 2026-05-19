@@ -12,6 +12,7 @@ import {
 } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { AlertCircle, Loader, Save, MapPin, FileText } from "lucide-react"
 
 export default function BillingContactPage() {
@@ -65,7 +66,8 @@ export default function BillingContactPage() {
     loadData()
   }, [])
 
-  if (!canRead('Billing Contact')) return <AccessDenied />
+  const blocked = useModuleGuard('Billing Contact')
+  if (blocked) return blocked
 
   const handleChange = (field: keyof BillingContactPayload, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))

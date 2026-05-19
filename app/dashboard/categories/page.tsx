@@ -18,6 +18,7 @@ import { useCategory, type Category } from "@/contexts/category-context"
 import { useToast } from "@/hooks/use-toast"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 export default function CategoriesPage() {
   const { canRead } = useSaasAuth()
@@ -49,7 +50,8 @@ export default function CategoriesPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  if (!canRead('Categories')) return <AccessDenied />
+  const blocked = useModuleGuard('Categories')
+  if (blocked) return blocked
 
   // Filter Logic
   // If "Parents Only" is checked, we only search/filter ROOT categories.

@@ -7,6 +7,7 @@ import { useVendor } from "@/contexts/vendor-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -216,7 +217,8 @@ export default function VendorReturnsPage() {
     }
   }, [toast])
 
-  if (!canRead('Vendor Returns')) return <AccessDenied />
+  const blocked = useModuleGuard('Vendor Returns')
+  if (blocked) return blocked
 
   const handleSelectProduct = (product: ProductResponse, variant?: ProductVariantResponse) => {
     const unitPrice = variant

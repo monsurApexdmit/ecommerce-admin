@@ -23,6 +23,7 @@ import supportApi, {
 import { getCompanyId } from "@/lib/utils/apiInterceptor"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 // ── Sound ─────────────────────────────────────────────────────────
 function playNotificationSound() {
@@ -738,7 +739,8 @@ export default function SupportPage() {
     fetchStats()
   }, [fetchStats])
 
-  if (!canRead('Support')) return <AccessDenied />
+  const blocked = useModuleGuard('Support')
+  if (blocked) return blocked
 
   return (
     <div className="space-y-4 h-full flex flex-col">

@@ -40,6 +40,7 @@ import {
 import paymentMethodApi, { type PaymentMethod, type PaymentMethodPayload } from "@/lib/paymentMethodApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const ICON_OPTIONS = [
   { value: "banknote",    label: "Banknote (Cash)",   Icon: Banknote },
@@ -102,7 +103,8 @@ export default function PaymentMethodsPage() {
 
   useEffect(() => { load() }, [])
 
-  if (!canRead('Payment Methods')) return <AccessDenied />
+  const blocked = useModuleGuard('Payment Methods')
+  if (blocked) return blocked
 
   const openAdd = () => {
     setEditing(null)

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { productApi, type ProductResponse } from '@/lib/productApi'
 import { useSaasAuth } from '@/contexts/saas-auth-context'
 import { AccessDenied } from '@/components/ui/access-denied'
+import { useModuleGuard } from '@/hooks/use-module-guard'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -333,7 +334,8 @@ export default function PrintBarcodePage() {
     printWindow.document.close()
   }, [printItems, labelSettings, fontSizes, selectedPaperSizeId, company?.name, toast])
 
-  if (!canRead('Print Barcode')) return <AccessDenied />
+  const blocked = useModuleGuard('Print Barcode')
+  if (blocked) return blocked
 
   // ============ JSX ============
 

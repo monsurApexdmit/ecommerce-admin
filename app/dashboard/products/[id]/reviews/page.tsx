@@ -18,6 +18,7 @@ import productApi, {
 } from "@/lib/productApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 function formatDate(value: string | null) {
   if (!value) return "-"
@@ -68,7 +69,8 @@ export default function ProductReviewsPage() {
     void loadPageData(true)
   }, [productId])
 
-  if (!canRead('Product Reviews')) return <AccessDenied />
+  const blocked = useModuleGuard('Product Reviews')
+  if (blocked) return blocked
 
   async function loadPageData(showInitialLoader = false) {
     if (showInitialLoader) {

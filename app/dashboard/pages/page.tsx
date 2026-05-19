@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import {
   Dialog,
   DialogContent,
@@ -160,7 +161,8 @@ export default function PagesManagementPage() {
     return 'Policy sections JSON should be an array: [{ "title": "Section title", "paragraphs": ["Paragraph one", "Paragraph two"] }].'
   }, [form.template])
 
-  if (!canRead('Pages')) return <AccessDenied />
+  const blocked = useModuleGuard('Pages')
+  if (blocked) return blocked
 
   const setField = (field: keyof FormState, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }))

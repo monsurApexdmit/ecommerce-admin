@@ -31,6 +31,7 @@ import { toast } from "sonner"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 interface CartItem {
     id: string
@@ -207,7 +208,8 @@ export default function PosPage() {
         })
     }, [products, searchQuery, selectedWarehouseId, cart]) // eslint-disable-line
 
-    if (!canRead('POS')) return <AccessDenied />
+    const blocked = useModuleGuard('POS')
+  if (blocked) return blocked
 
     const addToCart = (product: Product, variant?: Variant) => {
         if (product.variants && product.variants.length > 0 && !variant) {

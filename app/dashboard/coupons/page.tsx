@@ -16,6 +16,7 @@ import { couponApi, type CouponResponse } from "@/lib/couponApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 type FormData = {
   campaign_name: string
@@ -99,7 +100,8 @@ export default function CouponsPage() {
     refreshCoupons()
   }, [])
 
-  if (!canRead('Coupons')) return <AccessDenied />
+  const blocked = useModuleGuard('Coupons')
+  if (blocked) return blocked
 
   const filteredCoupons = coupons.filter(
     (coupon) =>

@@ -16,6 +16,7 @@ import { sellsApi, SellResponse, SellItem } from "@/lib/sellsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
 const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
@@ -119,7 +120,8 @@ export default function OrdersPage() {
     fetchStats()
   }, [fetchOrders, fetchStats])
 
-  if (!canRead('Orders')) return <AccessDenied />
+  const blocked = useModuleGuard('Orders')
+  if (blocked) return blocked
 
   const handleStatusChange = async (id: number, newStatus: SellResponse["status"]) => {
     setUpdatingStatus(id)
