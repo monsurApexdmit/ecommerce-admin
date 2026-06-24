@@ -135,6 +135,9 @@ export interface Product {
   attributes: ProductAttributeSelection[];
   variants: ProductVariant[];
   inventory: ProductInventoryItem[];
+  isBundle?: boolean;
+  bundlePriceOverride?: number;
+  bundleItems?: BundleItem[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -172,6 +175,15 @@ export interface ProductReviewListResult {
   };
 }
 
+export interface BundleItem {
+  productId: number;
+  productName: string;
+  productSku: string;
+  variantId?: number;
+  variantName?: string;
+  quantity: number;
+}
+
 export interface ProductDraft {
   name: string;
   description?: string;
@@ -201,6 +213,9 @@ export interface ProductDraft {
   localImages?: ProductFileAsset[];
   keepImages?: string[];
   deleteImages?: boolean;
+  isBundle?: boolean;
+  bundlePriceOverride?: number;
+  bundleItems?: BundleItem[];
 }
 
 export interface ProductReviewReplyPayload {

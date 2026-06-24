@@ -6,20 +6,21 @@ import { colors } from "@/constants/theme";
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   contentStyle?: ViewStyle;
+  edges?: ("top" | "bottom" | "left" | "right")[];
 }>;
 
-export function Screen({ children, scroll = true, contentStyle }: ScreenProps) {
+export function Screen({ children, scroll = true, contentStyle, edges = ["top", "bottom"] }: ScreenProps) {
   if (scroll) {
     return (
-      <SafeAreaView style={styles.safe} edges={["top"]}>
+      <SafeAreaView style={styles.safe} edges={edges}>
         <ScrollView contentContainerStyle={[styles.content, contentStyle]}>{children}</ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={[styles.content, contentStyle]}>{children}</View>
+    <SafeAreaView style={styles.safe} edges={edges}>
+      <View style={[styles.fill, contentStyle]}>{children}</View>
     </SafeAreaView>
   );
 }
@@ -32,5 +33,8 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     gap: 16,
+  },
+  fill: {
+    flex: 1,
   },
 });

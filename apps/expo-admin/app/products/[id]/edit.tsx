@@ -37,7 +37,7 @@ export default function EditProductScreen() {
   if (!canRead('Products')) return <AccessDenied />;
 
   return (
-    <Screen>
+    <Screen scroll={false}>
       {loading || !product ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primaryDark} size="large" />

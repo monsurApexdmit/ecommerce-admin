@@ -11,7 +11,7 @@ export default function CreateProductScreen() {
   if (!canRead('Products')) return <AccessDenied />;
 
   return (
-    <Screen>
+    <Screen scroll={false}>
       <ProductForm
         onSaved={(product) => {
           router.replace(`/products/${product.id}`);

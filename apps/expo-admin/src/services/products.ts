@@ -133,6 +133,36 @@ type ProductResponse = {
   attributes?: ProductAttributeResponse[] | null;
   variants?: ProductVariantResponse[] | null;
   inventory?: ProductInventoryResponse[] | null;
+  is_bundle?: boolean | null;
+  isBundle?: boolean | null;
+  bundle_price_override?: number | string | null;
+  bundlePriceOverride?: number | string | null;
+  bundle_items?: Array<{
+    product_id?: number;
+    productId?: number;
+    product_name?: string;
+    productName?: string;
+    product_sku?: string;
+    productSku?: string;
+    variant_id?: number | null;
+    variantId?: number | null;
+    variant_name?: string | null;
+    variantName?: string | null;
+    quantity?: number | string;
+  }> | null;
+  bundleItems?: Array<{
+    product_id?: number;
+    productId?: number;
+    product_name?: string;
+    productName?: string;
+    product_sku?: string;
+    productSku?: string;
+    variant_id?: number | null;
+    variantId?: number | null;
+    variant_name?: string | null;
+    variantName?: string | null;
+    quantity?: number | string;
+  }> | null;
   created_at?: string | null;
   updated_at?: string | null;
   createdAt?: string | null;
@@ -311,6 +341,18 @@ function normalizeDistribution(
     : [];
 }
 
+function normalizeBundleItems(items?: ProductResponse["bundle_items"]): import("@/types/product").BundleItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    productId: item.productId ?? item.product_id ?? 0,
+    productName: item.productName ?? item.product_name ?? "",
+    productSku: item.productSku ?? item.product_sku ?? "",
+    variantId: item.variantId ?? item.variant_id ?? undefined,
+    variantName: item.variantName ?? item.variant_name ?? undefined,
+    quantity: toNumber(item.quantity),
+  }));
+}
+
 function normalizeProduct(product: ProductResponse): Product {
   const categoryObject =
     typeof product.category === "object" && product.category !== null
@@ -367,6 +409,11 @@ function normalizeProduct(product: ProductResponse): Product {
     attributes: normalizeAttributes(product.attributes),
     variants: normalizeVariants(product.variants),
     inventory: normalizeInventory(product.inventory),
+    isBundle: Boolean(product.isBundle ?? product.is_bundle),
+    bundlePriceOverride: product.bundlePriceOverride ?? product.bundle_price_override
+      ? toNumber(product.bundlePriceOverride ?? product.bundle_price_override) || undefined
+      : undefined,
+    bundleItems: normalizeBundleItems(product.bundleItems ?? product.bundle_items),
     createdAt: product.createdAt ?? product.created_at ?? undefined,
     updatedAt: product.updatedAt ?? product.updated_at ?? undefined,
   };
@@ -450,6 +497,14 @@ function buildFormData(draft: ProductDraft) {
     draft.localImages.forEach((image, index) => {
       formData.append(`image[${index}]`, image as unknown as Blob);
     });
+  }
+
+  formData.append("isBundle", draft.isBundle ? "1" : "0");
+  if (draft.isBundle && draft.bundlePriceOverride !== undefined) {
+    formData.append("bundlePriceOverride", String(draft.bundlePriceOverride));
+  }
+  if (draft.bundleItems !== undefined) {
+    formData.append("bundleItems", JSON.stringify(draft.bundleItems));
   }
 
   return formData;

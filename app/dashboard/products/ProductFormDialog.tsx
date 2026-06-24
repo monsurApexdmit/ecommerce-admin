@@ -278,7 +278,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     setBundleSearchLoading(true)
     try {
       const res = await productApi.getAll({ search: query, limit: 10 })
-      setBundleSearchResults(res.data || [])
+      setBundleSearchResults((res.data || []).filter((p: any) => !p.isBundle && !p.is_bundle))
     } catch { setBundleSearchResults([]) }
     finally { setBundleSearchLoading(false) }
   }, [])

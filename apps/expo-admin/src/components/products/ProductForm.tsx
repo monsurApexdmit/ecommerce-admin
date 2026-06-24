@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   Alert,
@@ -14,13 +15,14 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { buildProductFileAsset, createProduct, updateProduct } from "@/services/products";
+import { buildProductFileAsset, createProduct, getProducts, updateProduct } from "@/services/products";
 import { getAttributes, getCategories, getVendors, getWarehouses } from "@/services/catalog";
 import { useCurrency } from "@/context/CurrencyContext";
 import { generateBarcodeCode, generateProductSku, generateVariantDrafts } from "@/lib/variants";
 import { getImageUrl } from "@/lib/images";
 import type { Attribute, Category, Vendor, Warehouse } from "@/types/catalog";
 import type {
+  BundleItem,
   Product,
   ProductAttributeSelection,
   ProductDraft,
@@ -117,6 +119,7 @@ function getInitialForm(product?: Product | null): FormState {
 
 export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
   const { currency, formatCurrency } = useCurrency();
+  const insets = useSafeAreaInsets();
   const [form, setForm] = useState<FormState>(() => getInitialForm(product));
   const [categories, setCategories] = useState<Category[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -135,6 +138,14 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [skuManuallyEdited, setSkuManuallyEdited] = useState(Boolean(product?.sku));
+  const [isBundle, setIsBundle] = useState(Boolean(product?.isBundle));
+  const [bundlePriceOverride, setBundlePriceOverride] = useState(
+    product?.bundlePriceOverride ? String(product.bundlePriceOverride) : "",
+  );
+  const [bundleItems, setBundleItems] = useState<BundleItem[]>(product?.bundleItems ?? []);
+  const [bundleSearch, setBundleSearch] = useState("");
+  const [bundleSearchResults, setBundleSearchResults] = useState<Product[]>([]);
+  const [bundleSearchLoading, setBundleSearchLoading] = useState(false);
 
   useEffect(() => {
     setForm(getInitialForm(product));
@@ -144,6 +155,9 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
     setExistingImages(product?.images ?? []);
     setLocalImages([]);
     setSkuManuallyEdited(Boolean(product?.sku));
+    setIsBundle(Boolean(product?.isBundle));
+    setBundlePriceOverride(product?.bundlePriceOverride ? String(product.bundlePriceOverride) : "");
+    setBundleItems(product?.bundleItems ?? []);
   }, [product]);
 
   useEffect(() => {
@@ -273,6 +287,38 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
     );
   };
 
+  const searchBundleProducts = async (query: string) => {
+    setBundleSearch(query);
+    if (!query.trim()) { setBundleSearchResults([]); return; }
+    setBundleSearchLoading(true);
+    try {
+      const res = await getProducts({ search: query, limit: 10 });
+      setBundleSearchResults(res.data.filter((p) => p.id !== product?.id && !p.isBundle));
+    } catch {
+      setBundleSearchResults([]);
+    } finally {
+      setBundleSearchLoading(false);
+    }
+  };
+
+  const addBundleItem = (p: Product) => {
+    if (bundleItems.some((bi) => bi.productId === p.id)) return;
+    setBundleItems((prev) => [
+      ...prev,
+      { productId: p.id, productName: p.name, productSku: p.sku ?? "", quantity: 1 },
+    ]);
+    setBundleSearch("");
+    setBundleSearchResults([]);
+  };
+
+  const updateBundleItemQty = (index: number, qty: number) => {
+    setBundleItems((prev) => prev.map((bi, i) => i === index ? { ...bi, quantity: Math.max(1, qty) } : bi));
+  };
+
+  const removeBundleItem = (index: number) => {
+    setBundleItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const addImages = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -400,6 +446,9 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
       localImages,
       keepImages: existingImages.map((image) => image.path),
       deleteImages: product ? existingImages.length === 0 && localImages.length === 0 : false,
+      isBundle,
+      bundlePriceOverride: isBundle && bundlePriceOverride ? Number(bundlePriceOverride) : undefined,
+      bundleItems: isBundle ? bundleItems : [],
     };
 
     try {
@@ -437,7 +486,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
     : 0;
 
   return (
-    <ScrollView contentContainerStyle={s.root} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={[s.root, { paddingBottom: 16 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
       {/* ── SECTION 1: Core Details ───────────────────────────── */}
       <SectionCard step={1} icon="cube-outline" title="Product Info" badge={
@@ -742,8 +791,99 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
         </InputField>
       </SectionCard>
 
-      {/* ── SECTION 5: Images ───────────────────────────────── */}
-      <SectionCard step={5} icon="images-outline" title="Product Images">
+      {/* ── SECTION 5: Bundle / Kit ─────────────────────────── */}
+      <SectionCard step={5} icon="layers-outline" title="Bundle / Kit">
+        <ToggleCard
+          icon="grid-outline"
+          label="Bundle / Kit product"
+          description="Group multiple products into one bundle"
+          value={isBundle}
+          onChange={setIsBundle}
+          accentColor="#7c3aed"
+          accentBg="#ede9fe"
+        />
+
+        {isBundle && (
+          <View style={s.bundleSection}>
+            <InputField label="Bundle price override" icon="cash-outline" hint="Leave blank to use product price">
+              <CurrencyInput
+                value={bundlePriceOverride}
+                onChangeText={setBundlePriceOverride}
+                currency={currency}
+                placeholder="Use product price"
+              />
+            </InputField>
+
+            <View style={s.field}>
+              <View style={s.fieldLabelRow}>
+                <Ionicons name="search-outline" size={13} color={colors.muted} />
+                <Text style={s.fieldLabel}>Add child products</Text>
+              </View>
+              <TextInput
+                value={bundleSearch}
+                onChangeText={searchBundleProducts}
+                placeholder="Search products to add…"
+                placeholderTextColor={colors.muted}
+                style={s.input}
+              />
+              {bundleSearchLoading && (
+                <ActivityIndicator size="small" color={colors.primaryDark} style={{ marginTop: 8 }} />
+              )}
+              {bundleSearchResults.length > 0 && (
+                <View style={s.bundleDropdown}>
+                  {bundleSearchResults.map((p) => (
+                    <Pressable key={p.id} style={s.bundleDropdownItem} onPress={() => addBundleItem(p)}>
+                      <Text style={s.bundleDropdownName}>{p.name}</Text>
+                      <Text style={s.bundleDropdownSku}>{p.sku ?? ""}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {bundleItems.length === 0 ? (
+              <View style={s.bundleEmpty}>
+                <Ionicons name="cube-outline" size={24} color={colors.muted} />
+                <Text style={s.bundleEmptyText}>No child products added yet</Text>
+              </View>
+            ) : (
+              <View style={s.bundleList}>
+                {bundleItems.map((item, index) => (
+                  <View key={`${item.productId}-${item.variantId ?? ""}`} style={s.bundleItemRow}>
+                    <View style={s.bundleItemInfo}>
+                      <Text style={s.bundleItemName}>{item.productName}</Text>
+                      <Text style={s.bundleItemSku}>{item.productSku}</Text>
+                    </View>
+                    <View style={s.bundleQtyRow}>
+                      <Pressable
+                        style={s.bundleQtyBtn}
+                        onPress={() => updateBundleItemQty(index, item.quantity - 1)}
+                        hitSlop={8}
+                      >
+                        <Ionicons name="remove" size={14} color={colors.primaryDark} />
+                      </Pressable>
+                      <Text style={s.bundleQtyText}>{item.quantity}</Text>
+                      <Pressable
+                        style={s.bundleQtyBtn}
+                        onPress={() => updateBundleItemQty(index, item.quantity + 1)}
+                        hitSlop={8}
+                      >
+                        <Ionicons name="add" size={14} color={colors.primaryDark} />
+                      </Pressable>
+                    </View>
+                    <Pressable onPress={() => removeBundleItem(index)} hitSlop={8}>
+                      <Ionicons name="trash-outline" size={17} color={colors.danger} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+      </SectionCard>
+
+      {/* ── SECTION 6: Images ───────────────────────────────── */}
+      <SectionCard step={7} icon="images-outline" title="Product Images">
         {imagePreviews.length > 0 ? (
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.imageRow}>
@@ -803,7 +943,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
       </SectionCard>
 
       {/* ── SECTION 6: Attributes & Variants ────────────────── */}
-      <SectionCard step={6} icon="options-outline" title="Attributes & Variants">
+      <SectionCard step={8} icon="options-outline" title="Attributes & Variants">
         {attributes.length > 0 && (
           <>
             <Text style={s.subLabel}>Select attributes for this product</Text>
@@ -1025,7 +1165,7 @@ function SectionCard({
         </View>
         <View style={s.sectionTitleBlock}>
           <Text style={s.sectionTitle}>{title}</Text>
-          <Text style={s.sectionStep}>Step {step} of 6</Text>
+          <Text style={s.sectionStep}>Step {step} of 8</Text>
         </View>
         {badge ?? action ?? null}
       </View>
@@ -1715,6 +1855,104 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     flex: 1,
+  },
+
+  // Bundle / Kit
+  bundleSection: {
+    gap: 12,
+    marginTop: 4,
+  },
+  bundleDropdown: {
+    marginTop: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: "hidden",
+  },
+  bundleDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  bundleDropdownName: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+  bundleDropdownSku: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  bundleEmpty: {
+    alignItems: "center",
+    paddingVertical: 20,
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+  },
+  bundleEmptyText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  bundleList: {
+    gap: 8,
+  },
+  bundleItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#ddd6fe",
+    backgroundColor: "#f5f3ff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  bundleItemInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  bundleItemName: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  bundleItemSku: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  bundleQtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  bundleQtyBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#a7f3d0",
+    backgroundColor: "#ecfdf5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bundleQtyText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "700",
+    minWidth: 24,
+    textAlign: "center",
   },
 
   // Footer
