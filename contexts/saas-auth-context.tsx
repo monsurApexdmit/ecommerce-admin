@@ -172,55 +172,17 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     phone: string
   }) => {
     try {
-      const response = await saasAuthApi.signup({
+      // Account is created in "unverified" status. The backend sends a
+      // verification email and returns NO auth token. Do NOT authenticate or
+      // redirect to the dashboard here — the user must verify their email
+      // first, then log in. Navigation is handled by the signup page.
+      await saasAuthApi.signup({
         companyName: data.companyName,
         ownerFullName: data.ownerFullName,
         email: data.email,
         password: data.password,
         phone: data.phone,
       })
-
-      // Store auth data
-      localStorage.setItem("token", response.data.token)
-      localStorage.setItem("company_id", response.data.companyId.toString())
-      localStorage.setItem("user_role", response.data.userRole)
-      // Set cookie for Next.js middleware
-      document.cookie = `token=${response.data.token}; path=/; max-age=86400; SameSite=Lax`
-
-      // Update state
-      setToken(response.data.token)
-      setIsAuthenticated(true)
-
-      // Set user_role cookie for Next.js middleware
-      document.cookie = `user_role=owner; path=/; max-age=86400; SameSite=Lax`
-
-      // Create basic user and company objects (will be populated on next fetch)
-      setUser({
-        id: response.data.userId,
-        companyId: response.data.companyId,
-        email: response.data.userEmail,
-        fullName: data.ownerFullName,
-        role: "owner",
-        status: "active",
-        joinedDate: new Date().toISOString(),
-        permissions: null,
-      })
-
-      setCompany({
-        id: response.data.companyId,
-        name: response.data.companyName,
-        status: "trial",
-        trialStartDate: response.data.trialStartDate,
-        trialEndDate: response.data.trialEndDate,
-        trialDaysRemaining: response.data.trialDaysRemaining,
-        licenseKey: response.data.licenseKey,
-        licenseType: "trial",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-
-      // Redirect to dashboard
-      router.push("/dashboard")
     } catch (error) {
       throw error
     }

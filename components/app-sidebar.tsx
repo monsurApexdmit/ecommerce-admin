@@ -167,20 +167,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { logout } = useAuth()
     const { state } = useSidebar()
     const { unreadCount } = useNotifications()
-    const { canRead } = useSaasAuth()
+    const { canRead, isPlanModule } = useSaasAuth()
 
-    // Filter navigation: remove items (and group sub-items) user cannot read
+    // A nav item is visible only when the module is BOTH in the current plan
+    // (subscription tier) AND readable by the user's role (RBAC). Plan gating
+    // hides modules the trial/plan doesn't include (e.g. Salary, Tailor).
+    const canSee = (module: string | null) =>
+        module === null || (isPlanModule(module) && canRead(module))
+
+    // Filter navigation: remove items (and group sub-items) the user can't see
     const visibleNav = NAV_CONFIG.map((item) => {
         if ("items" in item) {
-            const visibleItems = item.items.filter((sub) => canRead(sub.module))
+            const visibleItems = item.items.filter((sub) => canSee(sub.module))
             if (visibleItems.length === 0) return null
             return { ...item, items: visibleItems }
         }
-        if (!canRead(item.module)) return null
+        if (!canSee(item.module)) return null
         return item
     }).filter(Boolean) as typeof NAV_CONFIG[number][]
 
-    const showNotifications = canRead("Notifications")
+    const showNotifications = canSee("Notifications")
 
     return (
         <Sidebar collapsible="icon" {...props} className="border-r border-border">
