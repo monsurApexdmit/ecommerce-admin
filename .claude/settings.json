@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -n '/function signup/,/^    }/p' app/Services/Auth/SaasAuthService.php)",
+      "Bash(sed -n '/function resendVerification/,/^    }/p' app/Services/Auth/SaasAuthService.php)",
+      "Bash(git commit -q -m 'feat: restrict trial plan modules \\(no POS/Support\\) *)",
+      "Bash(echo \"committed: $?\")",
+      "Bash(git push *)"
+    ],
+    "additionalDirectories": [
+      "/home/monsur/Documents/Go/inventory-laravel/app/Services/Auth",
+      "/home/monsur/Documents/Go/inventory-laravel"
+    ]
+  }
+}

@@ -161,7 +161,7 @@ export default function StockTransferPage() {
                 <div className="space-y-2">
                   <Label>Source Warehouse</Label>
                   <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
-                    <SelectTrigger><SelectValue placeholder="From..." /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="From..." /></SelectTrigger>
                     <SelectContent>
                       {warehouses.map(w => (
                         <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === toWarehouse}>
@@ -174,7 +174,7 @@ export default function StockTransferPage() {
                 <div className="space-y-2">
                   <Label>Destination Warehouse</Label>
                   <Select value={toWarehouse} onValueChange={setToWarehouse}>
-                    <SelectTrigger><SelectValue placeholder="To..." /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="To..." /></SelectTrigger>
                     <SelectContent>
                       {warehouses.map(w => (
                         <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === fromWarehouse}>
@@ -193,7 +193,7 @@ export default function StockTransferPage() {
                   onValueChange={setSelectedRowKey}
                   disabled={!fromWarehouse || locationProductsLoading}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder={
                       !fromWarehouse ? "Select source warehouse first" :
                       locationProductsLoading ? "Loading..." :

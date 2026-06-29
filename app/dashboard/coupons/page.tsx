@@ -17,6 +17,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { toast } from "sonner"
 
 type FormData = {
   campaign_name: string
@@ -136,14 +137,14 @@ export default function CouponsPage() {
         await refreshCoupons()
       } catch (err: any) {
         console.error('Error deleting coupon:', err)
-        alert(err.message || 'Failed to delete coupon')
+        toast.error(err.message || 'Failed to delete coupon')
       }
     }
   }
 
   const handleBulkDelete = async () => {
     if (selectedCoupons.length === 0) {
-      alert("Please select coupons to delete")
+      toast.error("Please select coupons to delete")
       return
     }
     if (confirm(`Delete ${selectedCoupons.length} selected coupon(s)?`)) {
@@ -153,7 +154,7 @@ export default function CouponsPage() {
         await refreshCoupons()
       } catch (err: any) {
         console.error('Error deleting coupons:', err)
-        alert(err.message || 'Failed to delete coupons')
+        toast.error(err.message || 'Failed to delete coupons')
       }
     }
   }
@@ -190,7 +191,7 @@ export default function CouponsPage() {
 const handleAddCoupon = async () => {
     try {
       if (!formData.start_date || !formData.end_date) {
-        alert('Start Date and End Date are required')
+        toast.error('Start Date and End Date are required')
         return
       }
 
@@ -216,10 +217,10 @@ const handleAddCoupon = async () => {
       setFormData(emptyForm)
       setImagePreview(null)
       await refreshCoupons()
-      alert('Coupon created successfully')
+      toast.success('Coupon created successfully')
     } catch (err: any) {
       console.error('Error adding coupon:', err)
-      alert(err.message || 'Failed to add coupon')
+      toast.error(err.message || 'Failed to add coupon')
     }
   }
 
@@ -228,7 +229,7 @@ const handleAddCoupon = async () => {
 
     try {
       if (!formData.start_date || !formData.end_date) {
-        alert('Start Date and End Date are required')
+        toast.error('Start Date and End Date are required')
         return
       }
 
@@ -260,10 +261,10 @@ const handleAddCoupon = async () => {
       setCurrentCoupon(null)
       setImagePreview(null)
       await refreshCoupons()
-      alert('Coupon updated successfully')
+      toast.success('Coupon updated successfully')
     } catch (err: any) {
       console.error('Error updating coupon:', err)
-      alert(err.message || 'Failed to update coupon')
+      toast.error(err.message || 'Failed to update coupon')
     }
   }
 
@@ -298,7 +299,7 @@ const handleAddCoupon = async () => {
       setBulkAction("")
     } catch (err: any) {
       console.error('Error in bulk action:', err)
-      alert(err.message || 'Failed to perform bulk action')
+      toast.error(err.message || 'Failed to perform bulk action')
     }
   }
 
@@ -338,7 +339,7 @@ const handleAddCoupon = async () => {
             value={formData.type}
             onValueChange={(value) => setFormData({ ...formData, type: value as "percentage" | "fixed" })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -623,7 +624,7 @@ const handleAddCoupon = async () => {
             <div className="space-y-2">
               <Label>Action Type</Label>
               <Select value={bulkAction} onValueChange={setBulkAction}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select action" />
                 </SelectTrigger>
                 <SelectContent>

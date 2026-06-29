@@ -554,7 +554,7 @@ export default function AttributesPage() {
             <div className="space-y-2">
               <Label>Action Type</Label>
               <Select value={bulkAction} onValueChange={setBulkAction}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select action" />
                 </SelectTrigger>
                 <SelectContent>
@@ -611,7 +611,7 @@ export default function AttributesPage() {
                 value={formData.option} 
                 onValueChange={(value: "dropdown" | "radio") => setFormData({...formData, option: value})}
               >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select Option Type" />
                   </SelectTrigger>
                   <SelectContent>

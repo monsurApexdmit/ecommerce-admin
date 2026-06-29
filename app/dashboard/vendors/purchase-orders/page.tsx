@@ -361,7 +361,7 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-2">
                 <Label>Vendor *</Label>
                 <Select value={vendorId} onValueChange={setVendorId}>
-                  <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select vendor" /></SelectTrigger>
                   <SelectContent>
                     {vendors.map(v => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
                   </SelectContent>
@@ -370,7 +370,7 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-2">
                 <Label>Receive at Location</Label>
                 <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select location" /></SelectTrigger>
                   <SelectContent>
                     {warehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                   </SelectContent>
@@ -412,7 +412,7 @@ export default function PurchaseOrdersPage() {
                       <tr key={idx} className="border-t">
                         <td className="p-2">
                           <Select value={item.productId} onValueChange={v => updateFormItem(idx, "productId", v)}>
-                            <SelectTrigger className="h-8"><SelectValue placeholder="Select product" /></SelectTrigger>
+                            <SelectTrigger className="h-8 w-full"><SelectValue placeholder="Select product" /></SelectTrigger>
                             <SelectContent>
                               {products.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
                             </SelectContent>
@@ -421,7 +421,7 @@ export default function PurchaseOrdersPage() {
                         <td className="p-2">
                           {getVariants(item.productId).length > 0 ? (
                             <Select value={item.variantId} onValueChange={v => updateFormItem(idx, "variantId", v)}>
-                              <SelectTrigger className="h-8"><SelectValue placeholder="Variant" /></SelectTrigger>
+                              <SelectTrigger className="h-8 w-full"><SelectValue placeholder="Variant" /></SelectTrigger>
                               <SelectContent>
                                 {getVariants(item.productId).map((v: any) => (
                                   <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>

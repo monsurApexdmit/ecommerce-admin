@@ -451,7 +451,7 @@ export default function CategoriesPage() {
                     value={formData.parent_id || "none"} 
                     onValueChange={(val) => setFormData({...formData, parent_id: val})}
                 >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select Parent Category" />
                     </SelectTrigger>
                     <SelectContent>
