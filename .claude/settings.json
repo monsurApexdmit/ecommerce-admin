@@ -5,7 +5,8 @@
       "Bash(sed -n '/function resendVerification/,/^    }/p' app/Services/Auth/SaasAuthService.php)",
       "Bash(git commit -q -m 'feat: restrict trial plan modules \\(no POS/Support\\) *)",
       "Bash(echo \"committed: $?\")",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Read(//home/monsur/Downloads/**)"
     ],
     "additionalDirectories": [
       "/home/monsur/Documents/Go/inventory-laravel/app/Services/Auth",

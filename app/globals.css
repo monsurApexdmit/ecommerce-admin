@@ -37,40 +37,52 @@
   --sidebar-accent-foreground: oklch(0.15 0 0);
   --sidebar-border: oklch(0.93 0 0);
   --sidebar-ring: oklch(0.55 0.15 165);
+
+  /* Brand accent — overridable at runtime by the topbar swatch picker.
+     Default emerald. `-soft` is the tinted active/badge bg, `-fg` the text. */
+  --brand: #059669;
+  --brand-foreground: #ffffff;
+  --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
+  --brand-fg: var(--brand);
 }
 
 .dark {
-  --background: oklch(0.12 0 0);
-  --foreground: oklch(0.98 0 0);
-  --card: oklch(0.15 0 0);
-  --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.15 0 0);
-  --popover-foreground: oklch(0.98 0 0);
+  /* Brand brightens slightly on dark; soft tint gets stronger to stay visible. */
+  --brand-fg: color-mix(in srgb, var(--brand), white 26%);
+  --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
+
+  /* Blue-slate dark palette (matches the redesign mockup). Hue ~255, low chroma. */
+  --background: oklch(0.16 0.018 258);
+  --foreground: oklch(0.93 0.008 250);
+  --card: oklch(0.21 0.02 258);
+  --card-foreground: oklch(0.93 0.008 250);
+  --popover: oklch(0.21 0.02 258);
+  --popover-foreground: oklch(0.93 0.008 250);
   --primary: oklch(0.6 0.15 165);
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.2 0.01 165);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.2 0.01 165);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.2 0.01 165);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.5 0.2 27);
+  --secondary: oklch(0.26 0.02 258);
+  --secondary-foreground: oklch(0.93 0.008 250);
+  --muted: oklch(0.26 0.02 258);
+  --muted-foreground: oklch(0.68 0.02 250);
+  --accent: oklch(0.28 0.022 258);
+  --accent-foreground: oklch(0.93 0.008 250);
+  --destructive: oklch(0.6 0.2 22);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0 0);
-  --input: oklch(0.25 0 0);
+  --border: oklch(0.3 0.02 258);
+  --input: oklch(0.3 0.02 258);
   --ring: oklch(0.6 0.15 165);
   --chart-1: oklch(0.6 0.15 165);
   --chart-2: oklch(0.7 0.18 240);
   --chart-3: oklch(0.75 0.15 60);
   --chart-4: oklch(0.65 0.2 30);
   --chart-5: oklch(0.8 0.12 280);
-  --sidebar: oklch(0.15 0 0);
-  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar: oklch(0.18 0.02 258);
+  --sidebar-foreground: oklch(0.93 0.008 250);
   --sidebar-primary: oklch(0.6 0.15 165);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.2 0.01 165);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.22 0 0);
+  --sidebar-accent: oklch(0.26 0.02 258);
+  --sidebar-accent-foreground: oklch(0.93 0.008 250);
+  --sidebar-border: oklch(0.3 0.02 258);
   --sidebar-ring: oklch(0.6 0.15 165);
 }
 
@@ -113,6 +125,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-fg: var(--brand-fg);
 }
 
 @layer base {
@@ -122,4 +138,54 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/*
+ * Dark-mode compatibility layer.
+ *
+ * Many dashboard pages were authored with hardcoded light utilities
+ * (bg-white, text-gray-900, bg-gray-50, *-50 tints, etc.) before dark mode
+ * existed. Rather than migrate every page by hand, we remap the common
+ * hardcoded classes to theme tokens whenever `.dark` is active.
+ *
+ * `.dark .bg-white` (0,2,0) outranks the plain `.bg-white` utility (0,1,0),
+ * so these win without !important. Scoped to .dark only — light mode is
+ * untouched. Brand-tinted surfaces fall back to brand-soft so the accent
+ * picker keeps working in dark too.
+ */
+.dark {
+  /* Surfaces */
+  .bg-white { background-color: var(--card) !important; }
+  .bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100, .bg-neutral-50 {
+    background-color: color-mix(in oklab, var(--card), white 4%) !important;
+  }
+  .bg-gray-200 { background-color: var(--muted) !important; }
+
+  /* Text */
+  .text-gray-900, .text-slate-900, .text-black { color: var(--foreground) !important; }
+  .text-gray-800, .text-gray-700, .text-slate-700 {
+    color: color-mix(in oklab, var(--foreground), transparent 8%) !important;
+  }
+  .text-gray-600, .text-gray-500, .text-slate-600, .text-slate-500 {
+    color: var(--muted-foreground) !important;
+  }
+  .text-gray-400, .text-gray-300 {
+    color: color-mix(in oklab, var(--muted-foreground), transparent 25%) !important;
+  }
+
+  /* Borders / dividers */
+  .border-gray-100, .border-gray-200, .border-gray-300,
+  .border-slate-100, .border-slate-200 { border-color: var(--border) !important; }
+  .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+  .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border) !important; }
+
+  /* Soft brand/status tints used as card fills — keep tint but dark-appropriate */
+  .bg-emerald-50, .bg-green-50 { background-color: color-mix(in srgb, #10b981 14%, var(--card)) !important; }
+  .bg-blue-50, .bg-sky-50, .bg-indigo-50 { background-color: color-mix(in srgb, #3b82f6 14%, var(--card)) !important; }
+  .bg-purple-50, .bg-violet-50 { background-color: color-mix(in srgb, #8b5cf6 14%, var(--card)) !important; }
+  .bg-orange-50, .bg-amber-50, .bg-yellow-50 { background-color: color-mix(in srgb, #f59e0b 14%, var(--card)) !important; }
+  .bg-red-50, .bg-rose-50 { background-color: color-mix(in srgb, #ef4444 14%, var(--card)) !important; }
+
+  /* Hover states that assumed a light page */
+  .hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover { background-color: var(--accent) !important; }
 }

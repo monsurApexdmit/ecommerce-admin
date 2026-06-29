@@ -4,8 +4,7 @@ import type React from "react"
 import { Suspense } from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { useRouter, usePathname } from "next/navigation"
 import { StaffProvider } from "@/contexts/staff-context"
 import { VendorProvider } from "@/contexts/vendor-context"
 import { ProductProvider } from "@/contexts/product-context"
@@ -21,30 +20,17 @@ import { ShipmentProvider } from "@/contexts/shipment-context"
 import { OrderProvider } from "@/contexts/order-context"
 import { NotificationProvider, useNotifications } from "@/contexts/notification-context"
 import {
-  LayoutDashboard,
-  Settings,
-  LogOut,
   Bell,
-  ChevronDown,
   Trash2,
   ExternalLink,
 } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { Toaster as SonnerToaster } from "sonner"
 import { CustomerSupportMessenger } from "@/components/customer-support-messenger"
+import { ThemeAccentControls } from "@/components/theme-accent-controls"
 import { CompanySettingsProvider } from "@/contexts/company-settings-context"
-import { TrialBanner } from "@/components/trial-banner"
 
 
 function NotificationBell() {
@@ -174,10 +160,34 @@ function NotificationBell() {
   )
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useSaasAuth()
-  const userEmail = user?.email || ""
+// Derives a breadcrumb from the current path: home / current page (bolded).
+// Skips the leading "dashboard" segment and humanises the last one.
+function Breadcrumbs() {
+  const pathname = usePathname()
+  const segments = (pathname || "").split("/").filter(Boolean).filter((s) => s !== "dashboard")
+  const current = segments[segments.length - 1]
 
+  const humanise = (s: string) =>
+    s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+
+  return (
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+      <Link href="/dashboard" className="text-muted-foreground transition-colors hover:text-foreground">
+        Home
+      </Link>
+      {current && (
+        <>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="font-medium text-foreground" aria-current="page">
+            {humanise(current)}
+          </span>
+        </>
+      )}
+    </nav>
+  )
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <CompanySettingsProvider>
     <NotificationProvider>
@@ -198,56 +208,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <SidebarProvider>
                         <AppSidebar />
                         <SidebarInset>
-                          <TrialBanner />
-                          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b bg-white px-4">
-                            <div className="flex items-center gap-2 px-4">
-                              <SidebarTrigger className="-ml-1" />
-                            </div>
-    
-                            <div className="flex items-center gap-4 ml-auto">
+                          {/* Slim top bar: collapse toggle + breadcrumb (left), bell (right).
+                              Trial banner and profile moved into the sidebar. */}
+                          <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border bg-white px-4 dark:bg-background">
+                            <SidebarTrigger className="-ml-1" />
+                            <Breadcrumbs />
+                            <div className="ml-auto flex items-center gap-1">
+                              <ThemeAccentControls />
                               <NotificationBell />
-    
-                              <div className="flex items-center gap-3 pl-4 border-l">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button className="flex items-center gap-3 hover:bg-gray-50 p-2 rounded-lg transition-colors outline-none">
-                                      <div className="hidden sm:block text-right">
-                                        <p className="text-sm font-medium text-gray-900">Admin User</p>
-                                        <p className="text-xs text-gray-500">{userEmail}</p>
-                                      </div>
-                                      <Avatar>
-                                        <AvatarImage src="/admin-avatar.jpg" alt="Admin" />
-                                        <AvatarFallback className="bg-emerald-100 text-emerald-700">AD</AvatarFallback>
-                                      </Avatar>
-                                      <ChevronDown className="w-4 h-4 text-gray-500" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-56">
-                                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem asChild>
-                                      <Link href="/dashboard" className="cursor-pointer">
-                                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                                        <span>Dashboard</span>
-                                      </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                      <Link href="/dashboard/edit-profile" className="cursor-pointer">
-                                        <Settings className="mr-2 h-4 w-4" />
-                                        <span>Edit Profile</span>
-                                      </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer focus:text-red-600">
-                                      <LogOut className="mr-2 h-4 w-4" />
-                                      <span>Log out</span>
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
                             </div>
                           </header>
-                          <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-gray-50/50">
+                          <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-muted/30 dark:bg-background">
                             <div className="flex-1 min-h-0 overflow-auto p-4 lg:p-8 has-[[data-pos-page]]:p-0 has-[[data-pos-page]]:overflow-hidden">
                               {children}
                             </div>
