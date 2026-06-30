@@ -24,9 +24,9 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
     const { formatCurrency } = useCompanySettings()
 
     return (
-        <div className="flex gap-2.5 p-2.5 bg-white border rounded-lg group hover:border-emerald-200 transition-colors">
+        <div className="flex gap-2.5 p-2.5 bg-card border border-border rounded-lg group hover:border-brand/40 transition-colors">
             {/* Image */}
-            <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden shrink-0 mt-0.5">
+            <div className="w-12 h-12 bg-muted rounded-md overflow-hidden shrink-0 mt-0.5">
                 <img
                     src={item.image || "/placeholder.svg"}
                     alt={item.name}
@@ -41,7 +41,7 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
                     <TooltipProvider delayDuration={300}>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <h4 className="text-sm font-medium text-gray-900 truncate min-w-0 cursor-default leading-tight">
+                                <h4 className="text-sm font-medium text-foreground truncate min-w-0 cursor-default leading-tight">
                                     {item.name}
                                 </h4>
                             </TooltipTrigger>
@@ -60,12 +60,12 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
 
                 {/* Variant */}
                 {item.variantName && (
-                    <p className="text-xs text-gray-400 truncate">{item.variantName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{item.variantName}</p>
                 )}
 
                 {/* Price + Qty controls */}
                 <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-emerald-600">
+                    <p className="text-sm font-bold text-money-fg">
                         {formatCurrency(item.price)}
                     </p>
                     <div className="flex items-center gap-1">

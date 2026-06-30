@@ -44,12 +44,21 @@
   --brand-foreground: #ffffff;
   --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
   --brand-fg: var(--brand);
+
+  /* Money/checkout accent (teal) — used by POS price + charge button. */
+  --money: #0d9488;
+  --money-foreground: #ffffff;
+  --money-soft: color-mix(in srgb, var(--money) 12%, transparent);
+  --money-fg: var(--money);
 }
 
 .dark {
   /* Brand brightens slightly on dark; soft tint gets stronger to stay visible. */
   --brand-fg: color-mix(in srgb, var(--brand), white 26%);
   --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
+  --money: #2dd4bf;
+  --money-fg: color-mix(in srgb, var(--money), white 12%);
+  --money-soft: color-mix(in srgb, var(--money) 20%, transparent);
 
   /* Blue-slate dark palette (matches the redesign mockup). Hue ~255, low chroma. */
   --background: oklch(0.16 0.018 258);
@@ -129,6 +138,10 @@
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
   --color-brand-fg: var(--brand-fg);
+  --color-money: var(--money);
+  --color-money-foreground: var(--money-foreground);
+  --color-money-soft: var(--money-soft);
+  --color-money-fg: var(--money-fg);
 }
 
 @layer base {
@@ -139,6 +152,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Brand remap (both themes).
+ *
+ * Most green buttons/links were authored with hardcoded emerald/green
+ * utilities. Remap them to the runtime `--brand` var so the topbar accent
+ * picker recolours them too. `!important` because these must beat Tailwind's
+ * own utility output regardless of layer order and cover hover/focus variants.
+ */
+.bg-emerald-600, .bg-emerald-700, .bg-green-600, .bg-green-700 { background-color: var(--brand) !important; }
+.hover\:bg-emerald-600:hover, .hover\:bg-emerald-700:hover,
+.hover\:bg-green-600:hover, .hover\:bg-green-700:hover { background-color: color-mix(in srgb, var(--brand), black 8%) !important; }
+.text-emerald-600, .text-emerald-700, .text-green-600, .text-green-700 { color: var(--brand-fg) !important; }
+.hover\:text-emerald-700:hover, .hover\:text-green-700:hover { color: var(--brand-fg) !important; }
+.border-emerald-200, .border-emerald-300, .border-emerald-500, .border-emerald-600,
+.border-green-200, .border-green-300, .border-green-500, .border-green-600 { border-color: color-mix(in srgb, var(--brand) 45%, transparent) !important; }
+.ring-emerald-500, .ring-emerald-600, .ring-green-500, .ring-green-600,
+.focus-visible\:ring-emerald-500:focus-visible { --tw-ring-color: var(--brand) !important; }
+.bg-emerald-50, .bg-green-50, .bg-emerald-100, .bg-green-100 { background-color: var(--brand-soft) !important; }
+.text-emerald-800, .text-green-800 { color: var(--brand-fg) !important; }
 
 /*
  * Dark-mode compatibility layer.
@@ -159,7 +192,9 @@
   .bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100, .bg-neutral-50 {
     background-color: color-mix(in oklab, var(--card), white 4%) !important;
   }
-  .bg-gray-200 { background-color: var(--muted) !important; }
+  .bg-gray-200, .bg-gray-300, .bg-slate-200, .bg-slate-300, .bg-neutral-200 { background-color: var(--muted) !important; }
+  /* Mid grays — image placeholders, avatars, dots. Keep them visible but muted. */
+  .bg-gray-400, .bg-gray-500, .bg-slate-400, .bg-slate-500 { background-color: var(--secondary) !important; }
 
   /* Text */
   .text-gray-900, .text-slate-900, .text-black { color: var(--foreground) !important; }
@@ -175,7 +210,8 @@
 
   /* Borders / dividers */
   .border-gray-100, .border-gray-200, .border-gray-300,
-  .border-slate-100, .border-slate-200 { border-color: var(--border) !important; }
+  .border-gray-400, .border-gray-500, .border-gray-600,
+  .border-slate-100, .border-slate-200, .border-slate-300 { border-color: var(--border) !important; }
   .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
   .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border) !important; }
 
@@ -188,4 +224,14 @@
 
   /* Hover states that assumed a light page */
   .hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover { background-color: var(--accent) !important; }
+
+  /* Light page-background gradients (bg-gradient-to-* from-slate-50 to-gray-100 …).
+     Neutralise the from/to/via stops so the whole gradient flattens to the dark bg. */
+  .from-gray-50, .from-gray-100, .from-slate-50, .from-slate-100, .from-neutral-50,
+  .from-white { --tw-gradient-from: var(--background) !important; }
+  .to-gray-50, .to-gray-100, .to-slate-50, .to-slate-100, .to-neutral-50,
+  .to-white { --tw-gradient-to: var(--background) !important; }
+  .via-gray-50, .via-gray-100, .via-slate-50, .via-slate-100, .via-white {
+    --tw-gradient-via: var(--background) !important;
+  }
 }

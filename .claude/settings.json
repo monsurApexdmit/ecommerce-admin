@@ -6,7 +6,9 @@
       "Bash(git commit -q -m 'feat: restrict trial plan modules \\(no POS/Support\\) *)",
       "Bash(echo \"committed: $?\")",
       "Bash(git push *)",
-      "Read(//home/monsur/Downloads/**)"
+      "Read(//home/monsur/Downloads/**)",
+      "Bash(cd /home/monsur/Documents/ecommerce-admin; wc -l /home/monsur/Downloads/pos-redesign.html app/dashboard/pos/page.tsx)",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('app/globals.css','utf8'\\);const o=\\(c.match\\(/{/g\\)||[]\\).length,cl=\\(c.match\\(/}/g\\)||[]\\).length;console.log\\('braces',o,cl,o===cl?'OK':'MISMATCH'\\)\")"
     ],
     "additionalDirectories": [
       "/home/monsur/Documents/Go/inventory-laravel/app/Services/Auth",

@@ -340,7 +340,7 @@ export default function PrintBarcodePage() {
   // ============ JSX ============
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-muted/40 to-muted/20 dark:from-background dark:to-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div>

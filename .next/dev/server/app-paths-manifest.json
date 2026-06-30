@@ -1,9 +1,11 @@
 {
   "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
-  "/dashboard/orders/page": "app/dashboard/orders/page.js",
-  "/dashboard/billing/subscriptions/page": "app/dashboard/billing/subscriptions/page.js",
-  "/dashboard/edit-profile/page": "app/dashboard/edit-profile/page.js",
-  "/dashboard/categories/page": "app/dashboard/categories/page.js",
-  "/dashboard/products/page": "app/dashboard/products/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js"
+  "/dashboard/pos/page": "app/dashboard/pos/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/inventory/page": "app/dashboard/inventory/page.js",
+  "/dashboard/inventory/transfer/page": "app/dashboard/inventory/transfer/page.js",
+  "/dashboard/inventory/serial-batch/page": "app/dashboard/inventory/serial-batch/page.js",
+  "/dashboard/returns/customer/page": "app/dashboard/returns/customer/page.js",
+  "/dashboard/support/page": "app/dashboard/support/page.js",
+  "/dashboard/orders/page": "app/dashboard/orders/page.js"
 }

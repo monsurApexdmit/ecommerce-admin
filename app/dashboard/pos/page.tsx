@@ -370,11 +370,11 @@ export default function PosPage() {
     return (
         <div data-pos-page="" className="flex flex-col h-full gap-0 overflow-hidden">
             {/* Top Navigation Bar */}
-            <div className="bg-white border-b shadow-sm overflow-hidden">
+            <div className="bg-card border-b border-border overflow-hidden">
                 <div className="flex items-center gap-4 px-6 py-3">
                     <div className="relative flex-1 max-w-lg">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <Input placeholder="Search products..." className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white"
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <Input placeholder="Search products, scan a barcode…" className="pl-10 h-10 bg-muted/50 border-border focus:bg-background"
                             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
 
@@ -405,55 +405,69 @@ export default function PosPage() {
             <div className="flex gap-3 flex-1 overflow-hidden p-3 min-w-0">
 
                 {/* Category Sidebar */}
-                <div className="w-36 shrink-0 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="px-3 py-2.5 border-b bg-gray-50/50">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Categories</p>
+                <div className="w-36 shrink-0 flex flex-col bg-card rounded-xl border border-border overflow-hidden">
+                    <div className="px-3 py-2.5 border-b border-border">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Categories</p>
                     </div>
                     <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         <div className="flex flex-col gap-0.5 p-2">
-                            {categories.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => setSelectedCategory(cat.id)}
-                                    className={cn(
-                                        "w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all",
-                                        selectedCategory === cat.id
-                                            ? "bg-emerald-600 text-white shadow-sm"
-                                            : "text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
-                                    )}
-                                >
-                                    {cat.name}
-                                </button>
-                            ))}
+                            {categories.map(cat => {
+                                const count = cat.id === "all"
+                                    ? products.length
+                                    : products.filter(p => p.categoryId === String(cat.id)).length
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setSelectedCategory(cat.id)}
+                                        className={cn(
+                                            "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                                            selectedCategory === cat.id
+                                                ? "bg-brand-soft text-brand-fg"
+                                                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        )}
+                                    >
+                                        <span className="truncate text-left">{cat.name}</span>
+                                        <span className={cn(
+                                            "text-[11px] tabular-nums shrink-0",
+                                            selectedCategory === cat.id ? "text-brand-fg/70" : "text-muted-foreground/60"
+                                        )}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
                 </div>
 
                 {/* Product Grid */}
-                <div className="flex-1 min-w-0 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
-                    {/* View Toggle Header */}
-                    <div className="flex items-center justify-between px-4 py-2 border-b bg-gray-50/50 shrink-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            {filteredProducts.length} Products
-                        </p>
-                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex-1 min-w-0 flex flex-col bg-card rounded-xl border border-border overflow-hidden">
+                    {/* Grid header */}
+                    <div className="flex items-end justify-between px-4 py-3 border-b border-border shrink-0">
+                        <div>
+                            <h1 className="text-lg font-semibold tracking-tight text-foreground">Point of Sale</h1>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                <b className="text-money-fg font-semibold">{filteredProducts.length}</b> products available
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                             <button
                                 onClick={() => setViewMode("2col")}
-                                className={cn("p-1.5 rounded-md transition-all", viewMode === "2col" ? "bg-white shadow-sm text-emerald-600" : "text-gray-400 hover:text-gray-600")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "2col" ? "bg-card shadow-sm text-brand-fg" : "text-muted-foreground hover:text-foreground")}
                                 title="2 columns"
                             >
                                 <Grid2X2 className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={() => setViewMode("4col")}
-                                className={cn("p-1.5 rounded-md transition-all", viewMode === "4col" ? "bg-white shadow-sm text-emerald-600" : "text-gray-400 hover:text-gray-600")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "4col" ? "bg-card shadow-sm text-brand-fg" : "text-muted-foreground hover:text-foreground")}
                                 title="4 columns"
                             >
                                 <LayoutGrid className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={() => setViewMode("list")}
-                                className={cn("p-1.5 rounded-md transition-all", viewMode === "list" ? "bg-white shadow-sm text-emerald-600" : "text-gray-400 hover:text-gray-600")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "list" ? "bg-card shadow-sm text-brand-fg" : "text-muted-foreground hover:text-foreground")}
                                 title="List view"
                             >
                                 <List className="w-4 h-4" />
@@ -461,9 +475,9 @@ export default function PosPage() {
                         </div>
                     </div>
                     <div className="flex-1 min-h-0">
-                        <ScrollArea className="h-full p-4 bg-gray-50/30">
+                        <ScrollArea className="h-full p-4 bg-muted/20">
                             {productsLoading ? (
-                                <div className="flex items-center justify-center h-64 text-gray-400"><p>Loading products...</p></div>
+                                <div className="flex items-center justify-center h-64 text-muted-foreground"><p>Loading products...</p></div>
                             ) : filteredProducts.length > 0 ? (
                                 viewMode === "list" ? (
                                     <div className="flex flex-col gap-2 pb-4">
@@ -481,23 +495,23 @@ export default function PosPage() {
                                                     }}
                                                     disabled={stock === 0}
                                                     className={cn(
-                                                        "flex items-center gap-3 w-full text-left p-3 rounded-lg border bg-white hover:border-emerald-300 hover:bg-emerald-50/40 transition-all",
+                                                        "flex items-center gap-3 w-full text-left p-3 rounded-lg border border-border bg-card hover:border-brand/40 hover:bg-accent transition-all",
                                                         stock === 0 && "opacity-50 cursor-not-allowed"
                                                     )}
                                                 >
                                                     <img
                                                         src={product.image || "/placeholder.svg"}
                                                         alt={product.name}
-                                                        className="w-12 h-12 rounded-lg object-cover shrink-0 bg-gray-100"
+                                                        className="w-12 h-12 rounded-lg object-cover shrink-0 bg-muted"
                                                         onError={e => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
                                                     />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-medium text-gray-900 truncate text-sm">{product.name}</p>
-                                                        <p className="text-xs text-gray-500">{product.category}</p>
+                                                        <p className="font-medium text-foreground truncate text-sm">{product.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{product.category}</p>
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <p className="font-bold text-emerald-600 text-sm">{formatCurrency((() => { const b = product.salePrice || product.price; return product.offerPrice ? (product.offerType === "percentage" ? b * (1 - product.offerPrice / 100) : b - product.offerPrice) : b })())}</p>
-                                                        <p className="text-xs text-gray-400">{stock} in stock</p>
+                                                        <p className="font-bold text-money-fg text-sm">{formatCurrency((() => { const b = product.salePrice || product.price; return product.offerPrice ? (product.offerType === "percentage" ? b * (1 - product.offerPrice / 100) : b - product.offerPrice) : b })())}</p>
+                                                        <p className="text-xs text-muted-foreground">{stock} in stock</p>
                                                     </div>
                                                 </button>
                                             )
@@ -522,7 +536,7 @@ export default function PosPage() {
                                     </div>
                                 )
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                                     <Search className="w-12 h-12 mb-2 opacity-20" />
                                     <p>No products in stock at this location</p>
                                 </div>
@@ -531,19 +545,22 @@ export default function PosPage() {
                     </div>
                 </div>
 
-                {/* Cart - 40% width */}
-                <div className="w-80 xl:w-96 shrink-0 flex flex-col bg-white rounded-xl border shadow-sm h-full overflow-hidden">
-                <div className="p-4 border-b bg-gray-50/50">
+                {/* Cart — receipt-style */}
+                <div className="w-80 xl:w-96 shrink-0 flex flex-col bg-card rounded-xl border border-border h-full overflow-hidden">
+                <div className="p-4 border-b border-border">
                     <CustomerCombobox value={selectedCustomerId}
                         onValueChange={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name) }} />
                 </div>
                 <div className="flex-1 flex flex-col min-h-0 relative">
                     {cart.length === 0 ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 space-y-4">
-                            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
-                                <ShoppingCart className="w-10 h-10 opacity-20" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground space-y-4 px-6 text-center">
+                            <div className="w-20 h-20 rounded-2xl bg-brand-soft flex items-center justify-center">
+                                <ShoppingCart className="w-9 h-9 text-brand-fg opacity-80" />
                             </div>
-                            <p className="text-sm font-medium">Your cart is empty</p>
+                            <div>
+                                <p className="text-sm font-medium text-foreground">Cart is empty</p>
+                                <p className="text-xs mt-1">Tap any product to start ringing up a sale.</p>
+                            </div>
                         </div>
                     ) : (
                         <ScrollArea className="h-full">
@@ -555,15 +572,15 @@ export default function PosPage() {
                         </ScrollArea>
                     )}
                 </div>
-                <div className="grid grid-cols-3 gap-2 p-3 border-t bg-gray-50/30">
-                    <Button variant="outline" size="sm" className="h-9 gap-2 text-gray-600 border-dashed" onClick={() => setIsDiscountModalOpen(true)}>
+                <div className="grid grid-cols-3 gap-2 p-3 border-t border-border">
+                    <Button variant="outline" size="sm" className="h-9 gap-2 text-muted-foreground" onClick={() => setIsDiscountModalOpen(true)}>
                         <Percent className="w-3.5 h-3.5" />
                         Discount {discount > 0 && `(${formatCurrency(discount)})`}
                     </Button>
                     <Button
                         variant="outline"
                         size="sm"
-                        className={`h-9 gap-2 ${appliedCoupon ? 'text-emerald-600 border-emerald-200 hover:bg-emerald-50' : 'text-blue-600 border-blue-100 hover:bg-blue-50'}`}
+                        className={cn("h-9 gap-2", appliedCoupon ? "text-money-fg border-money/40 hover:bg-money-soft" : "text-muted-foreground")}
                         onClick={() => {
                             if (appliedCoupon) {
                                 handleRemoveCoupon()
@@ -576,33 +593,48 @@ export default function PosPage() {
                         <Ticket className="w-3.5 h-3.5" />
                         {appliedCoupon ? `${appliedCoupon.code}` : "Coupon"}
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 text-red-600 border-red-100 hover:bg-red-50" onClick={() => setIsResetDialogOpen(true)}>
+                    <Button variant="outline" size="sm" className="h-9 gap-2 text-destructive hover:bg-destructive/10" onClick={() => setIsResetDialogOpen(true)}>
                         <RotateCcw className="w-3.5 h-3.5" />
-                        Reset Cart
+                        Reset
                     </Button>
                 </div>
-                <div className="p-4 bg-gray-50 border-t space-y-3">
-                    <div className="space-y-1 text-sm text-gray-600">
-                        <div className="flex justify-between"><span>Subtotal</span><span className="font-medium font-mono">{formatCurrency(subtotal)}</span></div>
-                        <div className="flex justify-between"><span>{formatTaxLabel()}</span><span className="font-medium font-mono">{formatCurrency(tax)}</span></div>
-                        {discount > 0 && (
-                            <div className="flex justify-between text-emerald-600">
-                                <span>Manual Discount</span><span className="font-medium font-mono">-{formatCurrency(discount)}</span>
-                            </div>
-                        )}
-                        {couponDiscount > 0 && (
-                            <div className="flex justify-between text-blue-600">
-                                <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-{formatCurrency(couponDiscount)}</span>
-                            </div>
-                        )}
-                        <div className="pt-2 border-t mt-2 flex justify-between items-end text-gray-900">
-                            <span className="font-bold text-lg">Total</span>
-                            <span className="font-bold text-3xl text-emerald-600">{formatCurrency(total)}</span>
+                <div className="p-4 border-t border-border">
+                    {/* Receipt */}
+                    <div className="relative rounded-2xl border border-border bg-muted/40 p-4">
+                        {/* punch-hole notches */}
+                        <span className="absolute -left-[7px] top-[52px] size-3.5 rounded-full bg-card border border-border" aria-hidden />
+                        <span className="absolute -right-[7px] top-[52px] size-3.5 rounded-full bg-card border border-border" aria-hidden />
+
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                            <div className="flex justify-between py-0.5"><span>Subtotal</span><span className="font-medium font-mono text-foreground">{formatCurrency(subtotal)}</span></div>
+                            <div className="flex justify-between py-0.5"><span>{formatTaxLabel()}</span><span className="font-medium font-mono text-foreground">{formatCurrency(tax)}</span></div>
+                            {discount > 0 && (
+                                <div className="flex justify-between py-0.5 text-money-fg">
+                                    <span>Manual Discount</span><span className="font-medium font-mono">-{formatCurrency(discount)}</span>
+                                </div>
+                            )}
+                            {couponDiscount > 0 && (
+                                <div className="flex justify-between py-0.5 text-money-fg">
+                                    <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-{formatCurrency(couponDiscount)}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* tear line */}
+                        <div className="my-3 border-t-[1.5px] border-dashed border-border" />
+
+                        <div className="flex justify-between items-end">
+                            <span className="font-semibold text-base text-foreground">Total</span>
+                            <span className="font-bold text-3xl text-money-fg tracking-tight tabular-nums">{formatCurrency(total)}</span>
                         </div>
                     </div>
-                    <Button className="w-full h-14 text-lg font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 active:scale-[0.98] transition-all"
-                        disabled={cart.length === 0 || isSubmitting} onClick={() => setIsCheckoutOpen(true)}>
-                        {isSubmitting ? "Processing..." : "Pay Now"}
+
+                    <Button
+                        className="w-full h-14 mt-4 text-base font-bold text-money-foreground bg-money hover:brightness-110 shadow-lg shadow-money/20 active:scale-[0.98] transition-all"
+                        disabled={cart.length === 0 || isSubmitting}
+                        onClick={() => setIsCheckoutOpen(true)}
+                    >
+                        {isSubmitting ? "Processing..." : `Charge ${formatCurrency(total)}`}
                     </Button>
                 </div>
             </div>
@@ -680,17 +712,17 @@ export default function PosPage() {
                             const variantStock = getAvailableStock(selectedProductForVariant, variant)
                             return (
                                 <div key={variant.id}
-                                    className={cn("flex items-center justify-between border p-3 rounded-lg hover:bg-gray-50 cursor-pointer",
+                                    className={cn("flex items-center justify-between border border-border p-3 rounded-lg hover:bg-accent cursor-pointer",
                                         variantStock === 0 && "opacity-50 pointer-events-none")}
                                     onClick={() => variantStock > 0 && addToCart(selectedProductForVariant, variant)}
                                 >
                                     <div>
                                         <p className="font-medium">{variant.name}</p>
-                                        <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
+                                        <p className="text-sm text-muted-foreground">SKU: {variant.sku}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-emerald-600">{formatCurrency((() => { const b = variant.salePrice || variant.price || 0; const op = variant.offerPrice ?? selectedProductForVariant?.offerPrice; const ot = variant.offerType ?? selectedProductForVariant?.offerType ?? "percentage"; return op ? (ot === "percentage" ? b * (1 - op / 100) : b - op) : b })())}</p>
-                                        <Badge variant="outline" className={variantStock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
+                                        <p className="font-bold text-money-fg">{formatCurrency((() => { const b = variant.salePrice || variant.price || 0; const op = variant.offerPrice ?? selectedProductForVariant?.offerPrice; const ot = variant.offerType ?? selectedProductForVariant?.offerType ?? "percentage"; return op ? (ot === "percentage" ? b * (1 - op / 100) : b - op) : b })())}</p>
+                                        <Badge variant="outline" className={variantStock > 0 ? "text-money-fg border-money/30" : "text-destructive border-destructive/30"}>
                                             {variantStock > 0 ? `${variantStock} in stock` : "Out of stock"}
                                         </Badge>
                                     </div>
