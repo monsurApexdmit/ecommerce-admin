@@ -453,7 +453,7 @@ export function ListPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
-              <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+              <thead className="bg-muted border-b border-border sticky top-0 z-10">
                 <tr>
                   {enableCheckboxes && (
                     <th className="px-4 py-3 w-12 whitespace-nowrap">
@@ -466,23 +466,23 @@ export function ListPage({
                   {columns.map(col => (
                     <th
                       key={col.key}
-                      className={`px-4 py-3 text-left text-sm font-semibold text-gray-700 whitespace-nowrap ${col.width || "min-w-[150px]"}`}
+                      className={`px-4 py-3 text-left text-sm font-semibold text-foreground whitespace-nowrap ${col.width || "min-w-[150px]"}`}
                     >
                       {col.label}
                     </th>
                   ))}
                   {actions.length > 0 && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-20 whitespace-nowrap sticky right-0 bg-gray-50">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground w-20 whitespace-nowrap sticky right-0 bg-muted">
                       Actions
                     </th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-border">
                 {currentData.map(item => (
                   <tr
                     key={item.id}
-                    className={`hover:bg-gray-50 transition-colors ${rowClassName?.(item) || ""}`}
+                    className={`hover:bg-muted/40 transition-colors ${rowClassName?.(item) || ""}`}
                   >
                     {enableCheckboxes && (
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -493,12 +493,12 @@ export function ListPage({
                       </td>
                     )}
                     {columns.map(col => (
-                      <td key={`${item.id}-${col.key}`} className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                      <td key={`${item.id}-${col.key}`} className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
                         {col.render ? col.render(item[col.key], item) : item[col.key]}
                       </td>
                     ))}
                     {actions.length > 0 && (
-                      <td className="px-4 py-3 sticky right-0 bg-white">
+                      <td className="px-4 py-3 sticky right-0 bg-card">
                         <div className="flex gap-1 justify-center">
                           {actions
                             .filter(a => !a.show || a.show(item))

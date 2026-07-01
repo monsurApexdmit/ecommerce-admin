@@ -45,6 +45,13 @@
   --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
   --brand-fg: var(--brand);
 
+  /* Route the shadcn primary token through the brand var so every
+     primary-based component (Switch, default Button, Checkbox, rings)
+     follows the runtime accent picker. */
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --ring: var(--brand);
+
   /* Money/checkout accent (teal) — used by POS price + charge button. */
   --money: #0d9488;
   --money-foreground: #ffffff;
@@ -56,6 +63,9 @@
   /* Brand brightens slightly on dark; soft tint gets stronger to stay visible. */
   --brand-fg: color-mix(in srgb, var(--brand), white 26%);
   --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --ring: var(--brand);
   --money: #2dd4bf;
   --money-fg: color-mix(in srgb, var(--money), white 12%);
   --money-soft: color-mix(in srgb, var(--money) 20%, transparent);
@@ -67,8 +77,7 @@
   --card-foreground: oklch(0.93 0.008 250);
   --popover: oklch(0.21 0.02 258);
   --popover-foreground: oklch(0.93 0.008 250);
-  --primary: oklch(0.6 0.15 165);
-  --primary-foreground: oklch(0.98 0 0);
+  /* --primary / --primary-foreground / --ring routed to --brand above */
   --secondary: oklch(0.26 0.02 258);
   --secondary-foreground: oklch(0.93 0.008 250);
   --muted: oklch(0.26 0.02 258);
@@ -79,7 +88,7 @@
   --destructive-foreground: oklch(0.98 0 0);
   --border: oklch(0.3 0.02 258);
   --input: oklch(0.3 0.02 258);
-  --ring: oklch(0.6 0.15 165);
+  /* --ring routed to --brand above */
   --chart-1: oklch(0.6 0.15 165);
   --chart-2: oklch(0.7 0.18 240);
   --chart-3: oklch(0.75 0.15 60);
@@ -161,7 +170,15 @@
  * picker recolours them too. `!important` because these must beat Tailwind's
  * own utility output regardless of layer order and cover hover/focus variants.
  */
-.bg-emerald-600, .bg-emerald-700, .bg-green-600, .bg-green-700 { background-color: var(--brand) !important; }
+.bg-emerald-500, .bg-emerald-600, .bg-emerald-700,
+.bg-green-500, .bg-green-600, .bg-green-700 { background-color: var(--brand) !important; }
+/* Radix state variants (switch/toggle checked, tabs active) */
+.data-\[state\=checked\]\:bg-emerald-500[data-state="checked"],
+.data-\[state\=checked\]\:bg-emerald-600[data-state="checked"],
+.data-\[state\=checked\]\:bg-green-500[data-state="checked"],
+.data-\[state\=checked\]\:bg-green-600[data-state="checked"],
+.data-\[state\=on\]\:bg-emerald-500[data-state="on"],
+.data-\[state\=active\]\:bg-emerald-500[data-state="active"] { background-color: var(--brand) !important; }
 .hover\:bg-emerald-600:hover, .hover\:bg-emerald-700:hover,
 .hover\:bg-green-600:hover, .hover\:bg-green-700:hover { background-color: color-mix(in srgb, var(--brand), black 8%) !important; }
 .text-emerald-600, .text-emerald-700, .text-green-600, .text-green-700 { color: var(--brand-fg) !important; }
