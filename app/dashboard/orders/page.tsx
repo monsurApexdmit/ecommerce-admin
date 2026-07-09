@@ -30,10 +30,45 @@ interface StatsData {
   deliveredOrders: number
 }
 
+// Seller identity printed at the top of every invoice. Company settings only
+// carry tax/currency, so name/address/contact live here until the backend
+// exposes them.
+const SELLER = {
+  name: "Admin",
+  addressLines: ["59 Station Rd, Purls Bridge", "United Kingdom"],
+  phone: "019 579 034",
+  email: "",
+}
+
+const ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+/** Spells a whole number below one billion, e.g. 1280 -> "one thousand two hundred eighty". */
+function spell(n: number): string {
+  if (n === 0) return "zero"
+  if (n < 20) return ONES[n]
+  if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "")
+  if (n < 1000) return ONES[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + spell(n % 100) : "")
+  for (const [limit, word] of [[1e9, "million"], [1e6, "thousand"]] as const) {
+    const unit = limit === 1e9 ? 1e6 : 1e3
+    if (n < limit) return spell(Math.floor(n / unit)) + " " + word + (n % unit ? " " + spell(n % unit) : "")
+  }
+  return String(n)
+}
+
+/** "Two hundred eighty and 00/100" — the legal amount line on the total plate. */
+function amountInWords(amount: number): string {
+  const whole = Math.floor(Math.abs(amount))
+  const cents = Math.round((Math.abs(amount) - whole) * 100)
+  const words = spell(whole)
+  return words.charAt(0).toUpperCase() + words.slice(1) + ` and ${String(cents).padStart(2, "0")}/100`
+}
+
 export default function OrdersPage() {
   const { canRead } = useSaasAuth()
   const searchParams = useSearchParams()
-  const { formatCurrency } = useCompanySettings()
+  const { formatCurrency, settings } = useCompanySettings()
   const latestFetchIdRef = useRef(0)
   const [orders, setOrders] = useState<SellResponse[]>([])
   const [total, setTotal] = useState(0)
@@ -214,168 +249,372 @@ export default function OrdersPage() {
   }
 
   const handlePrintInvoice = (order: SellResponse) => {
-    const shipTo = order.shippingFullName
-      ? `<p style="font-weight:600;">${order.shippingFullName}</p>
-         ${order.shippingEmail ? `<p style="font-size:13px;color:#6b7280;">${order.shippingEmail}</p>` : ""}
-         <p style="font-size:13px;color:#6b7280;">${order.shippingPhone ?? ""}</p>
-         <p style="font-size:13px;color:#6b7280;">${order.shippingAddressLine1 ?? ""}${order.shippingAddressLine2 ? ", " + order.shippingAddressLine2 : ""}</p>
-         <p style="font-size:13px;color:#6b7280;">${[order.shippingCity, order.shippingState, order.shippingPostalCode].filter(Boolean).join(", ")}</p>
-         <p style="font-size:13px;color:#6b7280;">${order.shippingCountry ?? ""}</p>`
-      : `<p style="font-weight:600;">${order.customerName}</p>
-         ${order.shippingEmail ? `<p style="font-size:13px;color:#6b7280;">${order.shippingEmail}</p>` : ""}
-         ${order.shippingPhone ? `<p style="font-size:13px;color:#6b7280;">${order.shippingPhone}</p>` : ""}`
+    const esc = (v: unknown) =>
+      String(v ?? "").replace(/[&<>"']/g, c =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
 
+    const money = (n: number) => formatCurrency(n)
+
+    // ---- figures -------------------------------------------------------
+    const shippingCost = Number(fmt(order.shippingCost))
+    const discount = Number(fmt(order.discount))
+    const total = Number(order.amount)
+    const subtotal = total - shippingCost + discount
+    const deposit = Number(order.shippingDepositAmount ?? 0)
+
+    // Split the total so the plate can set the cents smaller, like a cheque.
+    const totalWhole = Math.floor(Math.abs(total))
+    const totalCents = String(Math.round((Math.abs(total) - totalWhole) * 100)).padStart(2, "0")
+    // Currency symbol = whatever formatCurrency puts before the first digit.
+    const currencySymbol = money(0).replace(/[\d.,\s]/g, "") || "$"
+
+    // ---- payment state -------------------------------------------------
+    const ps = order.paymentStatus ?? ""
+    const paid = ps === "paid"
+    const payment =
+      paid ? { label: "Paid", note: "Settled in full" }
+      : ps === "shipping_deposit_paid" ? { label: "Deposit", note: "Shipping deposit received" }
+      : ps === "failed" || ps === "cancelled" ? { label: ps, note: "Payment unsuccessful" }
+      : ps === "pending_payment" ? { label: "Pending", note: "Awaiting payment" }
+      : ps ? { label: ps, note: "" }
+      : null
+
+    const issued = new Date(order.orderTime)
+    const issuedDate = issued.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+    const issuedTime = issued.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    const stampDate = [issued.getDate(), issued.getMonth() + 1, issued.getFullYear()]
+      .map((n, i) => (i < 2 ? String(n).padStart(2, "0") : String(n)))
+      .join(" &middot; ")
+
+    // ---- billed-to -----------------------------------------------------
+    const buyerName = order.shippingFullName || order.customerName || "Walk-in Customer"
+    const buyerLines = [
+      order.shippingAddressLine1
+        ? esc(order.shippingAddressLine1) + (order.shippingAddressLine2 ? ", " + esc(order.shippingAddressLine2) : "")
+        : "",
+      esc([order.shippingCity, order.shippingState, order.shippingPostalCode].filter(Boolean).join(", ")),
+      esc(order.shippingCountry ?? ""),
+      esc(order.shippingEmail ?? ""),
+      esc(order.shippingPhone ?? ""),
+    ].filter(Boolean)
+    const buyerSub = buyerLines.length ? buyerLines.join("<br />") : "Point of sale"
+
+    // ---- line items ----------------------------------------------------
     const itemsHtml = order.items?.length
       ? order.items.map((item, i) => {
-          const bundleRows = item.bundleItems?.length
+          const children = item.bundleItems?.length
             ? item.bundleItems.map(bi => `
-              <tr style="background:#f9fafb;">
-                <td></td>
-                <td style="padding-left:32px;font-size:12px;color:#6b7280;">↳ ${bi.productName}</td>
-                <td style="text-align:center;font-size:12px;color:#6b7280;">${bi.totalQty}</td>
-                <td style="text-align:right;font-size:12px;color:#9ca3af;">${bi.qtyPerBundle}×${item.quantity}</td>
-                <td></td>
-              </tr>`).join("") : ""
+              <div class="row child">
+                <div></div>
+                <div class="cell-desc"><span class="branch">&#8627;</span>${esc(bi.productName)}</div>
+                <div class="cell-qty mono">${bi.qtyPerBundle} &times; ${item.quantity}</div>
+                <div class="cell-unit mono">&mdash;</div>
+                <div class="cell-amt mono">&mdash;</div>
+              </div>`).join("")
+            : ""
           return `
-          <tr>
-            <td>${i + 1}</td>
-            <td>${item.productName}${item.bundleItems?.length ? ' <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-weight:600;">Bundle</span>' : ''}</td>
-            <td style="text-align:center;">${item.quantity}</td>
-            <td style="text-align:right;">${formatCurrency(itemPrice(item))}</td>
-            <td class="amount-red">${formatCurrency(itemTotal(item))}</td>
-          </tr>${bundleRows}`
+            <div class="row line">
+              <div class="cell-num mono">${String(i + 1).padStart(2, "0")}</div>
+              <div class="cell-desc">
+                ${esc(item.productName)}${item.bundleItems?.length ? '<span class="tag">Bundle</span>' : ""}
+                <span class="unit-inline mono">${item.quantity} &times; ${money(itemPrice(item))}</span>
+              </div>
+              <div class="cell-qty mono">${item.quantity}</div>
+              <div class="cell-unit mono">${money(itemPrice(item))}</div>
+              <div class="cell-amt mono">${money(itemTotal(item))}</div>
+            </div>${children}`
         }).join("")
-      : `<tr>
-           <td>1</td>
-           <td>${order.customerName}</td>
-           <td style="text-align:center;">1</td>
-           <td style="text-align:right;">${formatCurrency(Number(order.amount))}</td>
-           <td class="amount-red">${formatCurrency(Number(order.amount))}</td>
-         </tr>`
+      : `
+        <div class="row line">
+          <div class="cell-num mono">01</div>
+          <div class="cell-desc">${esc(order.customerName)}</div>
+          <div class="cell-qty mono">1</div>
+          <div class="cell-unit mono">${money(total)}</div>
+          <div class="cell-amt mono">${money(total)}</div>
+        </div>`
+
+    const sumRow = (label: string, value: string) => `
+      <div class="sum-row">
+        <span class="lbl">${label}</span><span class="leader"></span><span class="val mono">${value}</span>
+      </div>`
 
     const printWindow = window.open("", "_blank")
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Invoice ${order.invoiceNo}</title>
-            <style>
-              * { margin:0; padding:0; box-sizing:border-box; }
-              body { font-family:Arial,sans-serif; padding:40px; color:#374151; line-height:1.6; }
-              .invoice-container { max-width:900px; margin:0 auto; }
-              .header { display:flex; justify-content:space-between; align-items:start; margin-bottom:40px; }
-              .company-info { text-align:right; }
-              .logo { font-size:24px; font-weight:bold; color:#10b981; }
-              .company-info p { font-size:14px; color:#6b7280; margin-top:4px; }
-              .invoice-title { font-size:32px; font-weight:bold; margin-bottom:12px; }
-              .status-badge { display:inline-block; padding:6px 16px; background:#10b981; color:white; border-radius:4px; font-size:14px; font-weight:600; }
-              .invoice-meta { display:grid; grid-template-columns:repeat(3,1fr); gap:40px; margin:40px 0; }
-              .meta-item h3 { font-size:12px; color:#6b7280; text-transform:uppercase; margin-bottom:8px; font-weight:600; }
-              .meta-item p { font-size:14px; color:#374151; }
-              .invoice-to { text-align:right; }
-              table { width:100%; border-collapse:collapse; margin:40px 0; }
-              thead { background:#f9fafb; }
-              th { padding:16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; color:#374151; border-bottom:2px solid #e5e7eb; }
-              th:last-child { text-align:right; }
-              td { padding:20px 16px; border-bottom:1px solid #f3f4f6; font-size:14px; }
-              td:last-child { text-align:right; font-weight:600; }
-              .amount-red { color:#ef4444; }
-              .summary { background:#f9fafb; padding:32px; display:grid; grid-template-columns:repeat(4,1fr); gap:32px; margin:40px 0; }
-              .summary-item h3 { font-size:12px; color:#6b7280; text-transform:uppercase; margin-bottom:8px; font-weight:600; }
-              .summary-item p { font-size:16px; color:#374151; font-weight:600; }
-              .total-amount { font-size:24px !important; color:#ef4444 !important; font-weight:bold !important; }
-              @media print { body { padding:20px; } }
-            </style>
-          </head>
-          <body>
-            <div class="invoice-container">
-              <div class="header">
-                <div>
-                  <h1 class="invoice-title">INVOICE</h1>
-                  <div>
-                    <span style="font-weight:600;margin-right:8px;">STATUS</span>
-                    <span class="status-badge">${order.status}</span>
-                  </div>
-                </div>
-                <div class="company-info">
-                  <div class="logo">Admin</div>
-                  <p>59 Station Rd, Purls Bridge, United Kingdom</p>
-                  <p>019579034</p>
-                </div>
-              </div>
-              <div class="invoice-meta">
-                <div class="meta-item">
-                  <h3>Date</h3>
-                  <p>${new Date(order.orderTime).toLocaleDateString()}</p>
-                </div>
-                <div class="meta-item">
-                  <h3>Invoice No</h3>
-                  <p>#${order.invoiceNo}</p>
-                </div>
-                <div class="meta-item invoice-to">
-                  <h3>${order.shippingFullName ? "Ship To" : "Invoice To"}</h3>
-                  ${shipTo}
-                </div>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width:80px;">SR.</th>
-                    <th>PRODUCT TITLE</th>
-                    <th style="text-align:center;width:120px;">QUANTITY</th>
-                    <th style="text-align:right;width:120px;">ITEM PRICE</th>
-                    <th style="width:120px;">AMOUNT</th>
-                  </tr>
-                </thead>
-                <tbody>${itemsHtml}</tbody>
-              </table>
-              <div class="summary">
-                <div class="summary-item">
-                  <h3>Payment Method</h3>
-                  <p>${order.method}</p>
-                  ${(() => {
-                    const ps = order.paymentStatus ?? ''
-                    const isPaid = ps === 'paid'
-                    const isDeposit = ps === 'shipping_deposit_paid'
-                    const isFailed = ps === 'failed' || ps === 'cancelled'
-                    const label = isPaid ? '✓ Paid'
-                      : isDeposit ? '⏳ Deposit Paid'
-                      : isFailed ? '✗ ' + ps
-                      : ps === 'pending_payment' ? '⏳ Awaiting Payment'
-                      : ps ? '⏳ ' + ps : ''
-                    const bg = isPaid ? '#d1fae5' : isDeposit ? '#fef3c7' : isFailed ? '#fee2e2' : '#fef9c3'
-                    const color = isPaid ? '#065f46' : isDeposit ? '#92400e' : isFailed ? '#991b1b' : '#713f12'
-                    return label ? `<span style="display:inline-block;margin-top:6px;padding:3px 10px;background:${bg};color:${color};border-radius:4px;font-size:11px;font-weight:600;">${label}</span>` : ''
-                  })()}
-                  ${order.paymentTransactionId ? `<p style="font-size:10px;color:#6b7280;font-family:monospace;margin-top:4px;word-break:break-all;">Txn: ${order.paymentTransactionId}</p>` : ''}
-                </div>
-                <div class="summary-item">
-                  <h3>Shipping Cost</h3>
-                  <p style="color:#6b7280;">${formatCurrency(Number(fmt(order.shippingCost)))}</p>
-                  ${Number(order.shippingDepositAmount ?? 0) > 0 ? `
-                    <div style="margin-top:8px;padding:8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;">
-                      <p style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:2px;">Shipping Deposit Paid</p>
-                      <p style="font-size:14px;font-weight:700;color:#b45309;">${formatCurrency(Number(order.shippingDepositAmount))}</p>
-                      ${order.shippingDepositTransactionId ? `<p style="font-size:10px;color:#92400e;font-family:monospace;margin-top:2px;word-break:break-all;">Txn: ${order.shippingDepositTransactionId}</p>` : ''}
-                    </div>` : ''}
-                </div>
-                <div class="summary-item">
-                  <h3>Discount</h3>
-                  <p style="color:#6b7280;">${formatCurrency(Number(fmt(order.discount)))}</p>
-                </div>
-                <div class="summary-item">
-                  <h3>Total Amount</h3>
-                  <p class="total-amount">${formatCurrency(Number(order.amount))}</p>
-                  ${Number(order.shippingDepositAmount ?? 0) > 0 && order.paymentStatus === 'shipping_deposit_paid' ? `<p style="font-size:11px;color:#6b7280;margin-top:4px;">Remaining on delivery: ${formatCurrency(Number(order.amount) - Number(order.shippingDepositAmount))}</p>` : ''}
-                </div>
-              </div>
-            </div>
-          </body>
-        </html>
-      `)
-      printWindow.document.close()
-      printWindow.print()
-    }
+    if (!printWindow) return
+
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Invoice ${esc(order.invoiceNo)} &mdash; ${esc(SELLER.name)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Token system: "security-paper ledger" */
+  :root {
+    --desk:#d6ded3; --sheet:#fcfcf8; --ink:#13281f; --muted:#5d6f64; --faint:#8b9a8f;
+    --viridian:#1f5a44; --ledger:#e9f0e7; --rule:#c3cfc1; --rule-soft:#d8e1d6;
+    --seal:#a05e1c; --seal-soft:rgba(160,94,28,.35); --plate:#eef3ec;
+    --paid:#1f5a44; --paid-soft:rgba(31,90,68,.35);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:"Archivo","Helvetica Neue",Arial,sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.55), rgba(255,255,255,0) 55%),
+      radial-gradient(90% 120% at 50% 110%, rgba(19,40,31,.10), rgba(19,40,31,0) 60%),
+      var(--desk);
+    color:var(--ink);min-height:100vh;padding:56px 20px 72px;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  }
+  .sheet{
+    max-width:780px;margin:0 auto;background:var(--sheet);
+    border:1px solid rgba(19,40,31,.08);
+    box-shadow:0 1px 0 rgba(255,255,255,.6) inset,0 24px 60px -18px rgba(19,40,31,.35),0 6px 18px -8px rgba(19,40,31,.25);
+    padding:58px 62px 46px;position:relative;
+    animation:settle .7s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes settle{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+  .eyebrow{font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--viridian)}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace}
+  .dbl{height:5px;border-top:2.5px solid var(--ink);border-bottom:1px solid var(--ink)}
+
+  /* Masthead — issuer (owner) on top */
+  .masthead{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:26px}
+  .issuer{display:flex;gap:16px;align-items:flex-start}
+  .medallion{
+    width:46px;height:46px;border-radius:50%;border:1.5px solid var(--viridian);
+    box-shadow:inset 0 0 0 3px var(--sheet),inset 0 0 0 4px rgba(31,90,68,.55);
+    display:grid;place-items:center;flex:none;
+    font-family:"Bodoni Moda",Georgia,serif;font-size:22px;font-weight:600;color:var(--viridian);
+    line-height:1;padding-bottom:2px;
+  }
+  .issuer-name{font-size:14px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;margin-top:3px}
+  .issuer-meta{margin-top:6px;font-size:12px;line-height:1.65;color:var(--muted)}
+  .docmark{text-align:right}
+  .docmark-word{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-weight:500;font-size:44px;line-height:1;letter-spacing:.01em}
+  .docmark-no{margin-top:10px;font-size:12px;color:var(--muted);letter-spacing:.04em}
+  .docmark-no .no-sign{color:var(--faint);margin-right:2px}
+
+  /* Meta ledger — customer below */
+  .meta{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:20px;padding:22px 0 24px;border-bottom:1px solid var(--rule)}
+  .meta-value{margin-top:8px;font-size:15px;font-weight:600;letter-spacing:.01em}
+  .meta-sub{margin-top:3px;font-size:12px;color:var(--muted);line-height:1.6}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 9px 3px 8px;
+    border:1px solid var(--seal-soft);border-radius:999px;font-size:10px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--seal);vertical-align:2px;
+  }
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--seal)}
+  .chip.paid{border-color:var(--paid-soft);color:var(--paid)}
+  .chip.paid::before{background:var(--paid)}
+
+  /* Items */
+  .items{margin-top:8px}
+  .row{display:grid;grid-template-columns:40px 1fr 64px 112px 118px;gap:10px;align-items:baseline}
+  .row.head{background:var(--ledger);padding:10px 12px;margin:18px -12px 0;border-radius:2px}
+  .row.head > span{font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--viridian)}
+  .row.line{padding:18px 0 6px}
+  .row.child{padding:7px 0}
+  .row.child:last-of-type{padding-bottom:20px}
+  .cell-num{font-size:12px;color:var(--faint)}
+  .cell-desc{font-size:15px;font-weight:600}
+  .tag{
+    display:inline-block;margin-left:9px;padding:2px 7px;border:1px solid rgba(31,90,68,.35);border-radius:2px;
+    font-size:9.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--viridian);vertical-align:2px;
+  }
+  .child .cell-desc{font-size:13.5px;font-weight:400;color:var(--muted);padding-left:14px}
+  .branch{color:var(--viridian);margin-right:7px}
+  .cell-qty{text-align:right;font-size:13px}
+  .cell-unit,.cell-amt{text-align:right;font-size:13.5px}
+  .cell-amt{font-weight:600}
+  .child .cell-qty,.child .cell-unit,.child .cell-amt{color:var(--faint);font-size:12px;font-weight:400}
+  .unit-inline{display:none}
+
+  /* Summary */
+  .summary{margin-top:6px;padding-top:18px;border-top:1px solid var(--rule);display:flex;justify-content:flex-end}
+  .sum-col{width:300px;max-width:100%}
+  .sum-row{display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:13.5px}
+  .sum-row .lbl{color:var(--muted)}
+  .sum-row .leader{flex:1;border-bottom:1px dotted var(--rule);transform:translateY(-3px)}
+  .sum-row .val{font-size:13.5px}
+
+  /* Total plate */
+  .plate{
+    position:relative;margin-top:26px;padding:30px 34px 28px;
+    background:
+      repeating-linear-gradient(115deg, rgba(31,90,68,.055) 0 1px, transparent 1px 7px),
+      repeating-linear-gradient(-115deg, rgba(31,90,68,.055) 0 1px, transparent 1px 7px),
+      var(--plate);
+    border:1px solid #9fb3a1;
+  }
+  .plate::before{content:"";position:absolute;inset:4px;border:1px solid rgba(31,90,68,.4);pointer-events:none}
+  .plate-inner{position:relative;display:flex;justify-content:space-between;align-items:center;gap:28px;flex-wrap:wrap}
+  .amount{font-family:"Bodoni Moda",Georgia,serif;font-weight:500;font-size:clamp(44px,7.5vw,62px);line-height:1;margin-top:12px;letter-spacing:.01em}
+  .amount .cur{font-size:.52em;vertical-align:.52em;margin-right:.06em;color:var(--viridian)}
+  .amount .cents{font-size:.52em}
+  .in-words{
+    display:flex;align-items:center;gap:12px;margin-top:14px;font-size:10px;font-weight:600;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--muted);white-space:nowrap;
+  }
+  .in-words::before,.in-words::after{content:"";width:26px;border-top:1px solid var(--rule)}
+
+  /* Rubber stamp */
+  .stamp{
+    flex:none;transform:rotate(-7deg);border:2.5px solid var(--seal);
+    box-shadow:inset 0 0 0 2px var(--plate),inset 0 0 0 3px var(--seal);
+    padding:10px 20px 9px;text-align:center;color:var(--seal);
+    mix-blend-mode:multiply;opacity:.92;
+    animation:stampdown .35s cubic-bezier(.2,.8,.3,1.2) .55s both;
+  }
+  .stamp.paid{border-color:var(--paid);color:var(--paid);box-shadow:inset 0 0 0 2px var(--plate),inset 0 0 0 3px var(--paid)}
+  .stamp .s1{font-size:17px;font-weight:700;letter-spacing:.26em;text-transform:uppercase;padding-left:.26em}
+  .stamp .s2{margin-top:4px;font-size:9px;letter-spacing:.3em;font-weight:500}
+  @keyframes stampdown{from{opacity:0;transform:rotate(-7deg) scale(1.25)}to{opacity:.92;transform:rotate(-7deg) scale(1)}}
+
+  /* Footer */
+  .foot{margin-top:34px;padding-top:20px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+  .thanks{font-family:"Bodoni Moda",Georgia,serif;font-style:italic;font-size:18px;color:var(--ink)}
+  .foot-meta{text-align:right;font-size:11px;line-height:1.8;color:var(--faint);letter-spacing:.03em}
+  .txn{word-break:break-all;max-width:320px}
+
+  @media (prefers-reduced-motion:reduce){.sheet,.stamp{animation:none}}
+
+  @media print{
+    @page{size:A4;margin:12mm}
+    body{background:#fff;padding:0}
+    .sheet{max-width:none;border:none;box-shadow:none;padding:24px 8px;animation:none}
+    .stamp{animation:none}
+    .row.line,.row.child{page-break-inside:avoid}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+
+  @media (max-width:700px){
+    body{padding:26px 12px 48px}
+    .sheet{padding:34px 24px 30px}
+    .docmark-word{font-size:34px}
+    .meta{grid-template-columns:1fr 1fr}
+    .meta-cell.billed{grid-column:1 / -1}
+  }
+  @media (max-width:520px){
+    .row{grid-template-columns:24px 1fr 46px 96px}
+    .row .cell-unit{display:none}
+    .unit-inline{display:block;margin-top:3px;font-size:11.5px;font-weight:400;color:var(--faint)}
+    .row.head{margin:18px -8px 0;padding:9px 8px}
+    .plate{padding:24px 20px}
+    .plate-inner{justify-content:center;text-align:center}
+    .in-words{justify-content:center;white-space:normal}
+    .foot{flex-direction:column;align-items:flex-start}
+    .foot-meta{text-align:left}
+  }
+</style>
+</head>
+<body>
+<main class="sheet" role="document" aria-label="Invoice ${esc(order.invoiceNo)} from ${esc(SELLER.name)}">
+
+  <!-- Masthead: issuer (owner) -->
+  <header class="masthead">
+    <div class="issuer">
+      <div class="medallion" aria-hidden="true">${esc(SELLER.name.charAt(0).toUpperCase())}</div>
+      <div>
+        <div class="issuer-name">${esc(SELLER.name)}</div>
+        <div class="issuer-meta">
+          ${SELLER.addressLines.map(l => esc(l)).join("<br />")}<br />
+          <span class="mono">${esc(SELLER.phone)}</span>
+          ${SELLER.email ? `<br />${esc(SELLER.email)}` : ""}
+          ${settings?.taxId ? `<br />Tax ID <span class="mono">${esc(settings.taxId)}</span>` : ""}
+        </div>
+      </div>
+    </div>
+    <div class="docmark">
+      <div class="docmark-word">Invoice</div>
+      <div class="docmark-no mono"><span class="no-sign">N&ordm;</span>${esc(order.invoiceNo)}</div>
+    </div>
+  </header>
+
+  <div class="dbl" aria-hidden="true"></div>
+
+  <!-- Meta ledger: customer below the issuer -->
+  <section class="meta">
+    <div class="meta-cell billed">
+      <div class="eyebrow">Billed to</div>
+      <div class="meta-value">${esc(buyerName)}</div>
+      <div class="meta-sub">${buyerSub}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="eyebrow">Issue date</div>
+      <div class="meta-value">${esc(issuedDate)}</div>
+      <div class="meta-sub mono">${esc(issuedTime)}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="eyebrow">Payment</div>
+      <div class="meta-value">${esc(order.method)}${payment ? `<span class="chip${paid ? " paid" : ""}">${esc(payment.label)}</span>` : ""}</div>
+      ${payment?.note ? `<div class="meta-sub">${esc(payment.note)}</div>` : ""}
+      ${order.paymentTransactionId ? `<div class="meta-sub mono txn">Txn ${esc(order.paymentTransactionId)}</div>` : ""}
+    </div>
+  </section>
+
+  <!-- Items -->
+  <section class="items" aria-label="Line items">
+    <div class="row head" aria-hidden="true">
+      <span>N&ordm;</span>
+      <span>Description</span>
+      <span style="text-align:right">Qty</span>
+      <span class="cell-unit" style="text-align:right">Unit price</span>
+      <span style="text-align:right">Amount</span>
+    </div>
+    ${itemsHtml}
+  </section>
+
+  <!-- Summary -->
+  <section class="summary">
+    <div class="sum-col">
+      ${sumRow("Subtotal", money(subtotal))}
+      ${sumRow("Shipping", money(shippingCost))}
+      ${discount > 0 ? sumRow("Discount", "-" + money(discount)) : ""}
+      ${deposit > 0 ? sumRow("Shipping deposit paid", money(deposit)) : ""}
+    </div>
+  </section>
+
+  <!-- Total plate -->
+  <section class="plate" aria-label="Total due">
+    <div class="plate-inner">
+      <div>
+        <div class="eyebrow">Total due</div>
+        <div class="amount"><span class="cur">${esc(currencySymbol)}</span>${totalWhole.toLocaleString()}<span class="cents">.${totalCents}</span></div>
+        <div class="in-words">${esc(amountInWords(total))}</div>
+      </div>
+      ${payment ? `
+      <div class="stamp${paid ? " paid" : ""}" aria-hidden="true">
+        <div class="s1">${esc(payment.label)}</div>
+        <div class="s2 mono">${stampDate}</div>
+      </div>` : ""}
+    </div>
+    ${deposit > 0 && order.paymentStatus === "shipping_deposit_paid"
+      ? `<div class="in-words" style="margin-top:18px">Remaining on delivery &mdash; ${esc(money(total - deposit))}</div>` : ""}
+  </section>
+
+  <!-- Footer -->
+  <footer class="foot">
+    <div class="thanks">Thank you for your business.</div>
+    <div class="foot-meta mono">
+      ${esc(order.invoiceNo)}<br />
+      Issued ${esc(issuedDate)} &middot; Payment via ${esc(order.method)}
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    // Let the webfonts settle before the print dialog measures the page.
+    printWindow.setTimeout(() => printWindow.print(), 400)
   }
 
   const handleEmailInvoice = (order: SellResponse) => {
