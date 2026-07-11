@@ -168,7 +168,7 @@ export default function PlansPage() {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-6 py-4">
                   <p className="text-emerald-900 font-semibold mb-1">✓ Active Subscription</p>
                   <p className="text-emerald-700 text-sm">
-                    Current Plan: <span className="font-semibold">{company.planName || plans.find(p => p.id === currentPlanId)?.name || "Professional"}</span>
+                    Current Plan: <span className="font-semibold">{company.planName || plans.find(p => p.id === currentPlanId)?.name || "No active plan"}</span>
                   </p>
                 </div>
               )}

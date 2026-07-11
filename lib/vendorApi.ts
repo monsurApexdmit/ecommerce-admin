@@ -55,8 +55,8 @@ api.interceptors.response.use(
 export interface VendorResponse {
   id: number;
   name: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   address: string;
   logo: string;
   status: string;
@@ -83,8 +83,8 @@ export interface VendorListResponse {
 
 export interface CreateVendorData {
   name: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   address?: string;
   logo?: string;
   status?: string;

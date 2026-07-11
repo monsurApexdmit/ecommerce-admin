@@ -181,7 +181,7 @@ export default function VendorReturnsPage() {
 
   const handleDownloadReport = () => {
     const csvContent = [
-      ["Return #", "Vendor", "Amount", "Status", "Date"],
+      ["Return #", "Supplier", "Amount", "Status", "Date"],
       ...returns.map((ret) => [
         ret.returnNumber ?? ret.id,
         ret.vendorName ?? ret.vendorId,
@@ -211,7 +211,7 @@ export default function VendorReturnsPage() {
       const res = await productApi.getAll({ vendor_id: Number(vendorId), limit: 200 })
       setVendorProducts(res.data ?? [])
     } catch {
-      toast({ title: "Failed to load vendor products", variant: "destructive" })
+      toast({ title: "Failed to load supplier products", variant: "destructive" })
     } finally {
       setVendorProductsLoading(false)
     }
@@ -250,7 +250,7 @@ export default function VendorReturnsPage() {
 
   const handleCreateReturn = async () => {
     if (!formData.vendorId) {
-      toast({ title: "Please select a vendor", variant: "destructive" })
+      toast({ title: "Please select a supplier", variant: "destructive" })
       return
     }
     if (formData.items.length === 0) {
@@ -304,8 +304,8 @@ export default function VendorReturnsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Vendor Returns</h1>
-          <p className="text-gray-600 mt-1">Manage returns to suppliers and vendors</p>
+          <h1 className="text-3xl font-bold text-gray-900">Supplier Returns</h1>
+          <p className="text-gray-600 mt-1">Manage products returned to suppliers</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -354,7 +354,7 @@ export default function VendorReturnsPage() {
           <div className="relative flex-1 min-w-[300px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
-              placeholder="Search by return # or vendor"
+              placeholder="Search by return # or supplier"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
               className="pl-10"
@@ -362,10 +362,10 @@ export default function VendorReturnsPage() {
           </div>
           <Select value={vendorFilter} onValueChange={(v) => { setVendorFilter(v); setCurrentPage(1) }}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Vendors" />
+              <SelectValue placeholder="All Suppliers" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Vendors</SelectItem>
+              <SelectItem value="all">All Suppliers</SelectItem>
               {vendors.map((v) => (
                 <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
               ))}
@@ -390,7 +390,7 @@ export default function VendorReturnsPage() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Return #</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Vendor</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Supplier</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Amount</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Status</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Date</th>
@@ -408,7 +408,7 @@ export default function VendorReturnsPage() {
                 ))
               ) : returns.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-500">No vendor returns found</td>
+                  <td colSpan={6} className="py-12 text-center text-gray-500">No supplier returns found</td>
                 </tr>
               ) : (
                 returns.map((ret) => (
@@ -468,13 +468,13 @@ export default function VendorReturnsPage() {
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="sm:max-w-5xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Vendor Return Details — {selectedReturn?.returnNumber ?? `#${selectedReturn?.id}`}</DialogTitle>
-            <DialogDescription>Complete information about this vendor return</DialogDescription>
+            <DialogTitle>Supplier Return Details — {selectedReturn?.returnNumber ?? `#${selectedReturn?.id}`}</DialogTitle>
+            <DialogDescription>Complete information about this supplier return</DialogDescription>
           </DialogHeader>
           {selectedReturn && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-sm font-medium text-gray-700">Vendor</p><p className="text-sm text-gray-900">{selectedReturn.vendorName ?? selectedReturn.vendorId}</p></div>
+                <div><p className="text-sm font-medium text-gray-700">Supplier</p><p className="text-sm text-gray-900">{selectedReturn.vendorName ?? selectedReturn.vendorId}</p></div>
                 <div><p className="text-sm font-medium text-gray-700">Status</p><div className="mt-1"><VendorReturnStatusBadge status={selectedReturn.status} /></div></div>
                 <div><p className="text-sm font-medium text-gray-700">Credit Type</p><p className="text-sm text-gray-900 capitalize">{(selectedReturn.creditType ?? "N/A").replace("_", " ")}</p></div>
                 <div><p className="text-sm font-medium text-gray-700">Return Date</p><p className="text-sm text-gray-900">{formatDate(selectedReturn.returnDate ?? selectedReturn.createdAt)}</p></div>
@@ -548,18 +548,18 @@ export default function VendorReturnsPage() {
       }}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Vendor Return</DialogTitle>
-            <DialogDescription>Select a vendor to load their products, then add items to return</DialogDescription>
+            <DialogTitle>Create New Supplier Return</DialogTitle>
+            <DialogDescription>Select a supplier to load their products, then add items to return</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5">
             {/* Vendor + Date + Credit Type */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label>Vendor *</Label>
+                <Label>Supplier *</Label>
                 <Select value={formData.vendorId} onValueChange={handleVendorSelect}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select vendor" />
+                    <SelectValue placeholder="Select supplier" />
                   </SelectTrigger>
                   <SelectContent>
                     {vendors.map((v) => (
@@ -604,7 +604,7 @@ export default function VendorReturnsPage() {
                     {vendorProductsLoading
                       ? "Loading products..."
                       : !formData.vendorId
-                      ? "Select a vendor first"
+                      ? "Select a supplier first"
                       : `Search product... (${vendorProducts.length} available)`}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -675,7 +675,7 @@ export default function VendorReturnsPage() {
 
               {formData.items.length === 0 ? (
                 <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center text-sm text-gray-400">
-                  Select a vendor and search for products to add return items
+                  Select a supplier and search for products to add return items
                 </div>
               ) : (
                 <div className="space-y-3">

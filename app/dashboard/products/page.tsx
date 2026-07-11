@@ -257,7 +257,7 @@ export default function ProductsPage() {
     },
     {
       key: "vendorId",
-      label: "Vendor",
+      label: "Supplier",
       width: "min-w-[110px]",
       render: (value, item) => {
         const name = (item as any).vendorName || vendors.find(v => v.id === value)?.name
@@ -299,7 +299,7 @@ export default function ProductsPage() {
     },
     {
       id: "vendor",
-      label: "Vendor",
+      label: "Supplier",
       value: selectedVendor,
       onChange: (v) => setSelectedVendor(v),
       options: vendors.map(v => ({
@@ -507,7 +507,7 @@ export default function ProductsPage() {
                   <div className="p-6 grid grid-cols-3 gap-4">
                     {[
                       { label: "Category", value: viewingProduct.category || allCategories.find(c => c.id === viewingProduct.categoryId)?.category_name || "—" },
-                      { label: "Vendor", value: viewingProduct.vendorName || vendors.find(v => v.id === viewingProduct.vendorId)?.name || "—" },
+                      { label: "Supplier", value: viewingProduct.vendorName || vendors.find(v => v.id === viewingProduct.vendorId)?.name || "—" },
                       { label: "Location", value: viewingProduct.locationName || warehouses.find(w => String(w.id) === viewingProduct.locationId)?.name || "—" },
                       { label: "Stock", value: `${viewingProduct.stock} units`, highlight: viewingProduct.stock < 5 ? "red" : viewingProduct.stock < 20 ? "amber" : "green" },
                       { label: "SKU", value: viewingProduct.sku || "—", mono: true },

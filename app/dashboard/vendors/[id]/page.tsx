@@ -48,8 +48,8 @@ export default function VendorDetailsPage() {
   if (!vendor) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Vendor Not Found</h2>
-        <Button onClick={() => router.push("/dashboard/vendors")}>Back to Vendors</Button>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Supplier Not Found</h2>
+        <Button onClick={() => router.push("/dashboard/vendors")}>Back to Suppliers</Button>
       </div>
     )
   }
@@ -98,11 +98,11 @@ export default function VendorDetailsPage() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
-          <h1 className="text-2xl font-bold text-gray-900">Vendor Details</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Supplier Details</h1>
         </div>
         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={openEditDialog}>
           <Edit2 className="w-4 h-4 mr-2" />
-          Edit Vendor
+          Edit Supplier
         </Button>
       </div>
 
@@ -205,7 +205,7 @@ export default function VendorDetailsPage() {
             <tbody className="divide-y">
               {vendorProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-400">No products found for this vendor</td>
+                  <td colSpan={6} className="py-8 text-center text-gray-400">No products found for this supplier</td>
                 </tr>
               ) : vendorProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50">
@@ -250,11 +250,11 @@ export default function VendorDetailsPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Vendor</DialogTitle>
+            <DialogTitle>Edit Supplier</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-1">
-              <Label>Vendor Name</Label>
+              <Label>Supplier Name</Label>
               <Input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
             </div>
             <div className="space-y-1">

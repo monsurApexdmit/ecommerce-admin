@@ -96,10 +96,10 @@ const NAV_CONFIG = [
 
     {
         section: "Operations",
-        name: "Vendors",
+        name: "Suppliers",
         icon: Truck,
         items: [
-            { name: "All vendors",      href: "/dashboard/vendors",                  module: "Vendors" },
+            { name: "All suppliers",    href: "/dashboard/vendors",                  module: "Vendors" },
             { name: "Purchase orders",  href: "/dashboard/vendors/purchase-orders",  module: "Vendors" },
         ],
     },
@@ -119,7 +119,7 @@ const NAV_CONFIG = [
         icon: RotateCcw,
         items: [
             { name: "Customer returns", href: "/dashboard/returns/customer", module: "Customer Returns" },
-            { name: "Vendor returns",   href: "/dashboard/returns/vendor",   module: "Vendor Returns" },
+            { name: "Supplier returns", href: "/dashboard/returns/vendor",   module: "Vendor Returns" },
         ],
     },
     {
@@ -156,7 +156,6 @@ const NAV_CONFIG = [
             { name: "Store settings",     href: "/dashboard/settings",                  module: "Settings" },
             { name: "Aura shop",          href: "/dashboard/settings/aura-shop",        module: "Aura Shop" },
             { name: "Company settings",   href: "/dashboard/company/settings",          module: "Company Settings" },
-            { name: "Billing contact",    href: "/dashboard/company/billing-contact",   module: "Billing Contact" },
             { name: "Team members",       href: "/dashboard/team/users",                module: "Team Members" },
             { name: "Subscriptions",      href: "/dashboard/billing/subscriptions",     module: "Subscriptions" },
             { name: "Billing plans",      href: "/dashboard/billing/plans",             module: "Billing Plans" },

@@ -573,14 +573,23 @@ export default function PosPage() {
                     )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 p-3 border-t border-border">
-                    <Button variant="outline" size="sm" className="h-9 gap-2 text-muted-foreground" onClick={() => setIsDiscountModalOpen(true)}>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-full min-w-0 gap-1.5 px-2 text-muted-foreground"
+                        title={discount > 0 ? `Discount (${formatCurrency(discount)})` : "Discount"}
+                        onClick={() => setIsDiscountModalOpen(true)}
+                    >
                         <Percent className="w-3.5 h-3.5" />
-                        Discount {discount > 0 && `(${formatCurrency(discount)})`}
+                        <span className="min-w-0 truncate">
+                            Discount {discount > 0 && `(${formatCurrency(discount)})`}
+                        </span>
                     </Button>
                     <Button
                         variant="outline"
                         size="sm"
-                        className={cn("h-9 gap-2", appliedCoupon ? "text-money-fg border-money/40 hover:bg-money-soft" : "text-muted-foreground")}
+                        className={cn("h-9 w-full min-w-0 gap-1.5 px-2", appliedCoupon ? "text-money-fg border-money/40 hover:bg-money-soft" : "text-muted-foreground")}
+                        title={appliedCoupon ? appliedCoupon.code : "Coupon"}
                         onClick={() => {
                             if (appliedCoupon) {
                                 handleRemoveCoupon()
@@ -591,11 +600,11 @@ export default function PosPage() {
                         }}
                     >
                         <Ticket className="w-3.5 h-3.5" />
-                        {appliedCoupon ? `${appliedCoupon.code}` : "Coupon"}
+                        <span className="min-w-0 truncate">{appliedCoupon ? appliedCoupon.code : "Coupon"}</span>
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 text-destructive hover:bg-destructive/10" onClick={() => setIsResetDialogOpen(true)}>
+                    <Button variant="outline" size="sm" className="h-9 w-full min-w-0 gap-1.5 px-2 text-destructive hover:bg-destructive/10" onClick={() => setIsResetDialogOpen(true)}>
                         <RotateCcw className="w-3.5 h-3.5" />
-                        Reset
+                        <span className="min-w-0 truncate">Reset</span>
                     </Button>
                 </div>
                 <div className="p-4 border-t border-border">

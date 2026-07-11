@@ -121,7 +121,7 @@ export default function PurchaseOrdersPage() {
 
   const handleCreate = async () => {
     if (!vendorId || formItems.some(i => !i.productId || i.quantityOrdered < 1)) {
-      toast.error("Fill in vendor and all item fields")
+      toast.error("Fill in supplier and all item fields")
       return
     }
     setSaving(true)
@@ -227,7 +227,7 @@ export default function PurchaseOrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Purchase Orders</h1>
-          <p className="text-gray-600 mt-1">Order stock from vendors and receive it into inventory</p>
+          <p className="text-gray-600 mt-1">Order stock from suppliers and receive it into inventory</p>
         </div>
         <Button onClick={() => setCreateOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
           <Plus className="w-4 h-4 mr-2" /> New Purchase Order
@@ -252,7 +252,7 @@ export default function PurchaseOrdersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
             className="pl-9"
-            placeholder="Search PO number or vendor..."
+            placeholder="Search PO number or supplier..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
@@ -280,7 +280,7 @@ export default function PurchaseOrdersPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Package className="w-12 h-12 text-gray-300 mb-4" />
             <p className="text-gray-500 text-lg font-medium">No purchase orders yet</p>
-            <p className="text-gray-400 mt-1">Create your first PO to order stock from vendors</p>
+            <p className="text-gray-400 mt-1">Create your first PO to order stock from suppliers</p>
           </CardContent>
         </Card>
       ) : (
@@ -290,7 +290,7 @@ export default function PurchaseOrdersPage() {
               <thead>
                 <tr className="border-b bg-gray-50">
                   <th className="text-left p-4 font-medium text-gray-600">PO Number</th>
-                  <th className="text-left p-4 font-medium text-gray-600">Vendor</th>
+                  <th className="text-left p-4 font-medium text-gray-600">Supplier</th>
                   <th className="text-left p-4 font-medium text-gray-600">Location</th>
                   <th className="text-left p-4 font-medium text-gray-600">Status</th>
                   <th className="text-left p-4 font-medium text-gray-600">Expected</th>
@@ -354,14 +354,14 @@ export default function PurchaseOrdersPage() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Purchase Order</DialogTitle>
-            <DialogDescription>Order stock from a vendor</DialogDescription>
+            <DialogDescription>Order stock from a supplier</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Vendor *</Label>
+                <Label>Supplier *</Label>
                 <Select value={vendorId} onValueChange={setVendorId}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select supplier" /></SelectTrigger>
                   <SelectContent>
                     {vendors.map(v => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
                   </SelectContent>
@@ -484,7 +484,7 @@ export default function PurchaseOrdersPage() {
           {viewPo && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-gray-500">Vendor:</span> <strong>{viewPo.vendorName}</strong></div>
+                <div><span className="text-gray-500">Supplier:</span> <strong>{viewPo.vendorName}</strong></div>
                 <div><span className="text-gray-500">Location:</span> <strong>{viewPo.locationName ?? "—"}</strong></div>
                 <div><span className="text-gray-500">Expected:</span> <strong>{viewPo.expectedDate ?? "—"}</strong></div>
                 <div><span className="text-gray-500">Total:</span> <strong>${viewPo.totalAmount.toFixed(2)}</strong></div>

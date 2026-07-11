@@ -132,7 +132,7 @@ function Hero() {
         </h1>
 
         <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Inventory management, POS, online storefront, vendors, staff, salary, shipments — everything connected, nothing missed.
+          Inventory management, POS, online storefront, suppliers, staff, salary, shipments — everything connected, nothing missed.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -206,8 +206,8 @@ const features = [
   },
   {
     icon: Truck,
-    title: "Shipments & Vendors",
-    desc: "Manage purchase orders from vendors, track shipments, handle returns, and restock inventory automatically.",
+    title: "Shipments & Suppliers",
+    desc: "Manage purchase orders from suppliers, track shipments, handle returns, and restock inventory automatically.",
     color: "bg-teal-50 text-teal-600",
   },
 ]
@@ -255,9 +255,9 @@ const modules = [
   { icon: CreditCard, label: "Payment Methods" },
   { icon: Tag, label: "Coupons & Discounts" },
   { icon: Truck, label: "Shipments" },
-  { icon: RefreshCcw, label: "Returns (Customer & Vendor)" },
+  { icon: RefreshCcw, label: "Returns (Customer & Supplier)" },
   { icon: Users, label: "Customers" },
-  { icon: Globe, label: "Vendors" },
+  { icon: Globe, label: "Suppliers" },
   { icon: Layers, label: "Categories & Attributes" },
   { icon: BarChart3, label: "Inventory Reports" },
   { icon: Bell, label: "Notifications" },
@@ -331,7 +331,7 @@ function DualApp() {
                   "Full inventory & multi-location management",
                   "POS with barcode scanner & coupons",
                   "Staff, roles, salary & HR management",
-                  "Vendor purchases & returns",
+                  "Supplier purchases & returns",
                   "Sales analytics & profit reports",
                   "Billing, subscriptions & team invites",
                 ].map((item) => (
@@ -422,7 +422,7 @@ const plans = [
       "Up to 10,000 products",
       "Up to 3 branches / locations",
       "Everything in Starter",
-      "Vendor & returns module",
+      "Supplier & returns module",
       "Staff & role management",
       "Online storefront (Aura Shop)",
       "Priority chat support",
@@ -547,7 +547,7 @@ const testimonials = [
   {
     name: "Mohammed Al-Rashid",
     role: "Manager, TechZone Electronics",
-    body: "The barcode scanning POS is incredibly fast. Our cashiers picked it up in minutes. Vendor purchase orders and returns are now fully tracked — no more spreadsheets.",
+    body: "The barcode scanning POS is incredibly fast. Our cashiers picked it up in minutes. Supplier purchase orders and returns are now fully tracked — no more spreadsheets.",
     stars: 5,
   },
   {

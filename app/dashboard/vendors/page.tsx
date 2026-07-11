@@ -42,9 +42,7 @@ export default function VendorsPage() {
     email: "",
     phone: "",
     address: "",
-    logo: "",
     status: "Active",
-    description: "",
     totalPaid: 0,
     amountPayable: 0,
   })
@@ -108,8 +106,8 @@ export default function VendorsPage() {
       address: v.address ?? "",
       status: v.status ?? "active",
     }))
-    exportToCSV(data, "vendors", headers)
-    toast({ title: `Exported ${data.length} vendors` })
+    exportToCSV(data, "suppliers", headers)
+    toast({ title: `Exported ${data.length} suppliers` })
   }
 
   const handleImportVendors = () => {
@@ -132,7 +130,7 @@ export default function VendorsPage() {
               created++
             } catch { /* skip invalid */ }
           }
-          toast({ title: `Imported ${created} vendors` })
+          toast({ title: `Imported ${created} suppliers` })
         } catch {
           toast({ title: "Failed to parse CSV", variant: "destructive" })
         }
@@ -149,9 +147,7 @@ export default function VendorsPage() {
       email: "",
       phone: "",
       address: "",
-      logo: "",
       status: "Active",
-      description: "",
       totalPaid: 0,
       amountPayable: 0,
     })
@@ -162,12 +158,10 @@ export default function VendorsPage() {
     setEditingVendor(vendor)
     setFormData({
       name: vendor.name,
-      email: vendor.email,
-      phone: vendor.phone,
+      email: vendor.email ?? "",
+      phone: vendor.phone ?? "",
       address: vendor.address,
-      logo: vendor.logo,
       status: vendor.status,
-      description: vendor.description,
       totalPaid: vendor.totalPaid,
       amountPayable: vendor.amountPayable,
     })
@@ -175,11 +169,11 @@ export default function VendorsPage() {
   }
 
   const handleSaveVendor = async () => {
-    if (!formData.name || !formData.email || !formData.phone) {
+    if (!formData.name.trim()) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Vendor Name, Email, and Phone are required",
+        description: "Supplier name is required",
       })
       return
     }
@@ -189,13 +183,13 @@ export default function VendorsPage() {
         await updateVendor(editingVendor.id, formData)
         toast({
           title: "Success",
-          description: "Vendor updated successfully",
+          description: "Supplier updated successfully",
         })
       } else {
         await addVendor(formData)
         toast({
           title: "Success",
-          description: "Vendor created successfully",
+          description: "Supplier created successfully",
         })
       }
       setIsDialogOpen(false)
@@ -209,12 +203,12 @@ export default function VendorsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Are you sure you want to delete this vendor?")) {
+    if (confirm("Are you sure you want to delete this supplier?")) {
       try {
         await deleteVendor(id)
         toast({
           title: "Success",
-          description: "Vendor deleted successfully",
+          description: "Supplier deleted successfully",
         })
       } catch (error: any) {
         toast({
@@ -232,7 +226,7 @@ export default function VendorsPage() {
       await updateVendor(vendor.id, { status: newStatus })
       toast({
         title: "Success",
-        description: `Vendor ${newStatus === 'Active' ? 'activated' : 'deactivated'} successfully`,
+        description: `Supplier ${newStatus === 'Active' ? 'activated' : 'deactivated'} successfully`,
       })
     } catch (error: any) {
       toast({
@@ -246,7 +240,7 @@ export default function VendorsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-2" onClick={handleImportVendors}>
             <Upload className="w-4 h-4" /> Import
@@ -256,7 +250,7 @@ export default function VendorsPage() {
           </Button>
           <Button size="sm" className="gap-2 bg-emerald-500 hover:bg-emerald-600" onClick={openAddDialog}>
             <Plus className="w-4 h-4" />
-            Add Vendor
+            Add Supplier
           </Button>
         </div>
       </div>
@@ -273,7 +267,7 @@ export default function VendorsPage() {
       ) : stats ? (
         <div className="mb-6">
           <StatsCards stats={[
-            { label: "Total Vendors", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
+            { label: "Total Suppliers", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
             { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
             { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
           ]} />
@@ -286,7 +280,7 @@ export default function VendorsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder="Search by name, email, phone, or contact person"
+                placeholder="Search suppliers by name, email, or phone"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value)
@@ -392,30 +386,30 @@ export default function VendorsPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingVendor ? "Edit Vendor" : "Add Vendor"}</DialogTitle>
+            <DialogTitle>{editingVendor ? "Edit Supplier" : "Add Supplier"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-2">
-              <Label htmlFor="name">Vendor Name *</Label>
+              <Label htmlFor="name">Supplier Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter vendor name"
+                placeholder="Enter supplier name"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="vendor@example.com"
+                placeholder="supplier@example.com"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone *</Label>
+              <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
                 value={formData.phone}
@@ -432,31 +426,13 @@ export default function VendorsPage() {
                 placeholder="456 Business Ave"
               />
             </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="logo">Logo URL</Label>
-              <Input
-                id="logo"
-                value={formData.logo}
-                onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
-                placeholder="https://example.com/logo.png"
-              />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="A reliable supplier"
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleSaveVendor} className="bg-emerald-600 hover:bg-emerald-700">
-              {editingVendor ? "Update Vendor" : "Add Vendor"}
+              {editingVendor ? "Update Supplier" : "Add Supplier"}
             </Button>
           </DialogFooter>
         </DialogContent>

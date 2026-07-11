@@ -684,13 +684,13 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
 
             {isPlanModule("Vendors") && (
             <div className="space-y-2">
-              <Label htmlFor="vendor">Vendor</Label>
+              <Label htmlFor="vendor">Supplier</Label>
               <Select
                 value={formData.vendorId || undefined}
                 onValueChange={(value) => set("vendorId", value)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Vendor (Optional)" />
+                  <SelectValue placeholder="Select Supplier (Optional)" />
                 </SelectTrigger>
                 <SelectContent>
                   {vendors.map((vendor) => (
