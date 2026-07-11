@@ -10,9 +10,6 @@ const API_URL = '/api/proxy';
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   withCredentials: true,
 });
 
@@ -31,10 +28,12 @@ api.interceptors.request.use(
         }
       }
     }
-    // When sending FormData, remove the default Content-Type so the browser
-    // sets it automatically with the correct multipart boundary
+    // For FormData let browser set Content-Type with boundary automatically
+    // For everything else default to JSON
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
+    } else if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
     }
     return config;
   },
@@ -52,31 +51,32 @@ api.interceptors.response.use(
   }
 );
 
-// Raw shape returned by the backend (snake_case)
+// Raw shape returned by the backend (camelCase from Laravel DTO)
 export interface CouponResponse {
   id: number;
-  campaign_name: string;
+  companyId: number;
+  campaignName: string;
   code: string;
   discount: number;
-  type: 'percentage' | 'fixed';
+  type: 'percentage' | 'fixed' | 'free_shipping';
   status: boolean;         // true = active, false = inactive/expired
-  image: string;
-  start_date: string;
-  end_date: string;
-  usage_limit: number | null;
-  usage_limit_per_user: number | null;
-  times_used: number;
-  min_order_amount: number;
-  max_discount: number | null;
-  applicable_to_categories: string;
-  applicable_to_products: string;
-  free_shipping: boolean;
+  image: string | null;
+  startDate: string;
+  endDate: string;
+  uploadedBy?: number | null;
+  usageLimit?: number | null;
+  usageLimitPerUser?: number | null;
+  timesUsed: number;
+  minOrderAmount: number;
+  maxDiscount?: number | null;
+  applicableToCategories?: string | null;
+  applicableToProducts?: string | null;
+  freeShipping: boolean;
   stackable: boolean;
-  auto_apply: boolean;
+  autoApply: boolean;
   priority: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CouponListResponse {
@@ -115,7 +115,11 @@ export const couponApi = {
     search?: string;
   }): Promise<CouponListResponse> => {
     const response = await api.get('/coupons', { params });
-    return response.data;
+    // Laravel returns: { success, message, data: [...], meta: { total, per_page, current_page } }
+    return {
+      message: response.data.message || '',
+      data: Array.isArray(response.data.data) ? response.data.data : [],
+    };
   },
 
   getById: async (id: number): Promise<{ message: string; data: CouponResponse }> => {
@@ -129,16 +133,43 @@ export const couponApi = {
   },
 
   createWithImage: async (data: CreateCouponData & { image: File }): Promise<{ message: string; data: CouponResponse }> => {
-    const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'image') {
-        formData.append('image', value as File);
-      } else if (value !== undefined && value !== null) {
-        formData.append(key, String(value));
+    try {
+      const formData = new FormData();
+      const { image, ...otherData } = data as any;
+
+      for (const [key, value] of Object.entries(otherData)) {
+        if (value !== undefined && value !== null && value !== '') {
+          if (typeof value === 'boolean') {
+            formData.append(key, value ? '1' : '0');
+          } else {
+            formData.append(key, String(value));
+          }
+        }
       }
-    });
-    const response = await api.post('/coupons/with-image', formData);
-    return response.data;
+      if (image) formData.append('image', image);
+
+      // Use fetch directly - axios serializes FormData incorrectly
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const companyId = typeof window !== 'undefined' ? localStorage.getItem('company_id') : null;
+      const url = `/api/proxy/coupons/with-image${companyId ? `?company_id=${companyId}` : ''}`;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        const err: any = new Error(json.message || 'Create failed');
+        err.response = { status: res.status, data: json };
+        throw err;
+      }
+      return json;
+    } catch (error: any) {
+      console.error('createWithImage error:', error.response?.status, error.response?.data);
+      throw error;
+    }
   },
 
   update: async (id: number, data: UpdateCouponData): Promise<{ message: string; data: CouponResponse }> => {
@@ -146,17 +177,44 @@ export const couponApi = {
     return response.data;
   },
 
-  updateWithImage: async (id: number, data: UpdateCouponData & { image: File }): Promise<{ message: string; data: CouponResponse }> => {
+  updateWithImage: async (id: number, data: UpdateCouponData & { image?: File }): Promise<{ message: string; data: CouponResponse }> => {
     const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      if (key === 'image') {
-        formData.append('image', value as File);
-      } else if (value !== undefined && value !== null) {
-        formData.append(key, String(value));
+    const { image, ...otherData } = data;
+
+    Object.entries(otherData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (typeof value === 'boolean') {
+          formData.append(key, value ? '1' : '0');
+        } else {
+          formData.append(key, String(value));
+        }
       }
     });
-    const response = await api.put(`/coupons/${id}/with-image`, formData);
-    return response.data;
+
+    if (image) {
+      formData.append('image', image);
+    }
+
+    // Use fetch directly to ensure FormData is sent as multipart/form-data
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const companyId = typeof window !== 'undefined' ? localStorage.getItem('company_id') : null;
+
+    const url = `/api/proxy/coupons/${id}/with-image${companyId ? `?company_id=${companyId}` : ''}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      const err: any = new Error(json.message || 'Update failed');
+      err.response = { status: res.status, data: json };
+      throw err;
+    }
+    return json;
   },
 
   delete: async (id: number): Promise<{ message: string }> => {
@@ -170,7 +228,7 @@ export const couponApi = {
   },
 
   getByCode: async (code: string): Promise<{ message: string; data: CouponResponse }> => {
-    const response = await api.get(`/coupons/by-code/${code}`);
+    const response = await api.get(`/coupons/code/${code}`);
     return response.data;
   },
 };

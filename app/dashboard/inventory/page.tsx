@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Search, ArrowRightLeft, Printer, QrCode } from "lucide-react"
+import { Search, ArrowRightLeft, Printer, QrCode, Package, Eye, AlertTriangle, Download, Upload } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,12 +12,26 @@ import Link from "next/link"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Skeleton } from "@/components/ui/skeleton"
 import { inventoryApi, type InventoryItem } from "@/lib/inventoryApi"
+import { StatsCards } from "@/components/ui/stats-card"
+import productApi from "@/lib/productApi"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
+import { toast } from "sonner"
 
 const ITEMS_PER_PAGE = 10
 
 export default function InventoryPage() {
+  const { canRead } = useSaasAuth()
   const { warehouses } = useWarehouse()
   const [items, setItems] = useState<InventoryItem[]>([])
+  const [stats, setStats] = useState<{
+    total: number
+    published: number
+    unpublished: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
@@ -48,6 +62,22 @@ export default function InventoryPage() {
     fetchInventory()
   }, [fetchInventory])
 
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await productApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch product stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
+
   // Client-side pagination
   const totalItems = items.length
   const totalPages = Math.ceil(totalItems / itemsPerPage)
@@ -56,10 +86,59 @@ export default function InventoryPage() {
     return items.slice(start, start + itemsPerPage)
   }, [items, currentPage, itemsPerPage])
 
+  const blocked = useModuleGuard('Inventory')
+  if (blocked) return blocked
+
   const handleSelectRow = (key: string) => {
     const next = new Set(selectedRows)
     next.has(key) ? next.delete(key) : next.add(key)
     setSelectedRows(next)
+  }
+
+  const handleExportInventory = () => {
+    const headers = ["Product", "Variant", "SKU", "Barcode", "Type", "Total Stock"]
+    const data = items.map(item => ({
+      product: item.productName,
+      variant: item.variantName ?? "",
+      sku: item.sku ?? "",
+      barcode: item.barcode ?? "",
+      type: item.type,
+      total_stock: item.stock,
+    }))
+    exportToCSV(data, "inventory", headers)
+    toast.success(`Exported ${data.length} inventory items`)
+  }
+
+  const handleImportInventory = () => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ".csv"
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = async (ev) => {
+        try {
+          const rows = parseCSV(ev.target?.result as string)
+          let updated = 0
+          for (const row of rows) {
+            const stock = Number(row.total_stock)
+            const productId = items.find(i => i.sku === row.sku?.trim())?.productId
+            if (!productId || isNaN(stock)) continue
+            try {
+              await productApi.update(productId, { stock })
+              updated++
+            } catch { /* skip invalid */ }
+          }
+          toast.success(`Updated ${updated} items from CSV`)
+          fetchInventory()
+        } catch {
+          toast.error("Failed to parse CSV")
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
   }
 
   const handleSelectAll = () => setSelectedRows(new Set(currentRows.map(rowKey)))
@@ -138,6 +217,12 @@ export default function InventoryPage() {
               Print Selected ({selectedRows.size})
             </Button>
           )}
+          <Button variant="outline" onClick={handleImportInventory} className="gap-2">
+            <Upload className="w-4 h-4" /> Import CSV
+          </Button>
+          <Button variant="outline" onClick={handleExportInventory} className="gap-2">
+            <Download className="w-4 h-4" /> Export CSV
+          </Button>
           <Link href="/dashboard/inventory/transfer">
             <Button className="bg-emerald-600 hover:bg-emerald-700">
               <ArrowRightLeft className="w-4 h-4 mr-2" />
@@ -146,6 +231,23 @@ export default function InventoryPage() {
           </Link>
         </div>
       </div>
+
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <StatsCards stats={[
+          { label: "Total Products", value: stats.total, icon: <Package className="w-5 h-5" />, color: "blue" },
+          { label: "Published", value: stats.published, icon: <Eye className="w-5 h-5" />, color: "green" },
+          { label: "Unpublished", value: stats.unpublished, icon: <AlertTriangle className="w-5 h-5" />, color: "yellow" },
+        ]} />
+      ) : null}
 
       <Card className="p-6">
         <div className="flex items-center gap-4 mb-4">
@@ -242,7 +344,19 @@ export default function InventoryPage() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{item.sku}</td>
-                    <td className="py-3 px-4 text-center font-bold text-gray-900">{item.stock}</td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <span className={`font-bold ${item.reorderPoint && item.stock <= item.reorderPoint ? "text-red-600" : "text-gray-900"}`}>
+                          {item.stock}
+                        </span>
+                        {item.reorderPoint && item.stock <= item.reorderPoint ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                            <AlertTriangle className="w-3 h-3" />
+                            Low
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     {warehouses.map(w => {
                       if (selectedWarehouse !== "all" && selectedWarehouse !== String(w.id)) return null
                       const loc = item.inventory?.find(inv => inv.locationId === w.id)

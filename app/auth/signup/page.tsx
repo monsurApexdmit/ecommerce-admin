@@ -29,6 +29,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState("")
   const [agreedToTerms, setAgreedToTerms] = useState(false)
+  const [signupSuccess, setSignupSuccess] = useState(false)
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
@@ -96,7 +97,10 @@ export default function SignupPage() {
         password: formData.password,
         phone: formData.phone,
       })
-      // Navigation handled in signup function
+      // Account created (unverified). Show the verify-email screen instead of
+      // redirecting to the dashboard — the user logs in after verifying.
+      setSignupSuccess(true)
+      setLoading(false)
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message || error.message || "Signup failed. Please try again."
@@ -126,6 +130,32 @@ export default function SignupPage() {
   }
 
   const strength = passwordStrength()
+
+  if (signupSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
+        <Card className="w-full max-w-lg p-8 shadow-lg text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-6 mx-auto">
+            <CheckCircle className="w-9 h-9 text-emerald-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
+          <p className="text-sm text-gray-600 mt-3">
+            We sent a verification link to{" "}
+            <span className="font-medium text-gray-900">{formData.email}</span>.
+          </p>
+          <p className="text-sm text-gray-600 mt-2">
+            Please verify your email to activate your account, then log in.
+          </p>
+          <Button
+            className="w-full mt-8 bg-emerald-600 hover:bg-emerald-700"
+            onClick={() => router.push("/auth/login")}
+          >
+            Go to Login
+          </Button>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">

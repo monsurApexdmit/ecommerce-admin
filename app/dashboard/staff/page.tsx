@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Search, Filter, Eye, Edit, Trash2, Plus, ChevronDown, Users, UserCheck, UserX, Download } from "lucide-react"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Button } from "@/components/ui/button"
@@ -10,11 +10,28 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card } from "@/components/ui/card"
 import Image from "next/image"
 import { useStaff, type Staff } from "@/contexts/staff-context"
+import { StatsCards } from "@/components/ui/stats-card"
+import staffApi from "@/lib/staffApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
+import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 
 export default function StaffPage() {
+  const { canRead } = useSaasAuth()
   const { staff, roles, isLoading, addStaff, updateStaff, deleteStaff } = useStaff()
+  const { formatCurrency } = useCompanySettings()
+  const [stats, setStats] = useState<{
+    total: number
+    active: number
+    inactive: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedRole, setSelectedRole] = useState("All Roles")
   const [showRoleDropdown, setShowRoleDropdown] = useState(false)
@@ -23,6 +40,8 @@ export default function StaffPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editFormData, setEditFormData] = useState<Staff | null>(null)
+  const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null)
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
 
   const filteredStaff = staff.filter((member) => {
     const matchesSearch =
@@ -45,6 +64,26 @@ export default function StaffPage() {
   const handleFilterChange = () => {
     setCurrentPage(1)
   }
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await staffApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch staff stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+    saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
+  }, [])
+
+  const blocked = useModuleGuard('Staff')
+  if (blocked) return blocked
 
   const handleTogglePublished = async (id: string) => {
     const member = staff.find((s) => s.id === id)
@@ -87,12 +126,14 @@ export default function StaffPage() {
       contact: formData.get("contact") as string,
       joiningDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
       role: formData.get("role") as string,
+      staffRoleId: formData.get("staffRoleId") ? parseInt(formData.get("staffRoleId") as string) : null,
       status: "Active",
       published: true,
       avatar: "/placeholder.svg?height=40&width=40",
       salary: parseFloat(formData.get("salary") as string) || 0,
       bankAccount: formData.get("bankAccount") as string,
       paymentMethod: (formData.get("paymentMethod") as "Bank Transfer" | "Cash" | "Check") || "Bank Transfer",
+      password: formData.get("password") as string || undefined,
     })
     setIsAddDialogOpen(false)
   }
@@ -101,12 +142,45 @@ export default function StaffPage() {
     <div>
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">All Staff</h1>
-        <Button onClick={() => setIsAddDialogOpen(true)} className="bg-emerald-500 hover:bg-emerald-600">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">All Staff</h1>
+          {planLimits && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {planLimits.currentUsers} / {planLimits.maxUsers} users used
+              {!planLimits.canAddUser && (
+                <span className="ml-2 text-amber-600 font-medium">· Limit reached</span>
+              )}
+            </p>
+          )}
+        </div>
+        <Button
+          onClick={() => planLimits && !planLimits.canAddUser ? setIsUpgradeModalOpen(true) : setIsAddDialogOpen(true)}
+          className="bg-emerald-500 hover:bg-emerald-600"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add Staff
         </Button>
       </div>
+
+      {/* Stats */}
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <div className="mb-6">
+          <StatsCards stats={[
+            { label: "Total Staff", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
+            { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
+            { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
+          ]} />
+        </div>
+      ) : null}
 
       {/* Search and Filters */}
       <div className="bg-white rounded-lg border mb-6">
@@ -253,7 +327,7 @@ export default function StaffPage() {
                         <span className="font-semibold text-gray-900">{member.role}</span>
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-emerald-600">
-                        ${member.salary.toLocaleString()}
+                        {formatCurrency(member.salary)}
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
@@ -446,6 +520,10 @@ export default function StaffPage() {
               <Input name="email" type="email" required />
             </div>
             <div>
+              <Label>Password</Label>
+              <Input name="password" type="password" placeholder="Leave blank to use default (ChangeMe123)" />
+            </div>
+            <div>
               <Label>Contact</Label>
               <Input name="contact" required />
             </div>
@@ -475,6 +553,15 @@ export default function StaffPage() {
                 ))}
               </select>
             </div>
+            <div>
+              <Label>Permission Role (optional)</Label>
+              <select name="staffRoleId" className="w-full px-3 py-2 border rounded-lg">
+                <option value="">-- No permission role --</option>
+                {roles.map(role => (
+                  <option key={role.id} value={role.id}>{role.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
@@ -486,6 +573,15 @@ export default function StaffPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <UpgradeRequiredModal
+        open={isUpgradeModalOpen}
+        onOpenChange={setIsUpgradeModalOpen}
+        title="User Limit Reached"
+        description={`Your current plan allows up to ${planLimits?.maxUsers} users. Upgrade to add more staff.`}
+        limitType="users"
+        currentLimit={planLimits?.maxUsers}
+      />
     </div>
   )
 }

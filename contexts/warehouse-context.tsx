@@ -28,8 +28,8 @@ function toWarehouse(loc: LocationResponse): Warehouse {
     id: loc.id,
     name: loc.name,
     address: loc.address,
-    contact: loc.contact_person,
-    isDefault: loc.is_default,
+    contact: loc.contactPerson ?? '',
+    isDefault: loc.isDefault,
   }
 }
 
@@ -41,9 +41,12 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true)
       const res = await locationApi.getAll()
-      setWarehouses((res.data ?? []).map(toWarehouse))
-    } catch (err) {
+      const data = res.data ?? []
+      setWarehouses(data.map(toWarehouse))
+    } catch (err: any) {
       console.error("Failed to fetch locations:", err)
+      // Set empty warehouses on error to prevent crash
+      setWarehouses([])
     } finally {
       setLoading(false)
     }
@@ -57,8 +60,8 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     const res = await locationApi.create({
       name: warehouseData.name,
       address: warehouseData.address,
-      contact_person: warehouseData.contact,
-      is_default: warehouseData.isDefault,
+      contactPerson: warehouseData.contact,
+      isDefault: warehouseData.isDefault,
     })
     setWarehouses(prev => [...prev, toWarehouse(res.data)])
   }
@@ -67,8 +70,8 @@ export function WarehouseProvider({ children }: { children: React.ReactNode }) {
     await locationApi.update(warehouse.id, {
       name: warehouse.name,
       address: warehouse.address,
-      contact_person: warehouse.contact,
-      is_default: warehouse.isDefault,
+      contactPerson: warehouse.contact,
+      isDefault: warehouse.isDefault,
     })
     // Refresh to get accurate is_default state from backend
     await fetchLocations()

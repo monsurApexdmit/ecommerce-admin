@@ -54,14 +54,13 @@ api.interceptors.response.use(
 
 export interface CategoryResponse {
   id: number;
-  category_name: string;
-  parent_id: number | null;
+  categoryName: string;
+  parentId: number | null;
   parent?: CategoryResponse;
   children?: CategoryResponse[];
   status: boolean;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CategoryListResponse {
@@ -112,7 +111,12 @@ export const categoryApi = {
     include_inactive?: boolean;
   }): Promise<CategoryListResponse> => {
     const response = await api.get('/categories/', { params });
-    return response.data;
+    // Backend returns: { success, message, data: [...] } directly (not paginated)
+    const data = response.data.data;
+    return {
+      message: response.data.message || '',
+      data: Array.isArray(data) ? data : (data?.data || []),
+    };
   },
 
   /**
@@ -120,7 +124,11 @@ export const categoryApi = {
    */
   getSimple: async (): Promise<CategoryListResponse> => {
     const response = await api.get('/categories/simple');
-    return response.data;
+    const data = response.data.data;
+    return {
+      message: response.data.message || '',
+      data: Array.isArray(data) ? data : (data?.data || []),
+    };
   },
 
   /**
@@ -143,10 +151,10 @@ export const categoryApi = {
    * Create category
    */
   create: async (data: CreateCategoryData): Promise<{ message: string; data: CategoryResponse }> => {
-    // Ensure parent_id is explicitly set, even if null
-    const payload = {
-      ...data,
-      parent_id: data.parent_id === undefined ? null : data.parent_id
+    const payload: any = {
+      categoryName: data.category_name,
+      parentId: data.parent_id === undefined ? null : data.parent_id,
+      status: data.status,
     };
     const response = await api.post('/categories/', payload);
     return response.data;
@@ -156,11 +164,10 @@ export const categoryApi = {
    * Update category
    */
   update: async (id: number, data: UpdateCategoryData): Promise<{ message: string; data: CategoryResponse }> => {
-    // Ensure parent_id is explicitly included if provided
-    const payload = { ...data };
-    if ('parent_id' in data) {
-      payload.parent_id = data.parent_id === undefined ? null : data.parent_id;
-    }
+    const payload: any = {};
+    if (data.category_name !== undefined) payload.categoryName = data.category_name;
+    if ('parent_id' in data) payload.parentId = data.parent_id === undefined ? null : data.parent_id;
+    if (data.status !== undefined) payload.status = data.status;
     const response = await api.put(`/categories/${id}`, payload);
     return response.data;
   },

@@ -12,6 +12,10 @@ import { useTransfer } from "@/contexts/transfer-context"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
 import { transferApi, type LocationProduct, type LocationProductRaw } from "@/lib/transferApi"
+import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
@@ -49,7 +53,9 @@ function flattenLocationProducts(raw: LocationProductRaw[]): LocationProduct[] {
 }
 
 export default function StockTransferPage() {
+  const { canRead } = useSaasAuth()
   const router = useRouter()
+  const { toast } = useToast()
   const { warehouses } = useWarehouse()
   const { transfers, loading, addTransfer, cancelTransfer } = useTransfer()
 
@@ -79,6 +85,9 @@ export default function StockTransferPage() {
 
   const locationProducts = useMemo(() => flattenLocationProducts(rawLocationProducts), [rawLocationProducts])
 
+  const blocked = useModuleGuard('Transfers')
+  if (blocked) return blocked
+
   const selectedItem = locationProducts.find(p =>
     (p.type === 'variant' ? `v-${p.id}` : `p-${p.id}`) === selectedRowKey
   )
@@ -103,6 +112,7 @@ export default function StockTransferPage() {
         quantity: qtyNum,
         notes: notes || undefined,
       })
+      toast({ title: "Success", description: "Transfer created successfully" })
       setFromWarehouse("")
       setToWarehouse("")
       setRawLocationProducts([])
@@ -110,7 +120,7 @@ export default function StockTransferPage() {
       setQuantity("")
       setNotes("")
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Transfer failed")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Transfer failed" })
     } finally {
       setSubmitting(false)
     }
@@ -120,8 +130,9 @@ export default function StockTransferPage() {
     try {
       setCancelling(id)
       await cancelTransfer(id)
+      toast({ title: "Success", description: "Transfer cancelled successfully" })
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to cancel transfer")
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to cancel transfer" })
     } finally {
       setCancelling(null)
     }
@@ -150,7 +161,7 @@ export default function StockTransferPage() {
                 <div className="space-y-2">
                   <Label>Source Warehouse</Label>
                   <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
-                    <SelectTrigger><SelectValue placeholder="From..." /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="From..." /></SelectTrigger>
                     <SelectContent>
                       {warehouses.map(w => (
                         <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === toWarehouse}>
@@ -163,7 +174,7 @@ export default function StockTransferPage() {
                 <div className="space-y-2">
                   <Label>Destination Warehouse</Label>
                   <Select value={toWarehouse} onValueChange={setToWarehouse}>
-                    <SelectTrigger><SelectValue placeholder="To..." /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="To..." /></SelectTrigger>
                     <SelectContent>
                       {warehouses.map(w => (
                         <SelectItem key={w.id} value={String(w.id)} disabled={String(w.id) === fromWarehouse}>
@@ -182,7 +193,7 @@ export default function StockTransferPage() {
                   onValueChange={setSelectedRowKey}
                   disabled={!fromWarehouse || locationProductsLoading}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder={
                       !fromWarehouse ? "Select source warehouse first" :
                       locationProductsLoading ? "Loading..." :

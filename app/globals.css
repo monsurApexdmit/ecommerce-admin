@@ -37,40 +37,70 @@
   --sidebar-accent-foreground: oklch(0.15 0 0);
   --sidebar-border: oklch(0.93 0 0);
   --sidebar-ring: oklch(0.55 0.15 165);
+
+  /* Brand accent — overridable at runtime by the topbar swatch picker.
+     Default emerald. `-soft` is the tinted active/badge bg, `-fg` the text. */
+  --brand: #059669;
+  --brand-foreground: #ffffff;
+  --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
+  --brand-fg: var(--brand);
+
+  /* Route the shadcn primary token through the brand var so every
+     primary-based component (Switch, default Button, Checkbox, rings)
+     follows the runtime accent picker. */
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --ring: var(--brand);
+
+  /* Money/checkout accent (teal) — used by POS price + charge button. */
+  --money: #0d9488;
+  --money-foreground: #ffffff;
+  --money-soft: color-mix(in srgb, var(--money) 12%, transparent);
+  --money-fg: var(--money);
 }
 
 .dark {
-  --background: oklch(0.12 0 0);
-  --foreground: oklch(0.98 0 0);
-  --card: oklch(0.15 0 0);
-  --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.15 0 0);
-  --popover-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.6 0.15 165);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.2 0.01 165);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.2 0.01 165);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.2 0.01 165);
-  --accent-foreground: oklch(0.98 0 0);
-  --destructive: oklch(0.5 0.2 27);
+  /* Brand brightens slightly on dark; soft tint gets stronger to stay visible. */
+  --brand-fg: color-mix(in srgb, var(--brand), white 26%);
+  --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --ring: var(--brand);
+  --money: #2dd4bf;
+  --money-fg: color-mix(in srgb, var(--money), white 12%);
+  --money-soft: color-mix(in srgb, var(--money) 20%, transparent);
+
+  /* Blue-slate dark palette (matches the redesign mockup). Hue ~255, low chroma. */
+  --background: oklch(0.16 0.018 258);
+  --foreground: oklch(0.93 0.008 250);
+  --card: oklch(0.21 0.02 258);
+  --card-foreground: oklch(0.93 0.008 250);
+  --popover: oklch(0.21 0.02 258);
+  --popover-foreground: oklch(0.93 0.008 250);
+  /* --primary / --primary-foreground / --ring routed to --brand above */
+  --secondary: oklch(0.26 0.02 258);
+  --secondary-foreground: oklch(0.93 0.008 250);
+  --muted: oklch(0.26 0.02 258);
+  --muted-foreground: oklch(0.68 0.02 250);
+  --accent: oklch(0.28 0.022 258);
+  --accent-foreground: oklch(0.93 0.008 250);
+  --destructive: oklch(0.6 0.2 22);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.25 0 0);
-  --input: oklch(0.25 0 0);
-  --ring: oklch(0.6 0.15 165);
+  --border: oklch(0.3 0.02 258);
+  --input: oklch(0.3 0.02 258);
+  /* --ring routed to --brand above */
   --chart-1: oklch(0.6 0.15 165);
   --chart-2: oklch(0.7 0.18 240);
   --chart-3: oklch(0.75 0.15 60);
   --chart-4: oklch(0.65 0.2 30);
   --chart-5: oklch(0.8 0.12 280);
-  --sidebar: oklch(0.15 0 0);
-  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar: oklch(0.18 0.02 258);
+  --sidebar-foreground: oklch(0.93 0.008 250);
   --sidebar-primary: oklch(0.6 0.15 165);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.2 0.01 165);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.22 0 0);
+  --sidebar-accent: oklch(0.26 0.02 258);
+  --sidebar-accent-foreground: oklch(0.93 0.008 250);
+  --sidebar-border: oklch(0.3 0.02 258);
   --sidebar-ring: oklch(0.6 0.15 165);
 }
 
@@ -113,6 +143,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-fg: var(--brand-fg);
+  --color-money: var(--money);
+  --color-money-foreground: var(--money-foreground);
+  --color-money-soft: var(--money-soft);
+  --color-money-fg: var(--money-fg);
 }
 
 @layer base {
@@ -121,5 +159,96 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/*
+ * Brand remap (both themes).
+ *
+ * Most green buttons/links were authored with hardcoded emerald/green
+ * utilities. Remap them to the runtime `--brand` var so the topbar accent
+ * picker recolours them too. `!important` because these must beat Tailwind's
+ * own utility output regardless of layer order and cover hover/focus variants.
+ */
+.bg-emerald-500, .bg-emerald-600, .bg-emerald-700,
+.bg-green-500, .bg-green-600, .bg-green-700 { background-color: var(--brand) !important; }
+/* Radix state variants (switch/toggle checked, tabs active) */
+.data-\[state\=checked\]\:bg-emerald-500[data-state="checked"],
+.data-\[state\=checked\]\:bg-emerald-600[data-state="checked"],
+.data-\[state\=checked\]\:bg-green-500[data-state="checked"],
+.data-\[state\=checked\]\:bg-green-600[data-state="checked"],
+.data-\[state\=on\]\:bg-emerald-500[data-state="on"],
+.data-\[state\=active\]\:bg-emerald-500[data-state="active"] { background-color: var(--brand) !important; }
+.hover\:bg-emerald-600:hover, .hover\:bg-emerald-700:hover,
+.hover\:bg-green-600:hover, .hover\:bg-green-700:hover { background-color: color-mix(in srgb, var(--brand), black 8%) !important; }
+.text-emerald-600, .text-emerald-700, .text-green-600, .text-green-700 { color: var(--brand-fg) !important; }
+.hover\:text-emerald-700:hover, .hover\:text-green-700:hover { color: var(--brand-fg) !important; }
+.border-emerald-200, .border-emerald-300, .border-emerald-500, .border-emerald-600,
+.border-green-200, .border-green-300, .border-green-500, .border-green-600 { border-color: color-mix(in srgb, var(--brand) 45%, transparent) !important; }
+.ring-emerald-500, .ring-emerald-600, .ring-green-500, .ring-green-600,
+.focus-visible\:ring-emerald-500:focus-visible { --tw-ring-color: var(--brand) !important; }
+.bg-emerald-50, .bg-green-50, .bg-emerald-100, .bg-green-100 { background-color: var(--brand-soft) !important; }
+.text-emerald-800, .text-green-800 { color: var(--brand-fg) !important; }
+
+/*
+ * Dark-mode compatibility layer.
+ *
+ * Many dashboard pages were authored with hardcoded light utilities
+ * (bg-white, text-gray-900, bg-gray-50, *-50 tints, etc.) before dark mode
+ * existed. Rather than migrate every page by hand, we remap the common
+ * hardcoded classes to theme tokens whenever `.dark` is active.
+ *
+ * `.dark .bg-white` (0,2,0) outranks the plain `.bg-white` utility (0,1,0),
+ * so these win without !important. Scoped to .dark only — light mode is
+ * untouched. Brand-tinted surfaces fall back to brand-soft so the accent
+ * picker keeps working in dark too.
+ */
+.dark {
+  /* Surfaces */
+  .bg-white { background-color: var(--card) !important; }
+  .bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100, .bg-neutral-50 {
+    background-color: color-mix(in oklab, var(--card), white 4%) !important;
+  }
+  .bg-gray-200, .bg-gray-300, .bg-slate-200, .bg-slate-300, .bg-neutral-200 { background-color: var(--muted) !important; }
+  /* Mid grays — image placeholders, avatars, dots. Keep them visible but muted. */
+  .bg-gray-400, .bg-gray-500, .bg-slate-400, .bg-slate-500 { background-color: var(--secondary) !important; }
+
+  /* Text */
+  .text-gray-900, .text-slate-900, .text-black { color: var(--foreground) !important; }
+  .text-gray-800, .text-gray-700, .text-slate-700 {
+    color: color-mix(in oklab, var(--foreground), transparent 8%) !important;
+  }
+  .text-gray-600, .text-gray-500, .text-slate-600, .text-slate-500 {
+    color: var(--muted-foreground) !important;
+  }
+  .text-gray-400, .text-gray-300 {
+    color: color-mix(in oklab, var(--muted-foreground), transparent 25%) !important;
+  }
+
+  /* Borders / dividers */
+  .border-gray-100, .border-gray-200, .border-gray-300,
+  .border-gray-400, .border-gray-500, .border-gray-600,
+  .border-slate-100, .border-slate-200, .border-slate-300 { border-color: var(--border) !important; }
+  .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+  .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border) !important; }
+
+  /* Soft brand/status tints used as card fills — keep tint but dark-appropriate */
+  .bg-emerald-50, .bg-green-50 { background-color: color-mix(in srgb, #10b981 14%, var(--card)) !important; }
+  .bg-blue-50, .bg-sky-50, .bg-indigo-50 { background-color: color-mix(in srgb, #3b82f6 14%, var(--card)) !important; }
+  .bg-purple-50, .bg-violet-50 { background-color: color-mix(in srgb, #8b5cf6 14%, var(--card)) !important; }
+  .bg-orange-50, .bg-amber-50, .bg-yellow-50 { background-color: color-mix(in srgb, #f59e0b 14%, var(--card)) !important; }
+  .bg-red-50, .bg-rose-50 { background-color: color-mix(in srgb, #ef4444 14%, var(--card)) !important; }
+
+  /* Hover states that assumed a light page */
+  .hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover { background-color: var(--accent) !important; }
+
+  /* Light page-background gradients (bg-gradient-to-* from-slate-50 to-gray-100 …).
+     Neutralise the from/to/via stops so the whole gradient flattens to the dark bg. */
+  .from-gray-50, .from-gray-100, .from-slate-50, .from-slate-100, .from-neutral-50,
+  .from-white { --tw-gradient-from: var(--background) !important; }
+  .to-gray-50, .to-gray-100, .to-slate-50, .to-slate-100, .to-neutral-50,
+  .to-white { --tw-gradient-to: var(--background) !important; }
+  .via-gray-50, .via-gray-100, .via-slate-50, .via-slate-100, .via-white {
+    --tw-gradient-via: var(--background) !important;
   }
 }

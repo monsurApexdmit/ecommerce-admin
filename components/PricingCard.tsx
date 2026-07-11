@@ -118,15 +118,19 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
       <div className="mb-6 flex-grow">
         <p className="text-xs font-semibold text-gray-700 uppercase mb-3">Features</p>
         <ul className="space-y-3">
-          {plan.features.map((feature) => (
-            <li key={feature.id} className="flex items-start gap-3">
-              <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">{feature.name}</p>
-                <p className="text-xs text-gray-600">{feature.description}</p>
-              </div>
-            </li>
-          ))}
+          {plan.features.map((feature, index) => {
+            const featureName = typeof feature === "string" ? feature : (feature.name || "");
+            const featureDesc = typeof feature === "object" ? (feature.description || "") : "";
+            return (
+              <li key={`${featureName}-${index}`} className="flex items-start gap-3">
+                <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{featureName}</p>
+                  {featureDesc && <p className="text-xs text-gray-600">{featureDesc}</p>}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
 

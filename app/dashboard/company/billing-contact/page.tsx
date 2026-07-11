@@ -11,11 +11,13 @@ import {
   type BillingContactPayload,
 } from "@/lib/saasCompanyApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { AlertCircle, Loader, Save, MapPin, FileText } from "lucide-react"
 
 export default function BillingContactPage() {
   const router = useRouter()
-  const { company } = useSaasAuth()
+  const { company, canRead } = useSaasAuth()
 
   const [billingContact, setBillingContact] = useState<BillingContact | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,6 +65,9 @@ export default function BillingContactPage() {
 
     loadData()
   }, [])
+
+  const blocked = useModuleGuard('Billing Contact')
+  if (blocked) return blocked
 
   const handleChange = (field: keyof BillingContactPayload, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -146,7 +151,7 @@ export default function BillingContactPage() {
               </label>
               <Input
                 type="email"
-                value={formData.email}
+                value={formData.email || ""}
                 onChange={(e) => handleChange("email", e.target.value)}
                 placeholder="billing@example.com"
               />
@@ -156,7 +161,8 @@ export default function BillingContactPage() {
                 Phone <span className="text-red-500">*</span>
               </label>
               <Input
-                value={formData.phone}
+                type="tel"
+                value={formData.phone || ""}
                 onChange={(e) => handleChange("phone", e.target.value)}
                 placeholder="+1 (555) 000-0000"
               />
@@ -169,7 +175,7 @@ export default function BillingContactPage() {
               Street Address <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.address}
+              value={formData.address || ""}
               onChange={(e) => handleChange("address", e.target.value)}
               placeholder="123 Main Street"
             />
@@ -182,7 +188,7 @@ export default function BillingContactPage() {
                 City <span className="text-red-500">*</span>
               </label>
               <Input
-                value={formData.city}
+                value={formData.city || ""}
                 onChange={(e) => handleChange("city", e.target.value)}
                 placeholder="New York"
               />
@@ -190,7 +196,7 @@ export default function BillingContactPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
               <Input
-                value={formData.state}
+                value={formData.state || ""}
                 onChange={(e) => handleChange("state", e.target.value)}
                 placeholder="NY"
               />
@@ -198,7 +204,7 @@ export default function BillingContactPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Zip Code</label>
               <Input
-                value={formData.zipCode}
+                value={formData.zipCode || ""}
                 onChange={(e) => handleChange("zipCode", e.target.value)}
                 placeholder="10001"
               />
@@ -206,7 +212,7 @@ export default function BillingContactPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
               <Input
-                value={formData.country}
+                value={formData.country || ""}
                 onChange={(e) => handleChange("country", e.target.value)}
                 placeholder="United States"
               />
@@ -232,7 +238,7 @@ export default function BillingContactPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Tax ID</label>
               <Input
-                value={formData.taxId}
+                value={formData.taxId || ""}
                 onChange={(e) => handleChange("taxId", e.target.value)}
                 placeholder="e.g., 12-3456789"
               />

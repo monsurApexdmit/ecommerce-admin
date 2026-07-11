@@ -13,12 +13,17 @@ import { exportToCSV } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { couponApi, type CouponResponse } from "@/lib/couponApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { toast } from "sonner"
 
 type FormData = {
   campaign_name: string
   code: string
   discount: string
-  type: "percentage" | "fixed"
+  type: "percentage" | "fixed" | "free_shipping"
   start_date: string
   end_date: string
   status: boolean
@@ -41,9 +46,9 @@ function isExpired(endDate: string): boolean {
   return new Date(endDate) < new Date()
 }
 
-function formatDiscount(coupon: CouponResponse): string {
+function formatDiscount(coupon: CouponResponse, fmt: (n: number) => string): string {
   const val = coupon.discount ?? 0
-  return coupon.type === "percentage" ? `${val}%` : `$${val}`
+  return coupon.type === "percentage" ? `${val}%` : fmt(val)
 }
 
 function formatDate(dateStr: string): string {
@@ -65,6 +70,8 @@ function toInputDate(dateStr: string): string {
 }
 
 export default function CouponsPage() {
+  const { canRead } = useSaasAuth()
+  const { formatCurrency } = useCompanySettings()
   const [coupons, setCoupons] = useState<CouponResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -94,9 +101,12 @@ export default function CouponsPage() {
     refreshCoupons()
   }, [])
 
+  const blocked = useModuleGuard('Coupons')
+  if (blocked) return blocked
+
   const filteredCoupons = coupons.filter(
     (coupon) =>
-      (coupon.campaign_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (coupon.campaignName ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (coupon.code ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
@@ -121,21 +131,31 @@ export default function CouponsPage() {
 
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this coupon?")) {
-      await couponApi.delete(id)
-      setSelectedCoupons(selectedCoupons.filter((cid) => cid !== id.toString()))
-      await refreshCoupons()
+      try {
+        await couponApi.delete(id)
+        setSelectedCoupons(selectedCoupons.filter((cid) => cid !== id.toString()))
+        await refreshCoupons()
+      } catch (err: any) {
+        console.error('Error deleting coupon:', err)
+        toast.error(err.message || 'Failed to delete coupon')
+      }
     }
   }
 
   const handleBulkDelete = async () => {
     if (selectedCoupons.length === 0) {
-      alert("Please select coupons to delete")
+      toast.error("Please select coupons to delete")
       return
     }
     if (confirm(`Delete ${selectedCoupons.length} selected coupon(s)?`)) {
-      await Promise.all(selectedCoupons.map((id) => couponApi.delete(parseInt(id))))
-      setSelectedCoupons([])
-      await refreshCoupons()
+      try {
+        await Promise.all(selectedCoupons.map((id) => couponApi.delete(parseInt(id))))
+        setSelectedCoupons([])
+        await refreshCoupons()
+      } catch (err: any) {
+        console.error('Error deleting coupons:', err)
+        toast.error(err.message || 'Failed to delete coupons')
+      }
     }
   }
 
@@ -147,16 +167,17 @@ export default function CouponsPage() {
   const handleEdit = (coupon: CouponResponse) => {
     setCurrentCoupon(coupon)
     setFormData({
-      campaign_name: coupon.campaign_name ?? "",
+      campaign_name: coupon.campaignName ?? "",
       code: coupon.code ?? "",
       discount: (coupon.discount ?? "").toString(),
       type: coupon.type ?? "percentage",
-      start_date: toInputDate(coupon.start_date),
-      end_date: toInputDate(coupon.end_date),
+      start_date: toInputDate(coupon.startDate),
+      end_date: toInputDate(coupon.endDate),
       status: coupon.status ?? true,
       image: null,
     })
-    setImagePreview(coupon.image ? `/api/proxy-image?url=${encodeURIComponent(coupon.image)}` : null)
+    // Show current image as preview (read-only in edit mode)
+    setImagePreview(coupon.image ? `http://localhost:8005/storage/${coupon.image}` : null)
     setIsEditDialogOpen(true)
   }
 
@@ -167,70 +188,95 @@ export default function CouponsPage() {
     setImagePreview(URL.createObjectURL(file))
   }
 
-  // Go's time.RFC3339 does not accept milliseconds — strip them
-  const toRFC3339 = (dateStr: string) => {
-    if (!dateStr) return undefined
-    const d = new Date(dateStr)
-    return d.toISOString().replace(/\.\d{3}Z$/, 'Z')
-  }
+const handleAddCoupon = async () => {
+    try {
+      if (!formData.start_date || !formData.end_date) {
+        toast.error('Start Date and End Date are required')
+        return
+      }
 
-  const handleAddCoupon = async () => {
-    const payload = {
-      campaign_name: formData.campaign_name,
-      code: formData.code.toUpperCase(),
-      type: formData.type,
-      discount: parseFloat(formData.discount) || 0,
-      status: formData.status,
-      start_date: toRFC3339(formData.start_date),
-      end_date: toRFC3339(formData.end_date),
+      const payload: any = {
+        campaign_name: formData.campaign_name,
+        code: formData.code.toUpperCase(),
+        type: formData.type,
+        discount: parseFloat(formData.discount) || 0,
+        status: formData.status,
+        start_date: formData.start_date, // Y-m-d format from date input
+        end_date: formData.end_date,
+      }
+
+      if (formData.image) {
+        console.log('Creating coupon with image...')
+        await couponApi.createWithImage({ ...payload, image: formData.image })
+      } else {
+        console.log('Creating coupon without image...')
+        await couponApi.create(payload)
+      }
+
+      setIsAddDialogOpen(false)
+      setFormData(emptyForm)
+      setImagePreview(null)
+      await refreshCoupons()
+      toast.success('Coupon created successfully')
+    } catch (err: any) {
+      console.error('Error adding coupon:', err)
+      toast.error(err.message || 'Failed to add coupon')
     }
-
-    if (formData.image) {
-      await couponApi.createWithImage({ ...payload, image: formData.image })
-    } else {
-      await couponApi.create(payload)
-    }
-
-    setIsAddDialogOpen(false)
-    setFormData(emptyForm)
-    setImagePreview(null)
-    await refreshCoupons()
   }
 
   const handleUpdateCoupon = async () => {
     if (!currentCoupon) return
 
-    const payload = {
-      campaign_name: formData.campaign_name,
-      code: formData.code.toUpperCase(),
-      type: formData.type,
-      discount: parseFloat(formData.discount) || 0,
-      status: formData.status,
-      start_date: toRFC3339(formData.start_date),
-      end_date: toRFC3339(formData.end_date),
-    }
+    try {
+      if (!formData.start_date || !formData.end_date) {
+        toast.error('Start Date and End Date are required')
+        return
+      }
 
-    if (formData.image) {
-      await couponApi.updateWithImage(currentCoupon.id, { ...payload, image: formData.image })
-    } else {
-      await couponApi.update(currentCoupon.id, payload)
-    }
+      const payload: any = {
+        campaign_name: formData.campaign_name,
+        code: formData.code.toUpperCase(),
+        type: formData.type,
+        discount: parseFloat(formData.discount) || 0,
+        status: formData.status,
+        start_date: formData.start_date, // Y-m-d format from date input
+        end_date: formData.end_date,
+      }
 
-    setIsEditDialogOpen(false)
-    setCurrentCoupon(null)
-    setImagePreview(null)
-    await refreshCoupons()
+      console.log('Updating coupon:', currentCoupon.id, payload)
+
+      if (formData.image) {
+        console.log('Updating with new image...')
+        console.log('Payload being sent with image:', payload)
+        // Only send fields that have values to FormData
+        const imagePayload: any = { ...payload, image: formData.image }
+        await couponApi.updateWithImage(currentCoupon.id, imagePayload)
+      } else {
+        console.log('Updating without image change...')
+        await couponApi.update(currentCoupon.id, payload)
+      }
+
+      console.log('Coupon updated successfully')
+      setIsEditDialogOpen(false)
+      setCurrentCoupon(null)
+      setImagePreview(null)
+      await refreshCoupons()
+      toast.success('Coupon updated successfully')
+    } catch (err: any) {
+      console.error('Error updating coupon:', err)
+      toast.error(err.message || 'Failed to update coupon')
+    }
   }
 
   const handleExport = () => {
     const exportData = filteredCoupons.map((coupon) => ({
       id: coupon.id,
-      campaign_name: coupon.campaign_name,
+      campaign_name: coupon.campaignName,
       code: coupon.code,
-      discount: formatDiscount(coupon),
+      discount: formatDiscount(coupon, formatCurrency),
       status: coupon.status ? "Active" : "Inactive",
-      start_date: formatDate(coupon.start_date),
-      end_date: formatDate(coupon.end_date),
+      start_date: formatDate(coupon.startDate),
+      end_date: formatDate(coupon.endDate),
     }))
     const headers = ["ID", "Campaign Name", "Code", "Discount", "Status", "Start Date", "End Date"]
     exportToCSV(exportData, "coupons", headers)
@@ -239,17 +285,22 @@ export default function CouponsPage() {
   const handleBulkActionSubmit = async () => {
     if (!bulkAction || selectedCoupons.length === 0) return
 
-    if (bulkAction === "delete") {
-      await handleBulkDelete()
-    } else {
-      const status = bulkAction === "activate"
-      await Promise.all(selectedCoupons.map((id) => couponApi.update(parseInt(id), { status })))
-      setSelectedCoupons([])
-      await refreshCoupons()
-    }
+    try {
+      if (bulkAction === "delete") {
+        await handleBulkDelete()
+      } else {
+        const status = bulkAction === "activate"
+        await Promise.all(selectedCoupons.map((id) => couponApi.update(parseInt(id), { status })))
+        setSelectedCoupons([])
+        await refreshCoupons()
+      }
 
-    setIsBulkActionDialogOpen(false)
-    setBulkAction("")
+      setIsBulkActionDialogOpen(false)
+      setBulkAction("")
+    } catch (err: any) {
+      console.error('Error in bulk action:', err)
+      toast.error(err.message || 'Failed to perform bulk action')
+    }
   }
 
   const renderCouponForm = () => (
@@ -288,7 +339,7 @@ export default function CouponsPage() {
             value={formData.type}
             onValueChange={(value) => setFormData({ ...formData, type: value as "percentage" | "fixed" })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -300,19 +351,21 @@ export default function CouponsPage() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>Start Date</Label>
+          <Label>Start Date <span className="text-red-500">*</span></Label>
           <Input
             type="date"
             value={formData.start_date}
             onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+            required
           />
         </div>
         <div>
-          <Label>End Date</Label>
+          <Label>End Date <span className="text-red-500">*</span></Label>
           <Input
             type="date"
             value={formData.end_date}
             onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+            required
           />
         </div>
       </div>
@@ -479,16 +532,16 @@ export default function CouponsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <img
-                            src={coupon.image ? `/api/proxy-image?url=${encodeURIComponent(coupon.image)}` : "/placeholder.svg"}
-                            alt={coupon.campaign_name}
+                            src={coupon.image ? `http://localhost:8005/storage/${coupon.image}` : "/placeholder.svg"}
+                            alt={coupon.campaignName}
                             className="w-10 h-10 rounded object-cover"
                             onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
                           />
-                          <span className="font-medium text-gray-900">{coupon.campaign_name}</span>
+                          <span className="font-medium text-gray-900">{coupon.campaignName}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-700">{coupon.code}</td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{formatDiscount(coupon)}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{formatDiscount(coupon, formatCurrency)}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => handleToggleStatus(coupon)}
@@ -498,14 +551,14 @@ export default function CouponsPage() {
                         </button>
                       </td>
                       <td className="px-4 py-3">
-                        {isExpired(coupon.end_date) ? (
+                        {isExpired(coupon.endDate) ? (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Expired</span>
                         ) : (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Valid</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{formatDate(coupon.start_date)}</td>
-                      <td className="px-4 py-3 text-gray-700">{formatDate(coupon.end_date)}</td>
+                      <td className="px-4 py-3 text-gray-700">{formatDate(coupon.startDate)}</td>
+                      <td className="px-4 py-3 text-gray-700">{formatDate(coupon.endDate)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button onClick={() => handleEdit(coupon)} className="p-1 hover:bg-gray-100 rounded">
@@ -571,7 +624,7 @@ export default function CouponsPage() {
             <div className="space-y-2">
               <Label>Action Type</Label>
               <Select value={bulkAction} onValueChange={setBulkAction}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select action" />
                 </SelectTrigger>
                 <SelectContent>

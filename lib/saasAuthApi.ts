@@ -116,6 +116,14 @@ export interface Company {
   subscriptionEndDate?: string;
   createdAt: string;
   updatedAt: string;
+  // Plan and feature info
+  planId?: number;
+  planName?: string;
+  planFeatures?: string[];
+  planModules?: string[];
+  maxUsers?: number;
+  maxProducts?: number;
+  maxBranches?: number;
 }
 
 export interface User {
@@ -127,6 +135,9 @@ export interface User {
   status: 'active' | 'invited' | 'inactive';
   joinedDate: string;
   lastLogin?: string;
+  /** null = full access (owner/admin). Object = per-module flags. Missing key = no access. */
+  permissions: Record<string, { read: boolean; write: boolean; delete: boolean }> | null;
+  roleId?: number | null;
 }
 
 export interface CurrentUserResponse {
@@ -233,38 +244,38 @@ export const saasAuthApi = {
   },
 
   /**
-   * POST /auth/password/forgot
+   * POST /auth/forgot-password
    * Request password reset email
    */
   forgotPassword: async (payload: ForgotPasswordPayload) => {
-    const response = await api.post<ForgotPasswordResponse>('/auth/password/forgot', payload);
+    const response = await api.post<ForgotPasswordResponse>('/auth/forgot-password', payload);
     return response.data;
   },
 
   /**
-   * POST /auth/password/reset
+   * POST /auth/reset-password
    * Reset password with token
    */
   resetPassword: async (payload: ResetPasswordPayload) => {
-    const response = await api.post<ResetPasswordResponse>('/auth/password/reset', payload);
+    const response = await api.post<ResetPasswordResponse>('/auth/reset-password', payload);
     return response.data;
   },
 
   /**
-   * POST /auth/password/change
+   * POST /auth/update-password
    * Change password (authenticated)
    */
   changePassword: async (payload: ChangePasswordPayload) => {
-    const response = await api.post<ChangePasswordResponse>('/auth/password/change', payload);
+    const response = await api.post<ChangePasswordResponse>('/auth/update-password', payload);
     return response.data;
   },
 
   /**
-   * GET /auth/verify-email/:token
+   * POST /auth/verify-email
    * Verify email with token
    */
   verifyEmail: async (token: string) => {
-    const response = await api.get(`/auth/verify-email/${token}`);
+    const response = await api.post('/auth/verify-email', { token });
     return response.data;
   },
 

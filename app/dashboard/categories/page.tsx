@@ -16,8 +16,12 @@ import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { useCategory, type Category } from "@/contexts/category-context"
 import { useToast } from "@/hooks/use-toast"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 export default function CategoriesPage() {
+  const { canRead } = useSaasAuth()
   const { categories: rootCategories, getAllCategoriesFlat, addCategory, updateCategory, deleteCategory } = useCategory()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
@@ -46,13 +50,16 @@ export default function CategoriesPage() {
     return () => clearTimeout(timer)
   }, [])
 
+  const blocked = useModuleGuard('Categories')
+  if (blocked) return blocked
+
   // Filter Logic
   // If "Parents Only" is checked, we only search/filter ROOT categories.
   // Otherwise, we search/filter ALL categories (flat list).
   const sourceList = parentsOnly ? rootCategories : flatCategories
 
   const filteredCategories = sourceList.filter((category) =>
-    category.category_name.toLowerCase().includes(searchQuery.toLowerCase()),
+    (category.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   const {
@@ -94,7 +101,7 @@ export default function CategoriesPage() {
 
     try {
       await addCategory({
-        category_name: formData.name,
+        category_name: formData.name.replace(/\b\w/g, (c) => c.toUpperCase()),
         status: formData.published,
         parent_id: formData.parent_id === "none" ? null : formData.parent_id,
       })
@@ -128,7 +135,7 @@ export default function CategoriesPage() {
 
     try {
       await updateCategory(editingCategory.id, {
-        category_name: formData.name,
+        category_name: formData.name.replace(/\b\w/g, (c) => c.toUpperCase()),
         status: formData.published,
         parent_id: formData.parent_id === "none" ? null : formData.parent_id,
       })
@@ -345,7 +352,6 @@ export default function CategoriesPage() {
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ID</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
                  {!parentsOnly && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PARENT</th>}
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PUBLISHED</th>
@@ -357,7 +363,6 @@ export default function CategoriesPage() {
                 ? Array.from({ length: 5 }).map((_, index) => (
                     <tr key={index} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4"><Skeleton className="h-4 w-4 rounded" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
                       <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
                        {!parentsOnly && <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>}
                       <td className="py-3 px-4"><Skeleton className="h-6 w-11 rounded-full" /></td>
@@ -374,7 +379,6 @@ export default function CategoriesPage() {
                           className="rounded border-gray-300"
                         />
                       </td>
-                      <td className="py-3 px-4 text-gray-600 text-xs">{category.id.substring(0, 6)}...</td>
                       <td className="py-3 px-4 text-gray-900 font-medium">{category.category_name}</td>
                       {!parentsOnly && (
                           <td className="py-3 px-4 text-gray-500 text-sm">
@@ -447,7 +451,7 @@ export default function CategoriesPage() {
                     value={formData.parent_id || "none"} 
                     onValueChange={(val) => setFormData({...formData, parent_id: val})}
                 >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select Parent Category" />
                     </SelectTrigger>
                     <SelectContent>

@@ -1,10 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { MapPin, Settings } from "lucide-react"
+import { MapPin, Settings, Heart } from "lucide-react"
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 export default function OnlineStorePage() {
+  const { canRead } = useSaasAuth()
+  const blocked = useModuleGuard('Store')
+  if (blocked) return blocked
   return (
     <div className="space-y-6">
       <div className="mb-6">
@@ -30,20 +36,36 @@ export default function OnlineStorePage() {
           </Card>
         </Link>
 
-        {/* Placeholder for other settings */}
-        <Card className="opacity-50 h-full">
+        <Link href="/dashboard/store/wishlist">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer h-full border-rose-100 hover:border-rose-300">
             <CardHeader>
-              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mb-2">
-                <Settings className="w-6 h-6 text-gray-500" />
+              <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center mb-2">
+                <Heart className="w-6 h-6 text-rose-600" />
               </div>
-              <CardTitle>Preferences</CardTitle>
+              <CardTitle>Wishlist Analytics</CardTitle>
               <CardDescription>
-                Store details, timezones, and formats
+                Most-wanted products and customer wishlist activity
               </CardDescription>
             </CardHeader>
             <CardContent>
-                <span className="text-sm text-gray-400 font-medium">Coming Soon</span>
+              <span className="text-sm text-rose-600 font-medium">View Analytics &rarr;</span>
             </CardContent>
+          </Card>
+        </Link>
+
+        <Card className="opacity-50 h-full">
+          <CardHeader>
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center mb-2">
+              <Settings className="w-6 h-6 text-gray-500" />
+            </div>
+            <CardTitle>Preferences</CardTitle>
+            <CardDescription>
+              Store details, timezones, and formats
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <span className="text-sm text-gray-400 font-medium">Coming Soon</span>
+          </CardContent>
         </Card>
       </div>
     </div>

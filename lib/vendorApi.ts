@@ -115,7 +115,20 @@ export const vendorApi = {
     search?: string;
   }): Promise<VendorListResponse> => {
     const response = await api.get('/vendors/', { params });
-    return response.data;
+    // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      pagination: {
+        total: laravelData.total || 0,
+        page: laravelData.current_page || 1,
+        limit: laravelData.per_page || 10,
+        total_pages: Math.ceil((laravelData.total || 0) / (laravelData.per_page || 10)),
+        has_next: laravelData.current_page < Math.ceil((laravelData.total || 0) / (laravelData.per_page || 10)),
+        has_previous: laravelData.current_page > 1,
+      },
+    };
   },
 
   /**
@@ -148,6 +161,18 @@ export const vendorApi = {
   delete: async (id: number): Promise<{ message: string }> => {
     const response = await api.delete(`/vendors/${id}`);
     return response.data;
+  },
+
+  /**
+   * Get vendor statistics
+   */
+  getStats: async (): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+  }> => {
+    const response = await api.get('/vendors/stats');
+    return response.data.data;
   },
 };
 

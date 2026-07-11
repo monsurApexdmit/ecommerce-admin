@@ -17,6 +17,10 @@ import {
 } from "lucide-react"
 import { shipmentsApi, ShipmentResponse, ShipmentStatus, CreateShipmentData } from "@/lib/shipmentsApi"
 import { sellsApi, SellResponse } from "@/lib/sellsApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 // Ordered progression — status can only move forward
 const STATUS_ORDER: ShipmentStatus[] = [
@@ -88,6 +92,8 @@ const EMPTY_FORM: CreateShipmentData = {
 }
 
 export default function ShipmentsPage() {
+  const { canRead } = useSaasAuth()
+  const { formatCurrency } = useCompanySettings()
   const [shipments, setShipments] = useState<ShipmentResponse[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, failed: 0 })
   const [orders, setOrders] = useState<SellResponse[]>([])
@@ -156,7 +162,7 @@ export default function ShipmentsPage() {
       setStats({
         total: Number(s?.total ?? 0),
         pending: Number(s?.pending ?? 0),
-        inTransit: Number(s?.in_transit ?? 0),
+        inTransit: Number(s?.inTransit ?? s?.in_transit ?? 0),
         delivered: Number(s?.delivered ?? 0),
         failed: Number(s?.failed ?? 0),
       })
@@ -169,6 +175,9 @@ export default function ShipmentsPage() {
   }, [currentPage, itemsPerPage, searchQuery, statusFilter])
 
   useEffect(() => { fetchShipments() }, [fetchShipments])
+
+  const blocked = useModuleGuard('Shipments')
+  if (blocked) return blocked
 
   const handleViewShipment = async (shipment: ShipmentResponse) => {
     setViewingShipment(shipment)
@@ -582,7 +591,7 @@ export default function ShipmentsPage() {
                 </Card>
                 <Card className="p-3 border-l-4 border-l-emerald-500">
                   <p className="text-xs font-semibold text-gray-600 uppercase">Cost</p>
-                  <p className="text-lg font-bold text-emerald-600 mt-1">${Number(viewingShipment.shippingCost ?? 0).toFixed(2)}</p>
+                  <p className="text-lg font-bold text-emerald-600 mt-1">{formatCurrency(Number(viewingShipment.shippingCost ?? 0))}</p>
                 </Card>
               </div>
 

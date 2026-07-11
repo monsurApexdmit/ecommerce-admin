@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation"
 import { useVendor } from "@/contexts/vendor-context"
 import { useProduct } from "@/contexts/product-context"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 import { ArrowLeft, Package, DollarSign, CreditCard, Wallet, Edit2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -11,14 +12,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useState } from "react"
 import Link from "next/link"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 export default function VendorDetailsPage() {
+  const { canRead } = useSaasAuth()
   const params = useParams()
   const router = useRouter()
   const vendorId = params.id as string
 
   const { getVendorById, updateVendor } = useVendor()
   const { getProductsByVendor } = useProduct()
+  const { formatCurrency } = useCompanySettings()
 
   const vendor = getVendorById(vendorId)
   const vendorProducts = getProductsByVendor(vendorId)
@@ -35,6 +41,9 @@ export default function VendorDetailsPage() {
     totalPaid: 0,
     amountPayable: 0,
   })
+
+  const blocked = useModuleGuard('Vendors')
+  if (blocked) return blocked
 
   if (!vendor) {
     return (
@@ -169,7 +178,7 @@ export default function VendorDetailsPage() {
             <div>
               <p className="text-xs text-gray-500">Amount Payable</p>
               <p className={`text-xl font-bold ${vendor.amountPayable > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                ${vendor.amountPayable.toFixed(2)}
+                {formatCurrency(vendor.amountPayable)}
               </p>
             </div>
           </div>
@@ -212,14 +221,14 @@ export default function VendorDetailsPage() {
                     </div>
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">{product.category}</td>
-                  <td className="py-3 px-4 text-sm font-semibold text-gray-900">${product.salePrice.toFixed(2)}</td>
+                  <td className="py-3 px-4 text-sm font-semibold text-gray-900">{formatCurrency(product.salePrice)}</td>
                   <td className="py-3 px-4 text-sm text-gray-600">
                     {product.stock < 5 ? (
                       <span className="text-red-600 font-semibold">{product.stock} <span className="text-xs">(Low)</span></span>
                     ) : product.stock}
                   </td>
                   <td className="py-3 px-4 text-sm font-semibold text-gray-900">
-                    ${(product.salePrice * product.stock).toFixed(2)}
+                    {formatCurrency(product.salePrice * product.stock)}
                   </td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${

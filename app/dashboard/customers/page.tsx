@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useToast } from "@/hooks/use-toast"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,8 +39,17 @@ import {
   Trash2,
   Plus,
   MoreHorizontal,
-  Edit2
+  Edit2,
+  Users,
+  UserCheck,
+  UserX,
+  Star,
+  Loader2,
+  X,
+  Check,
 } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { CustomerAddress } from "@/lib/customerApi"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRouter } from "next/navigation"
@@ -56,10 +66,239 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
+import { StatsCards } from "@/components/ui/stats-card"
+import customerApi from "@/lib/customerApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+
+const emptyAddrForm = {
+  fullName: "", phone: "", addressLine1: "", addressLine2: "",
+  city: "", state: "", postalCode: "", country: "", addressType: "home", isDefault: false,
+}
+
+function CustomerAddressesPanel({ customerId, readonly = false }: { customerId: number; readonly?: boolean }) {
+  const { toast } = useToast()
+  const [addresses, setAddresses] = useState<CustomerAddress[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [form, setForm] = useState(emptyAddrForm)
+
+  useEffect(() => {
+    setLoading(true)
+    customerApi.getAddresses(customerId)
+      .then(setAddresses)
+      .catch(() => toast({ variant: "destructive", title: "Error", description: "Failed to load addresses" }))
+      .finally(() => setLoading(false))
+  }, [customerId])
+
+  const reload = () =>
+    customerApi.getAddresses(customerId).then(setAddresses).catch(() => {})
+
+  const handleSave = async () => {
+    if (!form.fullName.trim() || !form.addressLine1.trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Full name and address line 1 are required" })
+      return
+    }
+    try {
+      setSaving(true)
+      if (editingId) {
+        await customerApi.updateAddress(editingId, form)
+        toast({ title: "Success", description: "Address updated" })
+      } else {
+        await customerApi.createAddress({ ...form, customerId })
+        toast({ title: "Success", description: "Address added" })
+      }
+      await reload()
+      setShowForm(false)
+      setEditingId(null)
+      setForm(emptyAddrForm)
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err?.response?.data?.message || "Failed to save address" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    try {
+      setDeletingId(id)
+      await customerApi.deleteAddress(id)
+      await reload()
+      toast({ title: "Success", description: "Address removed" })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err?.response?.data?.message || "Failed to delete address" })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleSetDefault = async (id: number) => {
+    try {
+      await customerApi.setDefaultAddress(id)
+      await reload()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to set default" })
+    }
+  }
+
+  const startEdit = (addr: CustomerAddress) => {
+    setForm({
+      fullName: addr.fullName,
+      phone: addr.phone ?? "",
+      addressLine1: addr.addressLine1,
+      addressLine2: addr.addressLine2 ?? "",
+      city: addr.city ?? "",
+      state: addr.state ?? "",
+      postalCode: addr.postalCode ?? "",
+      country: addr.country ?? "",
+      addressType: addr.addressType,
+      isDefault: addr.isDefault,
+    })
+    setEditingId(addr.id)
+    setShowForm(true)
+  }
+
+  if (loading) return (
+    <div className="space-y-3 py-2">
+      {[1, 2].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      {!readonly && !showForm && (
+        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setForm(emptyAddrForm); setEditingId(null); setShowForm(true) }}>
+          <Plus className="w-4 h-4 mr-2" /> Add Address
+        </Button>
+      )}
+
+      {showForm && !readonly && (
+        <div className="border rounded-lg p-4 space-y-3 bg-gray-50">
+          <div className="flex items-center justify-between mb-1">
+            <p className="font-semibold text-sm">{editingId ? "Edit Address" : "New Address"}</p>
+            <button onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { key: "fullName", label: "Full Name *", placeholder: "John Doe", span: 2 },
+              { key: "phone", label: "Phone", placeholder: "+1 555 000 0000" },
+              { key: "addressType", label: "Type", type: "select" },
+              { key: "addressLine1", label: "Address Line 1 *", placeholder: "123 Main St", span: 2 },
+              { key: "addressLine2", label: "Address Line 2", placeholder: "Apt 4B", span: 2 },
+              { key: "city", label: "City", placeholder: "New York" },
+              { key: "state", label: "State", placeholder: "NY" },
+              { key: "postalCode", label: "ZIP", placeholder: "10001" },
+              { key: "country", label: "Country", placeholder: "United States" },
+            ].map((f) => (
+              <div key={f.key} className={f.span === 2 ? "col-span-2" : ""}>
+                <Label className="text-xs mb-1 block">{f.label}</Label>
+                {f.type === "select" ? (
+                  <select
+                    value={(form as any)[f.key]}
+                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="home">Home</option>
+                    <option value="work">Work</option>
+                    <option value="other">Other</option>
+                  </select>
+                ) : (
+                  <Input
+                    value={(form as any)[f.key]}
+                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder}
+                    className="text-sm h-9"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setForm(prev => ({ ...prev, isDefault: !prev.isDefault }))}
+              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${form.isDefault ? "bg-emerald-600 border-emerald-600" : "border-gray-300"}`}
+            >
+              {form.isDefault && <Check className="w-3 h-3 text-white" />}
+            </button>
+            <span className="text-sm text-gray-600">Set as default</span>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+              {saving && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+              {editingId ? "Update" : "Save"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setEditingId(null) }}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {addresses.length === 0 && !showForm ? (
+        <div className="text-center py-8 text-gray-500">
+          <MapPin className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+          <p className="text-sm">No addresses saved</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {addresses.map(addr => (
+            <div key={addr.id} className="border rounded-lg p-4 relative bg-white">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wide capitalize">{addr.addressType}</span>
+                    {addr.isDefault && <Badge className="bg-emerald-100 text-emerald-700 text-[10px] py-0 px-1.5">Default</Badge>}
+                  </div>
+                  <p className="font-semibold text-sm text-gray-900">{addr.fullName}</p>
+                  <p className="text-sm text-gray-600">{addr.addressLine1}</p>
+                  {addr.addressLine2 && <p className="text-sm text-gray-600">{addr.addressLine2}</p>}
+                  <p className="text-sm text-gray-600">{[addr.city, addr.state, addr.postalCode].filter(Boolean).join(", ")}</p>
+                  {addr.country && <p className="text-sm text-gray-600">{addr.country}</p>}
+                  {addr.phone && <p className="text-xs text-gray-500 mt-1">{addr.phone}</p>}
+                </div>
+                {!readonly && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    {!addr.isDefault && (
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-500 hover:text-emerald-600 px-2" onClick={() => handleSetDefault(addr.id)}>
+                        <Star className="w-3 h-3 mr-1" /> Default
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => startEdit(addr)}>
+                      <Edit2 className="w-3 h-3 mr-1" /> Edit
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-red-500 hover:text-red-600 px-2" onClick={() => handleDelete(addr.id)} disabled={deletingId === addr.id}>
+                      {deletingId === addr.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3 mr-1" />} Remove
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CustomersPage() {
+  const { canRead } = useSaasAuth()
   const router = useRouter()
+  const { toast } = useToast()
   const { customers, isLoading, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
+  const { formatCurrency } = useCompanySettings()
+  const [stats, setStats] = useState<{
+    total: number
+    active: number
+    inactive: number
+    individuals: number
+    businesses: number
+  } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
@@ -91,6 +330,26 @@ export default function CustomersPage() {
     status: "active" as "active" | "inactive",
     notes: ""
   })
+
+  // Fetch stats
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true)
+        const statsData = await customerApi.getStats()
+        setStats(statsData)
+      } catch (err) {
+        console.error("Failed to fetch customer stats:", err)
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchStats()
+  }, [])
+
+  const blocked = useModuleGuard('Customers')
+  if (blocked) return blocked
 
   // Filter Logic
   const filteredCustomers = customers
@@ -188,39 +447,60 @@ export default function CustomersPage() {
   const handleSaveCustomer = async () => {
     if (!formData.name || !formData.email) return
 
-    if (editingCustomer) {
-      await updateCustomer(editingCustomer.id, formData)
-    } else {
-      await addCustomer(formData)
+    try {
+      if (editingCustomer) {
+        await updateCustomer(editingCustomer.id, formData)
+        toast({ title: "Success", description: "Customer updated successfully" })
+      } else {
+        await addCustomer(formData)
+        toast({ title: "Success", description: "Customer created successfully" })
+      }
+      setIsAddDialogOpen(false)
+      resetForm()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.response?.data?.message || err.message || "Failed to save customer" })
     }
-    setIsAddDialogOpen(false)
-    resetForm()
   }
 
   const handleDelete = async (id: string) => {
-    await deleteCustomer(id)
-    setSelectedCustomerIds(selectedCustomerIds.filter(sid => sid !== id))
+    try {
+      await deleteCustomer(id)
+      setSelectedCustomerIds(selectedCustomerIds.filter(sid => sid !== id))
+      toast({ title: "Success", description: "Customer deleted successfully" })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.response?.data?.message || err.message || "Failed to delete customer" })
+    }
   }
 
   // Bulk Actions
   const handleBulkDelete = async () => {
-    await Promise.all(selectedCustomerIds.map(id => deleteCustomer(id)))
-    setSelectedCustomerIds([])
+    try {
+      await Promise.all(selectedCustomerIds.map(id => deleteCustomer(id)))
+      setSelectedCustomerIds([])
+      toast({ title: "Success", description: "Customers deleted successfully" })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to delete customers" })
+    }
   }
 
   const handleBulkAction = async () => {
     if (!bulkAction || selectedCustomerIds.length === 0) return
 
-    if (bulkAction === "delete") {
-      await handleBulkDelete()
-    } else if (bulkAction === "active") {
-      await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "active" })))
-    } else if (bulkAction === "inactive") {
-      await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "inactive" })))
+    try {
+      if (bulkAction === "delete") {
+        await handleBulkDelete()
+      } else if (bulkAction === "active") {
+        await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "active" })))
+        toast({ title: "Success", description: "Customers activated successfully" })
+      } else if (bulkAction === "inactive") {
+        await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "inactive" })))
+        toast({ title: "Success", description: "Customers deactivated successfully" })
+      }
+      setIsBulkActionDialogOpen(false)
+      setBulkAction("")
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message || "Bulk action failed" })
     }
-
-    setIsBulkActionDialogOpen(false)
-    setBulkAction("")
   }
 
   // Import/Export
@@ -294,6 +574,29 @@ export default function CustomersPage() {
           <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-600 mt-1">Manage your customer base and view their activity</p>
         </div>
+      </div>
+
+      {statsLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="p-6">
+              <Skeleton className="h-4 w-20 mb-2" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
+        <StatsCards stats={[
+          { label: "Total Customers", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
+          { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
+          { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
+          { label: "Individuals", value: stats.individuals, icon: <Users className="w-5 h-5" />, color: "purple" },
+          { label: "Businesses", value: stats.businesses, icon: <ShoppingBag className="w-5 h-5" />, color: "yellow" },
+        ]} />
+      ) : null}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div></div>
         <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
@@ -475,7 +778,7 @@ export default function CustomersPage() {
                         </Link>
                       </td>
                       <td className="py-3 px-4">
-                        <p className="font-semibold text-gray-900">${(customer.totalSpent || 0).toFixed(2)}</p>
+                        <p className="font-semibold text-gray-900">{formatCurrency(customer.totalSpent || 0)}</p>
                       </td>
                       <td className="py-3 px-4">
                          <StatusBadge status={customer.status === "active" ? "Active" : "Inactive"} />
@@ -526,14 +829,14 @@ export default function CustomersPage() {
 
       {/* Details Dialog */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
             <DialogDescription>Customer profile and activity overview.</DialogDescription>
           </DialogHeader>
 
           {selectedCustomer && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
                 <Avatar className="w-16 h-16 border-2 border-white shadow-sm">
                   <AvatarFallback className="bg-emerald-100 text-emerald-700 font-semibold text-xl">
@@ -543,99 +846,94 @@ export default function CustomersPage() {
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
                     <div>
-                         <h3 className="text-xl font-bold text-gray-900">{selectedCustomer.name}</h3>
-                         <div className="flex items-center gap-2 mt-1">
-                            <StatusBadge status={selectedCustomer.status === "active" ? "Active" : "Inactive"} />
-                            <Badge variant="secondary" className="capitalize">{selectedCustomer.customerType}</Badge>
-                         </div>
+                      <h3 className="text-xl font-bold text-gray-900">{selectedCustomer.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <StatusBadge status={selectedCustomer.status === "active" ? "Active" : "Inactive"} />
+                        <Badge variant="secondary" className="capitalize">{selectedCustomer.customerType}</Badge>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => { setIsDetailsOpen(false); handleAddEditOpen(selectedCustomer); }}>
-                        <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
+                    <Button variant="outline" size="sm" onClick={() => { setIsDetailsOpen(false); handleAddEditOpen(selectedCustomer) }}>
+                      <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
                     </Button>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="p-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2"><Mail className="w-4 h-4" /> Contact Info</h4>
-                    <div className="space-y-2 text-sm">
+              <Tabs defaultValue="info">
+                <TabsList className="w-full">
+                  <TabsTrigger value="info" className="flex-1">Info & Stats</TabsTrigger>
+                  <TabsTrigger value="addresses" className="flex-1">Addresses</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="info" className="pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="p-4">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2"><Mail className="w-4 h-4" /> Contact Info</h4>
+                      <div className="space-y-2 text-sm">
                         <div className="grid grid-cols-3">
-                            <span className="text-gray-500">Email:</span>
-                            <span className="col-span-2 font-medium break-all">{selectedCustomer.email}</span>
+                          <span className="text-gray-500">Email:</span>
+                          <span className="col-span-2 font-medium break-all">{selectedCustomer.email}</span>
                         </div>
                         <div className="grid grid-cols-3">
-                            <span className="text-gray-500">Phone:</span>
-                            <span className="col-span-2 font-medium">{selectedCustomer.phone || "-"}</span>
+                          <span className="text-gray-500">Phone:</span>
+                          <span className="col-span-2 font-medium">{selectedCustomer.phone || "-"}</span>
                         </div>
-                    </div>
-                </Card>
+                      </div>
+                    </Card>
 
-                <Card className="p-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2"><MapPin className="w-4 h-4" /> Address</h4>
-                    <div className="space-y-1 text-sm">
-                        {selectedCustomer.address ? (
-                            <>
-                                <p>{selectedCustomer.address}</p>
-                                <p>{selectedCustomer.city}, {selectedCustomer.state} {selectedCustomer.zipCode}</p>
-                                <p>{selectedCustomer.country}</p>
-                            </>
-                        ) : (
-                            <p className="text-gray-500 italic">No address provided</p>
-                        )}
-                    </div>
-                </Card>
+                    <Card className="p-4">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Statistics</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Total Orders:</span>
+                          <span className="font-medium">{selectedCustomer.totalOrders || 0}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Total Spent:</span>
+                          <span className="font-medium text-emerald-600">{formatCurrency(selectedCustomer.totalSpent || 0)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Store Credit:</span>
+                          <span className="font-medium">{formatCurrency(selectedCustomer.storeCredit || 0)}</span>
+                        </div>
+                      </div>
+                    </Card>
 
-                <Card className="p-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Statistics</h4>
-                     <div className="space-y-2 text-sm">
+                    <Card className="p-4 md:col-span-2">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> Other Info</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Total Orders:</span>
-                            <span className="font-medium">{selectedCustomer.totalOrders || 0}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">Total Spent:</span>
-                            <span className="font-medium text-emerald-600">${(selectedCustomer.totalSpent || 0).toFixed(2)}</span>
+                          <span className="text-gray-500">Joined:</span>
+                          <span className="font-medium">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Store Credit:</span>
-                            <span className="font-medium">${(selectedCustomer.storeCredit || 0).toFixed(2)}</span>
+                          <span className="text-gray-500">Last Updated:</span>
+                          <span className="font-medium">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</span>
                         </div>
-                    </div>
-                </Card>
-
-                <Card className="p-4">
-                    <h4 className="font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> Other Info</h4>
-                     <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">Joined:</span>
-                            <span className="font-medium">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</span>
-                        </div>
-                         <div className="flex justify-between">
-                            <span className="text-gray-500">Last Updated:</span>
-                            <span className="font-medium">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</span>
-                        </div>
-                    </div>
-                    {selectedCustomer.notes && (
+                      </div>
+                      {selectedCustomer.notes && (
                         <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs text-gray-500 mb-1">Notes:</p>
-                            <p className="text-sm italic">{selectedCustomer.notes}</p>
+                          <p className="text-xs text-gray-500 mb-1">Notes:</p>
+                          <p className="text-sm italic">{selectedCustomer.notes}</p>
                         </div>
-                    )}
-                </Card>
-              </div>
+                      )}
+                    </Card>
+                  </div>
 
-               <div className="flex justify-end pt-2">
+                  <div className="flex justify-end pt-4">
                     <Button
-                      onClick={() => {
-                        setIsDetailsOpen(false)
-                        router.push(`/dashboard/orders?customer=${encodeURIComponent(selectedCustomer.name)}`)
-                      }}
+                      onClick={() => { setIsDetailsOpen(false); router.push(`/dashboard/orders?customer=${encodeURIComponent(selectedCustomer.name)}`) }}
                       className="bg-emerald-600 hover:bg-emerald-700"
                     >
                       View All Orders
                     </Button>
-               </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="addresses" className="pt-4">
+                  <CustomerAddressesPanel customerId={Number(selectedCustomer.id)} readonly />
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </DialogContent>
@@ -644,140 +942,106 @@ export default function CustomersPage() {
       {/* Add/Edit Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-                <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add New Customer'}</DialogTitle>
-                <DialogDescription>
-                    Fill in the details below. Required fields are marked with *
-                </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-6 py-4">
+          <DialogHeader>
+            <DialogTitle>{editingCustomer ? "Edit Customer" : "Add New Customer"}</DialogTitle>
+            <DialogDescription>Fill in the details below. Required fields are marked with *</DialogDescription>
+          </DialogHeader>
+
+          <Tabs defaultValue="profile">
+            <TabsList className="w-full">
+              <TabsTrigger value="profile" className="flex-1">Profile</TabsTrigger>
+              {editingCustomer && (
+                <TabsTrigger value="addresses" className="flex-1">Addresses</TabsTrigger>
+              )}
+            </TabsList>
+
+            <TabsContent value="profile" className="pt-4">
+              <div className="grid gap-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="name">Full Name *</Label>
-                        <Input 
-                            id="name" 
-                            value={formData.name} 
-                            onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                            placeholder="John Doe"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email Address *</Label>
-                        <Input 
-                            id="email" 
-                            type="email"
-                            value={formData.email} 
-                            onChange={(e) => setFormData({...formData, email: e.target.value})} 
-                            placeholder="john@example.com"
-                        />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Full Name *</Label>
+                    <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="John Doe" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address *</Label>
+                    <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="john@example.com" />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <Input 
-                            id="phone" 
-                            value={formData.phone} 
-                            onChange={(e) => setFormData({...formData, phone: e.target.value})} 
-                            placeholder="+1 (555) 000-0000"
-                        />
-                    </div>
-                     <div className="space-y-2">
-                        <Label htmlFor="type">Customer Type</Label>
-                        <Select 
-                            value={formData.customerType} 
-                            onValueChange={(val: "retail" | "wholesale") => setFormData({...formData, customerType: val})}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="retail">Retail</SelectItem>
-                                <SelectItem value="wholesale">Wholesale</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+1 (555) 000-0000" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Customer Type</Label>
+                    <Select value={formData.customerType} onValueChange={(val: "retail" | "wholesale") => setFormData({ ...formData, customerType: val })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="retail">Retail</SelectItem>
+                        <SelectItem value="wholesale">Wholesale</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                     <Label htmlFor="address">Street Address</Label>
-                     <Input 
-                        id="address" 
-                        value={formData.address} 
-                        onChange={(e) => setFormData({...formData, address: e.target.value})} 
-                        placeholder="123 Main St"
-                    />
+                  <Label htmlFor="address">Street Address</Label>
+                  <Input id="address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="123 Main St" />
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                     <div className="space-y-2 col-span-2">
-                        <Label htmlFor="city">City</Label>
-                        <Input 
-                            id="city" 
-                            value={formData.city} 
-                            onChange={(e) => setFormData({...formData, city: e.target.value})} 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
-                        <Input 
-                            id="state" 
-                            value={formData.state} 
-                            onChange={(e) => setFormData({...formData, state: e.target.value})} 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="zip">Zip Code</Label>
-                        <Input 
-                            id="zip" 
-                            value={formData.zipCode} 
-                            onChange={(e) => setFormData({...formData, zipCode: e.target.value})} 
-                        />
-                    </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input id="city" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Input id="state" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="zip">Zip Code</Label>
+                    <Input id="zip" value={formData.zipCode} onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })} />
+                  </div>
                 </div>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="country">Country</Label>
-                        <Input 
-                            id="country" 
-                            value={formData.country} 
-                            onChange={(e) => setFormData({...formData, country: e.target.value})} 
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="status">Status</Label>
-                        <Select 
-                            value={formData.status} 
-                            onValueChange={(val: "active" | "inactive") => setFormData({...formData, status: val})}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country</Label>
+                    <Input id="country" value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={formData.status} onValueChange={(val: "active" | "inactive") => setFormData({ ...formData, status: val })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                
+
                 <div className="space-y-2">
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea 
-                        id="notes" 
-                        value={formData.notes} 
-                        onChange={(e) => setFormData({...formData, notes: e.target.value})} 
-                        placeholder="Additional notes about the customer..."
-                    />
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Additional notes about the customer..." />
                 </div>
-            </div>
-            <DialogFooter>
+              </div>
+
+              <DialogFooter className="mt-6">
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
                 <Button onClick={handleSaveCustomer} className="bg-emerald-600 hover:bg-emerald-700">
-                    {editingCustomer ? 'Save Changes' : 'Add Customer'}
+                  {editingCustomer ? "Save Changes" : "Add Customer"}
                 </Button>
-            </DialogFooter>
+              </DialogFooter>
+            </TabsContent>
+
+            {editingCustomer && (
+              <TabsContent value="addresses" className="pt-4">
+                <CustomerAddressesPanel customerId={Number(editingCustomer.id)} />
+              </TabsContent>
+            )}
+          </Tabs>
         </DialogContent>
       </Dialog>
       

@@ -1,33 +1,20 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Mail, Trash2, ShoppingCart, AlertTriangle, DollarSign, Settings, CheckCheck, Eye, ExternalLink, Bell, Filter } from "lucide-react"
-import Image from "next/image"
+import { useState, useMemo, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Mail, Trash2, ShoppingCart, AlertTriangle, DollarSign, Settings, CheckCheck, Eye, ExternalLink, Bell, Filter, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Badge } from "@/components/ui/badge"
-import Link from "next/link"
+import { useNotifications } from "@/contexts/notification-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import type { NotificationType, NotificationPriority } from "@/lib/notificationApi"
 
-type NotificationType = 'order' | 'stock_alert' | 'payment' | 'system'
-type NotificationPriority = 'low' | 'medium' | 'high'
-
-interface Notification {
-  id: number
-  user: string
-  amount?: number
-  avatar: string
-  time: string
-  read: boolean
-  type: NotificationType
-  priority: NotificationPriority
-  message: string
-  actionUrl?: string
-}
-
-// Helper function to get relative time
 function getRelativeTime(dateStr: string): string {
   const date = new Date(dateStr)
   const now = new Date()
@@ -35,7 +22,6 @@ function getRelativeTime(dateStr: string): string {
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
-
   if (diffMins < 1) return "Just now"
   if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
   if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
@@ -44,216 +30,86 @@ function getRelativeTime(dateStr: string): string {
   return date.toLocaleDateString()
 }
 
-// Notification type configuration
-const notificationTypes = {
+const notificationTypes: Record<NotificationType, { icon: any; color: string; label: string }> = {
   order: { icon: ShoppingCart, color: 'emerald', label: 'New Order' },
   stock_alert: { icon: AlertTriangle, color: 'orange', label: 'Stock Alert' },
   payment: { icon: DollarSign, color: 'blue', label: 'Payment' },
-  system: { icon: Settings, color: 'gray', label: 'System' }
+  system: { icon: Settings, color: 'gray', label: 'System' },
+  support: { icon: Mail, color: 'blue', label: 'Support' },
+  review: { icon: Star, color: 'amber', label: 'Product Review' },
 }
 
-// Priority configuration
-const priorityConfig = {
+const priorityConfig: Record<NotificationPriority, { color: string; label: string }> = {
   high: { color: 'red', label: 'High Priority' },
   medium: { color: 'yellow', label: 'Medium' },
-  low: { color: 'gray', label: 'Low' }
+  low: { color: 'gray', label: 'Low' },
+}
+
+const badgeColorMap: Record<string, string> = {
+  emerald: 'bg-emerald-500',
+  orange: 'bg-orange-500',
+  blue: 'bg-blue-500',
+  gray: 'bg-gray-500',
+  amber: 'bg-amber-500',
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      user: "Nevil Nevil",
-      amount: 253.26,
-      avatar: "/admin-avatar.jpg",
-      time: "2026-01-21T11:29:00",
-      read: false,
-      type: "order",
-      priority: "high",
-      message: "placed an order of $253.26",
-      actionUrl: "/dashboard/orders"
-    },
-    {
-      id: 2,
-      user: "System",
-      avatar: "/placeholder.svg",
-      time: "2026-01-21T10:57:00",
-      read: false,
-      type: "stock_alert",
-      priority: "high",
-      message: "Fresh Mustard Oil is running low (5 items remaining)",
-      actionUrl: "/dashboard/inventory"
-    },
-    {
-      id: 3,
-      user: "TEJPAL SONI",
-      amount: 166.49,
-      avatar: "/marion-avatar.jpg",
-      time: "2026-01-20T13:17:00",
-      read: false,
-      type: "order",
-      priority: "medium",
-      message: "placed an order of $166.49",
-      actionUrl: "/dashboard/orders"
-    },
-    {
-      id: 4,
-      user: "Payment Gateway",
-      amount: 660.0,
-      avatar: "/placeholder.svg",
-      time: "2026-01-20T12:26:00",
-      read: true,
-      type: "payment",
-      priority: "medium",
-      message: "Payment of $660.00 received successfully",
-      actionUrl: "/dashboard/orders"
-    },
-    {
-      id: 5,
-      user: "Justinn Luish",
-      amount: 265.01,
-      avatar: "/stacey-avatar.jpg",
-      time: "2026-01-19T20:37:00",
-      read: true,
-      type: "order",
-      priority: "low",
-      message: "placed an order of $265.01",
-      actionUrl: "/dashboard/orders"
-    },
-    {
-      id: 6,
-      user: "System",
-      avatar: "/placeholder.svg",
-      time: "2026-01-19T15:22:00",
-      read: true,
-      type: "system",
-      priority: "low",
-      message: "Database backup completed successfully",
-    },
-    {
-      id: 7,
-      user: "System",
-      avatar: "/placeholder.svg",
-      time: "2026-01-18T09:00:00",
-      read: false,
-      type: "stock_alert",
-      priority: "medium",
-      message: "Rainbow Chard stock is low (8 items remaining)",
-      actionUrl: "/dashboard/inventory"
-    }
-  ])
+  const { canRead } = useSaasAuth()
+  const { notifications, unreadCount, loading, fetchNotifications, markAsRead, markAsUnread, markAllAsRead, deleteNotification, bulkDelete } = useNotifications()
+  const router = useRouter()
 
-  const [selectedNotifications, setSelectedNotifications] = useState<number[]>([])
-  const [filterStatus, setFilterStatus] = useState<string>("all") // all, read, unread
-  const [filterType, setFilterType] = useState<string>("all") // all, order, stock_alert, payment, system
-  const [sortOrder, setSortOrder] = useState<string>("newest") // newest, oldest
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [filterType, setFilterType] = useState("all")
+  const [sortOrder, setSortOrder] = useState("newest")
 
-  // Filter and sort notifications
-  const filteredNotifications = useMemo(() => {
-    let filtered = [...notifications]
+  useEffect(() => {
+    fetchNotifications()
+  }, []) // eslint-disable-line
 
-    // Filter by read status
-    if (filterStatus === "read") {
-      filtered = filtered.filter(n => n.read)
-    } else if (filterStatus === "unread") {
-      filtered = filtered.filter(n => !n.read)
-    }
-
-    // Filter by type
-    if (filterType !== "all") {
-      filtered = filtered.filter(n => n.type === filterType)
-    }
-
-    // Sort by date
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.time).getTime()
-      const dateB = new Date(b.time).getTime()
+  const filtered = useMemo(() => {
+    let list = [...notifications]
+    if (filterStatus === "read") list = list.filter(n => !!n.readAt)
+    else if (filterStatus === "unread") list = list.filter(n => !n.readAt)
+    if (filterType !== "all") list = list.filter(n => n.type === filterType)
+    list.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB
     })
-
-    // Sort by priority (high first) within same date
-    filtered.sort((a, b) => {
-      const priorityOrder = { high: 3, medium: 2, low: 1 }
-      if (!a.read && b.read) return -1
-      if (a.read && !b.read) return 1
-      return priorityOrder[b.priority] - priorityOrder[a.priority]
-    })
-
-    return filtered
+    return list
   }, [notifications, filterStatus, filterType, sortOrder])
 
-  const {
-    currentItems: currentNotifications,
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    setCurrentPage,
-    handleItemsPerPageChange,
-  } = usePagination(filteredNotifications, 10)
+  const { currentItems, currentPage, totalPages, itemsPerPage, setCurrentPage, handleItemsPerPageChange } = usePagination(filtered, 10)
 
-  const unreadCount = notifications.filter((n) => !n.read).length
-  const selectedCount = selectedNotifications.length
+  const blocked = useModuleGuard('Notifications')
+  if (blocked) return blocked
 
   const handleSelectAll = () => {
-    if (selectedNotifications.length === currentNotifications.length && currentNotifications.length > 0) {
-      setSelectedNotifications([])
-    } else {
-      setSelectedNotifications(currentNotifications.map((n) => n.id))
+    if (selectedIds.length === currentItems.length && currentItems.length > 0) setSelectedIds([])
+    else setSelectedIds(currentItems.map(n => n.id))
+  }
+
+  const handleMarkSelectedAsRead = async () => {
+    await Promise.all(selectedIds.map(id => markAsRead(id)))
+    setSelectedIds([])
+  }
+
+  const handleBulkDelete = async () => {
+    await bulkDelete(selectedIds)
+    setSelectedIds([])
+  }
+
+  const handleNotificationClick = async (id: number, actionUrl?: string | null) => {
+    const notification = notifications.find(item => item.id === id)
+
+    if (notification && !notification.readAt) {
+      await markAsRead(id)
     }
-  }
 
-  const handleSelectNotification = (id: number) => {
-    setSelectedNotifications((prev) => (prev.includes(id) ? prev.filter((nId) => nId !== id) : [...prev, id]))
-  }
-
-  // Fixed: Only mark selected notifications as read
-  const handleMarkSelectedAsRead = () => {
-    if (selectedCount === 0) return
-    setNotifications((prev) =>
-      prev.map((n) => (selectedNotifications.includes(n.id) ? { ...n, read: true } : n))
-    )
-    setSelectedNotifications([])
-  }
-
-  // Mark all notifications as read
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-    setSelectedNotifications([])
-  }
-
-  // Toggle individual notification read status
-  const handleToggleRead = (id: number) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
-    )
-  }
-
-  const handleDeleteNotification = (id: number) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
-    setSelectedNotifications((prev) => prev.filter((nId) => nId !== id))
-  }
-
-  const handleBulkDelete = () => {
-    if (selectedCount === 0) return
-    setNotifications((prev) => prev.filter((n) => !selectedNotifications.includes(n.id)))
-    setSelectedNotifications([])
-  }
-
-  // Get notification icon and color
-  const getNotificationIcon = (type: NotificationType) => {
-    const config = notificationTypes[type]
-    const Icon = config.icon
-    return <Icon className="w-5 h-5" />
-  }
-
-  const getNotificationBadgeColor = (type: NotificationType) => {
-    const colorMap: Record<string, string> = {
-      emerald: 'bg-emerald-500',
-      orange: 'bg-orange-500',
-      blue: 'bg-blue-500',
-      gray: 'bg-gray-500'
+    if (actionUrl) {
+      router.push(actionUrl)
     }
-    return colorMap[notificationTypes[type].color]
   }
 
   const getPriorityBadge = (priority: NotificationPriority) => {
@@ -261,7 +117,7 @@ export default function NotificationsPage() {
     const config = priorityConfig[priority]
     const colorMap: Record<string, string> = {
       red: 'bg-red-100 text-red-800 border-red-200',
-      yellow: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      yellow: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     }
     return (
       <Badge variant="outline" className={`text-xs ${colorMap[config.color]}`}>
@@ -272,7 +128,6 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -291,44 +146,31 @@ export default function NotificationsPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow">
-        {/* Action Bar */}
         <div className="p-6 border-b space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Button 
-              onClick={handleMarkSelectedAsRead} 
-              variant="default" 
-              className="bg-emerald-500 hover:bg-emerald-600"
-              disabled={selectedCount === 0}
-            >
+            <Button onClick={handleMarkSelectedAsRead} variant="default" className="bg-emerald-500 hover:bg-emerald-600" disabled={selectedIds.length === 0}>
               <CheckCheck className="w-4 h-4 mr-2" />
-              Mark Selected as Read {selectedCount > 0 && `(${selectedCount})`}
+              Mark Selected as Read {selectedIds.length > 0 && `(${selectedIds.length})`}
             </Button>
-            <Button 
-              onClick={handleMarkAllAsRead} 
-              variant="outline"
-              disabled={unreadCount === 0}
-            >
+            <Button onClick={markAllAsRead} variant="outline" disabled={unreadCount === 0}>
               <Mail className="w-4 h-4 mr-2" />
               Mark All as Read
             </Button>
-            {selectedCount > 0 && (
-              <Button onClick={handleBulkDelete} variant="destructive" size="default">
+            {selectedIds.length > 0 && (
+              <Button onClick={handleBulkDelete} variant="destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete Selected ({selectedCount})
+                Delete Selected ({selectedIds.length})
               </Button>
             )}
           </div>
 
-          {/* Filters */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-500" />
               <span className="text-sm font-medium text-gray-700">Filters:</span>
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="unread">Unread Only</SelectItem>
@@ -336,21 +178,19 @@ export default function NotificationsPage() {
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="order">Orders</SelectItem>
                 <SelectItem value="stock_alert">Stock Alerts</SelectItem>
                 <SelectItem value="payment">Payments</SelectItem>
+                <SelectItem value="support">Support</SelectItem>
+                <SelectItem value="review">Product Reviews</SelectItem>
                 <SelectItem value="system">System</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[140px]"><SelectValue placeholder="Sort" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="newest">Newest First</SelectItem>
                 <SelectItem value="oldest">Oldest First</SelectItem>
@@ -359,9 +199,10 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Notifications List */}
         <div className="p-6">
-          {filteredNotifications.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12 text-gray-400">Loading notifications...</div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-12">
               <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
               <p className="text-gray-500 font-medium">No notifications found</p>
@@ -375,110 +216,86 @@ export default function NotificationsPage() {
                     <tr>
                       <th className="w-12 px-4 py-3 text-left">
                         <Checkbox
-                          checked={selectedNotifications.length === currentNotifications.length && currentNotifications.length > 0}
+                          checked={selectedIds.length === currentItems.length && currentItems.length > 0}
                           onCheckedChange={handleSelectAll}
                         />
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Notification
-                      </th>
-                      <th className="w-48 px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Actions
-                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Notification</th>
+                      <th className="w-48 px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {currentNotifications.map((notification) => {
-                      const TypeIcon = notificationTypes[notification.type].icon
+                    {currentItems.map((n) => {
+                      const typeConfig = notificationTypes[n.type] ?? notificationTypes.system
+                      const TypeIcon = typeConfig.icon
+                      const isRead = !!n.readAt
                       return (
-                        <tr 
-                          key={notification.id} 
-                          className={`hover:bg-gray-50 transition-colors ${
-                            notification.read ? 'bg-gray-50/50 opacity-75' : 'bg-white'
-                          }`}
-                        >
+                        <tr key={n.id} className={`transition-colors ${isRead ? 'bg-gray-50/50 opacity-75' : 'bg-white'}`}>
                           <td className="px-4 py-4">
                             <Checkbox
-                              checked={selectedNotifications.includes(notification.id)}
-                              onCheckedChange={() => handleSelectNotification(notification.id)}
+                              checked={selectedIds.includes(n.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              onCheckedChange={() => setSelectedIds(prev => prev.includes(n.id) ? prev.filter(id => id !== n.id) : [...prev, n.id])}
                             />
                           </td>
                           <td className="px-4 py-4">
-                            <div className="flex items-start gap-3">
-                              {/* Unread Indicator */}
-                              {!notification.read && (
-                                <div className="flex-shrink-0 w-2 h-2 bg-emerald-500 rounded-full mt-2"></div>
-                              )}
-                              
-                              {/* Avatar */}
-                              <div className="relative flex-shrink-0">
-                                <Image
-                                  src={notification.avatar || "/placeholder.svg"}
-                                  alt={notification.user}
-                                  width={40}
-                                  height={40}
-                                  className="rounded-full"
-                                />
-                                <div className={`absolute -bottom-1 -right-1 ${getNotificationBadgeColor(notification.type)} rounded-full p-1`}>
-                                  {getNotificationIcon(notification.type)}
-                                </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleNotificationClick(n.id, n.actionUrl)}
+                              className="flex w-full items-start gap-3 text-left hover:bg-gray-50 rounded-md p-1 -m-1"
+                            >
+                              {!isRead && <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 shrink-0" />}
+                              <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${badgeColorMap[typeConfig.color]}`}>
+                                <TypeIcon className="w-4 h-4 text-white" />
                               </div>
-
-                              {/* Content */}
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm ${notification.read ? 'text-gray-600' : 'text-gray-900 font-medium'} mb-1`}>
-                                  <span className="font-semibold">{notification.user}</span> {notification.message}
+                                <p className={`text-sm mb-1 ${isRead ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
+                                  {n.title && <span className="font-semibold">{n.title} — </span>}
+                                  {n.message}
                                 </p>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge className={`text-xs ${getNotificationBadgeColor(notification.type)} text-white`}>
-                                    {notificationTypes[notification.type].label}
+                                  <Badge className={`text-xs ${badgeColorMap[typeConfig.color]} text-white`}>
+                                    {typeConfig.label}
                                   </Badge>
-                                  {getPriorityBadge(notification.priority)}
-                                  <span className="text-xs text-gray-500">
-                                    {getRelativeTime(notification.time)}
-                                  </span>
+                                  {getPriorityBadge(n.priority)}
+                                  <span className="text-xs text-gray-500">{getRelativeTime(n.createdAt)}</span>
                                 </div>
                               </div>
-                            </div>
+                            </button>
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex justify-end gap-2">
-                              {/* Toggle Read/Unread */}
                               <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleRead(notification.id)}
-                                title={notification.read ? "Mark as unread" : "Mark as read"}
-                                className="h-8 w-8 p-0"
+                                variant="ghost" size="sm" className="h-8 w-8 p-0"
+                                title={isRead ? "Mark as unread" : "Mark as read"}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void (isRead ? markAsUnread(n.id) : markAsRead(n.id))
+                                }}
                               >
-                                {notification.read ? (
-                                  <Mail className="w-4 h-4 text-gray-500" />
-                                ) : (
-                                  <Eye className="w-4 h-4 text-emerald-600" />
-                                )}
+                                {isRead ? <Mail className="w-4 h-4 text-gray-500" /> : <Eye className="w-4 h-4 text-emerald-600" />}
                               </Button>
-
-                              {/* Action Link */}
-                              {notification.actionUrl && (
-                                <Link href={notification.actionUrl}>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    title="View details"
-                                  >
+                              {n.actionUrl && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  title="View details"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void handleNotificationClick(n.id, n.actionUrl)
+                                  }}
+                                >
                                     <ExternalLink className="w-4 h-4 text-blue-600" />
-                                  </Button>
-                                </Link>
+                                </Button>
                               )}
-
-                              {/* Delete */}
                               <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteNotification(notification.id)}
-                                className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                                title="Delete notification"
+                                variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                                title="Delete"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void deleteNotification(n.id)
+                                }}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -492,12 +309,9 @@ export default function NotificationsPage() {
               </div>
               <div className="mt-4">
                 <PaginationControl
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                  itemsPerPage={itemsPerPage}
-                  onItemsPerPageChange={handleItemsPerPageChange}
-                  totalItems={filteredNotifications.length}
+                  currentPage={currentPage} totalPages={totalPages}
+                  onPageChange={setCurrentPage} itemsPerPage={itemsPerPage}
+                  onItemsPerPageChange={handleItemsPerPageChange} totalItems={filtered.length}
                 />
               </div>
             </>

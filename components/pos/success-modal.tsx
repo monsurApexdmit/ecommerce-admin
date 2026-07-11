@@ -1,11 +1,14 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Check, Printer, Gift, Clock } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { settingsApi } from "@/lib/settingsApi"
 
 interface CartItem {
   id: string
@@ -18,6 +21,8 @@ interface SuccessModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onClose: () => void
+  formatCurrency?: (amount: number) => string
+  taxLabel?: string
   orderDetails?: {
     cart: CartItem[]
     subtotal: number
@@ -29,47 +34,69 @@ interface SuccessModalProps {
   }
 }
 
-export function SuccessModal({ open, onOpenChange, onClose, orderDetails }: SuccessModalProps) {
+interface StoreInfo {
+  storeName: string
+  storePhone: string
+  storeAddress: string
+}
+
+export function SuccessModal({ open, onOpenChange, onClose, orderDetails, formatCurrency: fmt, taxLabel }: SuccessModalProps) {
+  const { formatCurrency: companyFormatCurrency } = useCompanySettings()
+  const formatCurrency = fmt ?? companyFormatCurrency
+  const taxLabelText = taxLabel ?? "Tax"
+  const [storeInfo, setStoreInfo] = useState<StoreInfo>({ storeName: "", storePhone: "", storeAddress: "" })
+
+  useEffect(() => {
+    settingsApi.getAll().then(res => {
+      const g = res.data?.general ?? {}
+      setStoreInfo({
+        storeName: g.storeName ?? "",
+        storePhone: g.storePhone ?? "",
+        storeAddress: g.storeAddress ?? "",
+      })
+    }).catch(() => {})
+  }, [])
 
   const handlePrint = () => {
     if (!orderDetails) return
     const printWindow = window.open('', '_blank', 'height=600,width=800')
     if (!printWindow) { alert("Please allow popups to print the invoice."); return }
     const html = `<html><head><title>Receipt</title><style>
-      @page{size:80mm auto;margin:0}
-      body{font-family:'Courier New',monospace;width:80mm;margin:0;padding:10px;color:#000;font-size:12px;line-height:1.4}
-      .header{text-align:center;margin-bottom:15px;border-bottom:1px dashed #000;padding-bottom:10px}
-      .store-name{font-size:16px;font-weight:bold;text-transform:uppercase;margin-bottom:5px}
-      .meta{font-size:10px;margin-top:5px}
-      .divider{border-top:1px dashed #000;margin:10px 0}
-      .item-row{display:flex;justify-content:space-between;margin-bottom:4px}
-      .item-name{font-weight:bold;flex:1;margin-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .summary-row{display:flex;justify-content:space-between;margin-bottom:3px}
-      .total-row{display:flex;justify-content:space-between;font-size:14px;font-weight:bold;margin-top:10px;border-top:1px dashed #000;padding-top:10px}
-      .footer{text-align:center;margin-top:20px;font-size:10px}
-      @media print{body{width:100%}.no-print{display:none}}
+      @page{size:80mm auto;margin:4mm 0}
+      *{box-sizing:border-box}
+      body{font-family:'Courier New',monospace;width:80mm;max-width:80mm;margin:0 auto;padding:4mm 5mm;color:#000;font-size:11px;line-height:1.4}
+      .header{text-align:center;margin-bottom:8px;border-bottom:1px dashed #000;padding-bottom:8px}
+      .store-name{font-size:15px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+      .meta{font-size:9px;margin-top:2px}
+      .divider{border:none;border-top:1px dashed #000;margin:6px 0}
+      .item-row{display:flex;justify-content:space-between;margin-bottom:2px;font-size:10px}
+      .item-name{font-weight:bold;font-size:11px;margin-bottom:1px}
+      .summary-row{display:flex;justify-content:space-between;margin-bottom:2px;font-size:10px}
+      .total-row{display:flex;justify-content:space-between;font-size:13px;font-weight:bold;margin-top:6px;border-top:1px dashed #000;padding-top:6px}
+      .footer{text-align:center;margin-top:10px;font-size:9px;border-top:1px dashed #000;padding-top:6px}
+      @media print{@page{size:80mm auto;margin:4mm 0}body{width:80mm}}
     </style></head><body>
       <div class="header">
-        <div class="store-name">Admin</div>
-        <div class="meta">59 Station Rd, Dhaka</div>
-        <div class="meta">Tel: 019579034</div>
+        <div class="store-name">${storeInfo.storeName || "Store"}</div>
+        ${storeInfo.storeAddress ? `<div class="meta">${storeInfo.storeAddress}</div>` : ''}
+        ${storeInfo.storePhone ? `<div class="meta">Tel: ${storeInfo.storePhone}</div>` : ''}
         <div class="meta">Date: ${new Date().toLocaleString()}</div>
         ${orderDetails.invoiceNo ? `<div class="meta">Invoice: ${orderDetails.invoiceNo}</div>` : ''}
         ${orderDetails.customer ? `<div class="meta">Customer: ${orderDetails.customer}</div>` : ''}
       </div>
       <div class="items">
         ${orderDetails.cart.map(item => `
-          <div class="item-row"><div class="item-name">${item.name}</div></div>
-          <div class="item-row" style="font-size:11px;color:#333;">
-            <span>${item.quantity} x $${item.price.toFixed(2)}</span>
-            <span>$${(item.price * item.quantity).toFixed(2)}</span>
+          <div class="item-name">${item.name}</div>
+          <div class="item-row">
+            <span>${item.quantity} x ${formatCurrency(item.price)}</span>
+            <span><b>${formatCurrency(item.price * item.quantity)}</b></span>
           </div>`).join('')}
       </div>
       <div class="divider"></div>
-      <div class="summary-row"><span>Subtotal</span><span>$${orderDetails.subtotal.toFixed(2)}</span></div>
-      <div class="summary-row"><span>Tax (10%)</span><span>$${orderDetails.tax.toFixed(2)}</span></div>
-      ${orderDetails.discount > 0 ? `<div class="summary-row"><span>Discount</span><span>-$${orderDetails.discount.toFixed(2)}</span></div>` : ''}
-      <div class="total-row"><span>Total</span><span>$${orderDetails.total.toFixed(2)}</span></div>
+      <div class="summary-row"><span>Subtotal</span><span>${formatCurrency(orderDetails.subtotal)}</span></div>
+      <div class="summary-row"><span>${taxLabelText}</span><span>${formatCurrency(orderDetails.tax)}</span></div>
+      ${orderDetails.discount > 0 ? `<div class="summary-row"><span>Discount</span><span>-${formatCurrency(orderDetails.discount)}</span></div>` : ''}
+      <div class="total-row"><span>Total</span><span>${formatCurrency(orderDetails.total)}</span></div>
       <div class="footer"><p>Thank you for shopping!</p><p style="margin-top:5px">Return Policy: 7 days with receipt</p></div>
     </body></html>`
     printWindow.document.open()
@@ -150,21 +177,21 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails }: Succ
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-900">${orderDetails.subtotal.toFixed(2)}</span>
+                  <span className="text-gray-900">{formatCurrency(orderDetails.subtotal)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Tax (10%)</span>
-                  <span className="text-gray-900">${orderDetails.tax.toFixed(2)}</span>
+                  <span className="text-gray-600">{taxLabelText}</span>
+                  <span className="text-gray-900">{formatCurrency(orderDetails.tax)}</span>
                 </div>
                 {orderDetails.discount > 0 && (
                   <div className="flex justify-between text-emerald-600">
                     <span className="font-medium">Discount</span>
-                    <span className="font-medium">-${orderDetails.discount.toFixed(2)}</span>
+                    <span className="font-medium">-{formatCurrency(orderDetails.discount)}</span>
                   </div>
                 )}
                 <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
                   <span className="font-bold text-gray-900">Total Amount</span>
-                  <span className="text-2xl font-black text-emerald-600">${orderDetails.total.toFixed(2)}</span>
+                  <span className="text-2xl font-black text-emerald-600">{formatCurrency(orderDetails.total)}</span>
                 </div>
               </div>
             </Card>

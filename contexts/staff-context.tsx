@@ -3,21 +3,47 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { staffApi, staffRoleApi, salaryPaymentApi, type StaffResponse, type SalaryPaymentResponse, type StaffRoleResponse } from "@/lib/staffApi"
 
-export type Module =
-    | "Dashboard"
-    | "Products"
-    | "Categories"
-    | "Attributes"
-    | "Coupons"
-    | "Customers"
-    | "Orders"
-    | "POS"
-    | "Sells"
-    | "Staff"
-    | "Settings"
-    | "International"
-    | "Store"
-    | "Pages"
+export const PERMISSION_MODULES = [
+    "Dashboard",
+    "Products",
+    "Categories",
+    "Attributes",
+    "Coupons",
+    "Print Barcode",
+    "Customers",
+    "Orders",
+    "Shipments",
+    "Vendors",
+    "POS",
+    "Sells",
+    "Inventory",
+    "Transfers",
+    "Customer Returns",
+    "Vendor Returns",
+    "Staff",
+    "Role & Permission",
+    "Salary Management",
+    "Settings",
+    "Aura Shop",
+    "Company Profile",
+    "Company Settings",
+    "Billing Contact",
+    "Team Members",
+    "Subscriptions",
+    "Billing Plans",
+    "Store",
+    "Shipping Methods",
+    "Payment Methods",
+    "Shipping Addresses",
+    "Store Locations",
+    "Store Wishlist",
+    "Pages",
+    "International",
+    "Notifications",
+    "Support",
+] as const
+
+export type Module = typeof PERMISSION_MODULES[number]
 
 export type Action = "read" | "write" | "delete"
 
@@ -41,12 +67,14 @@ export interface Staff {
     contact: string
     joiningDate: string
     role: string
+    staffRoleId?: number | null
     status: "Active" | "Inactive"
     published: boolean
     avatar: string
     salary: number
     bankAccount?: string
     paymentMethod?: "Bank Transfer" | "Cash" | "Check"
+    password?: string
 }
 
 export interface SalaryPayment {
@@ -150,8 +178,10 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             const response = await staffApi.getAll({ limit: 100 })
             setStaff(response.data.map(convertToStaff))
         } catch (err: any) {
-            console.error('Error fetching staff:', err)
-            setError(err.response?.data?.error || 'Failed to fetch staff')
+            if (err.response?.status !== 403) {
+                console.error('Error fetching staff:', err)
+                setError(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch staff')
+            }
         } finally {
             setIsLoading(false)
         }
@@ -163,7 +193,9 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             const response = await staffRoleApi.getAll({ limit: 100 })
             setRoles(response.data.map(convertToRole))
         } catch (err: any) {
-            console.error('Error fetching staff roles:', err)
+            if (err.response?.status !== 403) {
+                console.error('Error fetching staff roles:', err)
+            }
         } finally {
             setRolesLoading(false)
         }
@@ -175,7 +207,9 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             const response = await salaryPaymentApi.getAll({ limit: 1000 })
             setSalaryPayments(response.data.map(convertToSalaryPayment))
         } catch (err: any) {
-            console.error('Error fetching salary payments:', err)
+            if (err.response?.status !== 403) {
+                console.error('Error fetching salary payments:', err)
+            }
         } finally {
             setSalaryPaymentsLoading(false)
         }
@@ -201,6 +235,8 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 salary: member.salary,
                 bankAccount: member.bankAccount,
                 paymentMethod: member.paymentMethod,
+                password: member.password,
+                staffRoleId: member.staffRoleId,
             })
             await refreshStaff()
         } catch (err: any) {
@@ -223,6 +259,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
                 salary: member.salary,
                 bankAccount: member.bankAccount,
                 paymentMethod: member.paymentMethod,
+                staffRoleId: member.staffRoleId,
             })
             await refreshStaff()
         } catch (err: any) {
@@ -243,9 +280,39 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
 
     const addRole = async (role: Omit<Role, 'id'>) => {
         try {
+            const permissions = await staffRoleApi.getPermissions()
+            const permArray = Array.isArray(permissions) ? permissions : []
+            const permissionMap = new Map(
+                permArray.map((p: any) => [p.name, p.id])
+            )
+            const permissionsMap = new Map<number, any>()
+            permArray.forEach((p: any) => {
+                permissionsMap.set(p.id, {
+                    permissionId: p.id,
+                    read: false,
+                    write: false,
+                    delete: false,
+                })
+            })
+
+            role.permissions.forEach(p => {
+                const id = permissionMap.get(p.name)
+                if (id && permissionsMap.has(id)) {
+                    const existing = permissionsMap.get(id)
+                    permissionsMap.set(id, {
+                        permissionId: id,
+                        read: existing.read || p.read,
+                        write: existing.write || p.write,
+                        delete: existing.delete || p.delete,
+                    })
+                }
+            })
+
+            const permissionsWithIds = Array.from(permissionsMap.values())
+
             await staffRoleApi.create({
                 name: role.name,
-                permissions: role.permissions,
+                permissions: permissionsWithIds,
             })
             await refreshRoles()
         } catch (err: any) {
@@ -256,9 +323,39 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
 
     const updateRole = async (role: Role) => {
         try {
+            const permissions = await staffRoleApi.getPermissions()
+            const permArray = Array.isArray(permissions) ? permissions : []
+            const permissionMap = new Map(
+                permArray.map((p: any) => [p.name, p.id])
+            )
+            const permissionsMap = new Map<number, any>()
+            permArray.forEach((p: any) => {
+                permissionsMap.set(p.id, {
+                    permissionId: p.id,
+                    read: false,
+                    write: false,
+                    delete: false,
+                })
+            })
+
+            role.permissions.forEach(p => {
+                const id = permissionMap.get(p.name)
+                if (id && permissionsMap.has(id)) {
+                    const existing = permissionsMap.get(id)
+                    permissionsMap.set(id, {
+                        permissionId: id,
+                        read: existing.read || p.read,
+                        write: existing.write || p.write,
+                        delete: existing.delete || p.delete,
+                    })
+                }
+            })
+
+            const permissionsWithIds = Array.from(permissionsMap.values())
+
             await staffRoleApi.update(parseInt(role.id), {
                 name: role.name,
-                permissions: role.permissions,
+                permissions: permissionsWithIds,
             })
             await refreshRoles()
         } catch (err: any) {
@@ -294,7 +391,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             await refreshSalaryPayments()
         } catch (err: any) {
             console.error('Error creating salary payment:', err)
-            throw new Error(err.response?.data?.error || 'Failed to create salary payment')
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create salary payment')
         }
     }
 
@@ -313,7 +410,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             await refreshSalaryPayments()
         } catch (err: any) {
             console.error('Error updating salary payment:', err)
-            throw new Error(err.response?.data?.error || 'Failed to update salary payment')
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to update salary payment')
         }
     }
 
@@ -323,7 +420,7 @@ export function StaffProvider({ children }: { children: React.ReactNode }) {
             await refreshSalaryPayments()
         } catch (err: any) {
             console.error('Error deleting salary payment:', err)
-            throw new Error(err.response?.data?.error || 'Failed to delete salary payment')
+            throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete salary payment')
         }
     }
 

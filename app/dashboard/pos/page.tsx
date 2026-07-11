@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, ShoppingCart, RotateCcw, Percent, Ticket } from "lucide-react"
+import { Search, ShoppingCart, RotateCcw, Percent, Ticket, LayoutGrid, Grid2X2, List } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,7 +26,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { sellsApi } from "@/lib/sellsApi"
 import { productApi } from "@/lib/productApi"
 import { couponApi, CouponResponse } from "@/lib/couponApi"
+import { BarcodeScanner } from "@/components/pos/barcode-scanner"
 import { toast } from "sonner"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 interface CartItem {
     id: string
@@ -41,9 +46,11 @@ interface CartItem {
 }
 
 export default function PosPage() {
+    const { canRead } = useSaasAuth()
     const { warehouses, defaultWarehouse } = useWarehouse()
     const { getAllCategoriesFlat } = useCategory()
     const { getCustomerById } = useCustomer()
+    const { taxRate, formatCurrency, formatTaxLabel } = useCompanySettings()
 
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedCategory, setSelectedCategory] = useState("all")
@@ -69,6 +76,7 @@ export default function PosPage() {
     const [shipping] = useState(0)
     const [invoiceNo, setInvoiceNo] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [viewMode, setViewMode] = useState<"2col" | "4col" | "list">("4col")
 
     useEffect(() => {
         if (selectedWarehouseId) return
@@ -99,17 +107,32 @@ export default function PosPage() {
                         category: categoryObj ? categoryObj.category_name : (p.category as string || ""),
                         categoryId: categoryObj ? String(categoryObj.id) : p.category_id ? String(p.category_id) : undefined,
                         price: p.price,
-                        salePrice: p.sale_price,
+                        salePrice: p.sale_price ?? p.salePrice ?? p.price,
+                        offerPrice: p.offerPrice ?? p.offer_price ?? undefined,
+                        offerType: p.offerType ?? p.offer_type ?? undefined,
                         stock: p.stock,
                         status: p.status || (p.stock > 0 ? "Selling" : "Out of Stock"),
                         published: p.published ?? true,
                         image: (() => {
-                            if (p.images?.length > 0) {
-                                const path = p.images.find((i: any) => i.is_primary)?.path || p.images[0].path
-                                return path ? `/api/proxy/${path}` : ""
+                            try {
+                                if (p.images?.length > 0) {
+                                    const primaryImage = p.images.find((i: any) => i.isPrimary === true || i.is_primary === true)
+                                    const path = primaryImage?.path || p.images[0]?.path
+                                    if (path) {
+                                        if (path.startsWith("/api/proxy/") || path.startsWith("http")) return path
+                                        // Storage paths come as "products/..." - use /api/proxy/uploads/ for file serving
+                                        return `/api/proxy/uploads/${path}`
+                                    }
+                                }
+                                if (p.image && p.image.trim()) {
+                                    if (p.image.startsWith("/api/proxy/") || p.image.startsWith("http")) return p.image
+                                    // Storage paths come as "products/..." - use /api/proxy/uploads/ for file serving
+                                    return `/api/proxy/uploads/${p.image}`
+                                }
+                            } catch (e) {
+                                console.error("Error processing image for POS product", p.id, e)
                             }
-                            if (p.image) return p.image.startsWith("/api/proxy/") ? p.image : `/api/proxy/${p.image}`
-                            return ""
+                            return "/placeholder.svg"
                         })(),
                         sku: p.sku || "",
                         barcode: p.barcode || "",
@@ -118,20 +141,17 @@ export default function PosPage() {
                             name: v.name,
                             attributes: v.attributes || {},
                             price: v.price,
-                            salePrice: v.sale_price,
+                            salePrice: v.salePrice ?? v.sale_price ?? v.price,
+                            offerPrice: v.offerPrice ?? v.offer_price ?? undefined,
+                            offerType: v.offerType ?? v.offer_type ?? undefined,
                             stock: v.stock,
                             sku: v.sku || "",
                             barcode: v.barcode,
                             inventory: v.inventory?.map((i: any) => ({
                                 inventoryId: i.id,
-                                warehouseId: String(i.location_id),
+                                warehouseId: String(i.locationId ?? i.location_id),
                                 quantity: i.quantity,
                             })) || [],
-                        })) || [],
-                        inventory: p.inventory?.map((i: any) => ({
-                            inventoryId: i.id,
-                            warehouseId: String(i.location_id ?? i.warehouse_id),
-                            quantity: i.quantity,
                         })) || [],
                     } as Product
                 }))
@@ -147,10 +167,13 @@ export default function PosPage() {
             return loc ? loc.quantity : variant.stock
         }
         if (product.variants && product.variants.length > 0) {
-            return product.variants.reduce((sum, v) => {
+            // For products with variants, sum up inventory across all variants at this warehouse
+            const totalAtWarehouse = product.variants.reduce((sum, v) => {
                 const loc = v.inventory?.find(i => i.warehouseId === whId)
                 return sum + (loc ? loc.quantity : 0)
             }, 0)
+            // If warehouse-specific inventory is 0, fall back to total product stock
+            return totalAtWarehouse > 0 ? totalAtWarehouse : product.stock
         }
         const loc = product.inventory?.find(i => i.warehouseId === whId)
         return loc ? loc.quantity : product.stock
@@ -175,11 +198,18 @@ export default function PosPage() {
 
     const filteredProducts = useMemo(() => {
         return products.filter(product => {
-            const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
+            const searchLower = searchQuery.toLowerCase()
+            const matchesSearch =
+                product.name.toLowerCase().includes(searchLower) ||
+                (product.barcode && product.barcode.toLowerCase().includes(searchLower)) ||
+                (product.sku && product.sku.toLowerCase().includes(searchLower))
             const hasStock = selectedWarehouseId ? getAvailableStock(product) > 0 : true
             return matchesSearch && hasStock
         })
     }, [products, searchQuery, selectedWarehouseId, cart]) // eslint-disable-line
+
+    const blocked = useModuleGuard('POS')
+  if (blocked) return blocked
 
     const addToCart = (product: Product, variant?: Variant) => {
         if (product.variants && product.variants.length > 0 && !variant) {
@@ -189,7 +219,22 @@ export default function PosPage() {
         const cartItemId = variant ? `${product.id}-${variant.id}` : product.id
         const existingInCart = cart.find(item => item.id === cartItemId)
         if (availableStock <= 0) { toast.error("Not enough stock!"); return }
-        const price = variant ? (variant.salePrice || variant.price) : (product.salePrice || product.price)
+        const getDisplayPrice = (p: typeof product, v?: typeof variant) => {
+            if ((p as any).isBundle && (p as any).bundlePriceOverride) {
+                return (p as any).bundlePriceOverride
+            }
+            if (v) {
+                const base = v.salePrice || v.price
+                const offerPrice = v.offerPrice ?? p.offerPrice
+                const offerType = v.offerType ?? p.offerType ?? "percentage"
+                if (offerPrice) return offerType === "percentage" ? base * (1 - offerPrice / 100) : base - offerPrice
+                return base
+            }
+            const base = p.salePrice || p.price
+            if (p.offerPrice) return p.offerType === "percentage" ? base * (1 - p.offerPrice / 100) : base - p.offerPrice
+            return base
+        }
+        const price = getDisplayPrice(product, variant ?? undefined)
         const selectedInventory = variant
             ? variant.inventory?.find(i => i.warehouseId === selectedWarehouseId)
             : product.inventory?.find(i => i.warehouseId === selectedWarehouseId)
@@ -269,7 +314,7 @@ export default function PosPage() {
     }
 
     const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0)
-    const tax = subtotal * 0.1
+    const tax = subtotal * (taxRate / 100)
     const totalDiscount = discount + couponDiscount
     const total = Math.max(0, subtotal + tax + shipping - totalDiscount)
 
@@ -282,6 +327,14 @@ export default function PosPage() {
                 customerName: selectedCustomerName || "Walk-in Customer",
                 customerEmail: customer?.email || undefined,
                 customerPhone: customer?.phone || undefined,
+                shippingFullName: customer?.name || undefined,
+                shippingPhone: customer?.phone || undefined,
+                shippingEmail: customer?.email || undefined,
+                shippingAddressLine1: customer?.address || undefined,
+                shippingCity: customer?.city || undefined,
+                shippingState: customer?.state || undefined,
+                shippingPostalCode: customer?.zipCode || undefined,
+                shippingCountry: customer?.country || undefined,
                 method,
                 amount: total,
                 discount: discount > 0 ? discount : undefined,
@@ -300,6 +353,8 @@ export default function PosPage() {
                     productName: item.name,
                     quantity: item.quantity,
                     price: item.price,
+                    unitPrice: item.price,
+                    unit_price: item.price,
                 })),
             })
             setInvoiceNo(res.data.invoiceNo || "")
@@ -313,15 +368,26 @@ export default function PosPage() {
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-6rem)] gap-0 overflow-hidden">
+        <div data-pos-page="" className="flex flex-col h-full gap-0 overflow-hidden">
             {/* Top Navigation Bar */}
-            <div className="bg-white border-b shadow-sm">
+            <div className="bg-card border-b border-border overflow-hidden">
                 <div className="flex items-center gap-4 px-6 py-3">
                     <div className="relative flex-1 max-w-lg">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <Input placeholder="Search products..." className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white"
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <Input placeholder="Search products, scan a barcode…" className="pl-10 h-10 bg-muted/50 border-border focus:bg-background"
                             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
+
+                    {/* Barcode Scanner - Hidden but active for keyboard input */}
+                    <div className="hidden">
+                        <BarcodeScanner
+                            products={products}
+                            selectedWarehouseId={selectedWarehouseId}
+                            getAvailableStock={getAvailableStock}
+                            onProductScanned={addToCart}
+                        />
+                    </div>
+
                     <div className="w-48">
                         <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
                             <SelectTrigger className="h-10"><SelectValue placeholder="Select Warehouse" /></SelectTrigger>
@@ -333,44 +399,144 @@ export default function PosPage() {
                         </Select>
                     </div>
                 </div>
-
-                {/* Horizontal Category Tabs */}
-                <div className="border-t bg-gray-50/50 px-6 overflow-x-auto">
-                    <ScrollArea className="w-full">
-                        <div className="flex gap-2 py-3">
-                            {categories.map(cat => (
-                                <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-                                    className={cn(
-                                        "px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all shrink-0",
-                                        selectedCategory === cat.id
-                                            ? "bg-emerald-600 text-white shadow-md"
-                                            : "bg-white text-gray-600 border border-gray-200 hover:border-emerald-300 hover:text-emerald-600"
-                                    )}
-                                >
-                                    {cat.name}
-                                </button>
-                            ))}
-                        </div>
-                    </ScrollArea>
-                </div>
             </div>
 
-            {/* Main Content - Products & Cart Side by Side */}
-            <div className="flex gap-4 flex-1 overflow-hidden p-4">
-                {/* Product Grid - 60% width */}
-                <div className="flex-1 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden">
+            {/* Main Content - Category Sidebar + Products + Cart */}
+            <div className="flex gap-3 flex-1 overflow-hidden p-3 min-w-0">
+
+                {/* Category Sidebar */}
+                <div className="w-36 shrink-0 flex flex-col bg-card rounded-xl border border-border overflow-hidden">
+                    <div className="px-3 py-2.5 border-b border-border">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Categories</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        <div className="flex flex-col gap-0.5 p-2">
+                            {categories.map(cat => {
+                                const count = cat.id === "all"
+                                    ? products.length
+                                    : products.filter(p => p.categoryId === String(cat.id)).length
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => setSelectedCategory(cat.id)}
+                                        className={cn(
+                                            "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                                            selectedCategory === cat.id
+                                                ? "bg-brand-soft text-brand-fg"
+                                                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        )}
+                                    >
+                                        <span className="truncate text-left">{cat.name}</span>
+                                        <span className={cn(
+                                            "text-[11px] tabular-nums shrink-0",
+                                            selectedCategory === cat.id ? "text-brand-fg/70" : "text-muted-foreground/60"
+                                        )}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Product Grid */}
+                <div className="flex-1 min-w-0 flex flex-col bg-card rounded-xl border border-border overflow-hidden">
+                    {/* Grid header */}
+                    <div className="flex items-end justify-between px-4 py-3 border-b border-border shrink-0">
+                        <div>
+                            <h1 className="text-lg font-semibold tracking-tight text-foreground">Point of Sale</h1>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                <b className="text-money-fg font-semibold">{filteredProducts.length}</b> products available
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                            <button
+                                onClick={() => setViewMode("2col")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "2col" ? "bg-card shadow-sm text-brand-fg" : "text-muted-foreground hover:text-foreground")}
+                                title="2 columns"
+                            >
+                                <Grid2X2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode("4col")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "4col" ? "bg-card shadow-sm text-brand-fg" : "text-muted-foreground hover:text-foreground")}
+                                title="4 columns"
+                            >
+                                <LayoutGrid className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode("list")}
+                                className={cn("p-1.5 rounded-md transition-all", viewMode === "list" ? "bg-card shadow-sm text-brand-fg" : "text-muted-foreground hover:text-foreground")}
+                                title="List view"
+                            >
+                                <List className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                     <div className="flex-1 min-h-0">
-                        <ScrollArea className="h-full p-4 bg-gray-50/30">
+                        <ScrollArea className="h-full p-4 bg-muted/20">
                             {productsLoading ? (
-                                <div className="flex items-center justify-center h-64 text-gray-400"><p>Loading products...</p></div>
+                                <div className="flex items-center justify-center h-64 text-muted-foreground"><p>Loading products...</p></div>
                             ) : filteredProducts.length > 0 ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
-                                    {filteredProducts.map(product => (
-                                        <PosProductCard key={product.id} product={{ ...product, stock: getAvailableStock(product) }} onAddToCart={addToCart} />
-                                    ))}
-                                </div>
+                                viewMode === "list" ? (
+                                    <div className="flex flex-col gap-2 pb-4">
+                                        {filteredProducts.map(product => {
+                                            const stock = getAvailableStock(product)
+                                            return (
+                                                <button
+                                                    key={product.id}
+                                                    onClick={() => {
+                                                        if (product.variants && product.variants.length > 0) {
+                                                            setSelectedProductForVariant(product)
+                                                        } else {
+                                                            addToCart(product)
+                                                        }
+                                                    }}
+                                                    disabled={stock === 0}
+                                                    className={cn(
+                                                        "flex items-center gap-3 w-full text-left p-3 rounded-lg border border-border bg-card hover:border-brand/40 hover:bg-accent transition-all",
+                                                        stock === 0 && "opacity-50 cursor-not-allowed"
+                                                    )}
+                                                >
+                                                    <img
+                                                        src={product.image || "/placeholder.svg"}
+                                                        alt={product.name}
+                                                        className="w-12 h-12 rounded-lg object-cover shrink-0 bg-muted"
+                                                        onError={e => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-foreground truncate text-sm">{product.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{product.category}</p>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <p className="font-bold text-money-fg text-sm">{formatCurrency((() => { const b = product.salePrice || product.price; return product.offerPrice ? (product.offerType === "percentage" ? b * (1 - product.offerPrice / 100) : b - product.offerPrice) : b })())}</p>
+                                                        <p className="text-xs text-muted-foreground">{stock} in stock</p>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className={cn("grid gap-3 pb-4", viewMode === "2col" ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4")}>
+                                        {filteredProducts.map(product => (
+                                            <PosProductCard
+                                                key={product.id}
+                                                product={{ ...product, stock: getAvailableStock(product) }}
+                                                large={viewMode === "2col"}
+                                                onAddToCart={(product) => {
+                                                    if (product.variants && product.variants.length > 0) {
+                                                        setSelectedProductForVariant(product)
+                                                    } else {
+                                                        addToCart(product)
+                                                    }
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                )
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                                <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                                     <Search className="w-12 h-12 mb-2 opacity-20" />
                                     <p>No products in stock at this location</p>
                                 </div>
@@ -379,23 +545,26 @@ export default function PosPage() {
                     </div>
                 </div>
 
-                {/* Cart - 40% width */}
-                <div className="w-[40%] min-w-[380px] flex flex-col bg-white rounded-xl border shadow-sm h-full overflow-hidden">
-                <div className="p-4 border-b bg-gray-50/50">
+                {/* Cart — receipt-style */}
+                <div className="w-80 xl:w-96 shrink-0 flex flex-col bg-card rounded-xl border border-border h-full overflow-hidden">
+                <div className="p-4 border-b border-border">
                     <CustomerCombobox value={selectedCustomerId}
                         onValueChange={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name) }} />
                 </div>
                 <div className="flex-1 flex flex-col min-h-0 relative">
                     {cart.length === 0 ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 space-y-4">
-                            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
-                                <ShoppingCart className="w-10 h-10 opacity-20" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground space-y-4 px-6 text-center">
+                            <div className="w-20 h-20 rounded-2xl bg-brand-soft flex items-center justify-center">
+                                <ShoppingCart className="w-9 h-9 text-brand-fg opacity-80" />
                             </div>
-                            <p className="text-sm font-medium">Your cart is empty</p>
+                            <div>
+                                <p className="text-sm font-medium text-foreground">Cart is empty</p>
+                                <p className="text-xs mt-1">Tap any product to start ringing up a sale.</p>
+                            </div>
                         </div>
                     ) : (
-                        <ScrollArea className="h-full p-3">
-                            <div className="space-y-3 pb-4">
+                        <ScrollArea className="h-full">
+                            <div className="space-y-3 p-3 pr-4 pb-4">
                                 {cart.map(item => (
                                     <PosCartItem key={item.id} item={item} onVerifyQuantity={updateQuantity} onRemove={removeFromCart} />
                                 ))}
@@ -403,15 +572,15 @@ export default function PosPage() {
                         </ScrollArea>
                     )}
                 </div>
-                <div className="grid grid-cols-3 gap-2 p-3 border-t bg-gray-50/30">
-                    <Button variant="outline" size="sm" className="h-9 gap-2 text-gray-600 border-dashed" onClick={() => setIsDiscountModalOpen(true)}>
+                <div className="grid grid-cols-3 gap-2 p-3 border-t border-border">
+                    <Button variant="outline" size="sm" className="h-9 gap-2 text-muted-foreground" onClick={() => setIsDiscountModalOpen(true)}>
                         <Percent className="w-3.5 h-3.5" />
-                        Discount {discount > 0 && `($${discount.toFixed(2)})`}
+                        Discount {discount > 0 && `(${formatCurrency(discount)})`}
                     </Button>
                     <Button
                         variant="outline"
                         size="sm"
-                        className={`h-9 gap-2 ${appliedCoupon ? 'text-emerald-600 border-emerald-200 hover:bg-emerald-50' : 'text-blue-600 border-blue-100 hover:bg-blue-50'}`}
+                        className={cn("h-9 gap-2", appliedCoupon ? "text-money-fg border-money/40 hover:bg-money-soft" : "text-muted-foreground")}
                         onClick={() => {
                             if (appliedCoupon) {
                                 handleRemoveCoupon()
@@ -424,33 +593,48 @@ export default function PosPage() {
                         <Ticket className="w-3.5 h-3.5" />
                         {appliedCoupon ? `${appliedCoupon.code}` : "Coupon"}
                     </Button>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 text-red-600 border-red-100 hover:bg-red-50" onClick={() => setIsResetDialogOpen(true)}>
+                    <Button variant="outline" size="sm" className="h-9 gap-2 text-destructive hover:bg-destructive/10" onClick={() => setIsResetDialogOpen(true)}>
                         <RotateCcw className="w-3.5 h-3.5" />
-                        Reset Cart
+                        Reset
                     </Button>
                 </div>
-                <div className="p-4 bg-gray-50 border-t space-y-3">
-                    <div className="space-y-1 text-sm text-gray-600">
-                        <div className="flex justify-between"><span>Subtotal</span><span className="font-medium font-mono">${subtotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between"><span>Tax (10%)</span><span className="font-medium font-mono">${tax.toFixed(2)}</span></div>
-                        {discount > 0 && (
-                            <div className="flex justify-between text-emerald-600">
-                                <span>Manual Discount</span><span className="font-medium font-mono">-${discount.toFixed(2)}</span>
-                            </div>
-                        )}
-                        {couponDiscount > 0 && (
-                            <div className="flex justify-between text-blue-600">
-                                <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-${couponDiscount.toFixed(2)}</span>
-                            </div>
-                        )}
-                        <div className="pt-2 border-t mt-2 flex justify-between items-end text-gray-900">
-                            <span className="font-bold text-lg">Total</span>
-                            <span className="font-bold text-3xl text-emerald-600">${total.toFixed(2)}</span>
+                <div className="p-4 border-t border-border">
+                    {/* Receipt */}
+                    <div className="relative rounded-2xl border border-border bg-muted/40 p-4">
+                        {/* punch-hole notches */}
+                        <span className="absolute -left-[7px] top-[52px] size-3.5 rounded-full bg-card border border-border" aria-hidden />
+                        <span className="absolute -right-[7px] top-[52px] size-3.5 rounded-full bg-card border border-border" aria-hidden />
+
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                            <div className="flex justify-between py-0.5"><span>Subtotal</span><span className="font-medium font-mono text-foreground">{formatCurrency(subtotal)}</span></div>
+                            <div className="flex justify-between py-0.5"><span>{formatTaxLabel()}</span><span className="font-medium font-mono text-foreground">{formatCurrency(tax)}</span></div>
+                            {discount > 0 && (
+                                <div className="flex justify-between py-0.5 text-money-fg">
+                                    <span>Manual Discount</span><span className="font-medium font-mono">-{formatCurrency(discount)}</span>
+                                </div>
+                            )}
+                            {couponDiscount > 0 && (
+                                <div className="flex justify-between py-0.5 text-money-fg">
+                                    <span>Coupon ({appliedCoupon?.code})</span><span className="font-medium font-mono">-{formatCurrency(couponDiscount)}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* tear line */}
+                        <div className="my-3 border-t-[1.5px] border-dashed border-border" />
+
+                        <div className="flex justify-between items-end">
+                            <span className="font-semibold text-base text-foreground">Total</span>
+                            <span className="font-bold text-3xl text-money-fg tracking-tight tabular-nums">{formatCurrency(total)}</span>
                         </div>
                     </div>
-                    <Button className="w-full h-14 text-lg font-bold bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 active:scale-[0.98] transition-all"
-                        disabled={cart.length === 0 || isSubmitting} onClick={() => setIsCheckoutOpen(true)}>
-                        {isSubmitting ? "Processing..." : "Pay Now"}
+
+                    <Button
+                        className="w-full h-14 mt-4 text-base font-bold text-money-foreground bg-money hover:brightness-110 shadow-lg shadow-money/20 active:scale-[0.98] transition-all"
+                        disabled={cart.length === 0 || isSubmitting}
+                        onClick={() => setIsCheckoutOpen(true)}
+                    >
+                        {isSubmitting ? "Processing..." : `Charge ${formatCurrency(total)}`}
                     </Button>
                 </div>
             </div>
@@ -484,14 +668,14 @@ export default function PosPage() {
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-semibold text-gray-900">{coupon.code}</p>
-                                            <p className="text-sm text-gray-600">{coupon.campaign_name}</p>
+                                            <p className="text-sm text-gray-600">{coupon.campaignName}</p>
                                         </div>
                                         <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
-                                            {coupon.type === 'percentage' ? `${coupon.discount}%` : `$${coupon.discount}`}
+                                            {coupon.type === 'percentage' ? `${coupon.discount}%` : formatCurrency(coupon.discount)}
                                         </Badge>
                                     </div>
-                                    {coupon.min_order_amount > 0 && (
-                                        <p className="text-xs text-gray-500 mt-1">Min order: ${coupon.min_order_amount}</p>
+                                    {coupon.minOrderAmount > 0 && (
+                                        <p className="text-xs text-gray-500 mt-1">Min order: {formatCurrency(Number(coupon.minOrderAmount ?? 0))}</p>
                                     )}
                                 </button>
                             ))}
@@ -514,6 +698,7 @@ export default function PosPage() {
             </AlertDialog>
 
             <SuccessModal open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen} onClose={handleSuccessClose}
+                formatCurrency={formatCurrency} taxLabel={formatTaxLabel()}
                 orderDetails={{ cart, subtotal, tax, discount, total, customer: selectedCustomerName, invoiceNo }} />
 
             {/* Variant Modal */}
@@ -527,17 +712,17 @@ export default function PosPage() {
                             const variantStock = getAvailableStock(selectedProductForVariant, variant)
                             return (
                                 <div key={variant.id}
-                                    className={cn("flex items-center justify-between border p-3 rounded-lg hover:bg-gray-50 cursor-pointer",
+                                    className={cn("flex items-center justify-between border border-border p-3 rounded-lg hover:bg-accent cursor-pointer",
                                         variantStock === 0 && "opacity-50 pointer-events-none")}
                                     onClick={() => variantStock > 0 && addToCart(selectedProductForVariant, variant)}
                                 >
                                     <div>
                                         <p className="font-medium">{variant.name}</p>
-                                        <p className="text-sm text-gray-500">SKU: {variant.sku}</p>
+                                        <p className="text-sm text-muted-foreground">SKU: {variant.sku}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-emerald-600">${variant.salePrice || variant.price}</p>
-                                        <Badge variant="outline" className={variantStock > 0 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}>
+                                        <p className="font-bold text-money-fg">{formatCurrency((() => { const b = variant.salePrice || variant.price || 0; const op = variant.offerPrice ?? selectedProductForVariant?.offerPrice; const ot = variant.offerType ?? selectedProductForVariant?.offerType ?? "percentage"; return op ? (ot === "percentage" ? b * (1 - op / 100) : b - op) : b })())}</p>
+                                        <Badge variant="outline" className={variantStock > 0 ? "text-money-fg border-money/30" : "text-destructive border-destructive/30"}>
                                             {variantStock > 0 ? `${variantStock} in stock` : "Out of stock"}
                                         </Badge>
                                     </div>

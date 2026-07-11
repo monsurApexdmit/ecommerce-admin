@@ -1,19 +1,11 @@
 {
   "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
-  "/auth/login/page": "app/auth/login/page.js",
-  "/dashboard/attributes/page": "app/dashboard/attributes/page.js",
-  "/dashboard/categories/page": "app/dashboard/categories/page.js",
+  "/dashboard/pos/page": "app/dashboard/pos/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
   "/dashboard/inventory/page": "app/dashboard/inventory/page.js",
   "/dashboard/inventory/transfer/page": "app/dashboard/inventory/transfer/page.js",
-  "/dashboard/orders/page": "app/dashboard/orders/page.js",
-  "/dashboard/orders/shipments/page": "app/dashboard/orders/shipments/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/pos/page": "app/dashboard/pos/page.js",
-  "/dashboard/products/[id]/barcode/page": "app/dashboard/products/[id]/barcode/page.js",
-  "/dashboard/products/page": "app/dashboard/products/page.js",
-  "/dashboard/staff/page": "app/dashboard/staff/page.js",
-  "/dashboard/store/locations/page": "app/dashboard/store/locations/page.js",
-  "/dashboard/store/page": "app/dashboard/store/page.js",
-  "/dashboard/vendors/[id]/page": "app/dashboard/vendors/[id]/page.js",
-  "/dashboard/vendors/page": "app/dashboard/vendors/page.js"
+  "/dashboard/inventory/serial-batch/page": "app/dashboard/inventory/serial-batch/page.js",
+  "/dashboard/returns/customer/page": "app/dashboard/returns/customer/page.js",
+  "/dashboard/support/page": "app/dashboard/support/page.js",
+  "/dashboard/orders/page": "app/dashboard/orders/page.js"
 }

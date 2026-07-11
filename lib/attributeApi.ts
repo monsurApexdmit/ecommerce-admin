@@ -79,16 +79,16 @@ export interface AttributeListResponse {
 
 export interface CreateAttributeData {
   name: string;
-  display_name: string;
-  option_type: string;
+  displayName: string;
+  optionType: string;
   values: string;
   status?: boolean;
 }
 
 export interface UpdateAttributeData {
   name?: string;
-  display_name?: string;
-  option_type?: string;
+  displayName?: string;
+  optionType?: string;
   values?: string;
   status?: boolean;
 }
@@ -103,7 +103,20 @@ export const attributeApi = {
     search?: string;
   }): Promise<AttributeListResponse> => {
     const response = await api.get('/attributes/', { params });
-    return response.data;
+    // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
+    const laravelData = response.data.data || {};
+    return {
+      message: response.data.message || '',
+      data: laravelData.data || [],
+      pagination: {
+        total: laravelData.total || 0,
+        page: laravelData.current_page || 1,
+        limit: laravelData.per_page || 10,
+        total_pages: Math.ceil((laravelData.total || 0) / (laravelData.per_page || 10)),
+        has_next: laravelData.current_page < Math.ceil((laravelData.total || 0) / (laravelData.per_page || 10)),
+        has_previous: laravelData.current_page > 1,
+      },
+    };
   },
 
   /**

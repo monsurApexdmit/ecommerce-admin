@@ -10,7 +10,7 @@ const EXT_MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
 };
 
-const BACKEND_URL = process.env.BACKEND_URL || 'https://localhost:8004';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8005';
 const UPLOADS_DIR = process.env.UPLOADS_DIR || '';
 
 const backend = axios.create({
@@ -35,11 +35,21 @@ type Params = Promise<{ path: string[] }>;
 
 async function proxyRequest(req: NextRequest, params: Params) {
   const { path: segments } = await params;
-  const urlPath = '/' + segments.join('/');
+  // Prepend /api to the path for Laravel backend
+  const urlPath = '/api/' + segments.join('/');
 
   // Serve uploaded files directly from disk
-  if (segments[0] === 'uploads' && UPLOADS_DIR) {
-    const filePath = path.join(UPLOADS_DIR, ...segments);
+  if ((segments[0] === 'uploads' || segments[0] === 'storage') && UPLOADS_DIR) {
+    const relativeSegments = segments.slice(1);
+    // Try direct path first (e.g. /uploads/products/file.webp -> products/file.webp)
+    const relativePath = relativeSegments.join('/');
+    let filePath = path.join(UPLOADS_DIR, relativePath);
+
+    // If not found, try with 'uploads' included (legacy structure)
+    if (!fs.existsSync(filePath)) {
+      filePath = path.join(UPLOADS_DIR, ...relativeSegments);
+    }
+
     if (fs.existsSync(filePath)) {
       const fileBuffer = fs.readFileSync(filePath);
       const mimeType = EXT_MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
@@ -61,6 +71,33 @@ async function proxyRequest(req: NextRequest, params: Params) {
   if (cookie) headers['Cookie'] = cookie;
   const contentType = req.headers.get('content-type');
   if (contentType) headers['Content-Type'] = contentType;
+  const contentLength = req.headers.get('content-length');
+  if (contentLength) headers['Content-Length'] = contentLength;
+
+  // Stream multipart uploads directly. PHP/Laravel relies on the exact multipart
+  // framing and upload metadata, and buffering/re-wrapping the body can make
+  // UploadedFile invalid even when the form field exists.
+  const isMultipart = contentType?.includes('multipart/form-data');
+  if (isMultipart) {
+    const fetchRes = await fetch(`${BACKEND_URL}${cleanPath}${search}`, {
+      method: req.method,
+      headers,
+      body: req.body,
+      // @ts-ignore — duplex required for streaming body in Node fetch
+      duplex: 'half',
+    });
+    const resBody = await fetchRes.arrayBuffer();
+    const resContentType = fetchRes.headers.get('content-type') || 'application/octet-stream';
+    if (resContentType.includes('application/json')) {
+      const text = Buffer.from(resBody).toString('utf-8');
+      try {
+        return NextResponse.json(JSON.parse(text), { status: fetchRes.status });
+      } catch {
+        return new NextResponse(text, { status: fetchRes.status, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+    return new NextResponse(resBody, { status: fetchRes.status, headers: { 'Content-Type': resContentType } });
+  }
 
   let data: Buffer | object | string | undefined;
   if (!['GET', 'HEAD'].includes(req.method)) {

@@ -60,9 +60,14 @@ export function useTeamStatus(): TeamStatusResult {
     fetchTeamStatus()
   }, [company?.id])
 
-  const canAddMore = maxUsers ? userCount < maxUsers : false
-  const remainingSlots = maxUsers ? Math.max(0, maxUsers - userCount) : null
-  const utilizationPercentage = maxUsers ? Math.round((userCount / maxUsers) * 100) : 0
+  // Use company.maxUsers if available (from plan), otherwise use fetched maxUsers
+  const effectiveMaxUsers = company?.maxUsers ?? maxUsers
+
+  // canAddMore should only be false if maxUsers is a real number and limit is reached
+  // If maxUsers is null/undefined, unlimited users are allowed (canAddMore = true)
+  const canAddMore = effectiveMaxUsers ? userCount < effectiveMaxUsers : true
+  const remainingSlots = effectiveMaxUsers ? Math.max(0, effectiveMaxUsers - userCount) : null
+  const utilizationPercentage = effectiveMaxUsers ? Math.round((userCount / effectiveMaxUsers) * 100) : 0
 
   return {
     userCount,

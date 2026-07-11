@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { ArrowUpRight, ArrowDownRight, DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
+import { DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
 import { useVendor } from "@/contexts/vendor-context"
 import { useProduct } from "@/contexts/product-context"
 import { useStaff } from "@/contexts/staff-context"
@@ -21,13 +21,19 @@ import {
 } from "chart.js"
 import { sellsApi, SellResponse } from "@/lib/sellsApi"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
 export default function DashboardPage() {
+  const { canRead } = useSaasAuth()
   const { vendors } = useVendor()
   const { products } = useProduct()
   const { staff, salaryPayments } = useStaff()
+  const { formatCurrency, currency } = useCompanySettings()
 
   const [recentOrders, setRecentOrders] = useState<SellResponse[]>([])
   const [sellStats, setSellStats] = useState<{
@@ -37,47 +43,76 @@ export default function DashboardPage() {
     processingCount: number
     deliveredCount: number
   } | null>(null)
+  const [weeklyOrderCounts, setWeeklyOrderCounts] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
+  const [monthlyRevenue, setMonthlyRevenue] = useState<number[]>(Array(12).fill(0))
   const [ordersLoading, setOrdersLoading] = useState(true)
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [listRes, statsRes] = await Promise.all([
+        const [listRes, statsRes, weeklyRes, monthlyRes] = await Promise.all([
           sellsApi.getAll({ limit: 5 }),
           sellsApi.getStats(),
+          sellsApi.getWeeklyOrders(),
+          sellsApi.getMonthlyRevenue(),
         ])
         setRecentOrders(listRes.data ?? [])
 
         const s = statsRes.data
         setSellStats({
-          totalRevenue: Number(s?.total_revenue ?? 0),
-          totalOrders: Number(s?.total_sells ?? listRes.total ?? listRes.data?.length ?? 0),
-          pendingCount: Number(s?.pending_count ?? 0),
-          processingCount: Number(s?.processing_count ?? 0),
-          deliveredCount: Number(s?.delivered_count ?? 0),
+          totalRevenue: Number(s?.totalRevenue ?? 0),
+          totalOrders: Number(s?.totalSells ?? listRes.total ?? listRes.data?.length ?? 0),
+          pendingCount: Number(s?.pendingOrders ?? 0),
+          processingCount: Number(s?.processingOrders ?? 0),
+          deliveredCount: Number(s?.deliveredOrders ?? 0),
         })
-      } catch {
-        // fallback: just use list length
+
+        const counts = weeklyRes?.data
+        if (Array.isArray(counts) && counts.length === 7) {
+          setWeeklyOrderCounts(counts)
+        }
+
+        const monthly = monthlyRes?.data
+        if (Array.isArray(monthly) && monthly.length === 12) {
+          setMonthlyRevenue(monthly)
+        }
+      } catch (err) {
+        console.error('[Dashboard] fetchDashboardData error:', err)
+        // fallback: try each individually
         try {
           const listRes = await sellsApi.getAll({ limit: 5 })
           setRecentOrders(listRes.data ?? [])
-          const revenue = (listRes.data ?? []).reduce((sum, o) => sum + Number(o.amount ?? 0), 0)
+        } catch { setRecentOrders([]) }
+        try {
+          const statsRes = await sellsApi.getStats()
+          const s = statsRes.data
           setSellStats({
-            totalRevenue: revenue,
-            totalOrders: listRes.total ?? listRes.data?.length ?? 0,
-            pendingCount: 0,
-            processingCount: 0,
-            deliveredCount: 0,
+            totalRevenue: Number(s?.totalRevenue ?? 0),
+            totalOrders: Number(s?.totalSells ?? 0),
+            pendingCount: Number(s?.pendingOrders ?? 0),
+            processingCount: Number(s?.processingOrders ?? 0),
+            deliveredCount: Number(s?.deliveredOrders ?? 0),
           })
-        } catch {
-          setRecentOrders([])
-        }
+        } catch (e) { console.error('[Dashboard] stats fallback failed:', e) }
+        try {
+          const weeklyRes = await sellsApi.getWeeklyOrders()
+          const counts = weeklyRes?.data
+          if (Array.isArray(counts) && counts.length === 7) setWeeklyOrderCounts(counts)
+        } catch {}
+        try {
+          const monthlyRes = await sellsApi.getMonthlyRevenue()
+          const monthly = monthlyRes?.data
+          if (Array.isArray(monthly) && monthly.length === 12) setMonthlyRevenue(monthly)
+        } catch {}
       } finally {
         setOrdersLoading(false)
       }
     }
     fetchDashboardData()
   }, [])
+
+  const blocked = useModuleGuard('Dashboard')
+  if (blocked) return blocked
 
   // Vendor statistics
   const totalVendors = vendors.length
@@ -103,7 +138,7 @@ export default function DashboardPage() {
   const statsCards = [
     {
       name: "Total Revenue",
-      value: sellStats ? `$${sellStats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—",
+      value: sellStats ? formatCurrency(sellStats.totalRevenue) : "—",
       icon: DollarSign,
       bgColor: "bg-emerald-50",
       iconColor: "text-emerald-600",
@@ -135,8 +170,8 @@ export default function DashboardPage() {
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     datasets: [
       {
-        label: "Sales",
-        data: [12, 19, 15, 25, 22, 30, 28, 35, 32, 38, 40, 45],
+        label: "Revenue",
+        data: monthlyRevenue,
         borderColor: "rgb(16, 185, 129)",
         backgroundColor: "rgba(16, 185, 129, 0.1)",
         fill: true,
@@ -150,7 +185,7 @@ export default function DashboardPage() {
     datasets: [
       {
         label: "Orders",
-        data: [45, 52, 38, 65, 59, 80, 71],
+        data: weeklyOrderCounts,
         backgroundColor: "rgba(16, 185, 129, 0.8)",
         borderRadius: 6,
       },
@@ -165,7 +200,22 @@ export default function DashboardPage() {
       x: { grid: { display: false } },
       y: {
         grid: { color: "rgba(0, 0, 0, 0.05)" },
-        ticks: { callback: (value: number | string) => "$" + value + "k" },
+        beginAtZero: true,
+        ticks: { callback: (value: number | string) => currency + Number(value).toLocaleString() },
+      },
+    },
+  }
+
+  const ordersChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        grid: { color: "rgba(0, 0, 0, 0.05)" },
+        ticks: { stepSize: 1, callback: (value: number | string) => String(value) },
+        beginAtZero: true,
       },
     },
   }
@@ -214,11 +264,11 @@ export default function DashboardPage() {
           </div>
           <div className="p-4 bg-emerald-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Paid</p>
-            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Due</p>
-            <p className="text-2xl font-bold text-orange-600">${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalDue)}</p>
           </div>
         </div>
       </Card>
@@ -237,15 +287,15 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Monthly Budget</p>
-            <p className="text-2xl font-bold text-gray-900">${totalSalaryBudget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSalaryBudget)}</p>
           </div>
           <div className="p-4 bg-emerald-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Paid This Month</p>
-            <p className="text-2xl font-bold text-emerald-600">${totalSalaryPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalSalaryPaid)}</p>
           </div>
           <div className="p-4 bg-orange-50 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Pending</p>
-            <p className="text-2xl font-bold text-orange-600">${totalSalaryPending.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalSalaryPending)}</p>
           </div>
         </div>
       </Card>
@@ -262,7 +312,7 @@ export default function DashboardPage() {
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Weekly Orders</h2>
           <div className="h-80">
-            <Bar data={ordersData} options={chartOptions} />
+            <Bar data={ordersData} options={ordersChartOptions} />
           </div>
         </Card>
       </div>
@@ -300,7 +350,7 @@ export default function DashboardPage() {
                     <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
                       <td className="py-3 px-2 text-sm font-medium text-gray-900">#{order.invoiceNo}</td>
                       <td className="py-3 px-2 text-sm text-gray-700">{order.customerName}</td>
-                      <td className="py-3 px-2 text-sm font-medium text-gray-900">${Number(order.amount ?? 0).toFixed(2)}</td>
+                      <td className="py-3 px-2 text-sm font-medium text-gray-900">{formatCurrency(Number(order.amount ?? 0))}</td>
                       <td className="py-3 px-2">
                         <StatusBadge status={order.status} />
                       </td>
@@ -345,7 +395,7 @@ export default function DashboardPage() {
               <div className="pt-2 border-t">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Total Revenue</span>
-                  <span className="font-bold text-gray-900">${sellStats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-bold text-gray-900">{formatCurrency(sellStats.totalRevenue)}</span>
                 </div>
               </div>
             </div>

@@ -78,8 +78,10 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       const response = await customerApi.getAll({ limit: 100 })
       setCustomers(response.data.map(convertToCustomer))
     } catch (err: any) {
-      console.error('Error fetching customers:', err)
-      setError(err.response?.data?.error || 'Failed to fetch customers')
+      if (err.response?.status !== 403) {
+        console.error('Error fetching customers:', err)
+        setError(err.response?.data?.error || 'Failed to fetch customers')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -108,7 +110,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       await refreshCustomers()
     } catch (err: any) {
       console.error('Error creating customer:', err)
-      throw new Error(err.response?.data?.error || 'Failed to create customer')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create customer')
     }
   }
 
@@ -132,7 +134,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       await refreshCustomers()
     } catch (err: any) {
       console.error('Error updating customer:', err)
-      throw new Error(err.response?.data?.error || 'Failed to update customer')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to update customer')
     }
   }
 
@@ -142,7 +144,7 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       await refreshCustomers()
     } catch (err: any) {
       console.error('Error deleting customer:', err)
-      throw new Error(err.response?.data?.error || 'Failed to delete customer')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete customer')
     }
   }
 

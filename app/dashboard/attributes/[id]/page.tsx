@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 
 interface AttributeValue {
   id: string
@@ -17,6 +20,7 @@ interface AttributeValue {
 }
 
 export default function AttributeValuesPage() {
+  const { canRead } = useSaasAuth()
   const params = useParams()
   const attributeId = params.id as string
 
@@ -55,6 +59,9 @@ export default function AttributeValuesPage() {
     type: "dropdown" as "dropdown" | "radio",
     status: true,
   })
+
+  const blocked = useModuleGuard('Attributes')
+  if (blocked) return blocked
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

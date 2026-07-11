@@ -11,16 +11,28 @@ export interface Product {
     categoryId?: string     // backend id
     price: number
     salePrice: number
+    offerPrice?: number | null
+    offerType?: string | null
+    costPrice?: number
+    profitMargin?: number
+    marginType?: string
     stock: number
     status: "Selling" | "Out of Stock" | "Discontinued"
     published: boolean
+    isHotDeal?: boolean
+    isBestSeller?: boolean
+    isFeatured?: boolean
+    dealLabel?: string
     image: string
     images?: File[]         // for upload
+    delete_images?: boolean
+    keep_images?: string[]  // existing paths to keep on update
     sku: string
     barcode: string
     createdAt?: string
     updatedAt?: string
     vendorId?: string
+    vendorName?: string
     locationId?: string     // backend location/warehouse id
     locationName?: string   // display name
     receiptNumber?: string
@@ -35,6 +47,19 @@ export interface Product {
         warehouseId: string
         quantity: number
     }[]
+    reorderPoint?: number
+    trackingType?: "none" | "serial" | "batch"
+    isBundle?: boolean
+    bundlePriceOverride?: number
+    bundleItems?: {
+        id?: number
+        productId: number
+        productName?: string
+        productSku?: string
+        variantId?: number
+        variantName?: string
+        quantity: number
+    }[]
 }
 
 export interface Variant {
@@ -43,6 +68,11 @@ export interface Variant {
     attributes: { [key: string]: string }
     price: number
     salePrice: number
+    offerPrice?: number | null
+    offerType?: string | null
+    costPrice?: number
+    profitMargin?: number
+    marginType?: string
     stock: number
     sku: string
     barcode?: string
@@ -69,33 +99,62 @@ const ProductContext = createContext<ProductContextType | undefined>(undefined)
 
 function convertToProduct(p: ProductResponse): Product {
     const categoryObj = typeof p.category === "object" && p.category !== null ? p.category : null
+    // DTO returns camelCase IDs
+    const categoryId = categoryObj ? String(categoryObj.id) : ((p as any).categoryId ? String((p as any).categoryId) : undefined)
+    const categoryName = (p as any).categoryName || (categoryObj ? categoryObj.category_name : (p.category as string || ""))
+    const vendorId = (p as any).vendorId ? String((p as any).vendorId) : (p.vendor_id ? String(p.vendor_id) : undefined)
+    const vendorName = (p as any).vendorName ?? undefined
+    const locationId = (p as any).locationId ? String((p as any).locationId) : (p.location_id ? String(p.location_id) : undefined)
     return {
         id: String(p.id),
         name: p.name,
         description: p.description || "",
-        category: categoryObj ? categoryObj.category_name : (p.category as string || ""),
-        categoryId: categoryObj ? String(categoryObj.id) : undefined,
+        category: categoryName,
+        categoryId,
         price: p.price,
-        salePrice: p.sale_price,
+        salePrice: p.salePrice ?? p.sale_price,
+        offerPrice: (p as any).offerPrice ?? (p as any).offer_price ?? undefined,
+        offerType: (p as any).offerType ?? (p as any).offer_type ?? undefined,
+        costPrice: (p as any).costPrice ?? p.cost_price,
+        profitMargin: (p as any).profitMargin ?? p.profit_margin,
+        marginType: (p as any).marginType ?? p.margin_type,
         stock: p.stock,
         status: (p.status as Product["status"]) || (p.stock > 0 ? "Selling" : "Out of Stock"),
         published: p.published ?? true,
+        isHotDeal: (p as any).isHotDeal ?? (p as any).is_hot_deal ?? false,
+        isBestSeller: (p as any).isBestSeller ?? (p as any).is_best_seller ?? false,
+        isFeatured: (p as any).isFeatured ?? (p as any).is_featured ?? false,
+        dealLabel: (p as any).dealLabel ?? (p as any).deal_label ?? undefined,
         image: (() => {
-            if (p.images && p.images.length > 0) {
-                const path = p.images.find(i => i.is_primary)?.path || p.images[0].path
-                return path ? `/api/proxy/${path}` : ""
+            try {
+                // Try images array first (from backend relationship)
+                if (Array.isArray(p.images) && p.images.length > 0) {
+                    const primaryImage = p.images.find((i: any) => i.isPrimary === true || i.is_primary === true)
+                    const imagePath = primaryImage?.path || p.images[0]?.path
+                    if (imagePath && typeof imagePath === 'string' && imagePath.trim()) {
+                        if (imagePath.startsWith("/api/proxy/") || imagePath.startsWith("http")) return imagePath
+                        return `/api/proxy/uploads/${imagePath}`
+                    }
+                }
+                // Fallback to image field
+                if (p.image && typeof p.image === 'string' && p.image.trim()) {
+                    if (p.image.startsWith("/api/proxy/") || p.image.startsWith("http")) return p.image
+                    return `/api/proxy/uploads/${p.image}`
+                }
+            } catch (e) {
+                console.error("Error processing image for product", p.id, "error:", e, "p.images:", p.images, "p.image:", p.image)
             }
-            if (p.image) return p.image.startsWith("/api/proxy/") ? p.image : `/api/proxy/${p.image}`
-            return ""
+            return "/placeholder.svg"
         })(),
         sku: p.sku || "",
         barcode: p.barcode || "",
         createdAt: p.created_at,
         updatedAt: p.updated_at,
-        vendorId: p.vendor_id ? String(p.vendor_id) : undefined,
-        locationId: p.location_id ? String(p.location_id) : (p.inventory?.[0] ? String(p.inventory[0].warehouse_id) : undefined),
+        vendorId,
+        vendorName,
+        locationId,
         locationName: p.location?.name,
-        receiptNumber: p.receipt_number || undefined,
+        receiptNumber: (p as any).receiptNumber || p.receipt_number || undefined,
         attributes: p.attributes?.map(a => ({
             id: String(a.id),
             name: a.name,
@@ -104,9 +163,19 @@ function convertToProduct(p: ProductResponse): Product {
         variants: p.variants?.map(v => ({
             id: String(v.id),
             name: v.name,
-            attributes: v.attributes || {},
+            attributes: (() => {
+                const raw = (v as any).attributes
+                if (!raw) return {}
+                if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return {} } }
+                return raw
+            })(),
             price: v.price,
-            salePrice: v.sale_price,
+            salePrice: (v as any).salePrice ?? v.sale_price,
+            offerPrice: (v as any).offerPrice ?? (v as any).offer_price ?? undefined,
+            offerType: (v as any).offerType ?? (v as any).offer_type ?? undefined,
+            costPrice: (v as any).costPrice ?? v.cost_price,
+            profitMargin: (v as any).profitMargin ?? v.profit_margin,
+            marginType: (v as any).marginType ?? v.margin_type,
             stock: v.stock,
             sku: v.sku || "",
             barcode: v.barcode,
@@ -115,6 +184,19 @@ function convertToProduct(p: ProductResponse): Product {
             warehouseId: String(i.warehouse_id),
             quantity: i.quantity,
         })) || [],
+        reorderPoint: (p as any).reorderPoint ?? (p as any).reorder_point ?? undefined,
+        trackingType: (p as any).trackingType ?? (p as any).tracking_type ?? "none",
+        isBundle: (p as any).isBundle ?? (p as any).is_bundle ?? false,
+        bundlePriceOverride: (p as any).bundlePriceOverride ?? (p as any).bundle_price_override ?? undefined,
+        bundleItems: ((p as any).bundleItems ?? []).map((bi: any) => ({
+            id: bi.id,
+            productId: bi.productId,
+            productName: bi.productName || "",
+            productSku: bi.productSku || "",
+            variantId: bi.variantId,
+            variantName: bi.variantName,
+            quantity: bi.quantity || 1,
+        })),
     }
 }
 
@@ -130,8 +212,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
             const res = await productApi.getAll({ limit: 200 })
             setProducts((res.data ?? []).map(convertToProduct))
         } catch (err: any) {
-            console.error("Failed to fetch products:", err)
-            setError(err.response?.data?.error || "Failed to fetch products")
+            if (err.response?.status !== 403) {
+                console.error("Failed to fetch products:", err)
+                setError(err.response?.data?.error || "Failed to fetch products")
+            }
         } finally {
             setIsLoading(false)
         }
@@ -153,12 +237,21 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 location_id: parseInt(product.locationId),
                 price: product.price,
                 sale_price: product.salePrice,
+                offer_price: product.offerPrice,
+                offer_type: product.offerType,
+                cost_price: product.costPrice,
+                profit_margin: product.profitMargin,
+                margin_type: product.marginType,
                 stock: product.stock,
                 published: product.published,
                 sku: product.sku,
                 barcode: product.barcode,
                 vendor_id: product.vendorId ? parseInt(product.vendorId) : undefined,
                 receipt_number: product.receiptNumber,
+                is_hot_deal: product.isHotDeal,
+                is_best_seller: product.isBestSeller,
+                is_featured: product.isFeatured,
+                deal_label: product.dealLabel,
                 attributes: product.attributes,
                 variants: product.variants?.map(v => ({
                     name: v.name,
@@ -166,15 +259,29 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                     barcode: v.barcode,
                     price: v.price,
                     sale_price: v.salePrice,
+                    offer_price: v.offerPrice,
+                    offer_type: v.offerType,
+                    cost_price: v.costPrice,
+                    profit_margin: v.profitMargin,
+                    margin_type: v.marginType,
                     stock: v.stock,
                     attributes: v.attributes,
                 })),
                 images: product.images,
+                reorder_point: (product as any).reorderPoint,
+                tracking_type: (product as any).trackingType,
+                is_bundle: (product as any).isBundle,
+                bundle_price_override: (product as any).bundlePriceOverride,
+                bundle_items: (product as any).bundleItems?.map((bi: any) => ({
+                    productId: bi.productId,
+                    variantId: bi.variantId,
+                    quantity: bi.quantity,
+                })),
             })
             await refreshProducts()
         } catch (err: any) {
             console.error("Failed to create product:", err)
-            throw new Error(err.response?.data?.error || "Failed to create product")
+            throw new Error(err.response?.data?.message || err.response?.data?.error || err.message || "Failed to create product")
         }
     }
 
@@ -187,12 +294,21 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 location_id: product.locationId ? parseInt(product.locationId) : undefined,
                 price: product.price,
                 sale_price: product.salePrice,
+                offer_price: product.offerPrice,
+                offer_type: product.offerType,
+                cost_price: product.costPrice,
+                profit_margin: product.profitMargin,
+                margin_type: product.marginType,
                 stock: product.stock,
                 published: product.published,
                 sku: product.sku,
                 barcode: product.barcode,
                 vendor_id: product.vendorId ? parseInt(product.vendorId) : undefined,
                 receipt_number: product.receiptNumber,
+                is_hot_deal: product.isHotDeal,
+                is_best_seller: product.isBestSeller,
+                is_featured: product.isFeatured,
+                deal_label: product.dealLabel,
                 attributes: product.attributes,
                 variants: product.variants?.map(v => {
                     const numericId = parseInt(v.id)
@@ -203,16 +319,32 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                         barcode: v.barcode,
                         price: v.price,
                         sale_price: v.salePrice,
+                        offer_price: v.offerPrice,
+                        offer_type: v.offerType,
+                        cost_price: v.costPrice,
+                        profit_margin: v.profitMargin,
+                        margin_type: v.marginType,
                         stock: v.stock,
                         attributes: v.attributes,
                     }
                 }),
                 images: product.images,
+                delete_images: product.delete_images,
+                keep_images: product.keep_images,
+                reorder_point: (product as any).reorderPoint,
+                tracking_type: (product as any).trackingType,
+                is_bundle: (product as any).isBundle,
+                bundle_price_override: (product as any).bundlePriceOverride,
+                bundle_items: (product as any).bundleItems?.map((bi: any) => ({
+                    productId: bi.productId,
+                    variantId: bi.variantId,
+                    quantity: bi.quantity,
+                })),
             })
             await refreshProducts()
         } catch (err: any) {
             console.error("Failed to update product:", err)
-            throw new Error(err.response?.data?.error || "Failed to update product")
+            throw new Error(err.response?.data?.message || err.response?.data?.error || err.message || "Failed to update product")
         }
     }
 

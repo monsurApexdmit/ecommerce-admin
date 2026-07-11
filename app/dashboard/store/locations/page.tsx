@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Edit2, Trash2, MapPin, Loader2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Plus, Edit2, Trash2, MapPin, Loader2, AlertCircle } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,13 +17,21 @@ import {
 } from "@/components/ui/dialog"
 import { useWarehouse, type Warehouse } from "@/contexts/warehouse-context"
 import { Badge } from "@/components/ui/badge"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
+import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 
 export default function LocationsPage() {
+  const { canRead } = useSaasAuth()
   const { warehouses, loading, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouse()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null)
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
 
   const [formData, setFormData] = useState({
     name: "",
@@ -31,6 +39,15 @@ export default function LocationsPage() {
     contact: "",
     isDefault: false,
   })
+
+  useEffect(() => {
+    saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
+  }, [])
+
+  const blocked = useModuleGuard('Store Locations')
+  if (blocked) return blocked
+
+  const atBranchLimit = planLimits !== null && !planLimits.canAddBranch
 
   const resetForm = () => {
     setFormData({ name: "", address: "", contact: "", isDefault: false })
@@ -60,6 +77,7 @@ export default function LocationsPage() {
         await updateWarehouse({ id: editingWarehouse.id, ...formData })
       } else {
         await addWarehouse(formData)
+        saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
       }
       setIsDialogOpen(false)
       resetForm()
@@ -78,6 +96,7 @@ export default function LocationsPage() {
     setDeletingId(warehouse.id)
     try {
       await deleteWarehouse(warehouse.id)
+      saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
     } catch (err) {
       console.error("Failed to delete location:", err)
     } finally {
@@ -90,13 +109,38 @@ export default function LocationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Locations</h1>
-          <p className="text-gray-600 mt-1">Manage your warehouses and stores</p>
+          <p className="text-gray-600 mt-1">
+            Manage your warehouses and stores
+            {planLimits && (
+              <span className="ml-2 text-sm text-gray-400">
+                ({planLimits.currentBranches}/{planLimits.maxBranches} branches used)
+              </span>
+            )}
+          </p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-emerald-600 hover:bg-emerald-700">
+        <Button
+          onClick={() => atBranchLimit ? setIsUpgradeModalOpen(true) : handleOpenDialog()}
+          className="bg-emerald-600 hover:bg-emerald-700"
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add Location
         </Button>
       </div>
+
+      {atBranchLimit && (
+        <Card className="bg-yellow-50 border-yellow-200 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-700 flex-shrink-0 mt-0.5" />
+            <div className="text-yellow-800">
+              <p className="font-semibold">Branch Limit Reached</p>
+              <p className="text-sm mt-0.5">
+                Your <strong>{planLimits?.plan?.name ?? "current"}</strong> plan allows {planLimits?.maxBranches} branch{planLimits?.maxBranches === 1 ? "" : "es"}.
+                Upgrade your plan to add more locations.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">
@@ -159,6 +203,15 @@ export default function LocationsPage() {
           ))}
         </div>
       )}
+
+      <UpgradeRequiredModal
+        open={isUpgradeModalOpen}
+        onOpenChange={setIsUpgradeModalOpen}
+        title="Branch Limit Reached"
+        description={`Your current plan allows ${planLimits?.maxBranches} branch${planLimits?.maxBranches === 1 ? "" : "es"}.`}
+        limitType="warehouses"
+        currentLimit={planLimits?.maxBranches}
+      />
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsDialogOpen(open) }}>
         <DialogContent>

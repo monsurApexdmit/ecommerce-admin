@@ -7,156 +7,216 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { Building2, Mail, Phone, MapPin, Bell, Lock, Globe, Clock, CreditCard, DollarSign, Upload, AlertCircle, Loader2 } from "lucide-react"
-import Swal from "sweetalert2"
-import { settingsApi, AllSettings } from "@/lib/settingsApi"
+import { Building2, Mail, Phone, MapPin, Bell, Clock, Upload, Loader2, CreditCard, Copy, Check, ExternalLink } from "lucide-react"
+import { settingsApi, type StoreHours, type SSLCommerzConfig, type PortWalletConfig, type StripeConfig, type PayPalConfig, type BkashConfig, type NagadConfig, type CodShippingDepositConfig } from "@/lib/settingsApi"
 import { toast } from "sonner"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+
+type SavingSection = "general" | "business" | "notifications" | "storeHours" | "logo" | "banner" | "gateways" | null
+
+const DEFAULT_GENERAL_SETTINGS = {
+  storeName: "Dashtar Store",
+  storeEmail: "store@dashtar.com",
+  storePhone: "+1 (555) 123-4567",
+  storeAddress: "123 Business St, New York, NY 10001",
+  storeDescription: "Your one-stop shop for all your electronic and accessory needs.",
+}
+
+const DEFAULT_BUSINESS_SETTINGS = {
+  businessName: "Dashtar Store",
+  businessType: "Retail",
+  registrationNumber: "REG-2026-001",
+  gstNumber: "GST-123456789",
+  website: "https://dashtar.com",
+  socialLinks: {
+    facebook: "https://facebook.com/dashtar",
+    instagram: "https://instagram.com/dashtar",
+    twitter: "https://twitter.com/dashtar",
+  },
+  logoUrl: "",
+  bannerUrl: "",
+}
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  emailNotifications: true,
+  orderNotifications: true,
+  marketingEmails: false,
+}
+
+const DEFAULT_STORE_HOURS: StoreHours = {
+  monday: { open: "09:00", close: "17:00", isOpen: true },
+  tuesday: { open: "09:00", close: "17:00", isOpen: true },
+  wednesday: { open: "09:00", close: "17:00", isOpen: true },
+  thursday: { open: "09:00", close: "17:00", isOpen: true },
+  friday: { open: "09:00", close: "17:00", isOpen: true },
+  saturday: { open: "10:00", close: "15:00", isOpen: true },
+  sunday: { open: "", close: "", isOpen: false },
+}
+
+const mergeStoreHours = (storeHours: StoreHours = {}) => {
+  return Object.entries(DEFAULT_STORE_HOURS).reduce<StoreHours>((hours, [day, defaults]) => {
+    const dayHours = storeHours[day] ?? {}
+    hours[day] = {
+      open: dayHours.open ?? defaults.open,
+      close: dayHours.close ?? defaults.close,
+      isOpen: dayHours.isOpen ?? defaults.isOpen,
+    }
+    return hours
+  }, {})
+}
 
 export default function SettingsPage() {
-  const { user } = useSaasAuth()
-  const userEmail = user?.email || ""
-
+  const { canRead, company } = useSaasAuth()
+  const [copiedEnv, setCopiedEnv] = useState(false)
   // Loading state
   const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
+  const [savingSection, setSavingSection] = useState<SavingSection>(null)
 
   // General Settings
-  const [storeName, setStoreName] = useState("Dashtar Store")
-  const [storeEmail, setStoreEmail] = useState("store@dashtar.com")
-  const [storePhone, setStorePhone] = useState("+1 (555) 123-4567")
-  const [storeAddress, setStoreAddress] = useState("123 Business St, New York, NY 10001")
-  const [storeDescription, setStoreDescription] = useState(
-    "Your one-stop shop for all your electronic and accessory needs.",
-  )
+  const [storeName, setStoreName] = useState(DEFAULT_GENERAL_SETTINGS.storeName)
+  const [storeEmail, setStoreEmail] = useState(DEFAULT_GENERAL_SETTINGS.storeEmail)
+  const [storePhone, setStorePhone] = useState(DEFAULT_GENERAL_SETTINGS.storePhone)
+  const [storeAddress, setStoreAddress] = useState(DEFAULT_GENERAL_SETTINGS.storeAddress)
+  const [storeDescription, setStoreDescription] = useState(DEFAULT_GENERAL_SETTINGS.storeDescription)
+  const [primaryColor, setPrimaryColor] = useState("#6B1A2A")
+  const [accentColor, setAccentColor] = useState("#B8963E")
+  const [backgroundColor, setBackgroundColor] = useState("#F0EBE3")
 
   // Business Settings
-  const [businessName, setBusinessName] = useState("")
-  const [businessType, setBusinessType] = useState("Retail")
-  const [registrationNumber, setRegistrationNumber] = useState("")
-  const [gstNumber, setGstNumber] = useState("")
-  const [website, setWebsite] = useState("")
-  const [facebook, setFacebook] = useState("")
-  const [instagram, setInstagram] = useState("")
-  const [twitter, setTwitter] = useState("")
-  const [logoUrl, setLogoUrl] = useState("")
-  const [bannerUrl, setBannerUrl] = useState("")
+  const [businessName, setBusinessName] = useState(DEFAULT_BUSINESS_SETTINGS.businessName)
+  const [businessType, setBusinessType] = useState(DEFAULT_BUSINESS_SETTINGS.businessType)
+  const [registrationNumber, setRegistrationNumber] = useState(DEFAULT_BUSINESS_SETTINGS.registrationNumber)
+  const [gstNumber, setGstNumber] = useState(DEFAULT_BUSINESS_SETTINGS.gstNumber)
+  const [website, setWebsite] = useState(DEFAULT_BUSINESS_SETTINGS.website)
+  const [facebook, setFacebook] = useState(DEFAULT_BUSINESS_SETTINGS.socialLinks.facebook)
+  const [instagram, setInstagram] = useState(DEFAULT_BUSINESS_SETTINGS.socialLinks.instagram)
+  const [twitter, setTwitter] = useState(DEFAULT_BUSINESS_SETTINGS.socialLinks.twitter)
+  const [logoUrl, setLogoUrl] = useState(DEFAULT_BUSINESS_SETTINGS.logoUrl)
+  const [bannerUrl, setBannerUrl] = useState(DEFAULT_BUSINESS_SETTINGS.bannerUrl)
 
-  // Tax Settings (CRITICAL for POS)
-  const [defaultTaxRate, setDefaultTaxRate] = useState(10)
-  const [taxInclusivePrice, setTaxInclusivePrice] = useState(false)
-  const [enableGSTTracking, setEnableGSTTracking] = useState(false)
-  const [enableTaxExemption, setEnableTaxExemption] = useState(false)
-  const [defaultShippingTax, setDefaultShippingTax] = useState(0)
-
-  // Shipping Settings
-  const [enableShipping, setEnableShipping] = useState(true)
-  const [defaultShippingCost, setDefaultShippingCost] = useState(5.99)
-  const [freeShippingThreshold, setFreeShippingThreshold] = useState(50)
-
-  // Payment Settings
-  const [enableCash, setEnableCash] = useState(true)
-  const [enableCard, setEnableCard] = useState(true)
-  const [enableOnline, setEnableOnline] = useState(false)
-  const [cardProcessingFee, setCardProcessingFee] = useState(2.9)
+  // Promo Banner Settings
+  const [promoBannerEnabled, setPromoBannerEnabled] = useState(false)
+  const [promoBannerTitle, setPromoBannerTitle] = useState("Flash Sale — Up to 60% Off Everything")
+  const [promoBannerSubtitle, setPromoBannerSubtitle] = useState("Limited time offer on thousands of products. Don't miss out!")
+  const [promoBannerCta, setPromoBannerCta] = useState("Shop the Sale")
+  const [promoBannerLink, setPromoBannerLink] = useState("/shop")
 
   // Notification Settings
-  const [emailNotifications, setEmailNotifications] = useState(true)
-  const [orderNotifications, setOrderNotifications] = useState(true)
-  const [marketingEmails, setMarketingEmails] = useState(false)
-
-  // Regional Settings
-  const [language, setLanguage] = useState("en-US")
-  const [currency, setCurrency] = useState("USD")
-  const [timezone, setTimezone] = useState("America/New_York")
+  const [emailNotifications, setEmailNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS.emailNotifications)
+  const [orderNotifications, setOrderNotifications] = useState(DEFAULT_NOTIFICATION_SETTINGS.orderNotifications)
+  const [marketingEmails, setMarketingEmails] = useState(DEFAULT_NOTIFICATION_SETTINGS.marketingEmails)
 
   // Store Hours
-  const [storeHours, setStoreHours] = useState({
-    monday: { open: "09:00", close: "17:00", isOpen: true },
-    tuesday: { open: "09:00", close: "17:00", isOpen: true },
-    wednesday: { open: "09:00", close: "17:00", isOpen: true },
-    thursday: { open: "09:00", close: "17:00", isOpen: true },
-    friday: { open: "09:00", close: "17:00", isOpen: true },
-    saturday: { open: "10:00", close: "15:00", isOpen: true },
-    sunday: { open: "", close: "", isOpen: false },
-  })
+  const [storeHours, setStoreHours] = useState<StoreHours>(mergeStoreHours())
 
-  // Security
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
+  // Payment Gateway Credentials
+  const [sslcommerz, setSslcommerz] = useState<SSLCommerzConfig>({
+    enabled: false, store_id: "", store_passwd: "", sandbox: true,
+  })
+  const [portwallet, setPortwallet] = useState<PortWalletConfig>({
+    enabled: false, app_key: "", app_secret: "", sandbox: true,
+  })
+  const [stripe, setStripe] = useState<StripeConfig>({
+    enabled: false, publishable_key: "", secret_key: "", webhook_secret: "",
+  })
+  const [paypal, setPaypal] = useState<PayPalConfig>({
+    enabled: false, client_id: "", client_secret: "", sandbox: true,
+  })
+  const [bkash, setBkash] = useState<BkashConfig>({
+    enabled: false, app_key: "", app_secret: "", username: "", password: "", sandbox: true,
+  })
+  const [nagad, setNagad] = useState<NagadConfig>({
+    enabled: false, merchant_id: "", private_key: "", nagad_public_key: "", sandbox: true,
+  })
+  const [codDeposit, setCodDeposit] = useState<CodShippingDepositConfig>({
+    enabled: false, gateway: "sslcommerz", custom_amount: 0,
+  })
 
   // Load settings on mount
   useEffect(() => {
     loadSettings()
   }, [])
 
+  const blocked = useModuleGuard('Settings')
+  if (blocked) return blocked
+
   const loadSettings = async () => {
     try {
       setIsLoading(true)
-      const res = await settingsApi.getAll()
+      const [res, hoursRes] = await Promise.all([
+        settingsApi.getAll(),
+        settingsApi.getStoreHours(),
+      ])
       const data = res.data
 
       // Load all settings
-      if (data.general) {
-        setStoreName(data.general.storeName || "")
-        setStoreEmail(data.general.storeEmail || "")
-        setStorePhone(data.general.storePhone || "")
-        setStoreAddress(data.general.storeAddress || "")
-        setStoreDescription(data.general.storeDescription || "")
-      }
+      const general = data.general ?? {}
+      setStoreName(general.storeName ?? DEFAULT_GENERAL_SETTINGS.storeName)
+      setStoreEmail(general.storeEmail ?? DEFAULT_GENERAL_SETTINGS.storeEmail)
+      setStorePhone(general.storePhone ?? DEFAULT_GENERAL_SETTINGS.storePhone)
+      setStoreAddress(general.storeAddress ?? DEFAULT_GENERAL_SETTINGS.storeAddress)
+      setStoreDescription(general.storeDescription ?? DEFAULT_GENERAL_SETTINGS.storeDescription)
+      if (general.primaryColor) setPrimaryColor(general.primaryColor)
+      if (general.accentColor) setAccentColor(general.accentColor)
+      if (general.backgroundColor) setBackgroundColor(general.backgroundColor)
 
-      if (data.business) {
-        setBusinessName(data.business.businessName || "")
-        setBusinessType(data.business.businessType || "Retail")
-        setRegistrationNumber(data.business.registrationNumber || "")
-        setGstNumber(data.business.gstNumber || "")
-        setWebsite(data.business.website || "")
-        setFacebook(data.business.socialLinks?.facebook || "")
-        setInstagram(data.business.socialLinks?.instagram || "")
-        setTwitter(data.business.socialLinks?.twitter || "")
-        setLogoUrl(data.business.logoUrl || "")
-        setBannerUrl(data.business.bannerUrl || "")
-      }
+      const business = data.business ?? {}
+      const socialLinks = business.socialLinks ?? {}
+      setBusinessName(business.businessName ?? DEFAULT_BUSINESS_SETTINGS.businessName)
+      setBusinessType(business.businessType ?? DEFAULT_BUSINESS_SETTINGS.businessType)
+      setRegistrationNumber(business.registrationNumber ?? "")
+      setGstNumber(business.gstNumber ?? DEFAULT_BUSINESS_SETTINGS.gstNumber)
+      setWebsite(business.website ?? DEFAULT_BUSINESS_SETTINGS.website)
+      setFacebook(socialLinks.facebook ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.facebook)
+      setInstagram(socialLinks.instagram ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.instagram)
+      setTwitter(socialLinks.twitter ?? DEFAULT_BUSINESS_SETTINGS.socialLinks.twitter)
+      setLogoUrl(business.logoUrl ?? "")
+      setBannerUrl(business.bannerUrl ?? "")
+      const promo = (business.promoBanner ?? {}) as any
+      if (promo.title) setPromoBannerTitle(promo.title)
+      if (promo.subtitle) setPromoBannerSubtitle(promo.subtitle)
+      if (promo.cta) setPromoBannerCta(promo.cta)
+      if (promo.link) setPromoBannerLink(promo.link)
+      if (typeof promo.enabled === "boolean") setPromoBannerEnabled(promo.enabled)
 
-      if (data.tax) {
-        setDefaultTaxRate(data.tax.defaultTaxRate || 10)
-        setTaxInclusivePrice(data.tax.taxInclusivePrice || false)
-        setEnableGSTTracking(data.tax.enableGSTTracking || false)
-        setEnableTaxExemption(data.tax.enableTaxExemption || false)
-        setDefaultShippingTax(data.tax.defaultShippingTax || 0)
-      }
+      const notifications = { ...DEFAULT_NOTIFICATION_SETTINGS, ...(data.notifications ?? {}) }
+      setEmailNotifications(notifications.emailNotifications)
+      setOrderNotifications(notifications.orderNotifications)
+      setMarketingEmails(notifications.marketingEmails)
 
-      if (data.shipping) {
-        setEnableShipping(data.shipping.enableShipping || true)
-        setDefaultShippingCost(data.shipping.defaultShippingCost || 5.99)
-        setFreeShippingThreshold(data.shipping.freeShippingThreshold || 50)
-      }
+      // Load store hours from dedicated endpoint (not included in getAll)
+      setStoreHours(mergeStoreHours(hoursRes.data))
 
-      if (data.payment) {
-        setEnableCash(data.payment.enableCash || true)
-        setEnableCard(data.payment.enableCard || true)
-        setEnableOnline(data.payment.enableOnline || false)
-        setCardProcessingFee(data.payment.cardProcessingFee || 2.9)
+      // Load gateway credentials
+      const payment = data.payment ?? {}
+      if (payment.sslcommerz) {
+        const s = payment.sslcommerz
+        setSslcommerz({ enabled: Boolean(s.enabled), store_id: s.store_id ?? "", store_passwd: s.store_passwd ?? "", sandbox: s.sandbox ?? true })
       }
-
-      if (data.notifications) {
-        setEmailNotifications(data.notifications.emailNotifications || true)
-        setOrderNotifications(data.notifications.orderNotifications || true)
-        setMarketingEmails(data.notifications.marketingEmails || false)
+      if (payment.portwallet) {
+        const p = payment.portwallet
+        setPortwallet({ enabled: Boolean(p.enabled), app_key: p.app_key ?? "", app_secret: p.app_secret ?? "", sandbox: p.sandbox ?? true })
       }
-
-      if (data.regional) {
-        setLanguage(data.regional.language || "en-US")
-        setCurrency(data.regional.currency || "USD")
-        setTimezone(data.regional.timezone || "America/New_York")
+      if (payment.stripe) {
+        const s = payment.stripe
+        setStripe({ enabled: Boolean(s.enabled), publishable_key: s.publishable_key ?? "", secret_key: s.secret_key ?? "", webhook_secret: s.webhook_secret ?? "" })
       }
-
-      if (data.storeHours) {
-        setStoreHours(data.storeHours)
+      if (payment.paypal) {
+        const p = payment.paypal
+        setPaypal({ enabled: Boolean(p.enabled), client_id: p.client_id ?? "", client_secret: p.client_secret ?? "", sandbox: p.sandbox ?? true })
       }
+      if (payment.bkash) {
+        const b = payment.bkash
+        setBkash({ enabled: Boolean(b.enabled), app_key: b.app_key ?? "", app_secret: b.app_secret ?? "", username: b.username ?? "", password: b.password ?? "", sandbox: b.sandbox ?? true })
+      }
+      if (payment.nagad) {
+        const n = payment.nagad
+        setNagad({ enabled: Boolean(n.enabled), merchant_id: n.merchant_id ?? "", private_key: n.private_key ?? "", nagad_public_key: n.nagad_public_key ?? "", sandbox: n.sandbox ?? true })
+      }
+      if (payment.cod_shipping_deposit) setCodDeposit({ ...{ enabled: false, gateway: "sslcommerz" as const, custom_amount: 0 }, ...payment.cod_shipping_deposit })
 
-      toast.success("Settings loaded successfully")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to load settings")
     } finally {
@@ -166,25 +226,28 @@ export default function SettingsPage() {
 
   const handleSaveGeneral = async () => {
     try {
-      setIsSaving(true)
+      setSavingSection("general")
       await settingsApi.updateGeneral({
         storeName,
         storeEmail,
         storePhone,
         storeAddress,
         storeDescription,
+        primaryColor,
+        accentColor,
+        backgroundColor,
       })
       toast.success("General settings saved successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleSaveBusiness = async () => {
     try {
-      setIsSaving(true)
+      setSavingSection("business")
       await settingsApi.updateBusiness({
         businessName,
         businessType,
@@ -192,71 +255,37 @@ export default function SettingsPage() {
         gstNumber,
         website,
         socialLinks: { facebook, instagram, twitter },
+        promoBanner: {
+          enabled: promoBannerEnabled,
+          title: promoBannerTitle,
+          subtitle: promoBannerSubtitle,
+          cta: promoBannerCta,
+          link: promoBannerLink,
+        },
       })
       toast.success("Business settings saved successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
-  const handleSaveTax = async () => {
+  const handleSaveGateways = async () => {
     try {
-      setIsSaving(true)
-      await settingsApi.updateTax({
-        defaultTaxRate,
-        taxInclusivePrice,
-        enableGSTTracking,
-        gstNumber,
-        enableTaxExemption,
-        defaultShippingTax,
-      })
-      toast.success("Tax settings saved successfully!")
+      setSavingSection("gateways")
+      await settingsApi.updatePayment({ sslcommerz, portwallet, stripe, paypal, bkash, nagad, cod_shipping_deposit: codDeposit })
+      toast.success("Gateway credentials saved!")
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
+      toast.error(err?.response?.data?.message || "Failed to save gateway credentials")
     } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleSaveShipping = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updateShipping({
-        enableShipping,
-        defaultShippingCost,
-        freeShippingThreshold,
-        shippingMethods: [],
-      })
-      toast.success("Shipping settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleSavePayment = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updatePayment({
-        enableCash,
-        enableCard,
-        enableOnline,
-        cardProcessingFee,
-      })
-      toast.success("Payment settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleSaveNotifications = async () => {
     try {
-      setIsSaving(true)
+      setSavingSection("notifications")
       await settingsApi.updateNotifications({
         emailNotifications,
         orderNotifications,
@@ -266,88 +295,48 @@ export default function SettingsPage() {
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleSaveRegional = async () => {
-    try {
-      setIsSaving(true)
-      await settingsApi.updateRegional({
-        language,
-        currency,
-        timezone,
-      })
-      toast.success("Regional settings saved successfully!")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to save settings")
-    } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleSaveStoreHours = async () => {
     try {
-      setIsSaving(true)
-      await settingsApi.updateStoreHours(storeHours)
+      setSavingSection("storeHours")
+      const res = await settingsApi.updateStoreHours(mergeStoreHours(storeHours))
+      if (Object.keys(res.data).length > 0) {
+        setStoreHours(mergeStoreHours(res.data))
+      }
       toast.success("Store hours saved successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to save settings")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleUploadLogo = async (file: File) => {
     try {
-      setIsSaving(true)
+      setSavingSection("logo")
       const res = await settingsApi.uploadLogo(file)
       setLogoUrl(res.data.logoUrl)
       toast.success("Logo uploaded successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to upload logo")
     } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
   const handleUploadBanner = async (file: File) => {
     try {
-      setIsSaving(true)
+      setSavingSection("banner")
       const res = await settingsApi.uploadBanner(file)
       setBannerUrl(res.data.bannerUrl)
       toast.success("Banner uploaded successfully!")
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to upload banner")
     } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match!")
-      return
-    }
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters!")
-      return
-    }
-    try {
-      setIsSaving(true)
-      await settingsApi.changePassword({
-        currentPassword,
-        newPassword,
-        confirmPassword,
-      })
-      toast.success("Password changed successfully!")
-      setCurrentPassword("")
-      setNewPassword("")
-      setConfirmPassword("")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to change password")
-    } finally {
-      setIsSaving(false)
+      setSavingSection(null)
     }
   }
 
@@ -373,7 +362,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">Manage your store information, tax, shipping, and account preferences</p>
+        <p className="text-gray-600 mt-1">Manage your store information, notifications, and operating hours</p>
       </div>
 
       {/* Business Information */}
@@ -554,13 +543,51 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* Promo Banner */}
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-sm">Promo Banner</h3>
+                <p className="text-xs text-gray-500">Shown on homepage between hero and products</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-gray-600">{promoBannerEnabled ? "Enabled" : "Disabled"}</span>
+                <button
+                  type="button"
+                  onClick={() => setPromoBannerEnabled(!promoBannerEnabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${promoBannerEnabled ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${promoBannerEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Banner Title</Label>
+                <Input value={promoBannerTitle} onChange={(e) => setPromoBannerTitle(e.target.value)} placeholder="Flash Sale — Up to 60% Off Everything" />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Subtitle</Label>
+                <Input value={promoBannerSubtitle} onChange={(e) => setPromoBannerSubtitle(e.target.value)} placeholder="Limited time offer on thousands of products." />
+              </div>
+              <div className="space-y-1">
+                <Label>CTA Button Text</Label>
+                <Input value={promoBannerCta} onChange={(e) => setPromoBannerCta(e.target.value)} placeholder="Shop the Sale" />
+              </div>
+              <div className="space-y-1">
+                <Label>CTA Link</Label>
+                <Input value={promoBannerLink} onChange={(e) => setPromoBannerLink(e.target.value)} placeholder="/shop" />
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end pt-4">
             <Button
               onClick={handleSaveBusiness}
-              disabled={isSaving}
+              disabled={savingSection === "business"}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isSaving ? (
+              {savingSection === "business" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
@@ -643,249 +670,49 @@ export default function SettingsPage() {
             />
           </div>
 
+          {/* Brand Colors */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Brand Colors</Label>
+            <p className="text-xs text-gray-500">These colors are applied to the storefront automatically.</p>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: "Primary Color", value: primaryColor, setter: setPrimaryColor },
+                { label: "Accent Color", value: accentColor, setter: setAccentColor },
+                { label: "Background Color", value: backgroundColor, setter: setBackgroundColor },
+              ].map(({ label, value, setter }) => (
+                <div key={label} className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-600">{label}</label>
+                  <div className="flex items-center gap-2 border rounded-lg px-2 py-1.5">
+                    <input
+                      type="color"
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setter(v)
+                      }}
+                      maxLength={7}
+                      className="w-full text-xs font-mono uppercase bg-transparent outline-none text-gray-700"
+                      placeholder="#000000"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <Button
               onClick={handleSaveGeneral}
-              disabled={isSaving}
+              disabled={savingSection === "general"}
               className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Tax & Compliance Settings - CRITICAL FOR POS */}
-      <Card className="p-6 border-emerald-200 bg-emerald-50/30">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-            <AlertCircle className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Tax & Compliance</h2>
-            <p className="text-sm text-gray-600">Configure tax rates for POS and orders</p>
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          {/* Tax Rate Slider */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <Label className="font-semibold">Default Tax Rate</Label>
-              <span className="text-2xl font-bold text-emerald-600">{defaultTaxRate}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="25"
-              step="0.5"
-              value={defaultTaxRate}
-              onChange={(e) => setDefaultTaxRate(parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-            />
-            <p className="text-xs text-gray-600">This rate applies to all products by default (0-25%)</p>
-          </div>
-
-          {/* Tax Inclusive Toggle */}
-          <div className="flex items-center justify-between py-3 border-t border-b">
-            <div>
-              <p className="font-medium">Tax Inclusive Pricing</p>
-              <p className="text-sm text-gray-600">Include tax in displayed product prices?</p>
-            </div>
-            <Switch checked={taxInclusivePrice} onCheckedChange={setTaxInclusivePrice} />
-          </div>
-
-          {/* GST Tracking */}
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Enable GST/VAT Tracking</p>
-              <p className="text-sm text-gray-600">Track GST separately for compliance</p>
-            </div>
-            <Switch checked={enableGSTTracking} onCheckedChange={setEnableGSTTracking} />
-          </div>
-
-          {/* Tax Exemption */}
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <p className="font-medium">Allow Tax Exemption</p>
-              <p className="text-sm text-gray-600">Allow some customers to be tax-exempt</p>
-            </div>
-            <Switch checked={enableTaxExemption} onCheckedChange={setEnableTaxExemption} />
-          </div>
-
-          {/* Shipping Tax */}
-          <div className="space-y-2 pt-4 border-t">
-            <Label htmlFor="shippingTax">Shipping Tax Rate (%)</Label>
-            <Input
-              id="shippingTax"
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value={defaultShippingTax}
-              onChange={(e) => setDefaultShippingTax(parseFloat(e.target.value))}
-              placeholder="0"
-            />
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSaveTax}
-              disabled={isSaving}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Tax Settings"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Shipping Settings */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-            <DollarSign className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Shipping Settings</h2>
-            <p className="text-sm text-gray-600">Configure shipping costs and options</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Enable Shipping</p>
-              <p className="text-sm text-gray-600">Allow shipping for orders</p>
-            </div>
-            <Switch checked={enableShipping} onCheckedChange={setEnableShipping} />
-          </div>
-
-          {enableShipping && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="defaultShippingCost">Default Shipping Cost ($)</Label>
-                  <Input
-                    id="defaultShippingCost"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={defaultShippingCost}
-                    onChange={(e) => setDefaultShippingCost(parseFloat(e.target.value))}
-                    placeholder="5.99"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="freeShippingThreshold">Free Shipping Over ($)</Label>
-                  <Input
-                    id="freeShippingThreshold"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={freeShippingThreshold}
-                    onChange={(e) => setFreeShippingThreshold(parseFloat(e.target.value))}
-                    placeholder="50.00"
-                  />
-                  <p className="text-xs text-gray-600">Customers get free shipping over this amount</p>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSaveShipping}
-              disabled={isSaving}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Changes"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Payment Settings */}
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-            <CreditCard className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Payment Settings</h2>
-            <p className="text-sm text-gray-600">Configure payment methods and fees</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Accept Cash</p>
-              <p className="text-sm text-gray-600">Allow cash payments (for POS)</p>
-            </div>
-            <Switch checked={enableCash} onCheckedChange={setEnableCash} />
-          </div>
-
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Accept Card/Credit Card</p>
-              <p className="text-sm text-gray-600">Allow card-based payments</p>
-            </div>
-            <Switch checked={enableCard} onCheckedChange={setEnableCard} />
-          </div>
-
-          <div className="flex items-center justify-between py-3 border-b">
-            <div>
-              <p className="font-medium">Accept Online Payment</p>
-              <p className="text-sm text-gray-600">Enable online payments (UPI, etc.)</p>
-            </div>
-            <Switch checked={enableOnline} onCheckedChange={setEnableOnline} />
-          </div>
-
-          <div className="space-y-2 pt-2">
-            <Label htmlFor="cardFee">Card Processing Fee (%)</Label>
-            <Input
-              id="cardFee"
-              type="number"
-              min="0"
-              max="10"
-              step="0.1"
-              value={cardProcessingFee}
-              onChange={(e) => setCardProcessingFee(parseFloat(e.target.value))}
-              placeholder="2.9"
-            />
-            <p className="text-xs text-gray-600">Percentage fee added to card transactions</p>
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSavePayment}
-              disabled={isSaving}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              {isSaving ? (
+              {savingSection === "general" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
@@ -946,10 +773,10 @@ export default function SettingsPage() {
         <div className="flex justify-end pt-4">
           <Button
             onClick={handleSaveStoreHours}
-            disabled={isSaving}
+            disabled={savingSection === "storeHours"}
             className="bg-orange-600 hover:bg-orange-700"
           >
-            {isSaving ? (
+            {savingSection === "storeHours" ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Saving...
@@ -1001,10 +828,10 @@ export default function SettingsPage() {
           <div className="flex justify-end pt-4">
             <Button
               onClick={handleSaveNotifications}
-              disabled={isSaving}
+              disabled={savingSection === "notifications"}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isSaving ? (
+              {savingSection === "notifications" ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Saving...
@@ -1017,160 +844,445 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {/* Regional Settings - Enhanced */}
+      {/* Payment Gateway Credentials */}
       <Card className="p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
-            <Globe className="w-5 h-5 text-orange-600" />
+          <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+            <CreditCard className="w-5 h-5 text-green-600" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Regional Settings</h2>
-            <p className="text-sm text-gray-600">Set your language, currency, and timezone</p>
+            <h3 className="font-semibold text-gray-900">Payment Gateway Credentials</h3>
+            <p className="text-sm text-gray-600">SSLCommerz, PortWallet, Stripe, and PayPal credentials for online payments</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="language">Language</Label>
-            <select
-              id="language"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="es-ES">Spanish</option>
-              <option value="fr-FR">French</option>
-              <option value="de-DE">German</option>
-              <option value="ar-AE">Arabic</option>
-            </select>
+        <div className="space-y-6">
+          {/* SSLCommerz */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">SSLCommerz</p>
+                <p className="text-xs text-gray-500">Covers bKash, Nagad, Rocket, Cards, Net Banking</p>
+              </div>
+              <Switch
+                checked={sslcommerz.enabled}
+                onCheckedChange={(v) => setSslcommerz((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Store ID</Label>
+                <Input
+                  value={sslcommerz.store_id}
+                  onChange={(e) => setSslcommerz((p) => ({ ...p, store_id: e.target.value }))}
+                  placeholder="your_store_id"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Store Password</Label>
+                <Input
+                  type="password"
+                  value={sslcommerz.store_passwd}
+                  onChange={(e) => setSslcommerz((p) => ({ ...p, store_passwd: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={sslcommerz.sandbox}
+                onCheckedChange={(v) => setSslcommerz((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+            {sslcommerz.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">SSLCommerz Sandbox</p>
+                <p className="text-amber-600">Register at <a href="https://developer.sslcommerz.com/registration/" target="_blank" rel="noreferrer" className="underline">developer.sslcommerz.com</a> to get a free sandbox Store ID &amp; Password.</p>
+                <p className="text-amber-600 font-mono">Sandbox URL: https://sandbox.sslcommerz.com</p>
+                <p className="text-amber-500 mt-1">⚠ Callback URLs (success/fail/cancel/IPN) must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="currency">Currency</Label>
-            <select
-              id="currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="INR">INR (₹)</option>
-              <option value="AED">AED (د.إ)</option>
-            </select>
+          {/* PortWallet */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">PortWallet</p>
+                <p className="text-xs text-gray-500">Cards and Mobile Banking</p>
+              </div>
+              <Switch
+                checked={portwallet.enabled}
+                onCheckedChange={(v) => setPortwallet((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">App Key</Label>
+                <Input
+                  value={portwallet.app_key}
+                  onChange={(e) => setPortwallet((p) => ({ ...p, app_key: e.target.value }))}
+                  placeholder="your_app_key"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">App Secret</Label>
+                <Input
+                  type="password"
+                  value={portwallet.app_secret}
+                  onChange={(e) => setPortwallet((p) => ({ ...p, app_secret: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={portwallet.sandbox}
+                onCheckedChange={(v) => setPortwallet((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+            {portwallet.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">PortWallet Sandbox</p>
+                <p className="text-amber-600">Register at <a href="https://portwallet.com" target="_blank" rel="noreferrer" className="underline">portwallet.com</a> to get sandbox App Key &amp; Secret.</p>
+                <p className="text-amber-600 font-mono">Sandbox URL: https://sandbox.portwallet.com</p>
+                <p className="text-amber-500 mt-1">⚠ Callback URL must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="timezone">Timezone</Label>
-            <select
-              id="timezone"
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="America/New_York">America/New_York (EST)</option>
-              <option value="America/Chicago">America/Chicago (CST)</option>
-              <option value="America/Denver">America/Denver (MST)</option>
-              <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
-              <option value="Europe/London">Europe/London (GMT)</option>
-              <option value="Europe/Paris">Europe/Paris (CET)</option>
-              <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-              <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-              <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-            </select>
+          {/* Stripe */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">Stripe</p>
+                <p className="text-xs text-gray-500">Credit / Debit Card payments globally</p>
+              </div>
+              <Switch
+                checked={stripe.enabled}
+                onCheckedChange={(v) => setStripe((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Publishable Key</Label>
+                <Input
+                  value={stripe.publishable_key}
+                  onChange={(e) => setStripe((p) => ({ ...p, publishable_key: e.target.value }))}
+                  placeholder="pk_test_..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Secret Key</Label>
+                <Input
+                  type="password"
+                  value={stripe.secret_key}
+                  onChange={(e) => setStripe((p) => ({ ...p, secret_key: e.target.value }))}
+                  placeholder="sk_test_..."
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs">Webhook Secret</Label>
+                <Input
+                  type="password"
+                  value={stripe.webhook_secret}
+                  onChange={(e) => setStripe((p) => ({ ...p, webhook_secret: e.target.value }))}
+                  placeholder="whsec_..."
+                />
+              </div>
+            </div>
+            {(stripe.secret_key.startsWith("sk_test_") || stripe.secret_key === "") && (
+              <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-blue-700">Stripe Test Mode</p>
+                <p className="text-blue-600">Use <span className="font-mono">pk_test_...</span> / <span className="font-mono">sk_test_...</span> keys from <a href="https://dashboard.stripe.com/test/apikeys" target="_blank" rel="noreferrer" className="underline">dashboard.stripe.com</a></p>
+                <p className="text-blue-600 font-mono">Test card: 4242 4242 4242 4242 · Any future date · Any CVC</p>
+                <p className="text-blue-600 font-mono">Decline card: 4000 0000 0000 0002</p>
+                <p className="text-blue-500 mt-1">⚠ For webhooks: run <span className="font-mono">stripe listen --forward-to localhost:8005/api/gateway/stripe/webhook</span> locally, or use ngrok and register endpoint in Stripe dashboard</p>
+              </div>
+            )}
+          </div>
+
+          {/* PayPal */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">PayPal</p>
+                <p className="text-xs text-gray-500">PayPal account and card payments</p>
+              </div>
+              <Switch
+                checked={paypal.enabled}
+                onCheckedChange={(v) => setPaypal((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Client ID</Label>
+                <Input
+                  value={paypal.client_id}
+                  onChange={(e) => setPaypal((p) => ({ ...p, client_id: e.target.value }))}
+                  placeholder="AY..."
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Client Secret</Label>
+                <Input
+                  type="password"
+                  value={paypal.client_secret}
+                  onChange={(e) => setPaypal((p) => ({ ...p, client_secret: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={paypal.sandbox}
+                onCheckedChange={(v) => setPaypal((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+            {paypal.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">PayPal Sandbox</p>
+                <p className="text-amber-600">Get sandbox Client ID &amp; Secret from <a href="https://developer.paypal.com/dashboard/applications/sandbox" target="_blank" rel="noreferrer" className="underline">developer.paypal.com</a> → My Apps &amp; Credentials → Sandbox.</p>
+                <p className="text-amber-600">Create a sandbox buyer account at <a href="https://sandbox.paypal.com" target="_blank" rel="noreferrer" className="underline">sandbox.paypal.com</a> to test payments.</p>
+                <p className="text-amber-600 font-mono">Sandbox API: https://api-m.sandbox.paypal.com</p>
+                <p className="text-amber-500 mt-1">⚠ Return/cancel URLs must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
+          </div>
+
+          {/* bKash */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">bKash</p>
+                <p className="text-xs text-gray-500">Direct bKash merchant payments — no SSLCommerz needed</p>
+              </div>
+              <Switch
+                checked={bkash.enabled}
+                onCheckedChange={(v) => setBkash((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">App Key</Label>
+                <Input
+                  value={bkash.app_key}
+                  onChange={(e) => setBkash((p) => ({ ...p, app_key: e.target.value }))}
+                  placeholder="bkash_app_key"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">App Secret</Label>
+                <Input
+                  type="password"
+                  value={bkash.app_secret}
+                  onChange={(e) => setBkash((p) => ({ ...p, app_secret: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Username</Label>
+                <Input
+                  value={bkash.username}
+                  onChange={(e) => setBkash((p) => ({ ...p, username: e.target.value }))}
+                  placeholder="merchant username"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Password</Label>
+                <Input
+                  type="password"
+                  value={bkash.password}
+                  onChange={(e) => setBkash((p) => ({ ...p, password: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={bkash.sandbox}
+                onCheckedChange={(v) => setBkash((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+            {bkash.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">Sandbox Test Credentials</p>
+                <p className="text-amber-600 font-mono">App Key: 4f6o0cjiki2rfm34kfdadl1eqq</p>
+                <p className="text-amber-600 font-mono">App Secret: 2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b</p>
+                <p className="text-amber-600 font-mono">Username: sandboxTokenizedUser02</p>
+                <p className="text-amber-600 font-mono">Password: sandboxTokenizedUser02@12345</p>
+                <p className="text-amber-500 mt-1">⚠ Callback URL must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
+          </div>
+
+          {/* Nagad */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm">Nagad</p>
+                <p className="text-xs text-gray-500">Direct Nagad merchant payments — no SSLCommerz needed</p>
+              </div>
+              <Switch
+                checked={nagad.enabled}
+                onCheckedChange={(v) => setNagad((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Merchant ID</Label>
+                <Input
+                  value={nagad.merchant_id}
+                  onChange={(e) => setNagad((p) => ({ ...p, merchant_id: e.target.value }))}
+                  placeholder="686969"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Nagad Public Key (leave blank for sandbox default)</Label>
+                <Input
+                  value={nagad.nagad_public_key}
+                  onChange={(e) => setNagad((p) => ({ ...p, nagad_public_key: e.target.value }))}
+                  placeholder="Nagad-provided RSA public key"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs">Your RSA Private Key (base64, no headers)</Label>
+                <Input
+                  type="password"
+                  value={nagad.private_key}
+                  onChange={(e) => setNagad((p) => ({ ...p, private_key: e.target.value }))}
+                  placeholder="MIIEpAIBAAKCAQEA..."
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={nagad.sandbox}
+                onCheckedChange={(v) => setNagad((p) => ({ ...p, sandbox: v }))}
+              />
+              <Label className="text-xs text-gray-600">Sandbox mode (disable for live payments)</Label>
+            </div>
+            {nagad.sandbox && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">Sandbox Test Credentials (seeded)</p>
+                <p className="text-amber-600 font-mono">Merchant ID: 683002007104225</p>
+                <p className="text-amber-600 font-mono">Private Key: from anovob/laravel-nagad-api example (already in DB)</p>
+                <p className="text-amber-500 mt-1">⚠ Nagad sandbox requires merchant registration at <a href="https://auth.mynagad.com:10900/" target="_blank" rel="noreferrer" className="underline">auth.mynagad.com:10900</a> for a real sandbox account</p>
+                <p className="text-amber-500">⚠ Callback URL must be publicly accessible (use ngrok/localtunnel for local testing)</p>
+              </div>
+            )}
+          </div>
+
+          {/* COD Shipping Deposit */}
+          <div className="border rounded-lg p-4 space-y-4 bg-amber-50 border-amber-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm text-amber-900">COD Shipping Deposit</p>
+                <p className="text-xs text-amber-700">
+                  Require customers to pay shipping cost upfront before Cash on Delivery order is confirmed
+                </p>
+              </div>
+              <Switch
+                checked={codDeposit.enabled}
+                onCheckedChange={(v) => setCodDeposit((p) => ({ ...p, enabled: v }))}
+              />
+            </div>
+            {codDeposit.enabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Payment Gateway for Deposit</Label>
+                  <select
+                    value={codDeposit.gateway}
+                    onChange={(e) => setCodDeposit((p) => ({ ...p, gateway: e.target.value as "sslcommerz" | "portwallet" | "bkash" | "nagad" | "stripe" | "paypal" }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="sslcommerz">SSLCommerz (bKash, Nagad, Rocket, Cards)</option>
+                    <option value="portwallet">PortWallet (Cards, Mobile Banking)</option>
+                    <option value="bkash">bKash (Direct)</option>
+                    <option value="nagad">Nagad (Direct)</option>
+                    <option value="stripe">Stripe (Card)</option>
+                    <option value="paypal">PayPal</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fixed Deposit Amount (BDT) — 0 = use actual shipping cost</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={codDeposit.custom_amount}
+                    onChange={(e) => setCodDeposit((p) => ({ ...p, custom_amount: Number(e.target.value) }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex justify-end pt-4">
-          <Button
-            onClick={handleSaveRegional}
-            disabled={isSaving}
-            className="bg-orange-600 hover:bg-orange-700"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Settings"
-            )}
+          <Button onClick={handleSaveGateways} disabled={savingSection === "gateways"}>
+            {savingSection === "gateways" ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+            ) : "Save Gateway Credentials"}
           </Button>
         </div>
       </Card>
 
-      {/* Security Settings */}
+      {/* Aura Shop Integration */}
       <Card className="p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-            <Lock className="w-5 h-5 text-purple-600" />
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <ExternalLink className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Security Settings</h2>
-            <p className="text-sm text-gray-600">Change your password and security preferences</p>
+            <h2 className="text-lg font-semibold text-gray-900">Aura Shop Integration</h2>
+            <p className="text-sm text-gray-500">Connect your storefront to this company</p>
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Current Email</Label>
-            <Input value={userEmail || ""} disabled className="bg-gray-50" />
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Your Company ID</p>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-gray-900 font-mono">{company?.id ?? "—"}</span>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Enter current password"
-            />
+          <div>
+            <p className="text-sm text-gray-600 mb-2">
+              Paste this into your Aura Shop <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">.env</code> file:
+            </p>
+            <div className="relative">
+              <pre className="bg-gray-900 text-emerald-400 text-sm rounded-lg p-4 font-mono overflow-x-auto pr-12">
+{`VITE_API_BASE_URL=http://localhost:8005/api
+VITE_COMPANY_ID=${company?.id ?? "YOUR_COMPANY_ID"}`}
+              </pre>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`VITE_API_BASE_URL=http://localhost:8005/api\nVITE_COMPANY_ID=${company?.id ?? ""}`)
+                  setCopiedEnv(true)
+                  setTimeout(() => setCopiedEnv(false), 2000)
+                }}
+                className="absolute top-3 right-3 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                title="Copy to clipboard"
+              >
+                {copiedEnv ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
-            />
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleChangePassword}
-              disabled={isSaving}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Changing...
-                </>
-              ) : (
-                "Change Password"
-              )}
-            </Button>
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+            <p className="text-xs text-blue-700">
+              <strong>Local setup:</strong> Set <code className="font-mono">VITE_COMPANY_ID</code> in aura-shop <code className="font-mono">.env</code> to this value. The store will scope all products, orders and customers to this company automatically.
+            </p>
           </div>
         </div>
       </Card>
+
     </div>
   )
 }

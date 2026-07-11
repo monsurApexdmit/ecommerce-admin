@@ -2,23 +2,33 @@
 
 import { useState } from "react"
 import { useStaff } from "@/contexts/staff-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DollarSign, CreditCard, Clock, CheckCircle2, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 
 export default function SalaryManagementPage() {
+    const { canRead } = useSaasAuth()
     const { staff, salaryPayments, isLoading, salaryPaymentsLoading, addSalaryPayment, updateSalaryPayment, deleteSalaryPayment } = useStaff()
+    const { formatCurrency } = useCompanySettings()
     const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = new Date()
         return `${now.toLocaleString('en-US', { month: 'short' })} ${now.getFullYear()}`
     })
+
+    const blocked = useModuleGuard('Salary Management')
+  if (blocked) return blocked
+
     // Generate month options (last 12 months)
     const monthOptions = Array.from({ length: 12 }, (_, i) => {
-        const date = new Date()
-        date.setMonth(date.getMonth() - i)
+        const now = new Date()
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
         return `${date.toLocaleString('en-US', { month: 'short' })} ${date.getFullYear()}`
     })
 
@@ -114,7 +124,7 @@ export default function SalaryManagementPage() {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Total Monthly Budget</p>
-                            <p className="text-2xl font-bold text-gray-900">${totalBudget.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalBudget)}</p>
                         </div>
                     </div>
                 </Card>
@@ -126,7 +136,7 @@ export default function SalaryManagementPage() {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Total Paid</p>
-                            <p className="text-2xl font-bold text-emerald-600">${totalPaid.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
                         </div>
                     </div>
                 </Card>
@@ -138,7 +148,7 @@ export default function SalaryManagementPage() {
                         </div>
                         <div>
                             <p className="text-sm text-gray-600">Total Pending</p>
-                            <p className="text-2xl font-bold text-orange-600">${totalPending.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalPending)}</p>
                         </div>
                     </div>
                 </Card>
@@ -209,7 +219,7 @@ export default function SalaryManagementPage() {
                                             </td>
                                             <td className="py-3 px-4 text-sm text-gray-600">{member.role}</td>
                                             <td className="py-3 px-4 text-sm font-semibold text-gray-900">
-                                                ${member.salary.toLocaleString()}
+                                                {formatCurrency(member.salary)}
                                             </td>
                                             <td className="py-3 px-4 text-sm text-gray-600">{member.paymentMethod}</td>
                                             <td className="py-3 px-4">

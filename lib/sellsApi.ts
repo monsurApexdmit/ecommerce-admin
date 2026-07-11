@@ -64,6 +64,7 @@ export interface SellItem {
   totalPrice?: number;
   createdAt?: string;
   updatedAt?: string;
+  bundleItems?: { productId: number; productName: string; qtyPerBundle: number; totalQty: number }[] | null;
 }
 
 export interface SellShipment {
@@ -127,6 +128,9 @@ export interface SellResponse {
   shippingCost?: number;
   status: 'Pending' | 'Processing' | 'Delivered';
   paymentStatus?: string;
+  paymentTransactionId?: string | null;
+  shippingDepositAmount?: number | null;
+  shippingDepositTransactionId?: string | null;
   fulfillmentStatus?: string;
   trackingNumber?: string;
   carrier?: string;
@@ -149,11 +153,14 @@ export interface SellListResponse {
 export interface SellStatsResponse {
   message: string;
   data: {
-    total_sells: number;
-    total_revenue: number;
-    pending_count: number;
-    processing_count: number;
-    delivered_count: number;
+    totalSells: number;
+    totalRevenue: number;
+    totalCost: number;
+    grossProfit: number;
+    gpMarginPercent: number;
+    pendingOrders: number;
+    processingOrders: number;
+    deliveredOrders: number;
   };
 }
 
@@ -163,6 +170,15 @@ export interface CreateSellData {
   customerEmail?: string;
   customerPhone?: string;
   shippingAddressId?: number;
+  shippingFullName?: string;
+  shippingPhone?: string;
+  shippingEmail?: string;
+  shippingAddressLine1?: string;
+  shippingAddressLine2?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostalCode?: string;
+  shippingCountry?: string;
   method: string;
   amount: number;
   discount?: number;
@@ -180,6 +196,8 @@ export interface CreateSellData {
     productName: string;
     quantity: number;
     price: number;
+    unitPrice?: number;
+    unit_price?: number;
   }[];
 }
 
@@ -206,11 +224,35 @@ export const sellsApi = {
     end_date?: string;
   }): Promise<SellListResponse> => {
     const response = await api.get('/sells', { params });
-    return response.data;
+    // Backend returns either:
+    // 1. { success, message, data: [sells array] } - direct array
+    // 2. { success, message, data: { data: [...], pagination } } - paginated format
+    const data = response.data.data || [];
+    const isArray = Array.isArray(data);
+    const sellsData = isArray ? data : (data.data || []);
+    const paginationData = isArray ? {} : data;
+
+    return {
+      message: response.data.message || '',
+      data: sellsData,
+      total: paginationData.total || sellsData.length || 0,
+      page: paginationData.current_page || 1,
+      limit: paginationData.per_page || 10,
+    };
   },
 
   getStats: async (): Promise<SellStatsResponse> => {
     const response = await api.get('/sells/stats');
+    return response.data;
+  },
+
+  getWeeklyOrders: async (): Promise<{ data: number[] }> => {
+    const response = await api.get('/sells/weekly-orders');
+    return response.data;
+  },
+
+  getMonthlyRevenue: async (): Promise<{ data: number[] }> => {
+    const response = await api.get('/sells/monthly-revenue');
     return response.data;
   },
 
@@ -220,7 +262,9 @@ export const sellsApi = {
   },
 
   getByInvoice: async (invoiceNo: string): Promise<{ message: string; data: SellResponse }> => {
-    const response = await api.get(`/sells/invoice/${encodeURIComponent(invoiceNo)}`);
+    // Remove leading # if present (in case user copies invoice number with # prefix)
+    const cleanInvoiceNo = invoiceNo.startsWith('#') ? invoiceNo.substring(1) : invoiceNo;
+    const response = await api.get(`/sells/invoice/${encodeURIComponent(cleanInvoiceNo)}`);
     return response.data;
   },
 

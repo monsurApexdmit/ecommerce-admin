@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback } from "react"
 import { vendorReturnsApi, VendorReturnResponse, VendorReturnStatus } from "@/lib/vendorReturnsApi"
 import { productApi, ProductResponse, ProductVariantResponse } from "@/lib/productApi"
 import { useVendor } from "@/contexts/vendor-context"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { AccessDenied } from "@/components/ui/access-denied"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -86,8 +90,10 @@ const RETURN_REASONS = [
 const ITEMS_PER_PAGE = 10
 
 export default function VendorReturnsPage() {
+  const { canRead } = useSaasAuth()
   const { vendors } = useVendor()
   const { toast } = useToast()
+  const { formatCurrency } = useCompanySettings()
 
   const [returns, setReturns] = useState<VendorReturnResponse[]>([])
   const [stats, setStats] = useState({ total: 0, pending: 0, shipped: 0, received_by_vendor: 0, completed: 0, total_credit_amount: 0 })
@@ -179,7 +185,7 @@ export default function VendorReturnsPage() {
       ...returns.map((ret) => [
         ret.returnNumber ?? ret.id,
         ret.vendorName ?? ret.vendorId,
-        `$${fmt(ret.totalAmount)}`,
+        formatCurrency(Number(fmt(ret.totalAmount))),
         ret.status,
         formatDate(ret.createdAt),
       ]),
@@ -210,6 +216,9 @@ export default function VendorReturnsPage() {
       setVendorProductsLoading(false)
     }
   }, [toast])
+
+  const blocked = useModuleGuard('Vendor Returns')
+  if (blocked) return blocked
 
   const handleSelectProduct = (product: ProductResponse, variant?: ProductVariantResponse) => {
     const unitPrice = variant
@@ -325,7 +334,7 @@ export default function VendorReturnsPage() {
           { label: "Total Returns", value: stats.total, color: "text-gray-900", icon: <TruckIcon className="w-8 h-8 text-gray-400" /> },
           { label: "Pending", value: stats.pending, color: "text-yellow-600" },
           { label: "Shipped", value: stats.shipped, color: "text-blue-600" },
-          { label: "Total Credit", value: `$${fmt(stats.total_credit_amount)}`, color: "text-green-600" },
+          { label: "Total Credit", value: formatCurrency(stats.total_credit_amount), color: "text-green-600" },
         ].map((s) => (
           <Card key={s.label} className="p-4">
             <div className="flex items-center justify-between">
@@ -406,7 +415,7 @@ export default function VendorReturnsPage() {
                   <tr key={ret.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium text-gray-900">{ret.returnNumber ?? `#${ret.id}`}</td>
                     <td className="py-3 px-4 text-sm text-gray-900">{ret.vendorName ?? ret.vendorId}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-gray-900">${fmt(ret.totalAmount)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-gray-900">{formatCurrency(Number(fmt(ret.totalAmount)))}</td>
                     <td className="py-3 px-4 text-center"><VendorReturnStatusBadge status={ret.status} /></td>
                     <td className="py-3 px-4 text-sm text-gray-600">{formatDate(ret.createdAt)}</td>
                     <td className="py-3 px-4">
@@ -499,8 +508,8 @@ export default function VendorReturnsPage() {
                               {item.variantName && <p className="text-xs text-gray-500">{item.variantName}</p>}
                             </td>
                             <td className="py-2 px-3 text-center text-sm">{item.quantity}</td>
-                            <td className="py-2 px-3 text-right text-sm">${fmt(item.unitPrice)}</td>
-                            <td className="py-2 px-3 text-right text-sm font-medium">${fmt(item.totalPrice ?? Number(item.unitPrice ?? 0) * item.quantity)}</td>
+                            <td className="py-2 px-3 text-right text-sm">{formatCurrency(Number(fmt(item.unitPrice)))}</td>
+                            <td className="py-2 px-3 text-right text-sm font-medium">{formatCurrency(Number(fmt(item.totalPrice ?? Number(item.unitPrice ?? 0) * item.quantity)))}</td>
                             <td className="py-2 px-3 text-sm text-gray-600">{item.reason}</td>
                           </tr>
                         ))}
@@ -513,7 +522,7 @@ export default function VendorReturnsPage() {
               <div className="flex justify-end">
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Total Credit Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">${fmt(selectedReturn.totalAmount)}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(fmt(selectedReturn.totalAmount)))}</p>
                 </div>
               </div>
 
@@ -627,7 +636,7 @@ export default function VendorReturnsPage() {
                                     <span className="font-medium">{product.name}</span>
                                     <span className="text-xs text-gray-500 ml-2">SKU: {product.sku}</span>
                                   </div>
-                                  <span className="text-sm font-medium text-gray-700">${fmt(product.sale_price || product.price)}</span>
+                                  <span className="text-sm font-medium text-gray-700">{formatCurrency(Number(fmt(product.sale_price || product.price)))}</span>
                                 </div>
                               </CommandItem>
                             )}
@@ -643,7 +652,7 @@ export default function VendorReturnsPage() {
                                     <span>{v.name}</span>
                                     <span className="text-xs text-gray-500 ml-2">SKU: {v.sku}</span>
                                   </div>
-                                  <span className="text-sm font-medium text-gray-700">${fmt(v.sale_price || v.price)}</span>
+                                  <span className="text-sm font-medium text-gray-700">{formatCurrency(Number(fmt(v.sale_price || v.price)))}</span>
                                 </div>
                               </CommandItem>
                             ))}
@@ -727,7 +736,7 @@ export default function VendorReturnsPage() {
                   {/* Total */}
                   <div className="flex justify-end pt-1">
                     <p className="text-sm font-semibold text-gray-900">
-                      Total: ${fmt(formData.items.reduce((sum, i) => sum + (Number(i.unitPrice) * i.quantity), 0))}
+                      Total: {formatCurrency(formData.items.reduce((sum, i) => sum + (Number(i.unitPrice) * i.quantity), 0))}
                     </p>
                   </div>
                 </div>
