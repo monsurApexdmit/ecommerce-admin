@@ -23,6 +23,7 @@ import {
     Headphones,
     Scissors,
     Receipt,
+    Wallet,
 } from "lucide-react"
 
 import {
@@ -64,7 +65,7 @@ import { TrialCard } from "@/components/trial-card"
 // module: null = always visible (no permission gate)
 // Sentence-case section labels group the nav into scannable blocks. Order here
 // is the render order; each item carries its `section` so we can split them.
-const SECTIONS = ["Overview", "Sell", "Catalog", "Operations", "Workspace"] as const
+const SECTIONS = ["Overview", "Sell", "Catalog", "Operations", "Finance", "Workspace"] as const
 type Section = typeof SECTIONS[number]
 
 const NAV_CONFIG = [
@@ -105,6 +106,15 @@ const NAV_CONFIG = [
         items: [
             { name: "All suppliers",    href: "/dashboard/vendors",                  module: "Vendors" },
             { name: "Purchase orders",  href: "/dashboard/vendors/purchase-orders",  module: "Vendors" },
+        ],
+    },
+    {
+        section: "Finance",
+        name: "Expenses",
+        icon: Wallet,
+        items: [
+            { name: "All expenses", href: "/dashboard/expenses",            module: "Expenses" },
+            { name: "Categories",   href: "/dashboard/expenses/categories", module: "Expenses" },
         ],
     },
     {
