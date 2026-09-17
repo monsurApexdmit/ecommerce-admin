@@ -7,6 +7,8 @@ import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { StaffProvider } from "@/contexts/staff-context"
 import { VendorProvider } from "@/contexts/vendor-context"
+import { ExpenseProvider } from "@/contexts/expense-context"
+import { ExpenseCategoryProvider } from "@/contexts/expense-category-context"
 import { ProductProvider } from "@/contexts/product-context"
 import { AttributeProvider } from "@/contexts/attribute-context"
 import { WarehouseProvider } from "@/contexts/warehouse-context"
@@ -192,6 +194,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <CompanySettingsProvider>
     <NotificationProvider>
     <VendorProvider>
+      <ExpenseCategoryProvider>
+      <ExpenseProvider>
       <CategoryProvider>
         <AttributeProvider>
           <WarehouseProvider>
@@ -241,6 +245,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </WarehouseProvider>
         </AttributeProvider>
       </CategoryProvider>
+      </ExpenseProvider>
+      </ExpenseCategoryProvider>
     </VendorProvider>
     </NotificationProvider>
     </CompanySettingsProvider>
