@@ -178,7 +178,7 @@ export default function CompanyDetailPage() {
                   value={subdomain}
                   onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                   placeholder="e.g. acme"
-                  className="flex-1 px-3 py-2 text-sm outline-none bg-white"
+                  className="flex-1 px-2.5 py-2 text-sm outline-none bg-white"
                 />
                 <span className="px-3 py-2 bg-gray-50 text-gray-400 text-xs border-l border-gray-200">.localhost:8080</span>
               </div>
@@ -295,7 +295,7 @@ export default function CompanyDetailPage() {
               <select
                 value={selectedPlanId}
                 onChange={e => setSelectedPlanId(Number(e.target.value) || "")}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full text-sm border border-gray-300 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="">Select a plan…</option>
                 {plans.filter(p => p.isActive).map(p => (
@@ -310,7 +310,7 @@ export default function CompanyDetailPage() {
                   max={24}
                   value={selectedMonths}
                   onChange={e => setSelectedMonths(parseInt(e.target.value) || 1)}
-                  className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex-1 text-sm border border-gray-300 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <button

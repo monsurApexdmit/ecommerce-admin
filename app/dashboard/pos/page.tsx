@@ -384,7 +384,7 @@ export default function PosPage() {
                 <div className="flex items-center gap-4 px-6 py-3">
                     <div className="relative flex-1 max-w-lg">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                        <Input placeholder="Search products, scan a barcode…" className="pl-10 h-10 bg-muted/50 border-border focus:bg-background"
+                        <Input placeholder="Search products, scan a barcode…" className="pl-10 h-9 bg-muted/50 border-border focus:bg-background"
                             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                     </div>
 
@@ -400,7 +400,7 @@ export default function PosPage() {
 
                     <div className="w-48">
                         <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                            <SelectTrigger className="h-10"><SelectValue placeholder="Select Warehouse" /></SelectTrigger>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Select Warehouse" /></SelectTrigger>
                             <SelectContent>
                                 {warehouses.map(wh => (
                                     <SelectItem key={wh.id} value={String(wh.id)}>{wh.name}</SelectItem>

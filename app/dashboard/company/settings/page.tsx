@@ -324,7 +324,7 @@ export default function CompanySettingsPage() {
               onChange={(e) => handleProfileChange("description", e.target.value)}
               placeholder="Brief description of your company..."
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             />
           </div>
 
@@ -378,7 +378,7 @@ export default function CompanySettingsPage() {
                       e.target.value as "vat" | "ein" | "gst" | "other"
                     )
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="gst">GST (Goods & Services Tax)</option>
                   <option value="vat">VAT (Value Added Tax)</option>
@@ -415,7 +415,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.currency}
                   onChange={(e) => handleSettingsChange("currency", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="USD">USD - US Dollar</option>
                   <option value="EUR">EUR - Euro</option>
@@ -432,7 +432,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.timezone}
                   onChange={(e) => handleSettingsChange("timezone", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="UTC">UTC (Coordinated Universal Time)</option>
                   <option value="EST">EST (Eastern Standard Time)</option>
@@ -455,7 +455,7 @@ export default function CompanySettingsPage() {
               <select
                 value={settingsForm.language}
                 onChange={(e) => handleSettingsChange("language", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="en">English</option>
                 <option value="es">Español (Spanish)</option>
@@ -478,7 +478,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.currencySymbolPosition}
                   onChange={(e) => handleSettingsChange("currencySymbolPosition", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="before">Before amount (e.g., $1,234.56)</option>
                   <option value="after">After amount (e.g., 1,234.56 $)</option>
@@ -489,7 +489,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.currencyDecimalSeparator}
                   onChange={(e) => handleSettingsChange("currencyDecimalSeparator", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value=".">Period (.)</option>
                   <option value=",">Comma (,)</option>
@@ -502,7 +502,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.currencyThousandsSeparator}
                   onChange={(e) => handleSettingsChange("currencyThousandsSeparator", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value=",">Comma (,)</option>
                   <option value=".">Period (.)</option>
@@ -515,7 +515,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.currencyDecimalPlaces}
                   onChange={(e) => handleSettingsChange("currencyDecimalPlaces", parseInt(e.target.value) as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="0">0 decimal places</option>
                   <option value="1">1 decimal place</option>
@@ -534,7 +534,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.weightUnit}
                   onChange={(e) => handleSettingsChange("weightUnit", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="kg">Kilogram (kg)</option>
                   <option value="lb">Pound (lb)</option>
@@ -547,7 +547,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.dimensionUnit}
                   onChange={(e) => handleSettingsChange("dimensionUnit", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="cm">Centimeter (cm)</option>
                   <option value="in">Inch (in)</option>
@@ -566,7 +566,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.dateFormat}
                   onChange={(e) => handleSettingsChange("dateFormat", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="MM/DD/YYYY">MM/DD/YYYY (01/15/2024)</option>
                   <option value="DD/MM/YYYY">DD/MM/YYYY (15/01/2024)</option>
@@ -578,7 +578,7 @@ export default function CompanySettingsPage() {
                 <select
                   value={settingsForm.timeFormat}
                   onChange={(e) => handleSettingsChange("timeFormat", e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 >
                   <option value="12h">12-hour (2:30 PM)</option>
                   <option value="24h">24-hour (14:30)</option>

@@ -264,7 +264,7 @@ export default function InternationalPage() {
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             >
               {CURRENCY_LIST.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -281,7 +281,7 @@ export default function InternationalPage() {
               <select
                 value={currencySymbolPosition}
                 onChange={(e) => setCurrencySymbolPosition(e.target.value as "before" | "after")}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="before">Before amount (e.g., $1,234.56)</option>
                 <option value="after">After amount (e.g., 1,234.56 $)</option>
@@ -294,7 +294,7 @@ export default function InternationalPage() {
               <select
                 value={currencyDecimalSeparator}
                 onChange={(e) => setCurrencyDecimalSeparator(e.target.value as "." | ",")}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value=".">Period (.)</option>
                 <option value=",">Comma (,)</option>
@@ -309,7 +309,7 @@ export default function InternationalPage() {
               <select
                 value={currencyThousandsSeparator}
                 onChange={(e) => setCurrencyThousandsSeparator(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value=",">Comma (,)</option>
                 <option value=".">Period (.)</option>
@@ -324,7 +324,7 @@ export default function InternationalPage() {
               <select
                 value={currencyDecimalPlaces}
                 onChange={(e) => setCurrencyDecimalPlaces(parseInt(e.target.value) as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="0">0 decimal places (e.g., 1,235)</option>
                 <option value="1">1 decimal place (e.g., 1,234.5)</option>
@@ -349,7 +349,7 @@ export default function InternationalPage() {
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             >
               {TIMEZONE_LIST.map((tz) => (
                 <option key={tz.value} value={tz.value}>
@@ -365,7 +365,7 @@ export default function InternationalPage() {
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
             >
               {LANGUAGE_LIST.map((lang) => (
                 <option key={lang.code} value={lang.code}>
@@ -392,7 +392,7 @@ export default function InternationalPage() {
               <select
                 value={weightUnit}
                 onChange={(e) => setWeightUnit(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="kg">Kilogram (kg)</option>
                 <option value="lb">Pound (lb)</option>
@@ -407,7 +407,7 @@ export default function InternationalPage() {
               <select
                 value={dimensionUnit}
                 onChange={(e) => setDimensionUnit(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="cm">Centimeter (cm)</option>
                 <option value="in">Inch (in)</option>
@@ -433,7 +433,7 @@ export default function InternationalPage() {
               <select
                 value={dateFormat}
                 onChange={(e) => setDateFormat(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="MM/DD/YYYY">MM/DD/YYYY (01/15/2024)</option>
                 <option value="DD/MM/YYYY">DD/MM/YYYY (15/01/2024)</option>
@@ -447,7 +447,7 @@ export default function InternationalPage() {
               <select
                 value={timeFormat}
                 onChange={(e) => setTimeFormat(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               >
                 <option value="12h">12-hour (2:30 PM)</option>
                 <option value="24h">24-hour (14:30)</option>
