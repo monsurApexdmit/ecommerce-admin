@@ -113,8 +113,10 @@ const NAV_CONFIG = [
         name: "Expenses",
         icon: Wallet,
         items: [
-            { name: "All expenses", href: "/dashboard/expenses",            module: "Expenses" },
-            { name: "Categories",   href: "/dashboard/expenses/categories", module: "Expenses" },
+            { name: "All expenses",   href: "/dashboard/expenses",            module: "Expenses" },
+            { name: "Categories",     href: "/dashboard/expenses/categories", module: "Expenses" },
+            { name: "Customer dues",  href: "/dashboard/dues/customers",      module: "Dues" },
+            { name: "Vendor dues",    href: "/dashboard/dues/vendors",        module: "Dues" },
         ],
     },
     {

@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useVendor } from "@/contexts/vendor-context"
 import { useProduct } from "@/contexts/product-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { ArrowLeft, Package, DollarSign, CreditCard, Wallet, Edit2 } from "lucide-react"
+import { ArrowLeft, Package, DollarSign, CreditCard, Wallet, Edit2, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -142,7 +142,7 @@ export default function VendorDetailsPage() {
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="p-5">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg"><Package className="w-5 h-5 text-blue-600" /></div>
@@ -179,6 +179,19 @@ export default function VendorDetailsPage() {
               <p className="text-xs text-gray-500">Amount Payable</p>
               <p className={`text-xl font-bold ${vendor.amountPayable > 0 ? "text-red-600" : "text-emerald-600"}`}>
                 {formatCurrency(vendor.amountPayable)}
+              </p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${(vendor.poDueAmount ?? 0) > 0 ? "bg-red-100" : "bg-emerald-100"}`}>
+              <Receipt className={`w-5 h-5 ${(vendor.poDueAmount ?? 0) > 0 ? "text-red-600" : "text-emerald-600"}`} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Purchase Order Due</p>
+              <p className={`text-xl font-bold ${(vendor.poDueAmount ?? 0) > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                {formatCurrency(vendor.poDueAmount ?? 0)}
               </p>
             </div>
           </div>
