@@ -14,6 +14,7 @@ export interface Vendor {
   description: string
   totalPaid: number
   amountPayable: number
+  poDueAmount?: number
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -45,6 +46,7 @@ function convertToVendor(backendVendor: VendorResponse): Vendor {
     description: backendVendor.description || '',
     totalPaid: backendVendor.totalPaid || 0,
     amountPayable: backendVendor.amountPayable || 0,
+    poDueAmount: backendVendor.poDueAmount ?? undefined,
     created_at: backendVendor.created_at,
     updated_at: backendVendor.updated_at,
     deleted_at: backendVendor.deleted_at || null,

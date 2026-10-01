@@ -63,6 +63,7 @@ export interface VendorResponse {
   description: string;
   totalPaid: number;
   amountPayable: number;
+  poDueAmount?: number;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

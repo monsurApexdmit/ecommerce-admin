@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { DollarSign, ShoppingBag, Users, Package, Truck } from "lucide-react"
+import { DollarSign, ShoppingBag, Users, Package, Truck, Wallet, Receipt } from "lucide-react"
 import { useVendor } from "@/contexts/vendor-context"
 import { useProduct } from "@/contexts/product-context"
 import { useStaff } from "@/contexts/staff-context"
+import { useDue } from "@/contexts/due-context"
 import { Line, Bar } from "react-chartjs-2"
 import {
   Chart as ChartJS,
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const { products } = useProduct()
   const { staff, salaryPayments } = useStaff()
   const { formatCurrency, currency } = useCompanySettings()
+  const { customerDuesSummary, vendorDuesSummary, fetchCustomerDues, fetchVendorDues } = useDue()
 
   const [recentOrders, setRecentOrders] = useState<SellResponse[]>([])
   const [sellStats, setSellStats] = useState<{
@@ -46,6 +48,21 @@ export default function DashboardPage() {
   const [weeklyOrderCounts, setWeeklyOrderCounts] = useState<number[]>([0, 0, 0, 0, 0, 0, 0])
   const [monthlyRevenue, setMonthlyRevenue] = useState<number[]>(Array(12).fill(0))
   const [ordersLoading, setOrdersLoading] = useState(true)
+  const [duesLoading, setDuesLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDuesSummaries = async () => {
+      try {
+        await Promise.all([fetchCustomerDues(), fetchVendorDues()])
+      } catch (err) {
+        console.error('[Dashboard] fetchDuesSummaries error:', err)
+      } finally {
+        setDuesLoading(false)
+      }
+    }
+    fetchDuesSummaries()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -164,6 +181,22 @@ export default function DashboardPage() {
       bgColor: "bg-orange-50",
       iconColor: "text-orange-600",
     },
+    {
+      name: "Total Receivable",
+      value: customerDuesSummary ? formatCurrency(customerDuesSummary.totalDue) : "—",
+      icon: Receipt,
+      bgColor: "bg-cyan-50",
+      iconColor: "text-cyan-600",
+      loading: duesLoading,
+    },
+    {
+      name: "Total Payable",
+      value: vendorDuesSummary ? formatCurrency(vendorDuesSummary.totalDue) : "—",
+      icon: Wallet,
+      bgColor: "bg-rose-50",
+      iconColor: "text-rose-600",
+      loading: duesLoading,
+    },
   ]
 
   const salesData = {
@@ -235,7 +268,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-medium text-gray-600">{stat.name}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {ordersLoading ? <span className="text-gray-300 animate-pulse">—</span> : stat.value}
+                  {(stat.loading ?? ordersLoading) ? <span className="text-gray-300 animate-pulse">—</span> : stat.value}
                 </p>
               </div>
               <div className={`p-3 rounded-lg ${stat.bgColor}`}>
