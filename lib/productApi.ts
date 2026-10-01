@@ -230,6 +230,10 @@ export interface CreateProductData {
   barcode_type?: string;
   vendor_id?: number;
   receipt_number?: string;
+  supplier_payment_status?: 'due' | 'partial' | 'paid';
+  supplier_paid_amount?: number;
+  supplier_payment_method?: string;
+  supplier_payment_date?: string;
   attributes?: { id: string; name: string; value: string | string[] }[];
   variants?: {
     id?: number;
@@ -283,6 +287,10 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.is_featured !== undefined) fd.append('is_featured', data.is_featured ? '1' : '0');
   if (data.deal_label !== undefined) fd.append('deal_label', data.deal_label ?? '');
   if (data.receipt_number !== undefined && data.receipt_number !== '') fd.append('receipt_number', data.receipt_number);
+  if (data.supplier_payment_status) fd.append('supplier_payment_status', data.supplier_payment_status);
+  if (data.supplier_paid_amount !== undefined) fd.append('supplier_paid_amount', String(data.supplier_paid_amount));
+  if (data.supplier_payment_method) fd.append('supplier_payment_method', data.supplier_payment_method);
+  if (data.supplier_payment_date) fd.append('supplier_payment_date', data.supplier_payment_date);
 
   if (data.attributes !== undefined) {
     const attrIds = data.attributes.map(a => parseInt(a.id));
