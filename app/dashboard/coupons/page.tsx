@@ -39,6 +39,7 @@ import { useProduct } from "@/contexts/product-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type CType = "percentage" | "fixed" | "free_shipping"
 type Phase = "active" | "scheduled" | "used_up" | "expired" | "disabled"
@@ -530,12 +531,12 @@ export default function CouponsPage() {
                         <div className="flex justify-end gap-1">
                           <Switch checked={!!c.status} disabled={toggling.has(c.id)} onCheckedChange={(v) => setStatus([c], v)}
                             aria-label={`${c.status ? "Disable" : "Enable"} ${c.code}`} className="mr-1 self-center" />
-                          <Button type="button" variant="outline" size="icon" aria-label={`Copy code ${c.code}`} onClick={() => copyCode(c.code)}><Copy className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.code}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button>
+                          <WithTooltip content={`Copy code ${c.code}`}><Button type="button" variant="outline" size="icon" aria-label={`Copy code ${c.code}`} onClick={() => copyCode(c.code)}><Copy className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={`Edit ${c.code}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.code}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                            <WithTooltip content={`More actions for ${c.code}`}><DropdownMenuTrigger asChild>
                               <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.code}`}><MoreHorizontal className="size-4" /></Button>
-                            </DropdownMenuTrigger>
+                            </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setStatus([c], !c.status)}>{c.status ? "Disable" : "Enable"}</DropdownMenuItem>
                               <DropdownMenuSeparator />

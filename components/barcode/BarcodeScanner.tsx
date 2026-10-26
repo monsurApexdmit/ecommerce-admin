@@ -14,6 +14,7 @@ import { barcodeApi, type ProductWithBarcode } from "@/lib/barcodeApi"
 import { AlertCircle, Lightbulb, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface BarcodeScannerProps {
   onProductFound?: (product: ProductWithBarcode) => void
@@ -145,7 +146,7 @@ export default function BarcodeScanner({
                 className="pr-10"
               />
               {barcodeInput && (
-                <Button
+                <WithTooltip content="Clear barcode"><Button
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Clear barcode"
@@ -153,7 +154,7 @@ export default function BarcodeScanner({
                   className="absolute right-1 top-1/2 -translate-y-1/2"
                 >
                   <X className="size-4" />
-                </Button>
+                </Button></WithTooltip>
               )}
             </div>
 

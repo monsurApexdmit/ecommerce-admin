@@ -224,7 +224,7 @@ export function CustomerSupportMessenger() {
   // ── Minimized floating button ──
   if (isMinimized) {
     return (
-      <Button
+      <WithTooltip content="Open support inbox"><Button
         size="icon"
         onClick={handleOpen}
         aria-label="Open support inbox"
@@ -236,7 +236,7 @@ export function CustomerSupportMessenger() {
             {unreadCount > 9 ? "9+" : unreadCount}
           </Badge>
         )}
-      </Button>
+      </Button></WithTooltip>
     )
   }
 
@@ -280,22 +280,22 @@ export function CustomerSupportMessenger() {
               <ExternalLink className="h-4 w-4" />
             </Button>
           </WithTooltip>
-          <Button
+          <WithTooltip content="Minimize"><Button
             variant="ghost"
             size="icon-sm"
             onClick={() => setIsMinimized(true)}
             aria-label="Minimize"
           >
             <Minus className="h-4 w-4" />
-          </Button>
-          <Button
+          </Button></WithTooltip>
+          <WithTooltip content="Close"><Button
             variant="ghost"
             size="icon-sm"
             onClick={() => { setIsMinimized(true); setActiveTicket(null) }}
             aria-label="Close"
           >
             <X className="h-4 w-4" />
-          </Button>
+          </Button></WithTooltip>
         </div>
       </div>
       <Separator />
@@ -307,9 +307,9 @@ export function CustomerSupportMessenger() {
             as="p"
             className="px-4 py-2"
             action={
-              <Button variant="ghost" size="icon-sm" onClick={loadRecentTickets} aria-label="Refresh tickets">
+              <WithTooltip content="Refresh tickets"><Button variant="ghost" size="icon-sm" onClick={loadRecentTickets} aria-label="Refresh tickets">
                 <RefreshCw className={cn("h-3.5 w-3.5", loadingTickets && "animate-spin")} />
-              </Button>
+              </Button></WithTooltip>
             }
           >
             Recent open tickets
@@ -451,7 +451,7 @@ export function CustomerSupportMessenger() {
                 onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
                 disabled={sending || !canReplyToActiveTicket}
               />
-              <Button
+              <WithTooltip content="Send reply"><Button
                 onClick={handleSend}
                 size="icon"
                 disabled={!inputValue.trim() || sending || !canReplyToActiveTicket}
@@ -459,7 +459,7 @@ export function CustomerSupportMessenger() {
                 aria-label="Send reply"
               >
                 {sending ? <Spinner /> : <Send className="h-4 w-4" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
             </>
           )}

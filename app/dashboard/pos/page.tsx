@@ -796,7 +796,7 @@ export default function PosPage() {
                                     </ItemContent>
                                     <ItemActions className="gap-2">
                                         <Button type="button" size="sm" onClick={() => resumeHeld(h)}>Resume</Button>
-                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Discard held sale" onClick={() => dropHeld(h)}>×</Button>
+                                        <WithTooltip content="Discard held sale"><Button type="button" variant="ghost" size="icon-sm" aria-label="Discard held sale" onClick={() => dropHeld(h)}>×</Button></WithTooltip>
                                     </ItemActions>
                                 </Item>
                             ))}
@@ -804,9 +804,9 @@ export default function PosPage() {
                     </Popover>
 
                     <Button asChild variant="outline"><Link href="/dashboard/returns/customer">Return / exchange</Link></Button>
-                    <Button type="button" variant="outline" size="icon" aria-label="Full screen" onClick={toggleFullscreen}>
+                    <WithTooltip content="Full screen"><Button type="button" variant="outline" size="icon" aria-label="Full screen" onClick={toggleFullscreen}>
                         <Maximize2 className="size-[18px]" aria-hidden />
-                    </Button>
+                    </Button></WithTooltip>
                     <ThemeAccentControls />
                 </div>
             </header>

@@ -18,6 +18,7 @@ import { SectionCard } from "@/components/common/SectionCard"
 import { SectionTitle } from "@/components/common/SectionTitle"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface Props {
     open: boolean
@@ -122,9 +123,9 @@ export function PosCashDrawer({ open, onOpenChange, register, onRegisterChange, 
                                 : "Start a shift to take cash and track the drawer"}
                         </DialogDescription>
                     </div>
-                    <Button type="button" variant="outline" size="icon" aria-label="Close" onClick={() => onOpenChange(false)}>
+                    <WithTooltip content="Close"><Button type="button" variant="outline" size="icon" aria-label="Close" onClick={() => onOpenChange(false)}>
                         <X className="size-[18px]" />
-                    </Button>
+                    </Button></WithTooltip>
                 </DialogHeader>
                 <Separator />
 

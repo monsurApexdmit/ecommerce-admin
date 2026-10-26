@@ -33,6 +33,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useToast } from "@/hooks/use-toast"
 import { CustomerCombobox } from "@/components/pos/customer-combobox"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface Row { productId: string; productName: string; quantity: number; price: number; discount: number; /** price follows the quantity (wholesale tiers) until edited by hand */ auto?: boolean }
 const emptyRow = (): Row => ({ productId: "", productName: "", quantity: 1, price: 0, discount: 0 })
@@ -447,11 +448,11 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                           {lErr && <span className="text-xs text-destructive">{lErr}</span>}
                         </div>
                         <ButtonGroup className="w-full">
-                          <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity"
-                            onClick={() => setQty(i, Math.max(1, r.quantity - 1))}>−</Button>
+                          <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity"
+                            onClick={() => setQty(i, Math.max(1, r.quantity - 1))}>−</Button></WithTooltip>
                           <ButtonGroupText className="min-w-0 flex-1 justify-center px-1 tabular-nums">{r.quantity}</ButtonGroupText>
-                          <Button type="button" variant="outline" size="icon" aria-label="Increase quantity"
-                            onClick={() => setQty(i, r.quantity + 1)}>+</Button>
+                          <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity"
+                            onClick={() => setQty(i, r.quantity + 1)}>+</Button></WithTooltip>
                         </ButtonGroup>
                         <Input
                           type="number" min={0} step="0.01" aria-label="Unit price" value={r.price}
@@ -464,10 +465,10 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                           className="text-right tabular-nums"
                         />
                         <span className="text-right text-sm font-semibold tabular-nums">{formatCurrency(Math.max(0, r.price * r.quantity - r.discount))}</span>
-                        <Button type="button" variant="ghost" size="icon" aria-label="Remove line" disabled={rows.length === 1}
+                        <WithTooltip content="Remove line"><Button type="button" variant="ghost" size="icon" aria-label="Remove line" disabled={rows.length === 1}
                           onClick={() => setRows((p) => p.filter((_, idx) => idx !== i))}>
                           <Trash2 className="size-4" />
-                        </Button>
+                        </Button></WithTooltip>
                       </Card>
                     )
                   })}

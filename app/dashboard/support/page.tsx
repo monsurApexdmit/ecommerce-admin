@@ -29,6 +29,7 @@ import { SectionCard } from "@/components/common/SectionCard"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const STATUS_LABEL: Record<TicketStatus, string> = { open: "Open", in_progress: "In Progress", resolved: "Resolved", closed: "Closed" }
 const PRIORITY_LABEL: Record<TicketPriority, string> = { high: "High", medium: "Medium", low: "Low" }
@@ -294,7 +295,7 @@ function ConversationPanel({ ticketId, onChanged, onDeleted }: {
                 {attachments.map((f, i) => (
                   <Badge key={i} variant="outline" className="gap-1.5 pr-0.5">
                     {f.name}
-                    <Button type="button" variant="ghost" size="icon-sm" className="size-5" aria-label="Remove attachment" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))}>×</Button>
+                    <WithTooltip content="Remove attachment"><Button type="button" variant="ghost" size="icon-sm" className="size-5" aria-label="Remove attachment" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))}>×</Button></WithTooltip>
                   </Badge>
                 ))}
               </div>

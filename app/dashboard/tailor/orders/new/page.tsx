@@ -36,6 +36,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 /** Style-option chips offered per garment (labels only; saved with the item). */
 const STYLE_OPTS: Record<string, string[]> = {
@@ -391,9 +392,9 @@ export default function NewTailorOrderPage() {
                           </Select>
                           <span className="flex items-center gap-2 text-sm">
                             <ButtonGroup>
-                              <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => setIt(i, { meters: Math.max(0.5, r2(it.meters - 0.5)) })}>−</Button>
+                              <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => setIt(i, { meters: Math.max(0.5, r2(it.meters - 0.5)) })}>−</Button></WithTooltip>
                               <ButtonGroupText className="min-w-12 justify-center tabular-nums">{it.meters}</ButtonGroupText>
-                              <Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => setIt(i, { meters: r2(it.meters + 0.5) })}>+</Button>
+                              <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => setIt(i, { meters: r2(it.meters + 0.5) })}>+</Button></WithTooltip>
                             </ButtonGroup>
                             {c.f?.unit ?? "m"}
                           </span>
@@ -416,11 +417,11 @@ export default function NewTailorOrderPage() {
                     <div className="flex flex-col gap-1.5">
                       <SectionTitle as="p">Quantity</SectionTitle>
                       <ButtonGroup>
-                        <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity"
-                          onClick={() => setIt(i, { qty: Math.max(1, c.qty - 1), meters: !it.own && it.meters === suggest(it.g, c.qty) ? suggest(it.g, Math.max(1, c.qty - 1)) : it.meters })}>−</Button>
+                        <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity"
+                          onClick={() => setIt(i, { qty: Math.max(1, c.qty - 1), meters: !it.own && it.meters === suggest(it.g, c.qty) ? suggest(it.g, Math.max(1, c.qty - 1)) : it.meters })}>−</Button></WithTooltip>
                         <ButtonGroupText className="min-w-12 justify-center tabular-nums">{c.qty}</ButtonGroupText>
-                        <Button type="button" variant="outline" size="icon" aria-label="Increase quantity"
-                          onClick={() => setIt(i, { qty: c.qty + 1, meters: !it.own && it.meters === suggest(it.g, c.qty) ? suggest(it.g, c.qty + 1) : it.meters })}>+</Button>
+                        <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity"
+                          onClick={() => setIt(i, { qty: c.qty + 1, meters: !it.own && it.meters === suggest(it.g, c.qty) ? suggest(it.g, c.qty + 1) : it.meters })}>+</Button></WithTooltip>
                       </ButtonGroup>
                     </div>
                     <FormField label="Stitching (each)" htmlFor={`rate-${i}`}><Input id={`rate-${i}`} type="number" min={0} value={it.rate} onChange={(e) => setIt(i, { rate: Math.max(0, num(e.target.value)) })} /></FormField>

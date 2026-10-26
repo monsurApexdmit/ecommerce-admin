@@ -592,7 +592,7 @@ export default function ProductsPage() {
                       <Button type="button" variant="outline" onClick={() => openForm(p)} className="flex-1">Edit</Button>
                     )}
                     {canDelete("Products") && (
-                      <Button type="button" variant="outline" size="icon" aria-label={`Delete ${p.name}`} onClick={() => setDeleteTargets([p])}><Trash2 className="size-4" /></Button>
+                      <WithTooltip content={`Delete ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${p.name}`} onClick={() => setDeleteTargets([p])}><Trash2 className="size-4" /></Button></WithTooltip>
                     )}
                   </div>
                 </Card>
@@ -698,14 +698,14 @@ export default function ProductsPage() {
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <Button type="button" variant="outline" size="icon" aria-label={`View ${p.name}`} onClick={() => setViewing(p)}><Eye className="size-4" /></Button>
+                          <WithTooltip content={`View ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${p.name}`} onClick={() => setViewing(p)}><Eye className="size-4" /></Button></WithTooltip>
                           {canWrite("Products") && (
-                            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openForm(p)}><Pencil className="size-4" /></Button>
+                            <WithTooltip content={`Edit ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openForm(p)}><Pencil className="size-4" /></Button></WithTooltip>
                           )}
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                            <WithTooltip content={`More actions for ${p.name}`}><DropdownMenuTrigger asChild>
                               <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${p.name}`}><MoreHorizontal className="size-4" /></Button>
-                            </DropdownMenuTrigger>
+                            </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setViewing(p)}>View details</DropdownMenuItem>
                               <DropdownMenuItem asChild>

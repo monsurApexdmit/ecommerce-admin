@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { EmptyState } from "@/components/common/EmptyState"
 import { FormField } from "@/components/common/FormField"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type FormData = {
   name: string
@@ -151,9 +152,9 @@ function PlanFormDialog({
                     <ItemTitle className="font-normal">{f}</ItemTitle>
                   </ItemContent>
                   <ItemActions>
-                    <Button variant="ghost" size="icon-sm" onClick={() => removeFeature(i)} aria-label="Remove feature">
+                    <WithTooltip content="Remove feature"><Button variant="ghost" size="icon-sm" onClick={() => removeFeature(i)} aria-label="Remove feature">
                       <X size={15} />
-                    </Button>
+                    </Button></WithTooltip>
                   </ItemActions>
                 </Item>
               ))}

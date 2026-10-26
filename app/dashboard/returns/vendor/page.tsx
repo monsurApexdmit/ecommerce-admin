@@ -40,6 +40,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "all" | "pending" | "shipped" | "received" | "credited"
 
@@ -365,8 +366,8 @@ export default function SupplierReturnsPage() {
                       <TableCell className="pr-4">
                         <div className="flex items-center justify-end gap-1">
                           {s.next && <Button type="button" size="sm" className="mr-1" disabled={busyId === r.id} onClick={() => advance(r)}>{s.nextLabel}</Button>}
-                          <Button type="button" variant="outline" size="icon" aria-label="View return" onClick={() => setDetail(r)}><Eye className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label="Print return note" onClick={() => printReturn(r)}><Printer className="size-4" /></Button>
+                          <WithTooltip content="View return"><Button type="button" variant="outline" size="icon" aria-label="View return" onClick={() => setDetail(r)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content="Print return note"><Button type="button" variant="outline" size="icon" aria-label="Print return note" onClick={() => printReturn(r)}><Printer className="size-4" /></Button></WithTooltip>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -453,9 +454,9 @@ export default function SupplierReturnsPage() {
                             <div className="text-xs text-muted-foreground">{i.receivedQty !== null ? `${i.receivedQty} received · ` : ""}cost {formatCurrency(i.cost)} · {i.stock} in stock</div>
                           </div>
                           <ButtonGroup className="col-start-2 lg:col-start-auto">
-                            <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => patch(i.key, { qty: Math.max(1, i.qty - 1), on: true })}>−</Button>
+                            <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => patch(i.key, { qty: Math.max(1, i.qty - 1), on: true })}>−</Button></WithTooltip>
                             <ButtonGroupText className="w-10 justify-center tabular-nums">{i.qty}</ButtonGroupText>
-                            <Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => patch(i.key, { qty: Math.min(i.stock, i.qty + 1), on: true })}>+</Button>
+                            <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => patch(i.key, { qty: Math.min(i.stock, i.qty + 1), on: true })}>+</Button></WithTooltip>
                           </ButtonGroup>
                           <Input type="number" min={0} step="0.01" aria-label="Unit cost" value={i.cost} onChange={(e) => patch(i.key, { cost: Number(e.target.value) || 0 })}
                             className="col-start-2 tabular-nums lg:col-start-auto" />
@@ -479,7 +480,7 @@ export default function SupplierReturnsPage() {
                     {photos.map((f, i) => (
                       <Badge key={`${f.name}-${i}`} variant="outline" className="gap-1.5 pr-0.5">
                         {f.name}
-                        <Button type="button" variant="ghost" size="icon-sm" className="size-5" aria-label={`Remove ${f.name}`} onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))}>×</Button>
+                        <WithTooltip content={`Remove ${f.name}`}><Button type="button" variant="ghost" size="icon-sm" className="size-5" aria-label={`Remove ${f.name}`} onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))}>×</Button></WithTooltip>
                       </Badge>
                     ))}
                   </div>
@@ -578,8 +579,8 @@ export default function SupplierReturnsPage() {
                                 {a.mime?.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-full object-cover" /> : "PDF"}
                               </a>
                             </Button>
-                            <Button type="button" variant="secondary" size="icon-sm" aria-label={`Remove ${a.name}`} disabled={photoBusy} onClick={() => removePhoto(detail, a.id)}
-                              className="absolute -right-1.5 -top-1.5 size-5 rounded-full">×</Button>
+                            <WithTooltip content={`Remove ${a.name}`}><Button type="button" variant="secondary" size="icon-sm" aria-label={`Remove ${a.name}`} disabled={photoBusy} onClick={() => removePhoto(detail, a.id)}
+                              className="absolute -right-1.5 -top-1.5 size-5 rounded-full">×</Button></WithTooltip>
                           </div>
                         ))}
                       </div>

@@ -24,6 +24,7 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import shippingMethodApi, { courierAccountApi, type CourierAccount, type ShippingMethod } from "@/lib/shippingMethodApi"
 import { settingsApi } from "@/lib/settingsApi"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const ICONS = [
   { value: "package", label: "Package", Icon: Package },
@@ -258,8 +259,8 @@ export default function ShippingMethodsPage() {
         {acct ? (
           <>
             <Button type="button" variant="outline" disabled={busyId === -acct.id} onClick={() => toggleCourier(acct)}>{acct.isActive ? "Turn off" : "Turn on"}</Button>
-            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${name}`} onClick={() => editCourier(acct)}><Pencil className="size-4" /></Button>
-            <Button type="button" variant="destructive" size="icon" aria-label={`Remove ${name}`} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></Button>
+            <WithTooltip content={`Edit ${name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${name}`} onClick={() => editCourier(acct)}><Pencil className="size-4" /></Button></WithTooltip>
+            <WithTooltip content={`Remove ${name}`}><Button type="button" variant="destructive" size="icon" aria-label={`Remove ${name}`} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></Button></WithTooltip>
           </>
         ) : (
           <Button type="button" variant="outline" onClick={() => newCourier(name)}>Set up</Button>
@@ -393,8 +394,8 @@ export default function ShippingMethodsPage() {
                           <TableCell><Switch on={z.isActive} label={z.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === z.id} onClick={() => toggleZone(z)} /></TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-1.5">
-                              <Button type="button" variant="outline" size="icon" aria-label={`Edit ${z.name}`} onClick={() => openEdit(z)}><Pencil className="size-4" /></Button>
-                              <Button type="button" variant="destructive" size="icon" aria-label={`Delete ${z.name}`} disabled={busyId === z.id} onClick={() => removeZone(z)}><Trash2 className="size-4" /></Button>
+                              <WithTooltip content={`Edit ${z.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${z.name}`} onClick={() => openEdit(z)}><Pencil className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={`Delete ${z.name}`}><Button type="button" variant="destructive" size="icon" aria-label={`Delete ${z.name}`} disabled={busyId === z.id} onClick={() => removeZone(z)}><Trash2 className="size-4" /></Button></WithTooltip>
                             </div>
                           </TableCell>
                         </TableRow>

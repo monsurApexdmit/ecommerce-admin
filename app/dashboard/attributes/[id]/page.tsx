@@ -166,15 +166,15 @@ export default function AttributeValuesPage() {
                       <div className="flex justify-end gap-1">
                         {editIdx === i ? (
                           <>
-                            <Button type="button" variant="outline" size="icon" aria-label="Save value" onClick={() => renameValue(i)} disabled={saving}><Check className="size-4" /></Button>
-                            <Button type="button" variant="outline" size="icon" aria-label="Cancel" onClick={() => setEditIdx(null)}><X className="size-4" /></Button>
+                            <WithTooltip content="Save value"><Button type="button" variant="outline" size="icon" aria-label="Save value" onClick={() => renameValue(i)} disabled={saving}><Check className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content="Cancel"><Button type="button" variant="outline" size="icon" aria-label="Cancel" onClick={() => setEditIdx(null)}><X className="size-4" /></Button></WithTooltip>
                           </>
                         ) : (
                           <>
                             <WithTooltip content="Rename value">
                               <Button type="button" variant="outline" size="icon" aria-label={`Rename value ${v}`} onClick={() => { setEditIdx(i); setEditText(v) }}><Pencil className="size-4" /></Button>
                             </WithTooltip>
-                            <Button type="button" variant="outline" size="icon" aria-label={`Remove ${v}`} onClick={() => removeValue(i)} disabled={saving}><Trash2 className="size-4" /></Button>
+                            <WithTooltip content={`Remove ${v}`}><Button type="button" variant="outline" size="icon" aria-label={`Remove ${v}`} onClick={() => removeValue(i)} disabled={saving}><Trash2 className="size-4" /></Button></WithTooltip>
                           </>
                         )}
                       </div>

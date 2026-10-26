@@ -8,6 +8,7 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import {
   LayoutDashboard, Building2, CreditCard, LogOut, Zap, Menu, X, ChevronRight,
 } from "lucide-react"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const nav = [
   { href: "/platform", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -113,9 +114,9 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar (mobile) */}
         <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+          <WithTooltip content="Open menu"><Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu className="w-5 h-5" />
-          </Button>
+          </Button></WithTooltip>
           <span className="font-semibold text-sm">Platform Admin</span>
         </div>
 

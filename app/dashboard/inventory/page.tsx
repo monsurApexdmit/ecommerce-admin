@@ -30,6 +30,7 @@ import { BulkBar } from "@/components/common/BulkBar"
 import { FormField } from "@/components/common/FormField"
 import { SectionTitle } from "@/components/common/SectionTitle"
 import { StatusBadge } from "@/components/common/StatusBadge"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { EmptyState } from "@/components/common/EmptyState"
 
 type Tab = "all" | "attention" | "ok" | "low" | "out" | "over"
@@ -258,9 +259,17 @@ function InventoryInner() {
         <TableCell className="text-right tabular-nums">{formatCurrency(r.value)}</TableCell>
         <TableCell className="pr-4">
           <div className="flex justify-end gap-1">
-            {!hasVariants && <Button type="button" variant="outline" size="icon" aria-label={`Adjust ${r.name}`} onClick={() => openAdjust(r)}><Pencil className="size-4" /></Button>}
-            <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/transfer" aria-label="Transfer"><ArrowLeftRight className="size-4" /></Link></Button>
-            <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/adjustment" aria-label="Stock history"><ClipboardList className="size-4" /></Link></Button>
+            {!hasVariants && (
+              <WithTooltip content="Adjust stock">
+                <Button type="button" variant="outline" size="icon" aria-label={`Adjust ${r.name}`} onClick={() => openAdjust(r)}><Pencil className="size-4" /></Button>
+              </WithTooltip>
+            )}
+            <WithTooltip content="Transfer stock">
+              <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/transfer" aria-label="Transfer"><ArrowLeftRight className="size-4" /></Link></Button>
+            </WithTooltip>
+            <WithTooltip content="Stock history">
+              <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/adjustment" aria-label="Stock history"><ClipboardList className="size-4" /></Link></Button>
+            </WithTooltip>
           </div>
         </TableCell>
       </TableRow>

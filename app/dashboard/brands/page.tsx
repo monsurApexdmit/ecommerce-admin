@@ -38,6 +38,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { usePagination } from "@/hooks/use-pagination"
 import { useToast } from "@/hooks/use-toast"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const emptyForm = { brandName: "", logo: "", website: "", description: "", status: true }
 
@@ -267,11 +268,11 @@ export default function BrandsPage() {
                     <div className="flex items-center justify-between">
                       <StatusBadge status={b.status ? "active" : "inactive"} label={b.status ? "Active" : "Inactive"} />
                       <div className="flex gap-1">
-                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.brandName}`} onClick={() => openForm(b)}><Pencil className="size-4" /></Button>
+                        <WithTooltip content={`Edit ${b.brandName}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.brandName}`} onClick={() => openForm(b)}><Pencil className="size-4" /></Button></WithTooltip>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                          <WithTooltip content={`More actions for ${b.brandName}`}><DropdownMenuTrigger asChild>
                             <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${b.brandName}`}><MoreHorizontal className="size-4" /></Button>
-                          </DropdownMenuTrigger>
+                          </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openForm(b)}>Edit brand</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setActive(b, !b.status)}>{b.status ? "Mark inactive" : "Mark active"}</DropdownMenuItem>

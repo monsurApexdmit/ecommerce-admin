@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const UNLIMITED = 999999
 const TAX_RATE = 0.1
@@ -242,7 +243,7 @@ export default function PlansPage() {
                     <h2 className="text-2xl font-bold">{p.name}</h2>
                   </div>
                   {isSuperAdmin && (
-                    <Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openEdit(p)}><Pencil className="size-4" /></Button>
+                    <WithTooltip content={`Edit ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openEdit(p)}><Pencil className="size-4" /></Button></WithTooltip>
                   )}
                 </div>
                 <p className="min-h-10 text-sm text-muted-foreground">{p.description}</p>
@@ -398,7 +399,7 @@ export default function PlansPage() {
                   <Item key={`${f}-${i}`} variant="muted" size="sm" className="py-2">
                     <ItemContent>{f}</ItemContent>
                     <ItemActions>
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove feature" onClick={() => setE({ feats: ed.feats.filter((_, j) => j !== i) })}>&times;</Button>
+                      <WithTooltip content="Remove feature"><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove feature" onClick={() => setE({ feats: ed.feats.filter((_, j) => j !== i) })}>&times;</Button></WithTooltip>
                     </ItemActions>
                   </Item>
                 ))}

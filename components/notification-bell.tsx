@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/common/EmptyState"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -70,7 +71,7 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={ref}>
-      <Button
+      <WithTooltip content={`Notifications, ${unreadCount} unread`}><Button
         type="button"
         variant="outline"
         size="icon"
@@ -85,7 +86,7 @@ export function NotificationBell() {
             {unreadCount > 99 ? "99+" : unreadCount}
           </Badge>
         )}
-      </Button>
+      </Button></WithTooltip>
 
       {open && (
         <Card
@@ -133,7 +134,7 @@ export function NotificationBell() {
                     </div>
                   </div>
                 </Button>
-                <Button
+                <WithTooltip content="Delete notification"><Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
@@ -142,7 +143,7 @@ export function NotificationBell() {
                   className="shrink-0"
                 >
                   <Trash2 className="size-3.5" />
-                </Button>
+                </Button></WithTooltip>
               </div>
             ))}
           </div>

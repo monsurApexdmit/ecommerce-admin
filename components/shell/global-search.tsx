@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { SectionTitle } from "@/components/common/SectionTitle"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const PAGES = [
   { label: "Dashboard", href: "/dashboard", module: "Dashboard" },
@@ -227,9 +228,9 @@ export function GlobalSearch({ variant = "bar", className }: { variant?: "bar" |
   if (variant === "icon") {
     return (
       <>
-        <Button type="button" variant="outline" size="icon" onClick={() => setOverlay(true)} aria-label="Search" className={className}>
+        <WithTooltip content="Search"><Button type="button" variant="outline" size="icon" onClick={() => setOverlay(true)} aria-label="Search" className={className}>
           <Search className="size-[18px]" aria-hidden />
-        </Button>
+        </Button></WithTooltip>
         {overlay && (
           <div className="fixed inset-x-0 top-0 z-50 bg-background/95 p-3 shadow-lg backdrop-blur">
             <SearchBox autoFocus inputRef={inputRef} onDone={() => setOverlay(false)} />

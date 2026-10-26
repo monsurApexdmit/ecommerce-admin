@@ -367,12 +367,12 @@ export default function AssignmentsPage() {
                       </TableCell>
                       <TableCell className="align-top">
                         <div className="flex justify-end gap-1">
-                          <Button type="button" variant="outline" size="icon" aria-label="Print job card" onClick={() => printCards([r])}><Printer className="size-4" /></Button>
+                          <WithTooltip content="Print job card"><Button type="button" variant="outline" size="icon" aria-label="Print job card" onClick={() => printCards([r])}><Printer className="size-4" /></Button></WithTooltip>
                           {canWrite("TailorOrders") && (
                             <WithTooltip content={r.workStatus === "paid" ? "Paid jobs cannot be deleted." : "Delete"}>
                               {r.workStatus === "paid"
-                                ? <span tabIndex={0}><Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" disabled><Trash2 className="size-4" /></Button></span>
-                                : <Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" onClick={() => remove(r)}><Trash2 className="size-4" /></Button>}
+                                ? <span tabIndex={0}><WithTooltip content="Delete assignment"><Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" disabled><Trash2 className="size-4" /></Button></WithTooltip></span>
+                                : <WithTooltip content="Delete assignment"><Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>}
                             </WithTooltip>
                           )}
                         </div>

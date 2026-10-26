@@ -527,15 +527,15 @@ export default function CustomersPage() {
                         <TableCell>
                           <div className="flex justify-end gap-1">
                             {c.phone ? (
-                              <Button asChild variant="outline" size="icon"><a href={`tel:${c.phone}`} aria-label={`Call ${c.name}`}><Phone className="size-4" /></a></Button>
+                              <WithTooltip content={`Call ${c.name}`}><Button asChild variant="outline" size="icon"><a href={`tel:${c.phone}`} aria-label={`Call ${c.name}`}><Phone className="size-4" /></a></Button></WithTooltip>
                             ) : (
                               <Button type="button" variant="outline" size="icon" disabled aria-hidden tabIndex={-1}><Phone className="size-4" /></Button>
                             )}
-                            <Button asChild variant="outline" size="icon"><Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={`New sale for ${c.name}`}><Plus className="size-4" /></Link></Button>
+                            <WithTooltip content={`New sale for ${c.name}`}><Button asChild variant="outline" size="icon"><Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={`New sale for ${c.name}`}><Plus className="size-4" /></Link></Button></WithTooltip>
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
+                              <WithTooltip content={`More actions for ${c.name}`}><DropdownMenuTrigger asChild>
                                 <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.name}`}><MoreHorizontal className="size-4" /></Button>
-                              </DropdownMenuTrigger>
+                              </DropdownMenuTrigger></WithTooltip>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => openForm(c)}>Edit customer</DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href={`/dashboard/orders?customer=${encodeURIComponent(c.name)}`}>View orders</Link></DropdownMenuItem>

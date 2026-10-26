@@ -13,6 +13,7 @@ import { FormField } from "@/components/common/FormField"
 import { SegmentedControl } from "@/components/common/SegmentedControl"
 import { Eye, EyeOff, AlertCircle } from "lucide-react"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -180,7 +181,7 @@ export default function LoginPage() {
                 className="pr-10"
                 disabled={loading}
               />
-              <Button
+              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -189,7 +190,7 @@ export default function LoginPage() {
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
           </div>
           </>

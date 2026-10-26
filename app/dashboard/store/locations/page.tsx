@@ -26,6 +26,7 @@ import { SectionCard } from "@/components/common/SectionCard"
 import { FormField } from "@/components/common/FormField"
 import { EmptyState } from "@/components/common/EmptyState"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const TYPES: LocationType[] = ["Warehouse", "Shop", "Pickup point"]
 const DISTRICTS = ["Dhaka", "Chattogram", "Sylhet", "Khulna", "Rajshahi", "Barishal", "Rangpur", "Mymensingh"]
@@ -203,8 +204,8 @@ export default function LocationsPage() {
                       })}
                     </div>
                     <div className="flex gap-1.5">
-                      <Button type="button" variant="outline" size="icon" aria-label="Edit" onClick={() => startEdit(l)}><Pencil className="size-4" /></Button>
-                      <Button type="button" variant="destructive" size="icon" aria-label="Delete" onClick={() => remove(l)}><Trash2 className="size-4" /></Button>
+                      <WithTooltip content="Edit"><Button type="button" variant="outline" size="icon" aria-label="Edit" onClick={() => startEdit(l)}><Pencil className="size-4" /></Button></WithTooltip>
+                      <WithTooltip content="Delete"><Button type="button" variant="destructive" size="icon" aria-label="Delete" onClick={() => remove(l)}><Trash2 className="size-4" /></Button></WithTooltip>
                       {!l.isDefault && <Button type="button" variant="outline" onClick={() => makeDefault(l)}>Set default</Button>}
                       <Button asChild variant="outline" className="flex-1"><Link href="/dashboard/inventory">View stock</Link></Button>
                     </div>

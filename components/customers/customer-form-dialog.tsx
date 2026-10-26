@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Group = "retail" | "wholesale" | "vip"
 type Kind = "individual" | "business"
@@ -276,7 +277,7 @@ export function CustomerFormDialog({ open, onOpenChange, customer, prefillPhone,
                   {tags.map((t) => (
                     <Badge key={t} variant="secondary" className="gap-1 pr-0.5">
                       {t}
-                      <Button type="button" variant="ghost" size="icon" className="size-4" aria-label={`Remove tag ${t}`} onClick={() => setTags((p) => p.filter((x) => x !== t))}><X className="size-3" /></Button>
+                      <WithTooltip content={`Remove tag ${t}`}><Button type="button" variant="ghost" size="icon" className="size-4" aria-label={`Remove tag ${t}`} onClick={() => setTags((p) => p.filter((x) => x !== t))}><X className="size-3" /></Button></WithTooltip>
                     </Badge>
                   ))}
                   <Input id="cf-tags" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder={tags.length ? "" : "Type a tag, press Enter"}

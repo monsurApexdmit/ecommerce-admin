@@ -643,17 +643,17 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <Button type="button" variant="outline" size="icon" aria-label={`View ${o.invoiceNo}`} onClick={() => openDetail(o)}><Eye className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Print ${o.invoiceNo}`} onClick={() => printInvoice(o)}><Printer className="size-4" /></Button>
+                          <WithTooltip content={`View ${o.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${o.invoiceNo}`} onClick={() => openDetail(o)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={`Print ${o.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${o.invoiceNo}`} onClick={() => printInvoice(o)}><Printer className="size-4" /></Button></WithTooltip>
                           {!["Cancelled", "Delivered", "Completed"].includes(stage) && (
                             <WithTooltip content="Cancel order">
                               <Button type="button" variant="outline" size="icon" aria-label={`Cancel ${o.invoiceNo}`} className="text-destructive" onClick={() => cancelOrders([o])}><XCircle className="size-4" /></Button>
                             </WithTooltip>
                           )}
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                            <WithTooltip content={`More actions for ${o.invoiceNo}`}><DropdownMenuTrigger asChild>
                               <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${o.invoiceNo}`}><MoreHorizontal className="size-4" /></Button>
-                            </DropdownMenuTrigger>
+                            </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
                               {canShip && <DropdownMenuItem onClick={() => createShipment(o.id)}>Create shipment</DropdownMenuItem>}
                               <DropdownMenuItem onClick={async () => printPackingSlips([await fullOrder(o)])}>Print packing slip</DropdownMenuItem>

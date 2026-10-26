@@ -360,7 +360,7 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-sm">{formatCurrency(item.price * item.quantity)}</p>
-                      <Button
+                      <WithTooltip content={`Remove ${item.productName}`}><Button
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
@@ -368,7 +368,7 @@ export default function CheckoutPage() {
                         onClick={() => removeFromCart(item.productId)}
                       >
                         <Trash2 className="h-3 w-3" />
-                      </Button>
+                      </Button></WithTooltip>
                     </div>
                   </div>
                 ))}

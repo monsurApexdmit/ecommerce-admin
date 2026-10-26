@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Trash2, Minus, Plus, Printer, Eye, ChevronLeft, ChevronRight, ShoppingCart, Eraser } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useCompanySettings } from '@/contexts/company-settings-context'
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 // ============ TYPES ============
 
@@ -383,11 +384,11 @@ function PrintBarcodeInner() {
                       </TableCell>
                       <TableCell>
                         <div className="inline-flex items-center gap-1">
-                          <Button type="button" variant="outline" size="icon" aria-label="Fewer labels" onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })}><Minus className="size-4" aria-hidden /></Button>
+                          <WithTooltip content="Fewer labels"><Button type="button" variant="outline" size="icon" aria-label="Fewer labels" onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })}><Minus className="size-4" aria-hidden /></Button></WithTooltip>
                           <Input type="number" min={1} aria-label={`Labels for ${item.product.name}`} value={item.quantity}
                             onChange={e => updateItem(item.key, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                             className="w-14 text-center tabular-nums" />
-                          <Button type="button" variant="outline" size="icon" aria-label="More labels" onClick={() => updateItem(item.key, { quantity: item.quantity + 1 })}><Plus className="size-4" aria-hidden /></Button>
+                          <WithTooltip content="More labels"><Button type="button" variant="outline" size="icon" aria-label="More labels" onClick={() => updateItem(item.key, { quantity: item.quantity + 1 })}><Plus className="size-4" aria-hidden /></Button></WithTooltip>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -396,7 +397,7 @@ function PrintBarcodeInner() {
                           className="w-40" />
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${item.product.name}`} onClick={() => removeItem(item.key)}><Trash2 className="size-4" aria-hidden /></Button>
+                        <WithTooltip content={`Remove ${item.product.name}`}><Button type="button" variant="ghost" size="icon" aria-label={`Remove ${item.product.name}`} onClick={() => removeItem(item.key)}><Trash2 className="size-4" aria-hidden /></Button></WithTooltip>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -486,9 +487,9 @@ function PrintBarcodeInner() {
           </Card>
           {sheets > 1 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <Button type="button" variant="outline" size="icon-sm" aria-label="Previous sheet" disabled={pageN <= 1} onClick={() => setSheetNo(pageN - 1)}><ChevronLeft className="size-4" aria-hidden /></Button>
+              <WithTooltip content="Previous sheet"><Button type="button" variant="outline" size="icon-sm" aria-label="Previous sheet" disabled={pageN <= 1} onClick={() => setSheetNo(pageN - 1)}><ChevronLeft className="size-4" aria-hidden /></Button></WithTooltip>
               <span>Sheet {pageN} of {sheets}</span>
-              <Button type="button" variant="outline" size="icon-sm" aria-label="Next sheet" disabled={pageN >= sheets} onClick={() => setSheetNo(pageN + 1)}><ChevronRight className="size-4" aria-hidden /></Button>
+              <WithTooltip content="Next sheet"><Button type="button" variant="outline" size="icon-sm" aria-label="Next sheet" disabled={pageN >= sheets} onClick={() => setSheetNo(pageN + 1)}><ChevronRight className="size-4" aria-hidden /></Button></WithTooltip>
             </div>
           )}
           <div className="flex flex-wrap gap-2">

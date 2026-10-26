@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 function useLatest<T>(v: T) {
     const r = useRef(v)
@@ -145,7 +146,7 @@ export function PosCustomerPicker({ value, onChange }: Props) {
                         </div>
                     </PopoverContent>
                 </Popover>
-                <Button
+                <WithTooltip content="Add new customer"><Button
                     type="button"
                     variant="outline"
                     size="icon-lg"
@@ -154,7 +155,7 @@ export function PosCustomerPicker({ value, onChange }: Props) {
                     onClick={() => { setQuick((v) => !v); setErr("") }}
                 >
                     <UserPlus className="size-[18px]" aria-hidden />
-                </Button>
+                </Button></WithTooltip>
             </div>
 
             {quick && (

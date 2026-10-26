@@ -37,6 +37,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "all" | "draft" | "ordered" | "partial" | "received" | "cancelled"
 
@@ -610,10 +611,10 @@ export default function PurchaseOrdersPage() {
                           {canReceive(p) && (
                             <Button type="button" variant="link" size="sm" className="mr-1" onClick={() => (p.status === "partial" ? receiveRest(p) : openView(p))}>{p.status === "partial" ? "Receive rest" : "Receive stock"}</Button>
                           )}
-                          <Button type="button" variant="outline" size="icon" aria-label={`View ${p.poNumber}`} onClick={() => openView(p)}><Eye className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Print ${p.poNumber}`} onClick={() => printPo(p)}><Printer className="size-4" /></Button>
+                          <WithTooltip content={`View ${p.poNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${p.poNumber}`} onClick={() => openView(p)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={`Print ${p.poNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${p.poNumber}`} onClick={() => printPo(p)}><Printer className="size-4" /></Button></WithTooltip>
                           {p.dueAmount > 0 && p.status !== "cancelled" && (
-                            <Button type="button" variant="outline" size="icon" aria-label={`Record payment for ${p.poNumber}`} onClick={() => openView(p)}><Banknote className="size-4" /></Button>
+                            <WithTooltip content={`Record payment for ${p.poNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Record payment for ${p.poNumber}`} onClick={() => openView(p)}><Banknote className="size-4" /></Button></WithTooltip>
                           )}
                         </div>
                       </TableCell>
@@ -722,15 +723,15 @@ export default function PurchaseOrdersPage() {
                         </div>
                         <span className="text-sm tabular-nums">{l.stock}</span>
                         <ButtonGroup>
-                          <Button type="button" variant="outline" size="icon" aria-label="Decrease" onClick={() => patchLine(l.key, { qty: Math.max(1, l.qty - 1) })}>−</Button>
+                          <WithTooltip content="Decrease"><Button type="button" variant="outline" size="icon" aria-label="Decrease" onClick={() => patchLine(l.key, { qty: Math.max(1, l.qty - 1) })}>−</Button></WithTooltip>
                           <Input type="number" min={1} aria-label="Quantity" value={l.qty} onChange={(e) => patchLine(l.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
                             className="w-[52px] text-center tabular-nums" />
-                          <Button type="button" variant="outline" size="icon" aria-label="Increase" onClick={() => patchLine(l.key, { qty: l.qty + 1 })}>+</Button>
+                          <WithTooltip content="Increase"><Button type="button" variant="outline" size="icon" aria-label="Increase" onClick={() => patchLine(l.key, { qty: l.qty + 1 })}>+</Button></WithTooltip>
                         </ButtonGroup>
                         <Input type="number" min={0} step="0.01" aria-label="Unit cost" value={l.cost} onChange={(e) => patchLine(l.key, { cost: Number(e.target.value) || 0 })}
                           className="w-full tabular-nums" />
                         <span className="text-right text-sm font-semibold tabular-nums">{formatCurrency(l.qty * l.cost)}</span>
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button>
+                        <WithTooltip content="Remove line"><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button></WithTooltip>
                       </div>
                     </Fragment>
                   ))}

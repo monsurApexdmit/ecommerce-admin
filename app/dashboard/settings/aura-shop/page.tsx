@@ -20,6 +20,7 @@ import { SectionCard } from "@/components/common/SectionCard"
 import { FormField } from "@/components/common/FormField"
 import { SlideDots } from "@/components/common/SlideDots"
 import { EmptyState } from "@/components/common/EmptyState"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const TYPES = ["Retail", "Wholesale", "Manufacturing", "Service", "Restaurant", "Other"]
 const PRESETS: [string, string][] = [
@@ -293,8 +294,8 @@ export default function AuraShopSettingsPage() {
                   <FormField orientation="horizontal" label="Enabled" htmlFor={`slide-${i}-enabled`} className="w-auto gap-2">
                     <Switch id={`slide-${i}-enabled`} checked={s.enabled} aria-label="Slide enabled" onCheckedChange={() => patchSlide(i, { enabled: !s.enabled })} />
                   </FormField>
-                  <Button type="button" variant="outline" size="icon-sm" disabled={i === 0} aria-label="Move slide up" onClick={() => move(i, -1)}>↑</Button>
-                  <Button type="button" variant="outline" size="icon-sm" disabled={i === d.slides.length - 1} aria-label="Move slide down" onClick={() => move(i, 1)}>↓</Button>
+                  <WithTooltip content="Move slide up"><Button type="button" variant="outline" size="icon-sm" disabled={i === 0} aria-label="Move slide up" onClick={() => move(i, -1)}>↑</Button></WithTooltip>
+                  <WithTooltip content="Move slide down"><Button type="button" variant="outline" size="icon-sm" disabled={i === d.slides.length - 1} aria-label="Move slide down" onClick={() => move(i, 1)}>↓</Button></WithTooltip>
                   <Button type="button" variant="destructive" size="sm" onClick={() => { if (window.confirm(`Delete slide ${i + 1}? Save to apply.`)) patch({ slides: d.slides.filter((_, k) => k !== i) }) }}>Delete</Button>
                 </div>
               </div>

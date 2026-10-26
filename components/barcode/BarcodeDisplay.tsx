@@ -154,9 +154,9 @@ export default function BarcodeDisplay({
       <FormField label="Barcode Number" htmlFor={`barcode-number-${productId}`}>
         <div className="flex items-center gap-2">
           <Input id={`barcode-number-${productId}`} readOnly value={barcodeNumber} className="flex-1 font-mono" />
-          <Button size="icon" variant="ghost" aria-label="Copy barcode number" onClick={handleCopyBarcode}>
+          <WithTooltip content="Copy barcode number"><Button size="icon" variant="ghost" aria-label="Copy barcode number" onClick={handleCopyBarcode}>
             <Copy className="size-4" />
-          </Button>
+          </Button></WithTooltip>
         </div>
       </FormField>
 

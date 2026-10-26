@@ -35,6 +35,7 @@ import { BulkBar } from "@/components/common/BulkBar"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { EmptyState } from "@/components/common/EmptyState"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "all" | "pending" | "picked_up" | "in_transit" | "delivered" | "failed"
 
@@ -452,12 +453,12 @@ export default function ShipmentsPage() {
                                 {NEXT_STEP_LABEL[nxt]}
                               </Button>
                             )}
-                            <Button type="button" variant="outline" size="icon" aria-label="Track shipment" onClick={() => openView(s)}><MapPin className="size-4" /></Button>
-                            <Button type="button" variant="outline" size="icon" aria-label="Print label" onClick={() => printLabel(s)}><Printer className="size-4" /></Button>
+                            <WithTooltip content="Track shipment"><Button type="button" variant="outline" size="icon" aria-label="Track shipment" onClick={() => openView(s)}><MapPin className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content="Print label"><Button type="button" variant="outline" size="icon" aria-label="Print label" onClick={() => printLabel(s)}><Printer className="size-4" /></Button></WithTooltip>
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
+                              <WithTooltip content="More actions"><DropdownMenuTrigger asChild>
                                 <Button type="button" variant="outline" size="icon" aria-label="More actions"><MoreHorizontal className="size-4" /></Button>
-                              </DropdownMenuTrigger>
+                              </DropdownMenuTrigger></WithTooltip>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => openView(s)}>Update status</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openView(s)}>View tracking history</DropdownMenuItem>

@@ -11,6 +11,7 @@ import { FormField } from "@/components/common/FormField"
 import { Card } from "@/components/ui/card"
 import { Eye, EyeOff } from "lucide-react"
 import { saasAuthApi } from "@/lib/saasAuthApi"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -88,7 +89,7 @@ export default function LoginPage() {
                 required
                 className="pr-10"
               />
-              <Button
+              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -97,7 +98,7 @@ export default function LoginPage() {
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
           </FormField>
 

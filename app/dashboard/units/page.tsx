@@ -33,6 +33,7 @@ import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
 import { usePagination } from "@/hooks/use-pagination"
 import { useToast } from "@/hooks/use-toast"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type UnitType = "Count" | "Weight" | "Volume" | "Length"
 const TYPES: UnitType[] = ["Count", "Weight", "Volume", "Length"]
@@ -313,11 +314,11 @@ export default function UnitsPage() {
                     </TableCell>
                     <TableCell className="pr-4">
                       <div className="flex justify-end gap-1">
-                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${u.unitName}`} onClick={() => openForm(u)}><Pencil className="size-4" /></Button>
+                        <WithTooltip content={`Edit ${u.unitName}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${u.unitName}`} onClick={() => openForm(u)}><Pencil className="size-4" /></Button></WithTooltip>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                          <WithTooltip content={`More actions for ${u.unitName}`}><DropdownMenuTrigger asChild>
                             <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${u.unitName}`}><MoreHorizontal className="size-4" /></Button>
-                          </DropdownMenuTrigger>
+                          </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openForm(u)}>Edit unit</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setActive([u], !u.status)}>{u.status ? "Mark inactive" : "Mark active"}</DropdownMenuItem>

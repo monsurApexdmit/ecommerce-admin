@@ -31,6 +31,7 @@ import { FormField } from "@/components/common/FormField"
 import { Toolbar } from "@/components/common/Toolbar"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { EmptyState } from "@/components/common/EmptyState"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "batch" | "serial"
 
@@ -349,8 +350,8 @@ export default function SerialBatchPage() {
                           <TableCell className="tabular-nums">{b.sellOrderLabel ?? "—"}</TableCell>
                           <TableCell className="pr-4">
                             <div className="flex justify-end gap-1">
-                              <Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.batchNumber}`} onClick={() => editBatch(b)}><Pencil className="size-4" /></Button>
-                              <Button type="button" variant="outline" size="icon" aria-label={`Delete ${b.batchNumber}`} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></Button>
+                              <WithTooltip content={`Edit ${b.batchNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.batchNumber}`} onClick={() => editBatch(b)}><Pencil className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={`Delete ${b.batchNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${b.batchNumber}`} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -383,8 +384,8 @@ export default function SerialBatchPage() {
                         </TableCell>
                         <TableCell className="pr-4">
                           <div className="flex justify-end gap-1">
-                            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${s.serialNumber}`} onClick={() => editSerial(s)}><Pencil className="size-4" /></Button>
-                            <Button type="button" variant="outline" size="icon" aria-label={`Delete ${s.serialNumber}`} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></Button>
+                            <WithTooltip content={`Edit ${s.serialNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${s.serialNumber}`} onClick={() => editSerial(s)}><Pencil className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={`Delete ${s.serialNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${s.serialNumber}`} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
                           </div>
                         </TableCell>
                       </TableRow>

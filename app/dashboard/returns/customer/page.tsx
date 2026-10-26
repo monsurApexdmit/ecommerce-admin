@@ -38,6 +38,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "all" | "pending" | "completed" | "rejected" | "restocked" | "written_off"
 
@@ -359,8 +360,8 @@ export default function CustomerReturnsPage() {
                         <div className="flex items-center justify-end gap-1">
                           {pending && <Button type="button" size="sm" className="mr-1" disabled={busyId === r.id} onClick={() => approve(r)}>Approve</Button>}
                           {pending && <Button type="button" variant="ghost" size="sm" className="mr-1 text-destructive" disabled={busyId === r.id} onClick={() => reject(r)}>Reject</Button>}
-                          <Button type="button" variant="outline" size="icon" aria-label="View return" onClick={() => setDetail(r)}><Eye className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label="Print return" onClick={() => printReturn(r)}><Printer className="size-4" /></Button>
+                          <WithTooltip content="View return"><Button type="button" variant="outline" size="icon" aria-label="View return" onClick={() => setDetail(r)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content="Print return"><Button type="button" variant="outline" size="icon" aria-label="Print return" onClick={() => printReturn(r)}><Printer className="size-4" /></Button></WithTooltip>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -456,9 +457,9 @@ export default function CustomerReturnsPage() {
                                 <div className="text-xs text-muted-foreground">Bought {l.bought} × {formatCurrency(l.price)} · {l.returnable} can still be returned</div>
                               </div>
                               <ButtonGroup>
-                                <Button type="button" variant="outline" size="icon" aria-label="Decrease return quantity" onClick={() => patch(i, { qty: Math.max(1, l.qty - 1), on: true })}>−</Button>
+                                <WithTooltip content="Decrease return quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease return quantity" onClick={() => patch(i, { qty: Math.max(1, l.qty - 1), on: true })}>−</Button></WithTooltip>
                                 <ButtonGroupText className="w-10 justify-center tabular-nums">{l.qty}</ButtonGroupText>
-                                <Button type="button" variant="outline" size="icon" aria-label="Increase return quantity" onClick={() => patch(i, { qty: Math.min(l.returnable, l.qty + 1), on: true })}>+</Button>
+                                <WithTooltip content="Increase return quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase return quantity" onClick={() => patch(i, { qty: Math.min(l.returnable, l.qty + 1), on: true })}>+</Button></WithTooltip>
                               </ButtonGroup>
                               <span className="w-24 text-right text-sm font-semibold tabular-nums">{formatCurrency(l.qty * l.price)}</span>
                             </div>

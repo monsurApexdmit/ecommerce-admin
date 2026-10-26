@@ -39,6 +39,7 @@ import { useCategory, type Category } from "@/contexts/category-context"
 import { useToast } from "@/hooks/use-toast"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface Row { cat: Category; depth: number; hasChildren: boolean }
 
@@ -383,11 +384,11 @@ export default function CategoriesPage() {
                     <TableCell>
                       <div className="flex items-center gap-2.5" style={{ paddingLeft: depth * 28 }}>
                         {hasChildren && !flatMode ? (
-                          <Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
+                          <WithTooltip content={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}><Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
                             aria-label={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}
                             className="shrink-0">
                             {collapsed.has(c.id) ? <ChevronRight className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
-                          </Button>
+                          </Button></WithTooltip>
                         ) : (
                           <span aria-hidden className="w-8 shrink-0 text-center text-muted-foreground">{depth > 0 ? "└" : ""}</span>
                         )}
@@ -416,16 +417,16 @@ export default function CategoriesPage() {
                           const idx = sibs.findIndex((s) => s.id === c.id)
                           return (
                             <>
-                              <Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} up`} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button>
-                              <Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} down`} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button>
+                              <WithTooltip content={`Move ${c.category_name} up`}><Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} up`} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={`Move ${c.category_name} down`}><Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} down`} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button></WithTooltip>
                             </>
                           )
                         })()}
-                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.category_name}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button>
+                        <WithTooltip content={`Edit ${c.category_name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.category_name}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                          <WithTooltip content={`More actions for ${c.category_name}`}><DropdownMenuTrigger asChild>
                             <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.category_name}`}><MoreHorizontal className="size-4" /></Button>
-                          </DropdownMenuTrigger>
+                          </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openForm(c)}>Edit category</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setPublished([c], !c.status)}>{c.status ? "Unpublish" : "Publish"}</DropdownMenuItem>

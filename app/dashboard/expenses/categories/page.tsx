@@ -196,7 +196,7 @@ export default function ExpenseCategoriesPage() {
                     </div>
                     {warn && <span className={cn("text-xs font-medium", pct > 100 ? "text-destructive" : "text-amber-600")}>{warn}</span>}
                     <div className="mt-auto flex items-center gap-1.5 pt-1">
-                      <Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.name}`} onClick={() => startEdit(c)}><Pencil className="size-4" /></Button>
+                      <WithTooltip content={`Edit ${c.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.name}`} onClick={() => startEdit(c)}><Pencil className="size-4" /></Button></WithTooltip>
                       <WithTooltip content={c.system ? "Managed by payroll" : undefined}>
                         <span tabIndex={c.system ? 0 : undefined}>
                           <Button type="button" variant="outline" size="icon" aria-label={`Delete ${c.name}`} disabled={c.system} onClick={() => remove(c)}><Trash2 className="size-4" /></Button>

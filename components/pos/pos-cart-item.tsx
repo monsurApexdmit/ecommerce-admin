@@ -5,6 +5,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface CartItem {
     id: string
@@ -44,7 +45,7 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
             </div>
 
             <ButtonGroup aria-label={`Quantity of ${item.name}`}>
-                <Button
+                <WithTooltip content={`Decrease ${item.name}`}><Button
                     type="button"
                     variant="outline"
                     size="icon"
@@ -52,9 +53,9 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
                     onClick={() => onVerifyQuantity(item.id, -1)}
                 >
                     −
-                </Button>
+                </Button></WithTooltip>
                 <ButtonGroupText className="min-w-9 justify-center px-2 font-bold tabular-nums">{item.quantity}</ButtonGroupText>
-                <Button
+                <WithTooltip content={`Increase ${item.name}`}><Button
                     type="button"
                     variant="outline"
                     size="icon"
@@ -62,14 +63,14 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
                     onClick={() => onVerifyQuantity(item.id, 1)}
                 >
                     +
-                </Button>
+                </Button></WithTooltip>
             </ButtonGroup>
 
             <span className="w-[78px] text-right text-sm font-bold tabular-nums">
                 {formatCurrency(item.price * item.quantity)}
             </span>
 
-            <Button
+            <WithTooltip content={`Remove ${item.name}`}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -78,7 +79,7 @@ export function PosCartItem({ item, onVerifyQuantity, onRemove }: PosCartItemPro
                 className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
             >
                 <Trash2 className="size-4" />
-            </Button>
+            </Button></WithTooltip>
         </div>
     )
 }

@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/common/PageHeader"
 import { SectionCard } from "@/components/common/SectionCard"
 import { UserAvatar } from "@/components/common/UserAvatar"
 import Swal from "sweetalert2"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function EditProfilePage() {
   const { user } = useSaasAuth()
@@ -116,7 +117,7 @@ export default function EditProfilePage() {
               <div className="flex flex-col items-center gap-4">
                 <div className="relative group">
                   <UserAvatar className="size-32" src={avatar} alt="Profile" fallback="AD" />
-                  <Button
+                  <WithTooltip content="Change profile photo"><Button
                     type="button"
                     size="icon-sm"
                     onClick={triggerFileInput}
@@ -124,7 +125,7 @@ export default function EditProfilePage() {
                     className="absolute bottom-0 right-0 rounded-full"
                   >
                     <Camera className="w-4 h-4" />
-                  </Button>
+                  </Button></WithTooltip>
                   <Input
                     type="file"
                     ref={fileInputRef}

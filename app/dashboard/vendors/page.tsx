@@ -43,6 +43,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "all" | "Active" | "owe" | "Inactive" | "Blocked"
 type Sort = "purchased" | "owed" | "name" | "recent"
@@ -516,10 +517,10 @@ export default function SuppliersPage() {
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
                             <Button asChild variant="link" size="sm" className="mr-1"><Link href={poHref(r.id)}>New PO</Link></Button>
-                            <Button type="button" variant="outline" size="icon" aria-label={`Record payment to ${r.name}`}
-                              onClick={() => { select(r.id); setPayOpen(true) }}><Banknote className="size-4" /></Button>
-                            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Pencil className="size-4" /></Button>
-                            <Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => setDeleteTarget(r)}><Trash2 className="size-4" /></Button>
+                            <WithTooltip content={`Record payment to ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Record payment to ${r.name}`}
+                              onClick={() => { select(r.id); setPayOpen(true) }}><Banknote className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={`Edit ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={`Delete ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => setDeleteTarget(r)}><Trash2 className="size-4" /></Button></WithTooltip>
                           </div>
                         </TableCell>
                       </TableRow>

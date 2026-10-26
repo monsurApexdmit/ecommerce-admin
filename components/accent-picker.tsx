@@ -10,6 +10,7 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 // price/checkout) reads that var, so the whole UI recolours instantly.
 // Persisted in localStorage under `brand-accent`.
 export const ACCENTS = [
+  { name: "Blue", value: "#2449E8" },
   { name: "Emerald", value: "#059669" },
   { name: "Indigo", value: "#4f46e5" },
   { name: "Violet", value: "#7c3aed" },

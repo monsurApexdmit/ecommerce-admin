@@ -581,7 +581,7 @@ export default function PagesManagementPage() {
                               <Input type="text" value={r.label} onChange={(e) => upRow("stats", i, { label: e.target.value })} placeholder="Label, e.g. Happy customers" aria-label="Stat label" className="min-w-40 flex-1" />
                               <Input type="text" value={r.value} onChange={(e) => upRow("stats", i, { value: e.target.value })} placeholder="Value, e.g. 50K+" aria-label="Stat value" className="min-w-32 flex-1" />
                               <Select value={r.icon} onValueChange={(v) => upRow("stats", i, { icon: v })}><SelectTrigger aria-label="Stat icon" className="w-40"><SelectValue /></SelectTrigger><SelectContent>{ICONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
-                              <Button type="button" onClick={() => delRow("stats", i)} aria-label="Remove stat" variant="outline" size="icon"><X className="size-4" /></Button>
+                              <WithTooltip content="Remove stat"><Button type="button" onClick={() => delRow("stats", i)} aria-label="Remove stat" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                           ))}
                           <Button type="button" onClick={() => patch({ stats: [...f.stats, { label: "", value: "", icon: "users" }] })} variant="outline" size="sm" className="self-start">+ Add stat</Button>
@@ -594,7 +594,7 @@ export default function PagesManagementPage() {
                               <Input type="text" value={r.title} onChange={(e) => upRow("values", i, { title: e.target.value })} placeholder="Title" aria-label="Value title" className="min-w-40 flex-1" />
                               <Input type="text" value={r.description} onChange={(e) => upRow("values", i, { description: e.target.value })} placeholder="Description" aria-label="Value description" className="min-w-48 flex-[2]" />
                               <Select value={r.icon} onValueChange={(v) => upRow("values", i, { icon: v })}><SelectTrigger aria-label="Value icon" className="w-40"><SelectValue /></SelectTrigger><SelectContent>{ICONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
-                              <Button type="button" onClick={() => delRow("values", i)} aria-label="Remove value" variant="outline" size="icon"><X className="size-4" /></Button>
+                              <WithTooltip content="Remove value"><Button type="button" onClick={() => delRow("values", i)} aria-label="Remove value" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                           ))}
                           <Button type="button" onClick={() => patch({ values: [...f.values, { title: "", description: "", icon: "heart" }] })} variant="outline" size="sm" className="self-start">+ Add value</Button>
@@ -607,7 +607,7 @@ export default function PagesManagementPage() {
                               <Input type="text" value={r.name} onChange={(e) => upRow("team", i, { name: e.target.value })} placeholder="Name" aria-label="Team member name" className="min-w-36 flex-1" />
                               <Input type="text" value={r.role} onChange={(e) => upRow("team", i, { role: e.target.value })} placeholder="Role" aria-label="Team member role" className="min-w-36 flex-1" />
                               <Input type="text" value={r.bio} onChange={(e) => upRow("team", i, { bio: e.target.value })} placeholder="Short bio" aria-label="Team member bio" className="min-w-48 flex-[2]" />
-                              <Button type="button" onClick={() => delRow("team", i)} aria-label="Remove team member" variant="outline" size="icon"><X className="size-4" /></Button>
+                              <WithTooltip content="Remove team member"><Button type="button" onClick={() => delRow("team", i)} aria-label="Remove team member" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                           ))}
                           <Button type="button" onClick={() => patch({ team: [...f.team, { name: "", role: "", bio: "" }] })} variant="outline" size="sm" className="self-start">+ Add team member</Button>
@@ -622,7 +622,7 @@ export default function PagesManagementPage() {
                           <Card key={ci} className="gap-2 p-3 shadow-none">
                             <div className="flex gap-2">
                               <Input type="text" value={c.title} onChange={(e) => upCat(ci, { title: e.target.value })} placeholder="Category title, e.g. Orders & delivery" aria-label="Category title" />
-                              <Button type="button" onClick={() => patch({ faq: f.faq.filter((_, j) => j !== ci) })} aria-label="Remove category" variant="outline" size="icon"><X className="size-4" /></Button>
+                              <WithTooltip content="Remove category"><Button type="button" onClick={() => patch({ faq: f.faq.filter((_, j) => j !== ci) })} aria-label="Remove category" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                             {c.items.map((it, qi) => (
                               <div key={qi} className="flex gap-2">
@@ -630,7 +630,7 @@ export default function PagesManagementPage() {
                                   <Input type="text" value={it.q} onChange={(e) => upCat(ci, { items: c.items.map((x, n) => (n === qi ? { ...x, q: e.target.value } : x)) })} placeholder="Question" aria-label="Question" />
                                   <Textarea rows={2} value={it.a} onChange={(e) => upCat(ci, { items: c.items.map((x, n) => (n === qi ? { ...x, a: e.target.value } : x)) })} placeholder="Answer" aria-label="Answer" />
                                 </div>
-                                <Button type="button" onClick={() => upCat(ci, { items: c.items.filter((_, n) => n !== qi) })} aria-label="Remove question" variant="outline" size="icon"><X className="size-4" /></Button>
+                                <WithTooltip content="Remove question"><Button type="button" onClick={() => upCat(ci, { items: c.items.filter((_, n) => n !== qi) })} aria-label="Remove question" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                               </div>
                             ))}
                             <Button type="button" onClick={() => upCat(ci, { items: [...c.items, { q: "", a: "" }] })} variant="outline" size="sm" className="self-start">+ Add question</Button>
@@ -649,7 +649,7 @@ export default function PagesManagementPage() {
                               <Input type="text" value={r.title} onChange={(e) => upRow("sections", i, { title: e.target.value })} placeholder="Section title" aria-label="Section title" />
                               <Textarea rows={5} value={r.text} onChange={(e) => upRow("sections", i, { text: e.target.value })} placeholder="Paragraphs. Leave a blank line between paragraphs." aria-label="Section paragraphs" />
                             </div>
-                            <Button type="button" onClick={() => delRow("sections", i)} aria-label="Remove section" variant="outline" size="icon"><X className="size-4" /></Button>
+                            <WithTooltip content="Remove section"><Button type="button" onClick={() => delRow("sections", i)} aria-label="Remove section" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                           </div>
                         ))}
                         <Button type="button" onClick={() => patch({ sections: [...f.sections, { title: "", text: "" }] })} variant="outline" size="sm" className="self-start">+ Add section</Button>

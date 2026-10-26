@@ -319,8 +319,8 @@ export default function StaffPage() {
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <Button type="button" variant="outline" size="icon" aria-label={`View ${r.name}`} onClick={() => openView(r)}><Eye className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button>
+                          <WithTooltip content={`View ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${r.name}`} onClick={() => openView(r)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={`Edit ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
                           <WithTooltip content={r.isOnlyOwner ? "The only Owner cannot be deactivated" : r.status === "Inactive" ? "Reactivate" : "Deactivate"}>
                             <span tabIndex={r.isOnlyOwner ? 0 : undefined} className="inline-flex">
                               <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={r.status === "Inactive" ? "Reactivate" : "Deactivate"} onClick={() => toggleActive(r)}>

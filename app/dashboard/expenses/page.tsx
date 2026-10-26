@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Tab = "all" | "rec" | "salary" | "manual"
 type Period = "month" | "last" | "d30" | "year" | "all" | "custom"
@@ -397,8 +398,8 @@ export default function ExpensesPage() {
                           <div className="flex justify-end gap-1">
                             {r.locked || r.source === "salary" ? <span className="text-xs text-muted-foreground">Paid via Salary</span> : (
                               <>
-                                <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button>
-                                <Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.title}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>
+                                <WithTooltip content={`Edit ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
+                                <WithTooltip content={`Delete ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.title}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>
                               </>
                             )}
                           </div>

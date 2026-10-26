@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { FormField } from "@/components/common/FormField"
 import { saasAuthApi } from "@/lib/saasAuthApi"
 import { AlertCircle, Lock, Eye, EyeOff, CheckCircle, ArrowLeft } from "lucide-react"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -217,7 +218,7 @@ export default function ResetPasswordPage() {
                 placeholder="Enter new password"
                 disabled={loading}
               />
-              <Button
+              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -226,7 +227,7 @@ export default function ResetPasswordPage() {
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
 
             {password && (
@@ -254,7 +255,7 @@ export default function ResetPasswordPage() {
                 placeholder="Confirm new password"
                 disabled={loading}
               />
-              <Button
+              <WithTooltip content={showConfirmPassword ? "Hide password" : "Show password"}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -263,7 +264,7 @@ export default function ResetPasswordPage() {
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
 
             {password && confirmPassword && password === confirmPassword && (

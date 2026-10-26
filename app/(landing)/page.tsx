@@ -36,6 +36,7 @@ import {
   TicketPercent,
   BadgeCheck,
 } from "lucide-react"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -79,9 +80,9 @@ function Navbar() {
           </div>
 
           {/* Mobile menu */}
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu">
+          <WithTooltip content="Toggle menu"><Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu">
             {open ? <X className={cn("w-5 h-5", scrolled ? "text-gray-900" : "text-white")} /> : <Menu className={cn("w-5 h-5", scrolled ? "text-gray-900" : "text-white")} />}
-          </Button>
+          </Button></WithTooltip>
         </div>
       </div>
 

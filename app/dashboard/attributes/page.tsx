@@ -37,6 +37,7 @@ import { useAttribute, type Attribute } from "@/contexts/attribute-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Option = "dropdown" | "radio" | "button" | "swatch"
 type FormState = { name: string; displayName: string; option: Option; values: string[]; colors: Record<string, string>; published: boolean }
@@ -324,8 +325,8 @@ export default function AttributesPage() {
                   </div>
                   <ItemActions className="gap-1.5">
                     <Switch checked={a.published} onCheckedChange={(v) => setPublished([a], v)} aria-label={`Published: ${a.name}`} />
-                    <Button type="button" variant="outline" size="icon" onClick={() => startEdit(a)} aria-label={`Edit ${a.name}`}><Pencil className="size-4" /></Button>
-                    <Button type="button" variant="outline" size="icon" onClick={() => setDeleteTargets([a])} aria-label={`Delete ${a.name}`}><Trash2 className="size-4" /></Button>
+                    <WithTooltip content={`Edit ${a.name}`}><Button type="button" variant="outline" size="icon" onClick={() => startEdit(a)} aria-label={`Edit ${a.name}`}><Pencil className="size-4" /></Button></WithTooltip>
+                    <WithTooltip content={`Delete ${a.name}`}><Button type="button" variant="outline" size="icon" onClick={() => setDeleteTargets([a])} aria-label={`Delete ${a.name}`}><Trash2 className="size-4" /></Button></WithTooltip>
                   </ItemActions>
                 </Item>
                 </Fragment>
@@ -382,8 +383,8 @@ export default function AttributesPage() {
                       onChange={(hex) => setForm({ ...form, colors: { ...form.colors, [v]: hex } })} />
                   )}
                   {v}
-                  <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${v}`} onClick={() => setForm({ ...form, values: form.values.filter((x) => x !== v) })}
-                    className="size-4"><X className="size-3" /></Button>
+                  <WithTooltip content={`Remove ${v}`}><Button type="button" variant="ghost" size="icon" aria-label={`Remove ${v}`} onClick={() => setForm({ ...form, values: form.values.filter((x) => x !== v) })}
+                    className="size-4"><X className="size-3" /></Button></WithTooltip>
                 </Badge>
               ))}
               <InputGroupInput id="attr-values" ref={chipRef} value={chipDraft} placeholder="Type and press Enter"

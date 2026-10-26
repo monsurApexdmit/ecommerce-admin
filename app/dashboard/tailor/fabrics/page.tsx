@@ -315,8 +315,8 @@ export default function TailorFabricsPage() {
                         <TableCell>
                           <div className="flex justify-end gap-1">
                             {mayWrite && <WithTooltip content="Add stock"><Button type="button" variant="outline" size="icon" aria-label={`Add stock to ${r.name}`} onClick={() => startRestock(r)}><PackagePlus className="size-4" /></Button></WithTooltip>}
-                            {mayWrite && <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button>}
-                            {mayDelete && <Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>}
+                            {mayWrite && <WithTooltip content={`Edit ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>}
+                            {mayDelete && <WithTooltip content={`Delete ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>}
                           </div>
                         </TableCell>
                       </TableRow>

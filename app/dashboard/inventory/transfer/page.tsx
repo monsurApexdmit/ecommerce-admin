@@ -26,6 +26,7 @@ import { Toolbar } from "@/components/common/Toolbar"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { EmptyState } from "@/components/common/EmptyState"
 import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const REASONS = ["Restock store", "Rebalance stock", "Customer order pickup", "Return to warehouse"]
 
@@ -222,7 +223,7 @@ export default function TransferPage() {
                   </SelectContent>
                 </Select>
               </FormField>
-              <Button type="button" variant="outline" size="icon" onClick={swap} aria-label="Swap locations">⇄</Button>
+              <WithTooltip content="Swap locations"><Button type="button" variant="outline" size="icon" onClick={swap} aria-label="Swap locations">⇄</Button></WithTooltip>
               <FormField label="To" htmlFor="tr-to">
                 <Select value={to || undefined} onValueChange={(v) => { setTo(v); setErr("") }}>
                   <SelectTrigger id="tr-to" className="w-full"><SelectValue /></SelectTrigger>
@@ -263,12 +264,12 @@ export default function TransferPage() {
                     </ItemContent>
                     <ItemActions>
                     <div className="flex items-center">
-                      <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => setQty(l.key, l.qty - 1)}>−</Button>
+                      <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => setQty(l.key, l.qty - 1)}>−</Button></WithTooltip>
                       <Input type="number" min={1} max={l.avail} aria-label="Quantity" value={l.qty} onChange={(e) => setQty(l.key, Number(e.target.value))}
                         className="mx-1 w-16 text-center tabular-nums" />
-                      <Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => setQty(l.key, l.qty + 1)}>+</Button>
+                      <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => setQty(l.key, l.qty + 1)}>+</Button></WithTooltip>
                     </div>
-                    <Button type="button" variant="ghost" size="icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button>
+                    <WithTooltip content="Remove"><Button type="button" variant="ghost" size="icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button></WithTooltip>
                     </ItemActions>
                   </Item>
                   </div>

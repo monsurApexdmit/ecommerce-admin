@@ -30,6 +30,7 @@ import { FormField } from "@/components/common/FormField"
 import { EmptyState } from "@/components/common/EmptyState"
 import { Toolbar } from "@/components/common/Toolbar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const BUCKET_COLORS = ["#0F766E", "#F59E0B", "#EA580C", "#B42318"]
 const METHODS = [
@@ -320,7 +321,7 @@ export function DuesView({ party }: Props) {
                       <TableCell className="pr-4">
                         <div className="flex items-center justify-end gap-1.5">
                           <Button type="button" size="sm" onClick={() => open(r)}>{copy.action}</Button>
-                          {isCust && !r.walkIn && <Button type="button" variant="outline" size="icon" aria-label={`Send reminder to ${r.name}`} onClick={() => { open(r).then(() => remind(r, "Copy")) }}><Bell className="size-4" /></Button>}
+                          {isCust && !r.walkIn && <WithTooltip content={`Send reminder to ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Send reminder to ${r.name}`} onClick={() => { open(r).then(() => remind(r, "Copy")) }}><Bell className="size-4" /></Button></WithTooltip>}
                         </div>
                       </TableCell>
                     </TableRow>

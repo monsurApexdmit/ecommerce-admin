@@ -398,8 +398,8 @@ export default function PaymentMethodsPage() {
                   <StatusBadge status={m.isActive ? "active" : "inactive"} label={m.isActive ? "Active" : "Inactive"} />
                   <Switch on={m.isActive} label={m.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === m.id} onClick={() => toggle(m)} />
                   <div className="flex gap-1.5">
-                    <Button type="button" variant="outline" size="icon" aria-label={`Edit ${m.name}`} onClick={() => openEdit(m)}><Pencil className="size-4" /></Button>
-                    <Button type="button" variant="destructive" size="icon" aria-label={`Delete ${m.name}`} disabled={busyId === m.id} onClick={() => remove(m)}><Trash2 className="size-4" /></Button>
+                    <WithTooltip content={`Edit ${m.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${m.name}`} onClick={() => openEdit(m)}><Pencil className="size-4" /></Button></WithTooltip>
+                    <WithTooltip content={`Delete ${m.name}`}><Button type="button" variant="destructive" size="icon" aria-label={`Delete ${m.name}`} disabled={busyId === m.id} onClick={() => remove(m)}><Trash2 className="size-4" /></Button></WithTooltip>
                   </div>
                   </ItemActions>
                 </Item>

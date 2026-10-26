@@ -560,8 +560,8 @@ export default function SalesPage() {
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <Button type="button" variant="outline" size="icon" aria-label={`View ${s.invoiceNo}`} onClick={() => openDetail(s)}><Eye className="size-4" /></Button>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Print ${s.invoiceNo}`} onClick={() => printInvoice(s)}><Printer className="size-4" /></Button>
+                          <WithTooltip content={`View ${s.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${s.invoiceNo}`} onClick={() => openDetail(s)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={`Print ${s.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${s.invoiceNo}`} onClick={() => printInvoice(s)}><Printer className="size-4" /></Button></WithTooltip>
                           {step && (
                             <WithTooltip content={step.label}>
                               <Button type="button" variant="outline" size="icon" aria-label={`${step.label} ${s.invoiceNo}`}

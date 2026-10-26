@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { FormField } from "@/components/common/FormField"
 import { Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -257,7 +258,7 @@ export default function SignupPage() {
                 aria-invalid={errors.password ? true : undefined}
                 disabled={loading}
               />
-              <Button
+              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -266,7 +267,7 @@ export default function SignupPage() {
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
             {formData.password && strength.level > 0 && (
               <div className="flex items-center gap-2 text-xs">
@@ -300,7 +301,7 @@ export default function SignupPage() {
                 aria-invalid={errors.confirmPassword ? true : undefined}
                 disabled={loading}
               />
-              <Button
+              <WithTooltip content={showConfirmPassword ? "Hide password" : "Show password"}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -309,7 +310,7 @@ export default function SignupPage() {
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </Button>
+              </Button></WithTooltip>
             </div>
             {!errors.confirmPassword && formData.password && formData.confirmPassword && formData.password === formData.confirmPassword && (
               <p className="text-green-600 text-xs flex items-center gap-1">

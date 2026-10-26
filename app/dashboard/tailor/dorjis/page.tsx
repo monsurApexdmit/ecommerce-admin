@@ -33,6 +33,7 @@ import { exportToCSV } from "@/lib/export-import-utils"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const SPECS = ["Shirt", "Panjabi", "Pant", "Pajama", "Jama", "Kurta", "Blouse", "Salwar Kameez", "Coat", "Embroidery"]
 const STATUS_LABEL: Record<TailorDorjiStatus, string> = { active: "Active", on_leave: "On leave", inactive: "Inactive" }
@@ -217,9 +218,9 @@ export default function DorjisPage() {
                   </InfoList>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex gap-1.5">
-                      {canWrite("TailorDorji") && <Button type="button" variant="outline" size="icon" aria-label={`Edit ${d.name}`} onClick={() => startEdit(d)}><Pencil className="size-4" /></Button>}
+                      {canWrite("TailorDorji") && <WithTooltip content={`Edit ${d.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${d.name}`} onClick={() => startEdit(d)}><Pencil className="size-4" /></Button></WithTooltip>}
                       {canWrite("TailorDorji") && <Button type="button" variant="outline" onClick={() => toggleActive(d)} className="min-w-0 flex-1">{act ? "Deactivate" : "Activate"}</Button>}
-                      {canDelete("TailorDorji") && <Button type="button" variant="outline" size="icon" aria-label={`Delete ${d.name}`} onClick={() => remove(d)}><Trash2 className="size-4" /></Button>}
+                      {canDelete("TailorDorji") && <WithTooltip content={`Delete ${d.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${d.name}`} onClick={() => remove(d)}><Trash2 className="size-4" /></Button></WithTooltip>}
                     </div>
                     <div className="flex gap-1.5">
                       <Button asChild variant="outline" className="min-w-0 flex-1"><Link href={`/dashboard/tailor/assignments?dorji=${d.id}`}>View jobs</Link></Button>

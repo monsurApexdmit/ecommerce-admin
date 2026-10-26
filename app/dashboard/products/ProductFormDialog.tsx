@@ -858,10 +858,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       {index === 0 && (
                         <Badge className="absolute bottom-1.5 left-1.5">Cover</Badge>
                       )}
-                      <Button type="button" variant="destructive" size="icon-sm" onClick={() => removeImage(index)} aria-label={`Remove image ${index + 1}`}
+                      <WithTooltip content={`Remove image ${index + 1}`}><Button type="button" variant="destructive" size="icon-sm" onClick={() => removeImage(index)} aria-label={`Remove image ${index + 1}`}
                         className="absolute right-1.5 top-1.5">
                         <Trash2 className="size-3.5" />
-                      </Button>
+                      </Button></WithTooltip>
                     </Card>
                   ))}
                   {uploadedImages.length < MAX_IMAGES && <>
@@ -1092,8 +1092,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                 <TableCell>
                                   <div className="flex flex-col gap-1">
                                     <div className="flex gap-1">
-                                      <Button type="button" size="icon" variant={(variant.offerType ?? "percentage") === "percentage" ? "default" : "outline"} aria-label="Percentage offer" aria-pressed={(variant.offerType ?? "percentage") === "percentage"} onClick={() => updateVariant(variant.id, "offerType", "percentage")}>%</Button>
-                                      <Button type="button" size="icon" variant={variant.offerType === "flat" ? "default" : "outline"} aria-label="Flat offer" aria-pressed={variant.offerType === "flat"} onClick={() => updateVariant(variant.id, "offerType", "flat")}>$</Button>
+                                      <WithTooltip content="Percentage offer"><Button type="button" size="icon" variant={(variant.offerType ?? "percentage") === "percentage" ? "default" : "outline"} aria-label="Percentage offer" aria-pressed={(variant.offerType ?? "percentage") === "percentage"} onClick={() => updateVariant(variant.id, "offerType", "percentage")}>%</Button></WithTooltip>
+                                      <WithTooltip content="Flat offer"><Button type="button" size="icon" variant={variant.offerType === "flat" ? "default" : "outline"} aria-label="Flat offer" aria-pressed={variant.offerType === "flat"} onClick={() => updateVariant(variant.id, "offerType", "flat")}>$</Button></WithTooltip>
                                       <Input type="number" min={0} aria-label={`${variant.name} offer value`} aria-invalid={(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100} className="w-16" placeholder="0" value={variant.offerPrice || ""} onChange={(e) => updateVariant(variant.id, "offerPrice", Number(e.target.value) || undefined)} />
                                     </div>
                                     {(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100 ? (
@@ -1115,9 +1115,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                   {variantSkuErrors[variant.id] && <span className="mt-1 block max-w-[220px] text-xs font-medium text-destructive">{variantSkuErrors[variant.id]}</span>}
                                 </TableCell>
                                 <TableCell>
-                                  <Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove variant ${variant.name}`} onClick={() => removeVariant(variant.id)}>
+                                  <WithTooltip content={`Remove variant ${variant.name}`}><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove variant ${variant.name}`} onClick={() => removeVariant(variant.id)}>
                                     <Trash2 className="size-4" />
-                                  </Button>
+                                  </Button></WithTooltip>
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1206,9 +1206,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                   <TableCell className="text-xs text-muted-foreground">{bi.variantName || "—"}</TableCell>
                                   <TableCell>
                                     <div className="flex items-center justify-center gap-1">
-                                      <Button type="button" variant="outline" size="icon-sm" aria-label="Decrease quantity" onClick={() => updateBundleItemQty(index, bi.quantity - 1)}><Minus className="size-3" /></Button>
+                                      <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon-sm" aria-label="Decrease quantity" onClick={() => updateBundleItemQty(index, bi.quantity - 1)}><Minus className="size-3" /></Button></WithTooltip>
                                       <Input type="number" min={1} aria-label={`${bi.productName} quantity`} value={bi.quantity} onChange={(e) => updateBundleItemQty(index, parseInt(e.target.value) || 1)} className="w-14 text-center tabular-nums" />
-                                      <Button type="button" variant="outline" size="icon-sm" aria-label="Increase quantity" onClick={() => updateBundleItemQty(index, bi.quantity + 1)}><Plus className="size-3" /></Button>
+                                      <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon-sm" aria-label="Increase quantity" onClick={() => updateBundleItemQty(index, bi.quantity + 1)}><Plus className="size-3" /></Button></WithTooltip>
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-right tabular-nums">
@@ -1217,7 +1217,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                       : <span className={cn("font-semibold", bundleRows[index].available === 0 && "text-destructive")}>{bundleRows[index].available}</span>}
                                   </TableCell>
                                   <TableCell>
-                                    <Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove ${bi.productName}`} onClick={() => removeBundleItem(index)}><Trash2 className="size-4" /></Button>
+                                    <WithTooltip content={`Remove ${bi.productName}`}><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove ${bi.productName}`} onClick={() => removeBundleItem(index)}><Trash2 className="size-4" /></Button></WithTooltip>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1356,7 +1356,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                   <FormField label="SKU" htmlFor="sku" error={skuError || undefined} className="min-w-0">
                     <span className="flex gap-2">
                       <Input id="sku" aria-invalid={!!skuError} className="font-mono" value={formData.sku} onChange={(e) => set("sku", e.target.value)} placeholder="SKU" />
-                      <Button type="button" variant="outline" size="icon" aria-label="Regenerate SKU" onClick={() => set("sku", generateSkuCode())}><RefreshCw className="size-4" /></Button>
+                      <WithTooltip content="Regenerate SKU"><Button type="button" variant="outline" size="icon" aria-label="Regenerate SKU" onClick={() => set("sku", generateSkuCode())}><RefreshCw className="size-4" /></Button></WithTooltip>
                     </span>
                   </FormField>
                   <FormField label="Barcode" htmlFor="barcode" className="min-w-0"
@@ -1366,9 +1366,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       : `Auto-generated${isNumericBarcodeType(formData.barcodeType) ? " with a valid check digit" : ""}. Type or scan an existing barcode to use it instead.`}>
                     <span className="flex gap-2">
                       <Input id="barcode" aria-invalid={!!barcodeError} className="font-mono" value={formData.barcode} onChange={(e) => { setBarcodeTouched(true); set("barcode", e.target.value) }} placeholder="Barcode" />
-                      <Button type="button" variant="outline" size="icon" aria-label="Regenerate barcode" onClick={() => { setBarcodeTouched(false); set("barcode", generateBarcodeCode(formData.barcodeType)) }}><RefreshCw className="size-4" /></Button>
+                      <WithTooltip content="Regenerate barcode"><Button type="button" variant="outline" size="icon" aria-label="Regenerate barcode" onClick={() => { setBarcodeTouched(false); set("barcode", generateBarcodeCode(formData.barcodeType)) }}><RefreshCw className="size-4" /></Button></WithTooltip>
                       {formData.barcode && (
-                        <Button type="button" variant="outline" size="icon" aria-label="Copy barcode"
+                        <WithTooltip content="Copy barcode"><Button type="button" variant="outline" size="icon" aria-label="Copy barcode"
                           onClick={() => {
                             navigator.clipboard.writeText(formData.barcode)
                             setBarcodeCopied(true)
@@ -1376,7 +1376,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                             setTimeout(() => setBarcodeCopied(false), 2000)
                           }}>
                           {barcodeCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                        </Button>
+                        </Button></WithTooltip>
                       )}
                     </span>
                   </FormField>

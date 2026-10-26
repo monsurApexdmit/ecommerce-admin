@@ -29,6 +29,7 @@ import { FormField } from "@/components/common/FormField"
 import { Toolbar } from "@/components/common/Toolbar"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { EmptyState } from "@/components/common/EmptyState"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const TYPE_LABEL: Record<string, string> = { home: "Home", office: "Office", other: "Other" }
 
@@ -316,8 +317,8 @@ export default function ShippingAddressesPage() {
                         {!a.isDefault && (
                           <Button type="button" variant="link" size="sm" className="mr-1" onClick={() => makeDefault(a)}>Set as Default</Button>
                         )}
-                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${a.fullName}`} onClick={() => openEdit(a)}><Pencil className="size-4" /></Button>
-                        <Button type="button" variant="outline" size="icon" aria-label={`Delete ${a.fullName}`} onClick={() => setDeleteIds([a.id])}><Trash2 className="size-4" /></Button>
+                        <WithTooltip content={`Edit ${a.fullName}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${a.fullName}`} onClick={() => openEdit(a)}><Pencil className="size-4" /></Button></WithTooltip>
+                        <WithTooltip content={`Delete ${a.fullName}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${a.fullName}`} onClick={() => setDeleteIds([a.id])}><Trash2 className="size-4" /></Button></WithTooltip>
                       </div>
                     </TableCell>
                   </TableRow>

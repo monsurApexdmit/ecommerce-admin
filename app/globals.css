@@ -31,16 +31,17 @@
   --radius: 0.5rem;
   --sidebar: #0E1525;
   --sidebar-foreground: #C9D1E3;
-  --sidebar-primary: #2449E8;
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1D2A45;
   --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: #1D2A45;
-  --sidebar-ring: #2449E8;
+  --sidebar-ring: var(--brand);
 
   /* Brand accent — overridable at runtime by the topbar swatch picker.
-     Default emerald. `-soft` is the tinted active/badge bg, `-fg` the text. */
-  --brand: #059669;
+     Default is the design's blue. `-soft` is the tinted active/badge bg, `-fg` the text.
+     `--dash-accent*` below derive from it, so theme + shadcn controls share one accent. */
+  --brand: #2449E8;
   --brand-foreground: #ffffff;
   --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
   --brand-fg: var(--brand);
@@ -96,12 +97,12 @@
   --chart-5: oklch(0.8 0.12 280);
   --sidebar: #0E1525;
   --sidebar-foreground: #C9D1E3;
-  --sidebar-primary: #2449E8;
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1D2A45;
   --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: #1D2A45;
-  --sidebar-ring: #2449E8;
+  --sidebar-ring: var(--brand);
 }
 
 /* ── Dashboard redesign tokens ─────────────────────────────────────────────
@@ -117,9 +118,9 @@
   --dash-border-soft: #EEF0F5;
   --dash-ink: #0E1525;
   --dash-muted: #5B6478;
-  --dash-accent: #2449E8;
-  --dash-accent-soft: #E8EDFF;
-  --dash-accent-fg: #1A2F99;
+  --dash-accent: var(--brand);
+  --dash-accent-soft: color-mix(in srgb, var(--brand) 11%, white);
+  --dash-accent-fg: color-mix(in srgb, var(--brand), black 30%);
   --dash-warn: #F59E0B;
   --dash-warn-soft: #FDF0DC;
   --dash-warn-fg: #7A3E06;
@@ -143,9 +144,9 @@
   --dash-border-soft: #1D2640;
   --dash-ink: #E8ECF6;
   --dash-muted: #9AA5BD;
-  --dash-accent: #6B88FF;
-  --dash-accent-soft: #1B2750;
-  --dash-accent-fg: #B5C4FF;
+  --dash-accent: color-mix(in srgb, var(--brand), white 30%);
+  --dash-accent-soft: color-mix(in srgb, var(--brand) 24%, #131A2B);
+  --dash-accent-fg: color-mix(in srgb, var(--brand), white 62%);
   --dash-warn: #F59E0B;
   --dash-warn-soft: #3A2A0B;
   --dash-warn-fg: #F7C873;
