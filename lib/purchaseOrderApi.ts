@@ -49,12 +49,30 @@ export interface PurchaseOrder {
   expectedDate: string | null
   notes: string | null
   totalAmount: number
+  paidAmount: number
+  dueAmount: number
+  paymentStatus: 'pending' | 'partially_paid' | 'paid'
+  payments: PurchasePayment[]
   items: PurchaseOrderItem[]
   createdAt: string
   updatedAt: string
 }
 
+export interface PurchasePayment {
+  id: number
+  amount: number
+  paymentMethod: string
+  paymentDate: string | null
+  reference: string | null
+  notes: string | null
+  createdAt: string
+}
+
 export interface CreatePurchaseOrderData {
+  paidAmount?: number
+  paymentMethod?: string
+  paymentDate?: string
+  reference?: string
   vendorId: number
   locationId?: number
   expectedDate?: string
@@ -92,6 +110,15 @@ const purchaseOrderApi = {
 
   updateStatus: (id: number, status: string) =>
     api.patch(`/purchase-orders/${id}/status`, { status }),
+
+  recordPayment: (id: number, data: { amount: number; paymentMethod: string; paymentDate: string; reference?: string; notes?: string }) =>
+    api.post(`/payments/purchase-orders/${id}`, {
+      amount: data.amount,
+      payment_method: data.paymentMethod,
+      payment_date: data.paymentDate,
+      reference: data.reference,
+      notes: data.notes,
+    }),
 
   receive: (id: number, data: ReceiveItemsData) =>
     api.post(`/purchase-orders/${id}/receive`, data),

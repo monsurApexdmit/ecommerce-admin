@@ -39,6 +39,10 @@ export interface Product {
     locationId?: string     // backend location/warehouse id
     locationName?: string   // display name
     receiptNumber?: string
+    supplierPaymentStatus?: 'due' | 'partial' | 'paid'
+    supplierPaidAmount?: number
+    supplierPaymentMethod?: string
+    supplierPaymentDate?: string
     attributes?: {
         id: string
         name: string
@@ -257,6 +261,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 barcode_type: product.barcodeType || "C128",
                 vendor_id: product.vendorId ? parseInt(product.vendorId) : undefined,
                 receipt_number: product.receiptNumber,
+                supplier_payment_status: product.supplierPaymentStatus,
+                supplier_paid_amount: product.supplierPaidAmount,
+                supplier_payment_method: product.supplierPaymentMethod,
+                supplier_payment_date: product.supplierPaymentDate,
                 is_hot_deal: product.isHotDeal,
                 is_best_seller: product.isBestSeller,
                 is_featured: product.isFeatured,

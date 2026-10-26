@@ -473,7 +473,7 @@ export default function StaffPage() {
                 <select
                   value={editFormData.role}
                   onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-2.5 py-2 border rounded-lg text-sm"
                 >
                   {roles.map(role => (
                     <option key={role.id} value={role.name}>{role.name}</option>
@@ -501,7 +501,7 @@ export default function StaffPage() {
                 <select
                   value={editFormData.paymentMethod || "Bank Transfer"}
                   onChange={(e) => setEditFormData({ ...editFormData, paymentMethod: e.target.value as any })}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-2.5 py-2 border rounded-lg text-sm"
                 >
                   <option value="Bank Transfer">Bank Transfer</option>
                   <option value="Cash">Cash</option>
@@ -555,7 +555,7 @@ export default function StaffPage() {
               </div>
               <div>
                 <Label>Payment Method</Label>
-                <select name="paymentMethod" className="w-full px-3 py-2 border rounded-lg">
+                <select name="paymentMethod" className="w-full px-2.5 py-2 border rounded-lg text-sm">
                   <option value="Bank Transfer">Bank Transfer</option>
                   <option value="Cash">Cash</option>
                   <option value="Check">Check</option>
@@ -568,7 +568,7 @@ export default function StaffPage() {
             </div>
             <div>
               <Label>Role</Label>
-              <select name="role" required className="w-full px-3 py-2 border rounded-lg">
+              <select name="role" required className="w-full px-2.5 py-2 border rounded-lg text-sm">
                 {roles.map(role => (
                   <option key={role.id} value={role.name}>{role.name}</option>
                 ))}
@@ -576,7 +576,7 @@ export default function StaffPage() {
             </div>
             <div>
               <Label>Permission Role (optional)</Label>
-              <select name="staffRoleId" className="w-full px-3 py-2 border rounded-lg">
+              <select name="staffRoleId" className="w-full px-2.5 py-2 border rounded-lg text-sm">
                 <option value="">-- No permission role --</option>
                 {roles.map(role => (
                   <option key={role.id} value={role.id}>{role.name}</option>

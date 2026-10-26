@@ -60,6 +60,10 @@ const emptyForm = {
   vendorId: "",
   receiptNumber: "",
   locationId: "",
+  supplierPaymentStatus: "due",
+  supplierPaidAmount: "",
+  supplierPaymentMethod: "cash",
+  supplierPaymentDate: new Date().toISOString().slice(0, 10),
 }
 
 export function ProductFormDialog({ open, editingProduct, onClose }: ProductFormDialogProps) {
@@ -156,6 +160,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           vendorId: p.vendorId ? String(p.vendorId) : "",
           receiptNumber: p.receiptNumber || "",
           locationId: p.locationId ? String(p.locationId) : "",
+          supplierPaymentStatus: "due",
+          supplierPaidAmount: "",
+          supplierPaymentMethod: "cash",
+          supplierPaymentDate: new Date().toISOString().slice(0, 10),
         })
 
         setIsHotDeal(p.isHotDeal ?? p.is_hot_deal ?? false)
@@ -344,6 +352,16 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     }
     let finalStock = Number.parseInt(formData.stock || "0")
     if (generatedVariants.length > 0) finalStock = generatedVariants.reduce((sum, v) => sum + v.stock, 0)
+    const supplierTotal = (Number.parseFloat(formData.costPrice) || 0) * finalStock
+    if (formData.vendorId && formData.supplierPaymentStatus === "partial") {
+      const paid = Number(formData.supplierPaidAmount) || 0
+      if (paid <= 0 || paid >= supplierTotal) {
+        const msg = "Partial payment must be more than 0 and less than the total supplier cost"
+        setErrorMessage(msg)
+        toast({ variant: "destructive", title: "Invalid supplier payment", description: msg })
+        return
+      }
+    }
     setIsSaving(true)
     setErrorMessage(null)
     try {
@@ -379,6 +397,12 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         barcodeType: formData.barcodeType,
         vendorId: formData.vendorId || undefined,
         receiptNumber: formData.receiptNumber || undefined,
+        ...(formData.vendorId && supplierTotal > 0 ? {
+          supplierPaymentStatus: formData.supplierPaymentStatus as "due" | "partial" | "paid",
+          supplierPaidAmount: formData.supplierPaymentStatus === "partial" ? Number(formData.supplierPaidAmount) || 0 : undefined,
+          supplierPaymentMethod: formData.supplierPaymentMethod,
+          supplierPaymentDate: formData.supplierPaymentDate,
+        } : {}),
         attributes: productAttributes,
         variants: generatedVariants,
         inventory: [{ warehouseId: formData.locationId || String(warehouses[0]?.id || ""), quantity: finalStock }],
@@ -791,6 +815,73 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               </Select>
             </div>
             )}
+
+            {!editingProduct && formData.vendorId && (() => {
+              const qty = generatedVariants.length > 0
+                ? generatedVariants.reduce((sum, v) => sum + (v.stock || 0), 0)
+                : Number.parseInt(formData.stock || "0") || 0
+              const total = (Number.parseFloat(formData.costPrice) || 0) * qty
+              const paid = formData.supplierPaymentStatus === "paid" ? total
+                : formData.supplierPaymentStatus === "partial" ? Number(formData.supplierPaidAmount) || 0 : 0
+              return (
+                <div className="col-span-full space-y-3 rounded-lg border p-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base">Supplier Payment</Label>
+                    <span className="text-xs text-gray-500">Cost price × stock = {formatCurrency(total)}</span>
+                  </div>
+                  {total <= 0 ? (
+                    <p className="text-xs text-gray-500">Enter a cost price and stock to track what you owe this supplier.</p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="space-y-2">
+                          <Label>Status</Label>
+                          <Select value={formData.supplierPaymentStatus} onValueChange={(v) => set("supplierPaymentStatus", v)}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="due">Due (unpaid)</SelectItem>
+                              <SelectItem value="partial">Partial</SelectItem>
+                              <SelectItem value="paid">Paid</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {formData.supplierPaymentStatus === "partial" && (
+                          <div className="space-y-2">
+                            <Label>Paid Amount</Label>
+                            <Input type="number" min={0} max={total} step="0.01" value={formData.supplierPaidAmount}
+                              onChange={(e) => set("supplierPaidAmount", e.target.value)} placeholder="0.00" />
+                          </div>
+                        )}
+                        {formData.supplierPaymentStatus !== "due" && (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Method</Label>
+                              <Select value={formData.supplierPaymentMethod} onValueChange={(v) => set("supplierPaymentMethod", v)}>
+                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cash">Cash</SelectItem>
+                                  <SelectItem value="bank">Bank</SelectItem>
+                                  <SelectItem value="card">Card</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Date</Label>
+                              <Input type="date" value={formData.supplierPaymentDate} onChange={(e) => set("supplierPaymentDate", e.target.value)} />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600 flex justify-between">
+                        <span>Paid: <strong className="text-green-700">{formatCurrency(paid)}</strong></span>
+                        <span>Due: <strong className="text-red-600">{formatCurrency(Math.max(0, total - paid))}</strong></span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="space-y-2">
               <Label htmlFor="price">Product Price</Label>

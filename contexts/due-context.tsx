@@ -155,7 +155,7 @@ export function DueProvider({ children }: { children: React.ReactNode }) {
       return response.data
     } catch (err: any) {
       console.error('Error recording payment:', err)
-      throw new Error(err.response?.data?.error || 'Failed to record payment')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to record payment')
     }
   }
 
@@ -166,7 +166,7 @@ export function DueProvider({ children }: { children: React.ReactNode }) {
       return response.data
     } catch (err: any) {
       console.error('Error recording vendor payment:', err)
-      throw new Error(err.response?.data?.error || 'Failed to record payment')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to record payment')
     }
   }
 

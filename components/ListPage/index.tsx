@@ -405,7 +405,7 @@ export function ListPage({
                   value={filter.value || "all"}
                   onValueChange={value => handleFilterChange(filter.id, value)}
                 >
-                  <SelectTrigger className="w-[140px] h-10">
+                  <SelectTrigger className="w-[140px] h-9">
                     <SelectValue placeholder={filter.label} />
                   </SelectTrigger>
                   <SelectContent>
@@ -421,7 +421,7 @@ export function ListPage({
 
               {sortOptions.length > 0 && (
                 <Select value={sortBy} onValueChange={handleSortChange}>
-                  <SelectTrigger className="w-[160px] h-10">
+                  <SelectTrigger className="w-[160px] h-9">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>

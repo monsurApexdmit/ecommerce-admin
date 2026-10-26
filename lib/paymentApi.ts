@@ -84,7 +84,13 @@ export const paymentApi = {
     payableId: number,
     data: RecordPaymentData
   ): Promise<{ message: string; data: DuePaymentResponse }> => {
-    const response = await api.post(`/payments/${payableType}/${payableId}`, data);
+    const response = await api.post(`/payments/${payableType}/${payableId}`, {
+      amount: data.amount,
+      payment_method: data.paymentMethod,
+      payment_date: data.paymentDate,
+      reference: data.referenceNo,
+      notes: data.notes,
+    });
     return response.data;
   },
 };

@@ -107,7 +107,7 @@ function PlanFormDialog({
                 onChange={e => set("description", e.target.value)}
                 placeholder="Short description of the plan"
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
               />
             </div>
             <div>

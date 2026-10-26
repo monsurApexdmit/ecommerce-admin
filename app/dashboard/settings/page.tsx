@@ -845,7 +845,7 @@ export default function SettingsPage() {
                   <select
                     value={codDeposit.gateway}
                     onChange={(e) => setCodDeposit((p) => ({ ...p, gateway: e.target.value as "sslcommerz" | "portwallet" | "bkash" | "nagad" | "stripe" | "paypal" }))}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-10 w-full rounded-lg border border-input bg-background px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="sslcommerz">SSLCommerz (bKash, Nagad, Rocket, Cards)</option>
                     <option value="portwallet">PortWallet (Cards, Mobile Banking)</option>

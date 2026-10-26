@@ -203,7 +203,7 @@ function CustomerAddressesPanel({ customerId, readonly = false }: { customerId: 
                   <select
                     value={(form as any)[f.key]}
                     onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="home">Home</option>
                     <option value="work">Work</option>

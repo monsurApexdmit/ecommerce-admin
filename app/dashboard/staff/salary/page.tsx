@@ -111,7 +111,7 @@ export default function SalaryManagementPage() {
                     <select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="px-4 py-2 border rounded-lg bg-white"
+                        className="px-2.5 py-2 border rounded-lg bg-white text-sm"
                     >
                         {monthOptions.map((month) => (
                             <option key={month} value={month}>
