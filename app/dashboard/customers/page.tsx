@@ -8,6 +8,10 @@ import {
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -18,7 +22,21 @@ import {
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { ItemGroup, Item, ItemContent, ItemTitle, ItemDescription, ItemActions, ItemSeparator } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { StatTile } from "@/components/common/StatTile"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
 import { customerApi, type CustomerResponse, type DuplicateGroup, type CustomerListParams } from "@/lib/customerApi"
 import { MergeDialog } from "@/components/customers/merge-dialog"
@@ -34,43 +52,27 @@ import { cn } from "@/lib/utils"
 type Tab = "all" | "inactive" | "loyal" | "risk" | "due" | "never" | "dup"
 type Stats = Awaited<ReturnType<typeof customerApi.getStats>>
 
-const GROUP_STYLE: Record<string, { label: string; cls: string }> = {
-  retail: { label: "Retail", cls: "bg-dash-neutral-soft text-dash-neutral-fg" },
-  wholesale: { label: "Wholesale", cls: "bg-dash-accent-soft text-dash-accent-fg" },
-  vip: { label: "VIP", cls: "bg-dash-warn-soft text-dash-warn-fg" },
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
+
+const GROUP_STYLE: Record<string, { label: string; variant: BadgeVariant }> = {
+  retail: { label: "Retail", variant: "outline" },
+  wholesale: { label: "Wholesale", variant: "secondary" },
+  vip: { label: "VIP", variant: "default" },
 }
 
 const groupOf = (c: CustomerResponse) => c.customerGroup ?? c.customerType ?? "retail"
 const hasSms = (c: CustomerResponse) =>
   c.smsOptIn !== false && c.status !== "inactive" && (c.phone ?? "").replace(/\D/g, "").length >= 7
 
-const AVATAR = [
-  "bg-dash-accent-soft text-dash-accent-fg",
-  "bg-dash-success-soft text-dash-success-fg",
-  "bg-dash-warn-soft text-dash-warn-fg",
-  "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300",
-]
-
-const STATUS_CHIP: Record<string, string> = {
-  Pending: "text-dash-warn-fg",
-  Processing: "text-dash-accent-fg",
-  Delivered: "text-dash-success-fg",
-}
-
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
-
-const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "?"
 const daysSince = (iso?: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null)
 
-function segmentOf(c: CustomerResponse): { text: string; cls: string } {
+function segmentOf(c: CustomerResponse): { text: string; variant: BadgeVariant } {
   const orders = c.totalOrders ?? 0
   const days = daysSince(c.lastOrderAt)
-  if (orders === 0) return { text: "No orders yet", cls: "text-dash-muted" }
-  if (days !== null && days > 30) return { text: "At risk · 30+ days", cls: "text-dash-warn-fg" }
-  if (orders >= 5) return { text: "Loyal", cls: "text-dash-success-fg" }
-  return { text: "Active", cls: "text-dash-accent-fg" }
+  if (orders === 0) return { text: "No orders yet", variant: "outline" }
+  if (days !== null && days > 30) return { text: "At risk · 30+ days", variant: "destructive" }
+  if (orders >= 5) return { text: "Loyal", variant: "default" }
+  return { text: "Active", variant: "secondary" }
 }
 
 export default function CustomersPage() {
@@ -324,51 +326,50 @@ export default function CustomersPage() {
   useEffect(() => { if (searchParams.get("add") === "1") openForm(null) }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className="flex flex-col gap-5">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Customers</h1>
-          <p className="mt-1 text-sm text-dash-muted">Who buys from you, how often, and who still owes you money.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setImportOpen(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+      <PageHeader
+        title="Customers"
+        description="Who buys from you, how often, and who still owes you money."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="size-4" aria-hidden /> Import
-          </button>
-          {mayExport && <button type="button" onClick={() => handleExport()}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+          </Button>
+          {mayExport && <Button type="button" variant="outline" onClick={() => handleExport()}>
             <Download className="size-4" aria-hidden /> Export
-          </button>}
-          <button type="button" onClick={copySmsAll} title="Copies the phone numbers of customers who agreed to SMS offers"
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
-            Copy SMS numbers
-          </button>
-          <button type="button" onClick={() => openForm(null)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+          </Button>}
+          <WithTooltip content="Copies the phone numbers of customers who agreed to SMS offers">
+            <Button type="button" variant="outline" onClick={copySmsAll}>
+              Copy SMS numbers
+            </Button>
+          </WithTooltip>
+          <Button type="button" onClick={() => openForm(null)}>
             <Plus className="size-4" aria-hidden /> Add customer
-          </button>
-        </div>
-      </div>
+          </Button>
+        </>}
+      />
 
       {/* Duplicate banner */}
       {stats && stats.duplicates > 0 && !hideDupBanner && (
-        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-dash-warn-soft px-[18px] py-3.5 text-dash-warn-fg">
-          <Users className="size-[22px] shrink-0" aria-hidden />
-          <span className="min-w-[260px] flex-1 text-sm">
-            <strong>{stats.duplicates} customers share a phone number.</strong> Merge them so order history and dues stay in one place.
-          </span>
-          <button type="button" onClick={openDuplicates} className="h-10 rounded-[10px] bg-dash-warn-fg px-3.5 text-[13px] font-semibold text-dash-warn-soft">
-            Review &amp; merge
-          </button>
-          <button type="button" onClick={() => setHideDupBanner(true)} className="h-10 px-3 text-[13px] font-semibold">Dismiss</button>
-        </div>
+        <Alert>
+          <Users aria-hidden />
+          <AlertTitle>{stats.duplicates} customers share a phone number.</AlertTitle>
+          <AlertDescription>
+            <p>Merge them so order history and dues stay in one place.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={openDuplicates}>
+                Review &amp; merge
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setHideDupBanner(true)}>Dismiss</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* KPIs */}
       {!stats ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px]" />)}
         </div>
       ) : (
         <StatsCards stats={[
@@ -385,7 +386,7 @@ export default function CustomersPage() {
 
       <div className="flex flex-wrap items-start gap-4">
         {/* List */}
-        <section className="min-w-0 flex-[999_1_640px] rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="min-w-0 flex-[999_1_640px] gap-0 py-0">
           <div className="px-4">
             <StatusTabs
               value={tab}
@@ -403,15 +404,15 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden />
-              <span className="sr-only">Search customers</span>
-              <input type="search" placeholder="Search name, phone or email…" value={search}
+            <div className="relative min-w-[240px] flex-1">
+              <Label htmlFor="customer-search" className="sr-only">Search customers</Label>
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input id="customer-search" type="search" placeholder="Search name, phone or email…" value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
+                className="pl-8" />
+            </div>
             <Select value={groupFilter} onValueChange={(v) => { setGroupFilter(v); setPage(1) }}>
-              <SelectTrigger aria-label="Customer group" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Customer group" className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Group: All</SelectItem>
                 <SelectItem value="retail">Retail</SelectItem>
@@ -420,7 +421,7 @@ export default function CustomersPage() {
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1) }}>
-              <SelectTrigger aria-label="Customer type" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Customer type" className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Type: All</SelectItem>
                 <SelectItem value="individual">Individual</SelectItem>
@@ -428,7 +429,7 @@ export default function CustomersPage() {
               </SelectContent>
             </Select>
             <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1) }}>
-              <SelectTrigger aria-label="Sort" className={cn(filterSelect, "w-[170px]")}><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Sort" className="w-[170px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="recent">Sort: Recent</SelectItem>
                 <SelectItem value="name">Sort: Name</SelectItem>
@@ -438,108 +439,102 @@ export default function CustomersPage() {
               </SelectContent>
             </Select>
             {hasFilters && (
-              <button type="button" onClick={resetFilters} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+              <Button type="button" variant="ghost" onClick={resetFilters}>
                 <X className="size-4" aria-hidden /> Clear
-              </button>
+              </Button>
             )}
           </div>
 
-          {checked.size > 0 && (
-            <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
-              <span className="text-sm font-semibold">{checked.size} selected</span>
-              <button type="button" onClick={() => setActive(selected, "active")}
-                className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Mark active</button>
-              <button type="button" onClick={() => setActive(selected, "inactive")}
-                className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Mark inactive</button>
-              <button type="button" onClick={openMergeSelected} className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Merge</button>
-              <button type="button" onClick={copySmsSelected} className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Copy SMS numbers</button>
-              <button type="button" onClick={() => setTagOpen(true)} className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Add tag</button>
-              {mayExport && <button type="button" onClick={() => handleExport(true)}
-                className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Export selected</button>}
-              <button type="button" onClick={() => setDeleteTargets(selected)}
-                className="h-9 rounded-lg border border-red-400/50 px-3 text-[13px] font-semibold text-red-300 hover:bg-white/10">Delete</button>
-              <button type="button" onClick={() => setChecked(new Set())} className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">Clear</button>
-            </div>
-          )}
+          <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "active")}>Mark active</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "inactive")}>Mark inactive</Button>
+              <Button type="button" variant="outline" size="sm" onClick={openMergeSelected}>Merge</Button>
+              <Button type="button" variant="outline" size="sm" onClick={copySmsSelected}>Copy SMS numbers</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setTagOpen(true)}>Add tag</Button>
+              {mayExport && <Button type="button" variant="outline" size="sm" onClick={() => handleExport(true)}>Export selected</Button>}
+              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+          </BulkBar>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th scope="col" className="w-5 py-3 pl-4 pr-2"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Customer</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Contact</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Group</th>
-                  <th scope="col" className="px-2 py-3 text-right font-semibold">Orders</th>
-                  <th scope="col" className="px-2 py-3 text-right font-semibold">Spent</th>
-                  <th scope="col" className="px-2 py-3 text-right font-semibold">Due</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Last order</th>
-                  <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Table className="min-w-[820px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col" className="w-5"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></TableHead>
+                  <TableHead scope="col">Customer</TableHead>
+                  <TableHead scope="col">Contact</TableHead>
+                  <TableHead scope="col">Group</TableHead>
+                  <TableHead scope="col" className="text-right">Orders</TableHead>
+                  <TableHead scope="col" className="text-right">Spent</TableHead>
+                  <TableHead scope="col" className="text-right">Due</TableHead>
+                  <TableHead scope="col">Last order</TableHead>
+                  <TableHead scope="col" className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {loading ? (
-                  [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={9} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>)
+                  [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-10" /></TableCell></TableRow>)
                 ) : customers.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-14 text-center">
-                      <Users className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                      <p className="font-semibold">No customers found</p>
-                      <p className="text-sm text-dash-muted">{hasFilters ? "Try clearing the filters." : "Add your first customer to get started."}</p>
-                    </td>
-                  </tr>
+                  <TableRow>
+                    <TableCell colSpan={9} className="whitespace-normal">
+                      <EmptyState
+                        icon={Users}
+                        title="No customers found"
+                        description={hasFilters ? "Try clearing the filters." : "Add your first customer to get started."}
+                        className="p-4 md:p-6"
+                      />
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  customers.map((c, i) => {
+                  customers.map((c) => {
                     const grp = GROUP_STYLE[groupOf(c)] ?? GROUP_STYLE.retail
                     const seg = segmentOf(c)
                     const due = Number(c.dueAmount) || 0
                     const ck = checked.has(c.id)
                     return (
-                      <tr key={c.id} className={c.id === openId ? "bg-dash-accent-soft/40" : ck ? "bg-dash-bg" : ""}>
-                        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                      <TableRow key={c.id} data-state={ck || c.id === openId ? "selected" : undefined}>
+                        <TableCell>
                           <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.name}`} />
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <button type="button" onClick={() => setOpenId(c.id)} className="flex items-center gap-2.5 text-left">
-                            <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold", AVATAR[i % 4])}>{initials(c.name)}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Button type="button" variant="ghost" onClick={() => setOpenId(c.id)} className="h-auto justify-start gap-2.5 text-left">
+                            <UserAvatar name={c.name} className="size-9 shrink-0" />
                             <span className="flex flex-col">
                               <span className="flex items-center gap-1.5 font-semibold">
                                 {c.name}
-                                {c.status === "inactive" && <span className="rounded bg-dash-neutral-soft px-1.5 py-px text-[10px] font-bold text-dash-neutral-fg">Inactive</span>}
-                                {c.duplicatePhone && <span className="rounded bg-dash-warn-soft px-1.5 py-px text-[10px] font-bold text-dash-warn-fg">Duplicate?</span>}
+                                {c.status === "inactive" && <Badge variant="outline">Inactive</Badge>}
+                                {c.duplicatePhone && <Badge variant="secondary">Duplicate?</Badge>}
                               </span>
-                              <span className="text-xs text-dash-muted">{c.type === "business" ? `${c.businessName || "Business"} · ` : ""}Since {new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                              <span className="text-xs text-muted-foreground">{c.type === "business" ? `${c.businessName || "Business"} · ` : ""}Since {new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
                             </span>
-                          </button>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                          </Button>
+                        </TableCell>
+                        <TableCell>
                           <div>{c.phone || "—"}</div>
-                          <div className="text-xs text-dash-muted">{c.email || "—"}</div>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <span className={cn("rounded-md px-2 py-[3px] text-xs font-bold", grp.cls)}>{grp.label}</span>
-                          {c.type === "business" && <span className="ml-1 rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-bold text-dash-neutral-fg">Business</span>}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">{c.totalOrders ?? 0}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">{formatCurrency(Number(c.totalSpent) || 0)}</td>
-                        <td className={cn("border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums", due > 0 ? "text-dash-danger" : "text-dash-muted/60")}>
+                          <div className="text-xs text-muted-foreground">{c.email || "—"}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={grp.variant}>{grp.label}</Badge>
+                          {c.type === "business" && <Badge variant="outline" className="ml-1">Business</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{c.totalOrders ?? 0}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(Number(c.totalSpent) || 0)}</TableCell>
+                        <TableCell className={cn("text-right tabular-nums", due > 0 && "text-destructive")}>
                           {due > 0 ? formatCurrency(due) : "—"}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                        </TableCell>
+                        <TableCell>
                           <div>{c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</div>
-                          <div className={cn("text-xs font-semibold", seg.cls)}>{seg.text}</div>
-                        </td>
-                        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                          <Badge variant={seg.variant} className="mt-0.5">{seg.text}</Badge>
+                        </TableCell>
+                        <TableCell>
                           <div className="flex justify-end gap-1">
                             {c.phone ? (
-                              <a href={`tel:${c.phone}`} aria-label={`Call ${c.name}`} className={iconBtn}><Phone className="size-4" /></a>
+                              <Button asChild variant="outline" size="icon"><a href={`tel:${c.phone}`} aria-label={`Call ${c.name}`}><Phone className="size-4" /></a></Button>
                             ) : (
-                              <span aria-hidden className={cn(iconBtn, "opacity-40")}><Phone className="size-4" /></span>
+                              <Button type="button" variant="outline" size="icon" disabled aria-hidden tabIndex={-1}><Phone className="size-4" /></Button>
                             )}
-                            <Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={`New sale for ${c.name}`} className={iconBtn}><Plus className="size-4" /></Link>
+                            <Button asChild variant="outline" size="icon"><Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={`New sale for ${c.name}`}><Plus className="size-4" /></Link></Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button type="button" aria-label={`More actions for ${c.name}`} className={iconBtn}><MoreHorizontal className="size-4" /></button>
+                                <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.name}`}><MoreHorizontal className="size-4" /></Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => openForm(c)}>Edit customer</DropdownMenuItem>
@@ -548,21 +543,22 @@ export default function CustomersPage() {
                                   {c.status === "active" ? "Mark inactive" : "Mark active"}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-dash-danger focus:text-dash-danger" onClick={() => setDeleteTargets([c])}>Delete customer</DropdownMenuItem>
+                                <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>Delete customer</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )
                   })
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+          </Table>
 
           {!loading && customers.length > 0 && (
-            <div className="border-t border-dash-border-soft p-4 pt-3">
+            <>
+            <Separator />
+            <div className="p-4 pt-3">
               <PaginationControl
                 currentPage={page}
                 totalPages={Math.max(1, Math.ceil(total / perPage))}
@@ -572,19 +568,20 @@ export default function CustomersPage() {
                 onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
               />
             </div>
+            </>
           )}
-        </section>
+        </Card>
 
         {/* Detail panel */}
-        <aside aria-label="Customer details" className="min-w-0 flex-[1_1_320px] rounded-[14px] border border-dash-border bg-dash-card lg:sticky lg:top-0 lg:max-w-[400px]">
+        <aside aria-label="Customer details" className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
+          <Card className="gap-0 py-0">
           {!open ? (
-            <p className="p-6 text-center text-sm text-dash-muted">{loading ? "Loading…" : "Select a customer to see their profile."}</p>
+            <EmptyState title={loading ? "Loading…" : "Select a customer to see their profile."} className="p-6 md:p-6" />
           ) : (() => {
             const v: CustomerResponse = detail && detail.id === open.id ? { ...open, ...detail } : open
             const due = Number(v.dueAmount) || 0
             const grp = GROUP_STYLE[groupOf(v)] ?? GROUP_STYLE.retail
             const addr = [v.address, v.area || v.state, v.district || v.city, v.zipCode, v.country].filter(Boolean).join(", ")
-            const idx = customers.findIndex((c) => c.id === v.id)
             const limit = Number(v.creditLimit) || 0
             const used = Number(v.creditUsed ?? due) || 0
             const pct = Math.round(v.creditUsedPercent ?? (limit > 0 ? (used / limit) * 100 : 0))
@@ -598,107 +595,110 @@ export default function CustomersPage() {
               ["Address", addr || "—"],
               ["Store credit", formatCurrency(Number(v.storeCredit) || 0)],
             ]
+            const miniTile = "gap-1 p-2.5 [&_.text-2xl]:text-lg"
             return (
               <>
                 <div className="flex flex-col gap-3.5 p-[18px]">
                   <div className="flex items-center gap-3">
-                    <span className={cn("flex size-[52px] shrink-0 items-center justify-center rounded-full text-base font-bold", AVATAR[Math.max(0, idx) % 4])}>{initials(v.name)}</span>
+                    <UserAvatar name={v.name} className="size-[52px] shrink-0" />
                     <div className="min-w-0">
-                      <h2 className="flex items-center gap-2 truncate font-dash-display text-lg font-bold">
+                      <h2 className="flex items-center gap-2 truncate text-lg font-semibold">
                         {v.name}
-                        {v.status === "inactive" && <span className="rounded bg-dash-neutral-soft px-1.5 py-px text-[10px] font-bold text-dash-neutral-fg">Inactive</span>}
+                        {v.status === "inactive" && <Badge variant="outline">Inactive</Badge>}
                       </h2>
-                      <span className="text-[13px] text-dash-muted">
+                      <span className="text-sm text-muted-foreground">
                         {grp.label}{v.type === "business" ? " · Business" : ""} · since {new Date(v.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                       </span>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-[10px] bg-dash-bg p-2.5"><div className="text-xs text-dash-muted">Orders</div><div className="text-lg font-bold tabular-nums">{v.totalOrders ?? 0}</div></div>
-                    <div className="rounded-[10px] bg-dash-bg p-2.5"><div className="text-xs text-dash-muted">Spent</div><div className="text-lg font-bold tabular-nums">{formatCurrency(Number(v.totalSpent) || 0).replace(/\.00$/, "")}</div></div>
-                    <div className={cn("rounded-[10px] p-2.5", due > 0 ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-bg")}>
-                      <div className={cn("text-xs", due > 0 ? "" : "text-dash-muted")}>Due</div>
-                      <div className="text-lg font-bold tabular-nums">{formatCurrency(due).replace(/\.00$/, "")}</div>
-                    </div>
+                    <StatTile label="Orders" value={v.totalOrders ?? 0} className={miniTile} />
+                    <StatTile label="Spent" value={formatCurrency(Number(v.totalSpent) || 0).replace(/\.00$/, "")} className={miniTile} />
+                    <StatTile label="Due" value={formatCurrency(due).replace(/\.00$/, "")} className={cn(miniTile, due > 0 && "border-destructive/50 text-destructive")} />
                   </div>
                   {limit > 0 && (
                     <div>
                       <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-dash-muted">Credit limit {formatCurrency(limit)}</span>
-                        <span className={cn("font-semibold", pct >= 100 ? "text-dash-danger" : pct >= 80 ? "text-dash-warn-fg" : "")}>Credit used ({pct}%)</span>
+                        <span className="text-muted-foreground">Credit limit {formatCurrency(limit)}</span>
+                        <span className={cn("font-semibold", pct >= 80 && "text-destructive")}>Credit used ({pct}%)</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-dash-neutral-soft" role="progressbar" aria-valuenow={Math.min(pct, 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Credit used">
-                        <div className={cn("h-full rounded-full", pct >= 100 ? "bg-dash-danger" : pct >= 80 ? "bg-amber-500" : "bg-dash-accent")} style={{ width: `${Math.min(pct, 100)}%` }} />
-                      </div>
+                      <Progress
+                        value={Math.min(pct, 100)}
+                        aria-label="Credit used"
+                        className={cn(pct >= 80 && "[&>[data-slot=progress-indicator]]:bg-destructive")}
+                      />
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-2">
-                    <Link href={`/dashboard/sales?new=1&customer=${v.id}`}
-                      className="flex h-11 items-center justify-center rounded-[10px] bg-dash-accent text-[13px] font-semibold text-white">New sale</Link>
-                    <button type="button" disabled={due <= 0} onClick={() => setPayOpen((o) => !o)} aria-expanded={payOpen}
-                      title={due <= 0 ? "Nothing due" : undefined}
-                      className="h-11 rounded-[10px] border border-dash-border bg-dash-card text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:opacity-40">Get payment</button>
-                    <button type="button" onClick={() => openForm(v)}
-                      className="h-11 rounded-[10px] border border-dash-border bg-dash-card text-[13px] font-semibold hover:bg-dash-neutral-soft">Edit</button>
+                    <Button asChild><Link href={`/dashboard/sales?new=1&customer=${v.id}`}>New sale</Link></Button>
+                    <WithTooltip content={due <= 0 ? "Nothing due" : undefined}>
+                      <span tabIndex={due <= 0 ? 0 : undefined} className="grid">
+                        <Button type="button" variant="outline" disabled={due <= 0} onClick={() => setPayOpen((o) => !o)} aria-expanded={payOpen}>Get payment</Button>
+                      </span>
+                    </WithTooltip>
+                    <Button type="button" variant="outline" onClick={() => openForm(v)}>Edit</Button>
                   </div>
                   {payOpen && due > 0 && (
                     <GetPaymentForm customerId={v.id} due={due} onCancel={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); refresh() }} />
                   )}
                   <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setActive([v], v.status === "inactive" ? "active" : "inactive")}
-                      className="h-10 rounded-[10px] border border-dash-border bg-dash-card text-[13px] font-semibold hover:bg-dash-neutral-soft">
+                    <Button type="button" variant="outline" onClick={() => setActive([v], v.status === "inactive" ? "active" : "inactive")}>
                       {v.status === "inactive" ? "Mark active" : "Mark inactive"}
-                    </button>
-                    <button type="button" onClick={() => setDeleteTargets([v])}
-                      className="h-10 rounded-[10px] border border-dash-border bg-dash-card text-[13px] font-semibold text-dash-danger hover:bg-dash-neutral-soft">Delete</button>
+                    </Button>
+                    <Button type="button" variant="destructive" onClick={() => setDeleteTargets([v])}>Delete</Button>
                   </div>
                 </div>
 
-                <div className="border-t border-dash-border-soft p-[18px]">
-                  <h3 className="mb-2.5 text-xs font-bold uppercase tracking-[0.06em] text-dash-muted">Contact</h3>
-                  {rows.map(([k, val]) => (
-                    <div key={k} className="flex justify-between gap-3 py-1.5 text-sm">
-                      <span className="text-dash-muted">{k}</span>
-                      <span className="text-right font-semibold">{val}</span>
-                    </div>
-                  ))}
+                <Separator />
+                <div className="p-[18px]">
+                  <SectionTitle className="mb-2.5">Contact</SectionTitle>
+                  <InfoList className="gap-3">
+                    {rows.map(([k, val]) => <InfoRow key={k} label={k} value={val} />)}
+                  </InfoList>
                   {(v.tags?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1.5 py-1.5">
-                      {v.tags!.map((t) => <span key={t} className="rounded-md bg-dash-accent-soft px-2 py-0.5 text-xs font-semibold text-dash-accent-fg">{t}</span>)}
+                      {v.tags!.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
                     </div>
                   )}
-                  {v.notes && <p className="mt-2 rounded-[10px] bg-dash-bg p-2.5 text-[13px] text-dash-muted">{v.notes}</p>}
+                  {v.notes && <Card className="mt-2 p-2.5 text-sm text-muted-foreground shadow-none">{v.notes}</Card>}
                 </div>
 
-                <div className="border-t border-dash-border-soft p-[18px]">
-                  <h3 className="mb-2.5 text-xs font-bold uppercase tracking-[0.06em] text-dash-muted">Recent orders</h3>
+                <Separator />
+                <div className="p-[18px]">
+                  <SectionTitle className="mb-2.5">Recent orders</SectionTitle>
                   {detailLoading && !detail ? (
-                    <Skeleton className="h-12 rounded" />
+                    <Skeleton className="h-12" />
                   ) : recent.length === 0 ? (
-                    <p className="text-sm text-dash-muted">No orders yet.</p>
+                    <p className="text-sm text-muted-foreground">No orders yet.</p>
                   ) : (
-                    recent.slice(0, 5).map((o) => (
-                      <div key={o.id} className="flex items-center justify-between gap-3 border-b border-dash-border-soft py-2.5 last:border-b-0">
-                        <span className="flex flex-col">
-                          <span className="text-sm font-semibold">#{o.invoiceNo}</span>
-                          <span className="text-xs text-dash-muted">{new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                        </span>
-                        <span className="flex flex-col items-end">
-                          <span className="text-sm font-bold tabular-nums">{formatCurrency(Number(o.amount))}</span>
-                          <span className={cn("text-xs font-semibold", STATUS_CHIP[o.status])}>{o.status}</span>
-                        </span>
-                      </div>
-                    ))
+                    <ItemGroup>
+                      {recent.slice(0, 5).map((o, i) => (
+                        <div key={o.id} role="listitem">
+                          {i > 0 && <ItemSeparator />}
+                          <Item size="sm" className="px-0">
+                            <ItemContent>
+                              <ItemTitle>#{o.invoiceNo}</ItemTitle>
+                              <ItemDescription>{new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</ItemDescription>
+                            </ItemContent>
+                            <ItemActions className="flex-col items-end gap-1">
+                              <span className="text-sm font-semibold tabular-nums">{formatCurrency(Number(o.amount))}</span>
+                              <StatusBadge status={o.status} />
+                            </ItemActions>
+                          </Item>
+                        </div>
+                      ))}
+                    </ItemGroup>
                   )}
                   {recent.length > 0 && (
-                    <Link href={`/dashboard/orders?customer=${encodeURIComponent(v.name)}`} className="mt-2 inline-block text-[13px] font-semibold text-dash-accent hover:underline">
-                      View all orders →
-                    </Link>
+                    <Button asChild variant="link" className="mt-2 h-auto p-0">
+                      <Link href={`/dashboard/orders?customer=${encodeURIComponent(v.name)}`}>View all orders →</Link>
+                    </Button>
                   )}
                 </div>
               </>
             )
           })()}
+          </Card>
         </aside>
       </div>
 
@@ -714,33 +714,30 @@ export default function CustomersPage() {
         onMerged={() => { setChecked(new Set()); refresh() }} />
 
       <Dialog open={tagOpen} onOpenChange={setTagOpen}>
-        <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-sm">
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">Add tag</DialogTitle>
+            <DialogTitle>Add tag</DialogTitle>
             <DialogDescription>Adds a tag to {selected.length} selected customer{selected.length === 1 ? "" : "s"}.</DialogDescription>
           </DialogHeader>
-          <input autoFocus value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder="e.g. Eid campaign"
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyTag() } }}
-            className="h-11 w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent" />
+          <Input autoFocus aria-label="Tag" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder="e.g. Eid campaign"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyTag() } }} />
           <DialogFooter>
-            <button type="button" onClick={() => setTagOpen(false)} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-            <button type="button" onClick={applyTag} disabled={!tagDraft.trim()} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">Add tag</button>
+            <Button type="button" variant="outline" onClick={() => setTagOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={applyTag} disabled={!tagDraft.trim()}>Add tag</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Import */}
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">Import customers</DialogTitle>
+            <DialogTitle>Import customers</DialogTitle>
             <DialogDescription>Upload a CSV with columns: name, phone (required), email, type (individual or business), business name, group (retail, wholesale or VIP), credit limit, opening balance, birthday, tags, address, district, area, country. Rows without a name or phone, and duplicate phone numbers, are skipped.</DialogDescription>
           </DialogHeader>
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleImport}
-            className="block w-full rounded-[10px] border border-dashed border-dash-border bg-dash-bg p-4 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-dash-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white" />
+          <Input ref={fileRef} type="file" accept=".csv" aria-label="CSV file" onChange={handleImport} />
           <DialogFooter>
-            <button type="button" onClick={() => setImportOpen(false)}
-              className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Close</button>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -754,7 +751,7 @@ export default function CustomersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

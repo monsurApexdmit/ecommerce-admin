@@ -4,7 +4,11 @@ import { useState } from "react"
 import { dueApi } from "@/lib/dueApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { FormField } from "@/components/common/FormField"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
 
 const METHODS = ["Cash", "bKash", "Card", "Bank"]
 
@@ -42,27 +46,23 @@ export function GetPaymentForm({ customerId, due, onPaid, onCancel }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-[10px] border border-dash-border bg-dash-bg p-3">
-      <label className="flex flex-col gap-1 text-xs font-semibold">
-        Amount received (due {formatCurrency(due)})
-        <input type="number" min={0} max={due} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
-          className="h-10 rounded-lg border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent" />
-      </label>
-      <div role="radiogroup" aria-label="Payment method" className="flex flex-wrap gap-1.5">
-        {METHODS.map((m) => (
-          <button key={m} type="button" role="radio" aria-checked={method === m} onClick={() => setMethod(m)}
-            className={cn("h-9 rounded-lg border-2 px-3 text-[13px] font-semibold", method === m ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
-            {m}
-          </button>
-        ))}
-      </div>
-      {error && <p role="alert" className="text-xs text-dash-danger">{error}</p>}
+    <Card className="gap-2.5 p-3">
+      <FormField label={`Amount received (due ${formatCurrency(due)})`} htmlFor={`get-payment-amount-${customerId}`}>
+        <Input id={`get-payment-amount-${customerId}`} type="number" min={0} max={due} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </FormField>
+      <SegmentedControl
+        aria-label="Payment method"
+        value={method}
+        onValueChange={setMethod}
+        options={METHODS.map((m) => ({ value: m, label: m }))}
+      />
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
-        <button type="button" onClick={submit} disabled={saving} className="h-10 flex-1 rounded-lg bg-dash-accent text-[13px] font-semibold text-white disabled:opacity-40">
+        <Button type="button" onClick={submit} disabled={saving} className="flex-1">
           {saving ? "Saving…" : "Record payment"}
-        </button>
-        <button type="button" onClick={onCancel} className="h-10 rounded-lg border border-dash-border bg-dash-card px-3 text-[13px] font-semibold hover:bg-dash-neutral-soft">Cancel</button>
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
       </div>
-    </div>
+    </Card>
   )
 }

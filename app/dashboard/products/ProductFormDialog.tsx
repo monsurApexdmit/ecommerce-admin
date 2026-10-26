@@ -1,8 +1,26 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback } from "react"
+import { Fragment, useState, useEffect, useCallback } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardFooter } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatTile } from "@/components/common/StatTile"
+import { EmptyState } from "@/components/common/EmptyState"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -31,45 +49,33 @@ const NONE = "__none__"
 const MAX_IMAGES = 6
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
-const card = "rounded-[14px] border border-dash-border bg-dash-card p-[18px]"
-const labelCls = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const inputCls =
-  "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent disabled:cursor-not-allowed disabled:bg-dash-neutral-soft disabled:text-dash-muted"
-const cellCls =
-  "h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-sm font-normal text-dash-ink outline-none focus-visible:border-dash-accent"
-const selectCls = "!h-[42px] w-full rounded-[10px] border-dash-border bg-dash-card text-sm font-normal text-dash-ink"
+const selectCls = "w-full"
 
 const Section = ({ n, title, hint, children, action }: { n?: number; title: string; hint?: string; children: React.ReactNode; action?: React.ReactNode }) => (
-  <section className={card}>
-    <div className="mb-4 flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="flex items-center gap-2 font-dash-display text-base font-bold">
-          {n !== undefined && (
-            <span className="grid size-6 place-items-center rounded-full bg-dash-accent-soft text-xs font-bold text-dash-accent-fg tabular-nums">{n}</span>
-          )}
-          {title}
-        </h2>
-        {hint && <p className="mt-0.5 text-[13px] text-dash-muted">{hint}</p>}
-      </div>
-      {action}
-    </div>
+  <SectionCard
+    title={
+      <span className="flex items-center gap-2">
+        {n !== undefined && <Badge variant="secondary" className="size-6 rounded-full tabular-nums">{n}</Badge>}
+        {title}
+      </span>
+    }
+    description={hint}
+    actions={action}
+  >
     {children}
-  </section>
+  </SectionCard>
 )
 
 const ToggleRow = ({ id, title, sub, checked, onChange }: { id: string; title: string; sub: string; checked: boolean; onChange: (v: boolean) => void }) => (
-  <button
-    type="button" role="switch" id={id} aria-checked={checked} onClick={() => onChange(!checked)}
-    className="flex min-h-[52px] w-full items-center justify-between gap-3 rounded-xl border border-dash-border bg-dash-card px-3 py-2 text-left hover:bg-dash-neutral-soft"
-  >
-    <span className="flex min-w-0 flex-col">
-      <span className="text-sm font-semibold">{title}</span>
-      <span className="text-xs text-dash-muted">{sub}</span>
-    </span>
-    <span className={cn("flex h-[22px] w-10 flex-none items-center rounded-full p-[3px] transition-colors", checked ? "justify-end bg-dash-accent" : "justify-start bg-dash-neutral")}>
-      <span className="size-4 rounded-full bg-white" />
-    </span>
-  </button>
+  <Item variant="outline" size="sm" className="flex-nowrap">
+    <ItemContent className="min-w-0">
+      <ItemTitle><Label htmlFor={id} className="cursor-pointer">{title}</Label></ItemTitle>
+      <ItemDescription className="text-xs">{sub}</ItemDescription>
+    </ItemContent>
+    <ItemActions>
+      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+    </ItemActions>
+  </Item>
 )
 
 
@@ -796,19 +802,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     ? Math.min(...bundleRows.map(r => r.available as number)) : null
   const bundleItemsTotal = bundleRows.reduce((s, r) => s + (r.lineTotal || 0), 0)
 
-  const seg = (on: boolean, tone: "accent" | "warn" = "accent") =>
-    cn(
-      "h-10 flex-1 rounded-lg border px-3 text-sm font-semibold transition-colors",
-      on
-        ? tone === "warn"
-          ? "border-dash-warn bg-dash-warn-soft text-dash-warn-fg"
-          : "border-dash-accent bg-dash-accent-soft text-dash-accent-fg"
-        : "border-dash-border bg-dash-card text-dash-muted hover:bg-dash-neutral-soft",
-    )
-
   const money = (children: React.ReactNode, symbol: React.ReactNode) => (
     <span className="relative block">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-dash-muted">{symbol}</span>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{symbol}</span>
       {children}
     </span>
   )
@@ -840,14 +836,13 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
             <div className="flex min-w-0 flex-col gap-5">
               <Section n={1} title="Basic information" hint="What customers and staff see.">
                 <div className="flex flex-col gap-3">
-                  <label className={labelCls}>Product name *
-                    <input id="name" className={inputCls} value={formData.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Cotton Panjabi – White" />
-                  </label>
-                  <label className={labelCls}>Description
-                    <textarea id="description" rows={3} value={formData.description} onChange={(e) => set("description", e.target.value)}
-                      placeholder="Fabric, fit, care instructions…"
-                      className="resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent" />
-                  </label>
+                  <FormField label="Product name *" htmlFor="name" className="min-w-0">
+                    <Input id="name" value={formData.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Cotton Panjabi – White" />
+                  </FormField>
+                  <FormField label="Description" htmlFor="description" className="min-w-0">
+                    <Textarea id="description" rows={3} value={formData.description} onChange={(e) => set("description", e.target.value)}
+                      placeholder="Fabric, fit, care instructions…" />
+                  </FormField>
                 </div>
               </Section>
 
@@ -857,64 +852,61 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                   className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3"
                 >
                   {uploadedImages.map((image, index) => (
-                    <div key={index} className="group relative aspect-square overflow-hidden rounded-xl border border-dash-border bg-dash-neutral-soft">
+                    <Card key={index} className="group relative aspect-square gap-0 overflow-hidden bg-muted p-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={image || "/placeholder.svg"} alt={`Product image ${index + 1}`} className="size-full object-cover" />
                       {index === 0 && (
-                        <span className="absolute bottom-1.5 left-1.5 rounded-full bg-dash-accent px-2 py-0.5 text-[11px] font-bold text-white">Cover</span>
+                        <Badge className="absolute bottom-1.5 left-1.5">Cover</Badge>
                       )}
-                      <button type="button" onClick={() => removeImage(index)} aria-label={`Remove image ${index + 1}`}
-                        className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full bg-dash-card/90 text-dash-danger shadow hover:bg-dash-danger-soft">
+                      <Button type="button" variant="destructive" size="icon-sm" onClick={() => removeImage(index)} aria-label={`Remove image ${index + 1}`}
+                        className="absolute right-1.5 top-1.5">
                         <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
+                      </Button>
+                    </Card>
                   ))}
                   {uploadedImages.length < MAX_IMAGES && <>
-                  <input type="file" id="file-upload" accept="image/jpeg,image/png,image/webp" multiple onChange={handleFileInput} className="sr-only" />
-                  <label htmlFor="file-upload"
-                    className={cn("flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed text-center text-[13px] font-semibold text-dash-muted transition-colors focus-within:border-dash-accent hover:border-dash-accent hover:text-dash-accent",
-                      isDragging ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border")}>
-                    <CloudUpload className="size-6" />
-                    Add images
-                    <span className="px-2 text-[11px] font-normal">or drag them here</span>
-                  </label>
+                  <Input type="file" id="file-upload" accept="image/jpeg,image/png,image/webp" multiple onChange={handleFileInput} className="sr-only" />
+                  <Button asChild variant="outline"
+                    className={cn("aspect-square h-auto cursor-pointer flex-col gap-1.5 whitespace-normal border-dashed text-center", isDragging && "border-primary bg-accent")}>
+                    <Label htmlFor="file-upload">
+                      <CloudUpload className="size-6" />
+                      Add images
+                      <span className="px-2 text-xs font-normal text-muted-foreground">or drag them here</span>
+                    </Label>
+                  </Button>
                   </>}
                 </div>
-                {imageError && <p role="alert" className="mt-3 rounded-[10px] border border-dash-danger bg-dash-danger-soft px-3 py-2 text-[13px] font-medium text-dash-danger-fg">{imageError}</p>}
+                {imageError && <Alert variant="destructive" className="mt-3"><AlertDescription>{imageError}</AlertDescription></Alert>}
               </Section>
 
               <Section n={3} title="Pricing" hint="Set cost and margin — we work out the selling price.">
                 <div className="flex flex-col gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className={labelCls}>Cost price
-                      {money(<input id="costPrice" type="number" min={0} className={cn(inputCls, "pl-7")} value={formData.costPrice} onChange={(e) => set("costPrice", e.target.value)} placeholder="0" />, currencySymbol)}
-                      <span className="text-xs font-normal text-dash-muted">What you pay the supplier</span>
-                    </label>
-                    <div className={labelCls}>
-                      <span id="marginTypeLbl">Margin type</span>
+                    <FormField label="Cost price" htmlFor="costPrice" description="What you pay the supplier" className="min-w-0">
+                      {money(<Input id="costPrice" type="number" min={0} className="pl-7" value={formData.costPrice} onChange={(e) => set("costPrice", e.target.value)} placeholder="0" />, currencySymbol)}
+                    </FormField>
+                    <FormField label={<span id="marginTypeLbl">Margin type</span>} className="min-w-0">
                       <div role="radiogroup" aria-labelledby="marginTypeLbl" className="flex gap-2">
-                        <button type="button" role="radio" aria-checked={formData.marginType === "percentage"} onClick={() => set("marginType", "percentage")} className={seg(formData.marginType === "percentage")}>% Percentage</button>
-                        <button type="button" role="radio" aria-checked={formData.marginType === "flat"} onClick={() => set("marginType", "flat")} className={seg(formData.marginType === "flat")}>{currencySymbol} Flat</button>
+                        <Button type="button" variant={formData.marginType === "percentage" ? "default" : "outline"} role="radio" aria-checked={formData.marginType === "percentage"} onClick={() => set("marginType", "percentage")} className="flex-1">% Percentage</Button>
+                        <Button type="button" variant={formData.marginType === "flat" ? "default" : "outline"} role="radio" aria-checked={formData.marginType === "flat"} onClick={() => set("marginType", "flat")} className="flex-1">{currencySymbol} Flat</Button>
                       </div>
-                    </div>
-                    <label className={labelCls}>Profit margin {formData.marginType === "percentage" ? "(%)" : `(${currencySymbol})`}
-                      {money(<input id="profitMargin" type="number" min={0} className={cn(inputCls, "pl-7")} value={formData.profitMargin} onChange={(e) => set("profitMargin", e.target.value)} placeholder="0" />, formData.marginType === "percentage" ? "%" : currencySymbol)}
-                    </label>
-                    <div className={labelCls}>
-                      <span>Selling price <span className="ml-1 rounded-full bg-dash-accent-soft px-2 py-0.5 text-[11px] font-bold text-dash-accent-fg">auto</span></span>
-                      <span className="flex h-[42px] items-center justify-between rounded-[10px] bg-dash-accent-soft px-3 text-lg font-bold tabular-nums text-dash-accent-fg">
+                    </FormField>
+                    <FormField label={<>Profit margin {formData.marginType === "percentage" ? "(%)" : `(${currencySymbol})`}</>} htmlFor="profitMargin" className="min-w-0">
+                      {money(<Input id="profitMargin" type="number" min={0} className="pl-7" value={formData.profitMargin} onChange={(e) => set("profitMargin", e.target.value)} placeholder="0" />, formData.marginType === "percentage" ? "%" : currencySymbol)}
+                    </FormField>
+                    <FormField className="min-w-0"
+                      label={<>Selling price <Badge variant="secondary" className="ml-1">auto</Badge></>}
+                      description={hasVariants ? "Variants below start from this price and can be edited."
+                        : "Worked out from cost + margin (no cost? use a flat margin as the price). This is the price customers see."}>
+                      <Card className="flex-row items-center justify-between gap-2 bg-muted/50 px-3 py-2 text-lg font-bold tabular-nums shadow-none">
                         {formatCurrency(sellingPrice)}
-                        <span className="text-xs font-semibold">
+                        <span className="text-xs font-semibold text-muted-foreground">
                           {isBundle && bundleOverrideNum > 0 ? "bundle price" : costNum > 0 || marginNum > 0
                             ? `${costNum} ${formData.marginType === "percentage" ? `+ ${marginNum}%` : `+ ${marginNum}`}`
                             : "cost + margin"}
                         </span>
-                      </span>
-                      <span className="text-xs font-normal text-dash-muted">
-                        {hasVariants ? "Variants below start from this price and can be edited."
-                          : "Worked out from cost + margin (no cost? use a flat margin as the price). This is the price customers see."}
-                      </span>
-                    </div>
+                      </Card>
+                    </FormField>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
@@ -924,46 +916,43 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       { k: "Markup", v: markupPct === null ? "—" : `${markupPct.toFixed(1)}%`, bad: markupPct !== null && markupPct < 0 },
                       { k: "Price after offer", v: salePriceNum > 0 ? formatCurrency(finalPrice) : "—", bad: false },
                     ].map(s => (
-                      <div key={s.k} className="rounded-xl border border-dash-border-soft bg-dash-bg px-3 py-2.5">
-                        <div className="text-xs text-dash-muted">{s.k}</div>
-                        <div className={cn("font-dash-display text-lg font-bold tabular-nums", s.bad && "text-dash-danger")}>{s.v}</div>
-                      </div>
+                      <StatTile key={s.k} label={s.k} className="gap-1 px-3 py-2.5"
+                        value={<span className={cn(s.bad && "text-destructive")}>{s.v}</span>} />
                     ))}
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
-                    <div className={labelCls}>
-                      <span id="offerTypeLbl">Offer / discount</span>
+                    <FormField label={<span id="offerTypeLbl">Offer / discount</span>} className="min-w-0">
                       <div role="radiogroup" aria-labelledby="offerTypeLbl" className="flex gap-2">
-                        <button type="button" role="radio" aria-checked={formData.offerType === "percentage"} onClick={() => set("offerType", "percentage")} className={cn(seg(formData.offerType === "percentage", "warn"), "flex-none")}>% Off</button>
-                        <button type="button" role="radio" aria-checked={formData.offerType === "flat"} onClick={() => set("offerType", "flat")} className={cn(seg(formData.offerType === "flat", "warn"), "flex-none")}>{currencySymbol} Flat</button>
+                        <Button type="button" variant={formData.offerType === "percentage" ? "default" : "outline"} role="radio" aria-checked={formData.offerType === "percentage"} onClick={() => set("offerType", "percentage")} className="flex-none">% Off</Button>
+                        <Button type="button" variant={formData.offerType === "flat" ? "default" : "outline"} role="radio" aria-checked={formData.offerType === "flat"} onClick={() => set("offerType", "flat")} className="flex-none">{currencySymbol} Flat</Button>
                       </div>
-                    </div>
-                    <label className={labelCls}>{formData.offerType === "percentage" ? "Discount (%)" : "Discount amount"}
-                      {money(<input type="number" min={0} max={formData.offerType === "percentage" ? 100 : undefined} aria-invalid={formData.offerType === "percentage" && offerNum > 100} className={cn(inputCls, "pl-7", formData.offerType === "percentage" && offerNum > 100 && "border-dash-danger")} value={formData.offerPrice} onChange={(e) => set("offerPrice", e.target.value)} placeholder="0" />, formData.offerType === "percentage" ? "%" : currencySymbol)}
-                      {formData.offerType === "percentage" && offerNum > 100
-                        ? <span className="text-xs font-medium text-dash-danger">A percentage offer cannot be more than 100%.</span>
-                        : <span className="text-xs font-normal text-dash-muted">0 = no offer</span>}
-                    </label>
+                    </FormField>
+                    <FormField label={formData.offerType === "percentage" ? "Discount (%)" : "Discount amount"} htmlFor="offerPrice" className="min-w-0"
+                      error={formData.offerType === "percentage" && offerNum > 100 ? "A percentage offer cannot be more than 100%." : undefined}
+                      description={formData.offerType === "percentage" && offerNum > 100 ? undefined : "0 = no offer"}>
+                      {money(<Input id="offerPrice" type="number" min={0} max={formData.offerType === "percentage" ? 100 : undefined} aria-invalid={formData.offerType === "percentage" && offerNum > 100} className="pl-7" value={formData.offerPrice} onChange={(e) => set("offerPrice", e.target.value)} placeholder="0" />, formData.offerType === "percentage" ? "%" : currencySymbol)}
+                    </FormField>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <label className={labelCls}>Offer ends
-                      <input type="date" className={inputCls} value={formData.offerEndsAt} min={today} disabled={!Number(formData.offerPrice)}
+                    <FormField label="Offer ends" htmlFor="offerEndsAt" description="Blank = no end date" className="min-w-0">
+                      <Input id="offerEndsAt" type="date" value={formData.offerEndsAt} min={today} disabled={!Number(formData.offerPrice)}
                         onChange={(e) => set("offerEndsAt", e.target.value)} />
-                      <span className="text-xs font-normal text-dash-muted">Blank = no end date</span>
-                    </label>
-                    <label className={labelCls}>Wholesale price
-                      {money(<input type="number" min={0} className={cn(inputCls, "pl-7")} value={formData.wholesalePrice} onChange={(e) => set("wholesalePrice", e.target.value)} placeholder="0" />, currencySymbol)}
-                    </label>
-                    <label className={labelCls}>Min. wholesale qty
-                      <input type="number" min={0} className={inputCls} value={formData.minWholesaleQty} onChange={(e) => set("minWholesaleQty", e.target.value)} placeholder="e.g. 12" />
-                    </label>
+                    </FormField>
+                    <FormField label="Wholesale price" htmlFor="wholesalePrice" className="min-w-0">
+                      {money(<Input id="wholesalePrice" type="number" min={0} className="pl-7" value={formData.wholesalePrice} onChange={(e) => set("wholesalePrice", e.target.value)} placeholder="0" />, currencySymbol)}
+                    </FormField>
+                    <FormField label="Min. wholesale qty" htmlFor="minWholesaleQty" className="min-w-0">
+                      <Input id="minWholesaleQty" type="number" min={0} value={formData.minWholesaleQty} onChange={(e) => set("minWholesaleQty", e.target.value)} placeholder="e.g. 12" />
+                    </FormField>
                   </div>
                   {warnings.length > 0 && (
-                    <div role="status" className="flex flex-col gap-1 rounded-[10px] border border-dash-warn bg-dash-warn-soft px-3 py-2 text-[13px] font-medium text-dash-warn-fg">
-                      {warnings.map(w => <span key={w}>{w}</span>)}
-                      <span className="text-xs font-normal">These are warnings only — you can still save.</span>
-                    </div>
+                    <Alert role="status">
+                      <AlertDescription className="flex flex-col gap-1">
+                        {warnings.map(w => <span key={w} className="font-medium text-foreground">{w}</span>)}
+                        <span className="text-xs">These are warnings only — you can still save.</span>
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </div>
               </Section>
@@ -971,64 +960,54 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               <Section n={4} title="Inventory" hint="Opening stock and when to warn you.">
                 <div className="flex flex-col gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className={labelCls}>{editingProduct ? "Stock" : "Opening stock"}
-                      <input id="stock" type="number" min={0} className={inputCls} value={formData.stock} onChange={(e) => setTopStock(e.target.value)} placeholder="0" />
-                      {hasVariants && <span className="text-xs font-normal text-dash-muted">Changing this spreads the total evenly over the {generatedVariants.length} variants; you can still edit each one.</span>}
-                    </label>
-                    <div className={labelCls}>
-                      <span id="whLbl">Warehouse</span>
+                    <FormField label={editingProduct ? "Stock" : "Opening stock"} htmlFor="stock" className="min-w-0"
+                      description={hasVariants ? `Changing this spreads the total evenly over the ${generatedVariants.length} variants; you can still edit each one.` : undefined}>
+                      <Input id="stock" type="number" min={0} value={formData.stock} onChange={(e) => setTopStock(e.target.value)} placeholder="0" />
+                    </FormField>
+                    <FormField label={<span id="whLbl">Warehouse</span>} className="min-w-0">
                       <Select value={formData.locationId || String(warehouses[0]?.id || "")} onValueChange={(val) => set("locationId", val)}>
                         <SelectTrigger aria-labelledby="whLbl" className={selectCls}><SelectValue placeholder="Location" /></SelectTrigger>
                         <SelectContent>
                           {warehouses.map(w => (<SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>))}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <label className={labelCls}>Reorder point
-                      <input id="reorderPoint" type="number" min={0} className={inputCls} value={formData.reorderPoint} onChange={(e) => set("reorderPoint", e.target.value)} placeholder="0 (off)" />
-                      <span className="text-xs font-normal text-dash-muted">Low-stock alert at or below this. 0 = off</span>
-                    </label>
-                    <label className={labelCls}>Receipt / batch no.
-                      <input id="receiptNumber" className={inputCls} value={formData.receiptNumber} onChange={(e) => set("receiptNumber", e.target.value)} placeholder="Optional" />
-                    </label>
+                    </FormField>
+                    <FormField label="Reorder point" htmlFor="reorderPoint" description="Low-stock alert at or below this. 0 = off" className="min-w-0">
+                      <Input id="reorderPoint" type="number" min={0} value={formData.reorderPoint} onChange={(e) => set("reorderPoint", e.target.value)} placeholder="0 (off)" />
+                    </FormField>
+                    <FormField label="Receipt / batch no." htmlFor="receiptNumber" className="min-w-0">
+                      <Input id="receiptNumber" value={formData.receiptNumber} onChange={(e) => set("receiptNumber", e.target.value)} placeholder="Optional" />
+                    </FormField>
                   </div>
-                  <div className={labelCls}>
-                    <span id="trackLbl">Track by</span>
+                  <FormField label={<span id="trackLbl">Track by</span>} className="min-w-0"
+                    description={trackingType === "none" ? "Just a stock count — no serial or batch numbers."
+                      : trackingType === "serial" ? "Each unit gets a unique serial number. Stock = count of available serials. Manage serials from the Serial/Batch page."
+                      : trackingType === "batch" ? "Units grouped in batches/lots with expiry dates. Stock = sum of remaining batch quantities. Uses FEFO (First Expired First Out) on sell."
+                      : undefined}>
                     <div role="radiogroup" aria-labelledby="trackLbl" className="flex flex-wrap gap-2">
                       {(["none", "serial", "batch"] as const).map((type) => (
-                        <button key={type} type="button" role="radio" aria-checked={trackingType === type} onClick={() => setTrackingType(type)} className={seg(trackingType === type)}>
+                        <Button key={type} type="button" variant={trackingType === type ? "default" : "outline"} role="radio" aria-checked={trackingType === type} onClick={() => setTrackingType(type)} className="flex-1">
                           {type === "none" ? "Quantity only" : type === "serial" ? "Serial" : "Batch"}
-                        </button>
+                        </Button>
                       ))}
                     </div>
-                    {trackingType === "none" && (
-                      <span className="text-xs font-normal text-dash-muted">Just a stock count — no serial or batch numbers.</span>
-                    )}
-                    {trackingType === "serial" && (
-                      <span className="text-xs font-normal text-dash-muted">Each unit gets a unique serial number. Stock = count of available serials. Manage serials from the Serial/Batch page.</span>
-                    )}
-                    {trackingType === "batch" && (
-                      <span className="text-xs font-normal text-dash-muted">Units grouped in batches/lots with expiry dates. Stock = sum of remaining batch quantities. Uses FEFO (First Expired First Out) on sell.</span>
-                    )}
-                  </div>
+                  </FormField>
                 </div>
               </Section>
 
-              <Section n={5} title="Variants" hint="Sell the same product in different colours or sizes." action={<a href="/dashboard/attributes" target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-dash-accent hover:underline">Manage attributes →</a>}>
+              <Section n={5} title="Variants" hint="Sell the same product in different colours or sizes." action={<Button asChild variant="link" size="sm" className="h-auto p-0"><a href="/dashboard/attributes" target="_blank" rel="noreferrer">Manage attributes →</a></Button>}>
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center gap-2">
                     {attributesLoading ? (
-                      <p className="text-sm text-dash-muted">Loading attributes…</p>
+                      <p className="text-sm text-muted-foreground">Loading attributes…</p>
                     ) : globalAttributes.length === 0 ? (
-                      <p className="text-sm text-dash-muted">No attributes found. Add attributes from the Attributes page first.</p>
+                      <p className="text-sm text-muted-foreground">No attributes found. Add attributes from the Attributes page first.</p>
                     ) : globalAttributes.map(attr => {
                       const on = selectedAttributeIds.includes(attr.id)
                       return (
-                        <button key={attr.id} type="button" aria-pressed={on} onClick={() => handleAttributeSelect(attr.id, !on)}
-                          className={cn("h-9 rounded-full border px-3.5 text-[13px] font-semibold",
-                            on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
+                        <Button key={attr.id} type="button" size="sm" variant={on ? "default" : "outline"} aria-pressed={on} onClick={() => handleAttributeSelect(attr.id, !on)}>
                           {on ? "✓ " : "+ "}{attr.displayName || attr.name}
-                        </button>
+                        </Button>
                       )
                     })}
                   </div>
@@ -1041,7 +1020,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                           <span className="w-24 shrink-0 text-[13px] font-semibold">{attr.name}</span>
                           <div className="flex flex-wrap gap-2">
                             {(Array.isArray(attr.value) ? attr.value : [attr.value]).map(val => (
-                              <span key={val} className="rounded-full bg-dash-accent-soft px-3 py-1 text-[13px] font-semibold text-dash-accent-fg">{val}</span>
+                              <Badge key={val} variant="secondary">{val}</Badge>
                             ))}
                           </div>
                         </div>
@@ -1051,9 +1030,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       <div key={attr.id} className="flex flex-wrap items-center gap-3">
                         <span className="w-24 shrink-0 text-[13px] font-semibold">{globalAttr.displayName || globalAttr.name}</span>
                         {(globalAttr.option === "dropdown" || globalAttr.option === "radio") && globalAttr.values.length > 0 && (
-                          <span className="flex shrink-0 gap-2 text-xs font-semibold text-dash-accent">
-                            <button type="button" className="hover:underline" onClick={() => selectAllValues(attr.id, globalAttr.values)}>Select all</button>
-                            <button type="button" className="text-dash-muted hover:underline" onClick={() => clearValues(attr.id)}>Clear</button>
+                          <span className="flex shrink-0 gap-2">
+                            <Button type="button" variant="link" size="sm" onClick={() => selectAllValues(attr.id, globalAttr.values)}>Select all</Button>
+                            <Button type="button" variant="link" size="sm" onClick={() => clearValues(attr.id)}>Clear</Button>
                           </span>
                         )}
                         {globalAttr.option === "dropdown" || globalAttr.option === "radio" ? (
@@ -1062,24 +1041,22 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                               {globalAttr.values.map(val => {
                                 const isSelected = Array.isArray(attr.value) ? attr.value.includes(val) : attr.value === val
                                 return (
-                                  <button key={val} type="button" aria-pressed={isSelected}
+                                  <Button key={val} type="button" size="sm" variant={isSelected ? "default" : "outline"} aria-pressed={isSelected}
                                     onClick={() => {
                                       let newValue: string[] = Array.isArray(attr.value) ? [...attr.value] : []
                                       newValue = newValue.includes(val) ? newValue.filter(v => v !== val) : [...newValue, val]
                                       handleAttributeValueChange(attr.id, newValue)
-                                    }}
-                                    className={cn("h-8 rounded-full border px-3 text-[13px] font-semibold",
-                                      isSelected ? "border-dash-accent bg-dash-accent text-white" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
+                                    }}>
                                     {val}
-                                  </button>
+                                  </Button>
                                 )
                               })}
                             </div>
                           ) : (
-                            <p className="text-xs italic text-dash-muted">No values defined for this attribute</p>
+                            <p className="text-xs italic text-muted-foreground">No values defined for this attribute</p>
                           )
                         ) : (
-                          <input className={cn(inputCls, "flex-1")} aria-label={globalAttr.displayName || globalAttr.name}
+                          <Input className="flex-1" aria-label={globalAttr.displayName || globalAttr.name}
                             value={attr.value as string} onChange={(e) => handleAttributeValueChange(attr.id, e.target.value)}
                             placeholder={`Enter ${globalAttr.displayName || globalAttr.name}`} />
                         )}
@@ -1088,68 +1065,68 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                   })}
 
                   {productAttributes.some(a => Array.isArray(a.value) ? a.value.length > 0 : a.value !== "") && (
-                    <button type="button" onClick={() => generateVariants()} className="h-11 w-full rounded-[10px] bg-dash-accent text-sm font-bold text-white">
+                    <Button type="button" onClick={() => generateVariants()} className="w-full">
                       {hasVariants ? "Generate new combinations" : "Generate variants"}
-                    </button>
+                    </Button>
                   )}
 
                   {hasVariants && (
                     <>
-                      <div className="overflow-x-auto rounded-xl border border-dash-border">
-                        <table className="w-full text-sm">
-                          <thead className="bg-dash-bg text-left text-xs font-bold uppercase tracking-[0.04em] text-dash-muted">
-                            <tr>
-                              <th className="p-2.5">Variant</th>
-                              <th className="p-2.5">Price</th>
-                              <th className="p-2.5">Offer (type + value)</th>
-                              <th className="p-2.5">Stock</th>
-                              <th className="p-2.5">SKU</th>
-                              <th className="p-2.5"><span className="sr-only">Actions</span></th>
-                            </tr>
-                          </thead>
-                          <tbody>
+                      <Card className="gap-0 overflow-x-auto py-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Variant</TableHead>
+                              <TableHead>Price</TableHead>
+                              <TableHead>Offer (type + value)</TableHead>
+                              <TableHead>Stock</TableHead>
+                              <TableHead>SKU</TableHead>
+                              <TableHead><span className="sr-only">Actions</span></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
                             {generatedVariants.map(variant => (
-                              <tr key={variant.id} className="border-t border-dash-border-soft">
-                                <td className="p-2.5 font-semibold">{variant.name}</td>
-                                <td className="p-2.5"><input type="number" aria-label={`${variant.name} price`} min={0} className={cn(cellCls, "w-24")} value={variant.salePrice || ""} onChange={(e) => setVariantPrice(variant.id, Number(e.target.value))} /></td>
-                                <td className="p-2.5">
+                              <TableRow key={variant.id}>
+                                <TableCell className="font-medium">{variant.name}</TableCell>
+                                <TableCell><Input type="number" aria-label={`${variant.name} price`} min={0} className="w-24" value={variant.salePrice || ""} onChange={(e) => setVariantPrice(variant.id, Number(e.target.value))} /></TableCell>
+                                <TableCell>
                                   <div className="flex flex-col gap-1">
                                     <div className="flex gap-1">
-                                      <button type="button" aria-label="Percentage offer" aria-pressed={(variant.offerType ?? "percentage") === "percentage"} onClick={() => updateVariant(variant.id, "offerType", "percentage")}
-                                        className={cn("h-9 rounded-md border px-2 text-xs font-bold", (variant.offerType ?? "percentage") === "percentage" ? "border-dash-warn bg-dash-warn-soft text-dash-warn-fg" : "border-dash-border text-dash-muted")}>%</button>
-                                      <button type="button" aria-label="Flat offer" aria-pressed={variant.offerType === "flat"} onClick={() => updateVariant(variant.id, "offerType", "flat")}
-                                        className={cn("h-9 rounded-md border px-2 text-xs font-bold", variant.offerType === "flat" ? "border-dash-warn bg-dash-warn-soft text-dash-warn-fg" : "border-dash-border text-dash-muted")}>$</button>
-                                      <input type="number" min={0} aria-label={`${variant.name} offer value`} aria-invalid={(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100} className={cn(cellCls, "w-16", (variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100 && "border-dash-danger")} placeholder="0" value={variant.offerPrice || ""} onChange={(e) => updateVariant(variant.id, "offerPrice", Number(e.target.value) || undefined)} />
+                                      <Button type="button" size="icon" variant={(variant.offerType ?? "percentage") === "percentage" ? "default" : "outline"} aria-label="Percentage offer" aria-pressed={(variant.offerType ?? "percentage") === "percentage"} onClick={() => updateVariant(variant.id, "offerType", "percentage")}>%</Button>
+                                      <Button type="button" size="icon" variant={variant.offerType === "flat" ? "default" : "outline"} aria-label="Flat offer" aria-pressed={variant.offerType === "flat"} onClick={() => updateVariant(variant.id, "offerType", "flat")}>$</Button>
+                                      <Input type="number" min={0} aria-label={`${variant.name} offer value`} aria-invalid={(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100} className="w-16" placeholder="0" value={variant.offerPrice || ""} onChange={(e) => updateVariant(variant.id, "offerPrice", Number(e.target.value) || undefined)} />
                                     </div>
                                     {(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100 ? (
-                                      <span className="text-xs font-medium text-dash-danger">Max 100%</span>
+                                      <span className="text-xs font-medium text-destructive">Max 100%</span>
                                     ) : variant.offerPrice ? (
-                                      <span className="text-xs font-semibold tabular-nums text-dash-warn-fg">
+                                      <span className="text-xs font-semibold tabular-nums text-foreground">
                                         = {formatCurrency((variant.offerType ?? "percentage") === "percentage"
                                           ? variant.salePrice * (1 - variant.offerPrice / 100)
                                           : variant.salePrice - variant.offerPrice)}
                                       </span>
                                     ) : null}
                                   </div>
-                                </td>
-                                <td className="p-2.5"><input type="number" aria-label={`${variant.name} stock`} className={cn(cellCls, "w-20")} value={variant.stock || ""} onChange={(e) => updateVariant(variant.id, "stock", Number(e.target.value))} /></td>
-                                <td className="p-2.5"><input aria-label={`${variant.name} SKU`} aria-invalid={!!variantSkuErrors[variant.id]} title={variantSkuErrors[variant.id]} className={cn(cellCls, "w-36 font-mono", variantSkuErrors[variant.id] && "border-dash-danger")} value={variant.sku} onChange={(e) => updateVariant(variant.id, "sku", e.target.value)} />
-                                  {variantSkuErrors[variant.id] && <span className="mt-1 block max-w-[220px] text-xs font-medium text-dash-danger">{variantSkuErrors[variant.id]}</span>}
-                                </td>
-                                <td className="p-2.5">
-                                  <button type="button" aria-label={`Remove variant ${variant.name}`} onClick={() => removeVariant(variant.id)}
-                                    className="grid size-9 place-items-center rounded-lg text-dash-danger hover:bg-dash-danger-soft">
+                                </TableCell>
+                                <TableCell><Input type="number" aria-label={`${variant.name} stock`} className="w-20" value={variant.stock || ""} onChange={(e) => updateVariant(variant.id, "stock", Number(e.target.value))} /></TableCell>
+                                <TableCell>
+                                  <WithTooltip content={variantSkuErrors[variant.id]}>
+                                    <Input aria-label={`${variant.name} SKU`} aria-invalid={!!variantSkuErrors[variant.id]} className="w-36 font-mono" value={variant.sku} onChange={(e) => updateVariant(variant.id, "sku", e.target.value)} />
+                                  </WithTooltip>
+                                  {variantSkuErrors[variant.id] && <span className="mt-1 block max-w-[220px] text-xs font-medium text-destructive">{variantSkuErrors[variant.id]}</span>}
+                                </TableCell>
+                                <TableCell>
+                                  <Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove variant ${variant.name}`} onClick={() => removeVariant(variant.id)}>
                                     <Trash2 className="size-4" />
-                                  </button>
-                                </td>
-                              </tr>
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
                             ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          </TableBody>
+                        </Table>
+                      </Card>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-dash-muted tabular-nums">{generatedVariants.length} variants · each gets its own SKU and stock · price starts from the product price</span>
-                        <button type="button" onClick={() => setGeneratedVariants([])} className="h-9 rounded-lg border border-dash-border px-3 text-[13px] font-semibold text-dash-danger hover:bg-dash-danger-soft">Remove all variants</button>
+                        <span className="text-xs text-muted-foreground tabular-nums">{generatedVariants.length} variants · each gets its own SKU and stock · price starts from the product price</span>
+                        <Button type="button" variant="destructive" size="sm" onClick={() => setGeneratedVariants([])}>Remove all variants</Button>
                       </div>
                     </>
                   )}
@@ -1163,100 +1140,99 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                     <ToggleRow id="bestSeller" title="Best seller" sub="Show Best seller badge" checked={isBestSeller} onChange={setIsBestSeller} />
                     <ToggleRow id="featured" title="Featured" sub="Show on home page" checked={isFeatured} onChange={setIsFeatured} />
                   </div>
-                  <label className={labelCls}>Custom tag (optional)
-                    <input id="tag" className={inputCls} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. New arrival" maxLength={30} />
-                    <span className="text-xs font-normal text-dash-muted">One short tag shown as a badge, in addition to Best seller / Hot deal.</span>
-                  </label>
-                  <label className={labelCls}>Badge text (optional)
-                    <input id="dealLabel" className={inputCls} value={dealLabel} onChange={(e) => setDealLabel(e.target.value)} placeholder="e.g. Eid special, 40% off" maxLength={50} />
-                    <span className="text-xs font-normal text-dash-muted">Replaces the automatic badge. Leave blank to use the tag name.</span>
-                  </label>
+                  <FormField label="Custom tag (optional)" htmlFor="tag" description="One short tag shown as a badge, in addition to Best seller / Hot deal." className="min-w-0">
+                    <Input id="tag" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. New arrival" maxLength={30} />
+                  </FormField>
+                  <FormField label="Badge text (optional)" htmlFor="dealLabel" description="Replaces the automatic badge. Leave blank to use the tag name." className="min-w-0">
+                    <Input id="dealLabel" value={dealLabel} onChange={(e) => setDealLabel(e.target.value)} placeholder="e.g. Eid special, 40% off" maxLength={50} />
+                  </FormField>
                   <ToggleRow id="isBundle" title="Bundle / kit" sub="Sell several products together. Stock = lowest available item." checked={isBundle} onChange={setIsBundle} />
 
                   {isBundle && (
-                    <div className="flex flex-col gap-4 rounded-xl border border-dash-border bg-dash-bg p-4">
-                      <label className={cn(labelCls, "max-w-xs")}>Bundle price override
-                        {money(<input id="bundlePriceOverride" type="number" min={0} className={cn(inputCls, "pl-7")} value={bundlePriceOverride} onChange={(e) => setBundlePriceOverride(e.target.value)} placeholder="Use items total" />, currencySymbol)}
-                        <span className="text-xs font-normal text-dash-muted">Optional — leave blank to price the bundle from cost + margin</span>
-                      </label>
+                    <Card className="gap-4 bg-muted/50 p-4 shadow-none">
+                      <FormField label="Bundle price override" htmlFor="bundlePriceOverride" className="min-w-0 max-w-xs"
+                        description="Optional — leave blank to price the bundle from cost + margin">
+                        {money(<Input id="bundlePriceOverride" type="number" min={0} className="pl-7" value={bundlePriceOverride} onChange={(e) => setBundlePriceOverride(e.target.value)} placeholder="Use items total" />, currencySymbol)}
+                      </FormField>
 
-                      <div className={labelCls}>
-                        <label htmlFor="bundleSearch">Add child products</label>
+                      <FormField label="Add child products" htmlFor="bundleSearch" className="min-w-0">
                         <div className="relative">
-                          <input id="bundleSearch" className={inputCls} value={bundleSearch} placeholder="Search products to add…"
+                          <Input id="bundleSearch" value={bundleSearch} placeholder="Search products to add…"
                             onChange={(e) => { setBundleSearch(e.target.value); searchBundleProducts(e.target.value) }} />
                           {bundleSearchResults.length > 0 && (
-                            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-[10px] border border-dash-border bg-dash-card shadow-lg">
-                              {bundleSearchLoading && <div className="p-2 text-sm text-dash-muted">Searching…</div>}
-                              {bundleSearchResults.map((p: any) => (
-                                <div key={p.id} className="border-b border-dash-border-soft last:border-0">
-                                  <button type="button" onClick={() => addBundleItem(p)}
-                                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-normal hover:bg-dash-neutral-soft">
-                                    <span>{p.name} <span className="text-xs text-dash-muted">({p.sku})</span></span>
-                                    <span className="text-xs text-dash-muted tabular-nums">Stock: {p.stock}</span>
-                                  </button>
+                            <Card className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 gap-0 overflow-y-auto py-0 shadow-lg">
+                              {bundleSearchLoading && <div className="p-2 text-sm text-muted-foreground">Searching…</div>}
+                              {bundleSearchResults.map((p: any, pi: number) => (
+                                <Fragment key={p.id}>
+                                  {pi > 0 && <Separator />}
+                                  <Button type="button" variant="ghost" onClick={() => addBundleItem(p)}
+                                    className="h-auto w-full justify-between rounded-none text-left">
+                                    <span>{p.name} <span className="text-xs text-muted-foreground">({p.sku})</span></span>
+                                    <span className="text-xs text-muted-foreground tabular-nums">Stock: {p.stock}</span>
+                                  </Button>
                                   {p.variants?.length > 0 && p.variants.map((v: any) => (
-                                    <button key={v.id} type="button" onClick={() => addBundleItem(p, v)}
-                                      className="flex w-full items-center justify-between border-t border-dash-border-soft px-6 py-1.5 text-left text-xs font-normal text-dash-muted hover:bg-dash-neutral-soft">
+                                    <Button key={v.id} type="button" variant="ghost" size="sm" onClick={() => addBundleItem(p, v)}
+                                      className="h-auto w-full justify-between rounded-none pl-6 text-left">
                                       <span>└ {v.name}</span>
                                       <span className="tabular-nums">Stock: {v.stock}</span>
-                                    </button>
+                                    </Button>
                                   ))}
-                                </div>
+                                </Fragment>
                               ))}
-                            </div>
+                            </Card>
                           )}
                         </div>
-                      </div>
+                      </FormField>
 
                       {bundleItems.length > 0 ? (
-                        <div className="overflow-hidden rounded-xl border border-dash-border bg-dash-card">
-                          <table className="w-full text-sm">
-                            <thead className="bg-dash-bg text-left text-xs font-bold uppercase tracking-[0.04em] text-dash-muted">
-                              <tr>
-                                <th className="p-2.5">Product</th>
-                                <th className="p-2.5">Variant</th>
-                                <th className="w-32 p-2.5 text-center">Qty in bundle</th>
-                                <th className="w-24 p-2.5 text-right">Available</th>
-                                <th className="w-10 p-2.5"><span className="sr-only">Remove</span></th>
-                              </tr>
-                            </thead>
-                            <tbody>
+                        <Card className="gap-0 overflow-hidden py-0">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Product</TableHead>
+                                <TableHead>Variant</TableHead>
+                                <TableHead className="w-32 text-center">Qty in bundle</TableHead>
+                                <TableHead className="w-24 text-right">Available</TableHead>
+                                <TableHead className="w-10"><span className="sr-only">Remove</span></TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
                               {bundleItems.map((bi, index) => (
-                                <tr key={index} className="border-t border-dash-border-soft">
-                                  <td className="p-2.5">
+                                <TableRow key={index}>
+                                  <TableCell>
                                     <div className="font-semibold">{bi.productName}</div>
-                                    <div className="text-xs text-dash-muted">{bi.productSku}</div>
-                                  </td>
-                                  <td className="p-2.5 text-xs text-dash-muted">{bi.variantName || "—"}</td>
-                                  <td className="p-2.5">
+                                    <div className="text-xs text-muted-foreground">{bi.productSku}</div>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{bi.variantName || "—"}</TableCell>
+                                  <TableCell>
                                     <div className="flex items-center justify-center gap-1">
-                                      <button type="button" aria-label="Decrease quantity" onClick={() => updateBundleItemQty(index, bi.quantity - 1)} className="grid size-8 place-items-center rounded-lg border border-dash-border hover:bg-dash-neutral-soft"><Minus className="size-3" /></button>
-                                      <input type="number" min={1} aria-label={`${bi.productName} quantity`} value={bi.quantity} onChange={(e) => updateBundleItemQty(index, parseInt(e.target.value) || 1)} className={cn(cellCls, "w-14 text-center")} />
-                                      <button type="button" aria-label="Increase quantity" onClick={() => updateBundleItemQty(index, bi.quantity + 1)} className="grid size-8 place-items-center rounded-lg border border-dash-border hover:bg-dash-neutral-soft"><Plus className="size-3" /></button>
+                                      <Button type="button" variant="outline" size="icon-sm" aria-label="Decrease quantity" onClick={() => updateBundleItemQty(index, bi.quantity - 1)}><Minus className="size-3" /></Button>
+                                      <Input type="number" min={1} aria-label={`${bi.productName} quantity`} value={bi.quantity} onChange={(e) => updateBundleItemQty(index, parseInt(e.target.value) || 1)} className="w-14 text-center tabular-nums" />
+                                      <Button type="button" variant="outline" size="icon-sm" aria-label="Increase quantity" onClick={() => updateBundleItemQty(index, bi.quantity + 1)}><Plus className="size-3" /></Button>
                                     </div>
-                                  </td>
-                                  <td className="p-2.5 text-right text-sm tabular-nums">
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums">
                                     {bundleRows[index]?.available === null || bundleRows[index]?.available === undefined
-                                      ? <span className="text-dash-muted">—</span>
-                                      : <span className={cn("font-semibold", bundleRows[index].available === 0 && "text-dash-danger")}>{bundleRows[index].available}</span>}
-                                  </td>
-                                  <td className="p-2.5">
-                                    <button type="button" aria-label={`Remove ${bi.productName}`} onClick={() => removeBundleItem(index)} className="grid size-9 place-items-center rounded-lg text-dash-danger hover:bg-dash-danger-soft"><Trash2 className="size-4" /></button>
-                                  </td>
-                                </tr>
+                                      ? <span className="text-muted-foreground">—</span>
+                                      : <span className={cn("font-semibold", bundleRows[index].available === 0 && "text-destructive")}>{bundleRows[index].available}</span>}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove ${bi.productName}`} onClick={() => removeBundleItem(index)}><Trash2 className="size-4" /></Button>
+                                  </TableCell>
+                                </TableRow>
                               ))}
-                            </tbody>
-                          </table>
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dash-border-soft bg-dash-bg px-3 py-2 text-xs text-dash-muted tabular-nums">
-                            <span>Bundles available from current stock: <strong className="text-dash-ink">{bundlesAvailable === null ? "—" : bundlesAvailable}</strong></span>
-                            <span>Items add up to <strong className="text-dash-ink">{formatCurrency(bundleItemsTotal)}</strong>{sellingPrice > 0 && bundleItemsTotal > 0 ? <> · bundle sells at <strong className="text-dash-ink">{formatCurrency(sellingPrice)}</strong></> : null}</span>
-                          </div>
-                        </div>
+                            </TableBody>
+                          </Table>
+                          <Separator />
+                          <CardFooter className="flex-wrap justify-between gap-2 px-3 py-2 text-xs text-muted-foreground tabular-nums">
+                            <span>Bundles available from current stock: <strong className="text-foreground">{bundlesAvailable === null ? "—" : bundlesAvailable}</strong></span>
+                            <span>Items add up to <strong className="text-foreground">{formatCurrency(bundleItemsTotal)}</strong>{sellingPrice > 0 && bundleItemsTotal > 0 ? <> · bundle sells at <strong className="text-foreground">{formatCurrency(sellingPrice)}</strong></> : null}</span>
+                          </CardFooter>
+                        </Card>
                       ) : (
-                        <p className="py-2 text-center text-sm text-dash-muted">No child products added yet. Search above to add products.</p>
+                        <EmptyState className="p-4 md:p-4" title="No child products added yet." description="Search above to add products." />
                       )}
-                    </div>
+                    </Card>
                   )}
                 </div>
               </Section>
@@ -1268,14 +1244,14 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                 <div className="flex flex-col gap-2.5">
                   <ToggleRow id="availableInPos" title="Available in POS" sub="Show at the point of sale" checked={availableInPos} onChange={setAvailableInPos} />
                   <ToggleRow id="visibleOnline" title="Visible online" sub="Show on your website" checked={visibleOnline} onChange={setVisibleOnline} />
-                  <p className="text-xs text-dash-muted">Use “Save as draft” to keep it hidden everywhere until it is ready.</p>
+                  <p className="text-xs text-muted-foreground">Use “Save as draft” to keep it hidden everywhere until it is ready.</p>
                 </div>
               </Section>
 
               <Section title="Organise">
                 <div className="flex flex-col gap-3">
-                  <div className={labelCls}>
-                    <span className="flex items-center justify-between"><span id="catLbl">Category</span><a href="/dashboard/categories" target="_blank" rel="noreferrer" className="text-xs font-semibold text-dash-accent hover:underline">+ Category</a></span>
+                  <FormField className="min-w-0">
+                    <span className="flex items-center justify-between"><Label id="catLbl">Category</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/categories" target="_blank" rel="noreferrer">+ Category</a></Button></span>
                     <Select value={formData.categoryId || NONE}
                       onValueChange={(value) => {
                         const cat = allCategories.find(c => c.id === value)
@@ -1292,9 +1268,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className={labelCls}>
-                    <span className="flex items-center justify-between"><span id="brandLbl">Brand</span><a href="/dashboard/brands" target="_blank" rel="noreferrer" className="text-xs font-semibold text-dash-accent hover:underline">+ Brand</a></span>
+                  </FormField>
+                  <FormField className="min-w-0">
+                    <span className="flex items-center justify-between"><Label id="brandLbl">Brand</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/brands" target="_blank" rel="noreferrer">+ Brand</a></Button></span>
                     <Select value={formData.brandId || NONE} onValueChange={(value) => setFormData(prev => ({ ...prev, brandId: value === NONE ? "" : value }))}>
                       <SelectTrigger aria-labelledby="brandLbl" className={selectCls}><SelectValue placeholder="Select brand" /></SelectTrigger>
                       <SelectContent>
@@ -1302,9 +1278,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         {brands.filter(b => b.status !== false || String(b.id) === formData.brandId).map((b) => (<SelectItem key={b.id} value={String(b.id)} textValue={b.brandName}>{b.brandName}{b.status === false ? " (Inactive)" : ""}</SelectItem>))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className={labelCls}>
-                    <span className="flex items-center justify-between"><span id="unitLbl">Unit</span><a href="/dashboard/units" target="_blank" rel="noreferrer" className="text-xs font-semibold text-dash-accent hover:underline">+ Unit</a></span>
+                  </FormField>
+                  <FormField className="min-w-0">
+                    <span className="flex items-center justify-between"><Label id="unitLbl">Unit</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/units" target="_blank" rel="noreferrer">+ Unit</a></Button></span>
                     <Select value={formData.unitId} onValueChange={(value) => setFormData(prev => ({ ...prev, unitId: value }))}>
                       <SelectTrigger aria-labelledby="unitLbl" className={selectCls}><SelectValue placeholder="Select unit" /></SelectTrigger>
                       <SelectContent>
@@ -1313,9 +1289,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className={labelCls}>
-                    <span id="vendorLbl">Supplier</span>
+                  </FormField>
+                  <FormField label={<span id="vendorLbl">Supplier</span>} className="min-w-0">
                     <Select value={formData.vendorId || NONE} onValueChange={(value) => set("vendorId", value === NONE ? "" : value)}>
                       <SelectTrigger aria-labelledby="vendorLbl" className={selectCls}><SelectValue placeholder="Select supplier (optional)" /></SelectTrigger>
                       <SelectContent>
@@ -1323,18 +1298,17 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         {vendors.map((vendor) => (<SelectItem key={vendor.id} value={vendor.id}>{vendor.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </FormField>
                 </div>
               </Section>
 
               {showSupplierPayment && (
                 <Section title="Supplier payment" hint={`Cost price × stock = ${formatCurrency(supplierTotal)}`}>
                   {supplierTotal <= 0 ? (
-                    <p className="text-[13px] text-dash-muted">Enter a cost price and stock to track what you owe this supplier.</p>
+                    <p className="text-sm text-muted-foreground">Enter a cost price and stock to track what you owe this supplier.</p>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <div className={labelCls}>
-                        <span id="spStatusLbl">Status</span>
+                      <FormField label={<span id="spStatusLbl">Status</span>} className="min-w-0">
                         <Select value={formData.supplierPaymentStatus} onValueChange={(v) => set("supplierPaymentStatus", v)}>
                           <SelectTrigger aria-labelledby="spStatusLbl" className={selectCls}><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -1343,16 +1317,15 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                             <SelectItem value="paid">Paid</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
+                      </FormField>
                       {formData.supplierPaymentStatus === "partial" && (
-                        <label className={labelCls}>Paid amount
-                          <input type="number" min={0} max={supplierTotal} step="0.01" className={inputCls} value={formData.supplierPaidAmount} onChange={(e) => set("supplierPaidAmount", e.target.value)} placeholder="0.00" />
-                        </label>
+                        <FormField label="Paid amount" htmlFor="supplierPaidAmount" className="min-w-0">
+                          <Input id="supplierPaidAmount" type="number" min={0} max={supplierTotal} step="0.01" value={formData.supplierPaidAmount} onChange={(e) => set("supplierPaidAmount", e.target.value)} placeholder="0.00" />
+                        </FormField>
                       )}
                       {formData.supplierPaymentStatus !== "due" && (
                         <>
-                          <div className={labelCls}>
-                            <span id="spMethodLbl">Method</span>
+                          <FormField label={<span id="spMethodLbl">Method</span>} className="min-w-0">
                             <Select value={formData.supplierPaymentMethod} onValueChange={(v) => set("supplierPaymentMethod", v)}>
                               <SelectTrigger aria-labelledby="spMethodLbl" className={selectCls}><SelectValue /></SelectTrigger>
                               <SelectContent>
@@ -1363,16 +1336,16 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                 <SelectItem value="other">Other</SelectItem>
                               </SelectContent>
                             </Select>
-                          </div>
-                          <label className={labelCls}>Date
-                            <input type="date" className={inputCls} value={formData.supplierPaymentDate} onChange={(e) => set("supplierPaymentDate", e.target.value)} />
-                          </label>
+                          </FormField>
+                          <FormField label="Date" htmlFor="supplierPaymentDate" className="min-w-0">
+                            <Input id="supplierPaymentDate" type="date" value={formData.supplierPaymentDate} onChange={(e) => set("supplierPaymentDate", e.target.value)} />
+                          </FormField>
                         </>
                       )}
-                      <div className="flex justify-between rounded-xl bg-dash-bg px-3 py-2 text-[13px] tabular-nums">
-                        <span>Paid: <strong className="text-dash-success-fg">{formatCurrency(supplierPaid)}</strong></span>
-                        <span>Due: <strong className="text-dash-danger">{formatCurrency(Math.max(0, supplierTotal - supplierPaid))}</strong></span>
-                      </div>
+                      <InfoList className="tabular-nums">
+                        <InfoRow label="Paid" value={formatCurrency(supplierPaid)} />
+                        <InfoRow label="Due" value={<span className="text-destructive">{formatCurrency(Math.max(0, supplierTotal - supplierPaid))}</span>} />
+                      </InfoList>
                     </div>
                   )}
                 </Section>
@@ -1380,64 +1353,53 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
 
               <Section title="Codes">
                 <div className="flex flex-col gap-3">
-                  <label className={labelCls}>SKU
+                  <FormField label="SKU" htmlFor="sku" error={skuError || undefined} className="min-w-0">
                     <span className="flex gap-2">
-                      <input id="sku" aria-invalid={!!skuError} className={cn(inputCls, "font-mono", skuError && "border-dash-danger")} value={formData.sku} onChange={(e) => set("sku", e.target.value)} placeholder="SKU" />
-                      <button type="button" aria-label="Regenerate SKU" onClick={() => set("sku", generateSkuCode())}
-                        className="grid size-[42px] flex-none place-items-center rounded-[10px] border border-dash-border hover:bg-dash-neutral-soft"><RefreshCw className="size-4" /></button>
+                      <Input id="sku" aria-invalid={!!skuError} className="font-mono" value={formData.sku} onChange={(e) => set("sku", e.target.value)} placeholder="SKU" />
+                      <Button type="button" variant="outline" size="icon" aria-label="Regenerate SKU" onClick={() => set("sku", generateSkuCode())}><RefreshCw className="size-4" /></Button>
                     </span>
-                    {skuError && <span role="alert" className="text-xs font-medium text-dash-danger">{skuError}</span>}
-                  </label>
-                  <label className={labelCls}>Barcode
+                  </FormField>
+                  <FormField label="Barcode" htmlFor="barcode" className="min-w-0"
+                    error={barcodeError || undefined}
+                    description={barcodeError ? undefined : barcodeMisfitHint
+                      ? `Does not fit ${barcodeTypeLabel(formData.barcodeType).replace(/ \(.*\)/, "")} (${barcodeMisfitHint}) — will print as Code 128.`
+                      : `Auto-generated${isNumericBarcodeType(formData.barcodeType) ? " with a valid check digit" : ""}. Type or scan an existing barcode to use it instead.`}>
                     <span className="flex gap-2">
-                      <input id="barcode" aria-invalid={!!barcodeError} className={cn(inputCls, "font-mono", barcodeError && "border-dash-danger")} value={formData.barcode} onChange={(e) => { setBarcodeTouched(true); set("barcode", e.target.value) }} placeholder="Barcode" />
-                      <button type="button" aria-label="Regenerate barcode" onClick={() => { setBarcodeTouched(false); set("barcode", generateBarcodeCode(formData.barcodeType)) }}
-                        className="grid size-[42px] flex-none place-items-center rounded-[10px] border border-dash-border hover:bg-dash-neutral-soft"><RefreshCw className="size-4" /></button>
+                      <Input id="barcode" aria-invalid={!!barcodeError} className="font-mono" value={formData.barcode} onChange={(e) => { setBarcodeTouched(true); set("barcode", e.target.value) }} placeholder="Barcode" />
+                      <Button type="button" variant="outline" size="icon" aria-label="Regenerate barcode" onClick={() => { setBarcodeTouched(false); set("barcode", generateBarcodeCode(formData.barcodeType)) }}><RefreshCw className="size-4" /></Button>
                       {formData.barcode && (
-                        <button type="button" aria-label="Copy barcode"
+                        <Button type="button" variant="outline" size="icon" aria-label="Copy barcode"
                           onClick={() => {
                             navigator.clipboard.writeText(formData.barcode)
                             setBarcodeCopied(true)
                             toast({ title: "Copied", description: "Barcode copied to clipboard" })
                             setTimeout(() => setBarcodeCopied(false), 2000)
-                          }}
-                          className="grid size-[42px] flex-none place-items-center rounded-[10px] border border-dash-border hover:bg-dash-neutral-soft">
-                          {barcodeCopied ? <Check className="size-4 text-dash-success" /> : <Copy className="size-4" />}
-                        </button>
+                          }}>
+                          {barcodeCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                        </Button>
                       )}
                     </span>
-                    {barcodeError
-                      ? <span role="alert" className="text-xs font-medium text-dash-danger">{barcodeError}</span>
-                      : barcodeMisfitHint
-                        ? <span className="text-xs font-medium text-dash-warn-fg">Does not fit {barcodeTypeLabel(formData.barcodeType).replace(/ \(.*\)/, "")} ({barcodeMisfitHint}) — will print as Code 128.</span>
-                        : <span className="text-xs font-normal text-dash-muted">Auto-generated{isNumericBarcodeType(formData.barcodeType) ? " with a valid check digit" : ""}. Type or scan an existing barcode to use it instead.</span>}
-                  </label>
-                  <div className={labelCls}>
-                    <span id="bcTypeLbl">Barcode type</span>
+                  </FormField>
+                  <FormField label={<span id="bcTypeLbl">Barcode type</span>} className="min-w-0">
                     <Select value={formData.barcodeType} onValueChange={changeBarcodeType}>
                       <SelectTrigger aria-labelledby="bcTypeLbl" className={selectCls}><SelectValue placeholder="Select barcode type" /></SelectTrigger>
                       <SelectContent>
                         {BARCODE_TYPES.map(t => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </FormField>
                 </div>
               </Section>
 
               <Section title="Preview in POS">
-                <div className="flex items-center gap-3 rounded-xl border border-dash-border-soft bg-dash-bg p-3">
-                  <span className="grid size-14 flex-none place-items-center overflow-hidden rounded-lg bg-dash-neutral-soft text-dash-muted">
-                    {uploadedImages[0]
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={uploadedImages[0]} alt="" className="size-full object-cover" />
-                      : <Package className="size-6" />}
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-semibold">{formData.name || "Product name"}</span>
-                    <span className="text-xs text-dash-muted tabular-nums">{totalStockShown} in stock{selectedWarehouseName ? ` · ${selectedWarehouseName}` : ""}</span>
-                  </span>
-                  <span className="text-sm font-bold tabular-nums">{formatCurrency(finalPrice)}</span>
-                </div>
+                <Item variant="outline" size="sm" className="flex-nowrap">
+                  <UserAvatar shape="square" src={uploadedImages[0] || null} alt="" fallback={<Package className="size-6" />} className="size-14" />
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="w-full truncate">{formData.name || "Product name"}</ItemTitle>
+                    <ItemDescription className="text-xs tabular-nums">{totalStockShown} in stock{selectedWarehouseName ? ` · ${selectedWarehouseName}` : ""}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="text-sm font-bold tabular-nums">{formatCurrency(finalPrice)}</ItemActions>
+                </Item>
               </Section>
             </aside>
           </div>
@@ -1445,27 +1407,23 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
 
         <DialogFooter className="flex-col items-stretch gap-2 border-t border-dash-border bg-dash-card px-6 py-4 sm:flex-col">
           {errorMessage && (
-            <p role="alert" className="rounded-[10px] border border-dash-danger bg-dash-danger-soft px-3 py-2 text-sm font-medium text-dash-danger-fg">{errorMessage}</p>
+            <Alert variant="destructive"><AlertDescription>{errorMessage}</AlertDescription></Alert>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[13px] text-dash-muted tabular-nums">
-              Selling at <strong className="text-dash-ink">{formatCurrency(finalPrice)}</strong>
-              {hasCost && <> · profit <strong className="text-dash-ink">{formatCurrency(profitPerUnit)}</strong> per unit</>}
+            <span className="text-sm text-muted-foreground tabular-nums">
+              Selling at <strong className="text-foreground">{formatCurrency(finalPrice)}</strong>
+              {hasCost && <> · profit <strong className="text-foreground">{formatCurrency(profitPerUnit)}</strong> per unit</>}
               {hasVariants && <> · {generatedVariants.length} variants</>}
             </span>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={handleClose}
-                className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-              <button type="button" onClick={() => submit("draft")} disabled={isSaving}
-                className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-40">Save as draft</button>
+              <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => submit("draft")} disabled={isSaving}>Save as draft</Button>
               {!editingProduct && (
-                <button type="button" onClick={() => submit("another")} disabled={isSaving}
-                  className="h-11 rounded-[10px] border border-dash-accent bg-dash-accent-soft px-[18px] text-sm font-semibold text-dash-accent-fg disabled:opacity-40">Save &amp; add another</button>
+                <Button type="button" variant="secondary" onClick={() => submit("another")} disabled={isSaving}>Save &amp; add another</Button>
               )}
-              <button type="button" onClick={() => submit("save")} disabled={isSaving}
-                className="h-11 rounded-[10px] bg-dash-accent px-[22px] text-sm font-bold text-white disabled:opacity-40">
+              <Button type="button" onClick={() => submit("save")} disabled={isSaving}>
                 {isSaving ? "Saving…" : editingProduct ? "Save changes" : "Save product"}
-              </button>
+              </Button>
             </div>
           </div>
         </DialogFooter>

@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertCircle, Building2, MapPin, Pencil, Store, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
@@ -14,18 +18,23 @@ import { staffApi } from "@/lib/staffApi"
 import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
 import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { UserAvatar } from "@/components/common/UserAvatar"
 
 const TYPES: LocationType[] = ["Warehouse", "Shop", "Pickup point"]
 const DISTRICTS = ["Dhaka", "Chattogram", "Sylhet", "Khulna", "Rajshahi", "Barishal", "Rangpur", "Mymensingh"]
-const TYPE_STYLE: Record<string, { tint: string; Icon: typeof Store }> = {
-  Warehouse: { tint: "bg-dash-accent-soft text-dash-accent-fg", Icon: Building2 },
-  Shop: { tint: "bg-dash-success-soft text-dash-success-fg", Icon: Store },
-  "Pickup point": { tint: "bg-dash-warn-soft text-dash-warn-fg", Icon: MapPin },
+const TYPE_STYLE: Record<string, { Icon: typeof Store }> = {
+  Warehouse: { Icon: Building2 },
+  Shop: { Icon: Store },
+  "Pickup point": { Icon: MapPin },
 }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft disabled:opacity-50"
 
 const blank = { type: "Shop" as LocationType, name: "", address: "", district: "Dhaka", phone: "", manager: "" }
 
@@ -137,131 +146,134 @@ export default function LocationsPage() {
   }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Locations</h1>
-        <p className="mt-1 text-sm text-dash-muted">
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Locations"
+        description={<>
           Warehouses and shops — where stock lives and where you sell from.
-          {planLimits && <span className="ml-2 text-dash-muted">({planLimits.currentBranches}/{unlimitedBranches ? "unlimited" : planLimits.maxBranches} branches used)</span>}
-        </p>
-      </div>
+          {planLimits && <span className="ml-2">({planLimits.currentBranches}/{unlimitedBranches ? "unlimited" : planLimits.maxBranches} branches used)</span>}
+        </>}
+      />
 
       {atLimit && (
-        <div className="flex items-start gap-3 rounded-[14px] border border-dash-border bg-dash-warn-soft p-4 text-dash-warn-fg">
-          <AlertCircle className="mt-0.5 size-5 shrink-0" />
-          <div className="text-sm">
-            <p className="font-semibold">Branch limit reached</p>
-            <p>Your {planLimits?.plan?.name ?? "current"} plan allows {planLimits?.maxBranches} branch{planLimits?.maxBranches === 1 ? "" : "es"}. Upgrade your plan to add more locations.</p>
-          </div>
-        </div>
+        <Alert>
+          <AlertCircle />
+          <AlertTitle>Branch limit reached</AlertTitle>
+          <AlertDescription>Your {planLimits?.plan?.name ?? "current"} plan allows {planLimits?.maxBranches} branch{planLimits?.maxBranches === 1 ? "" : "es"}. Upgrade your plan to add more locations.</AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-wrap items-start gap-4">
         <section className="grid min-w-0 flex-[999_1_600px] grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
           {loading
-            ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[300px] rounded-[14px]" />)
+            ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[300px]" />)
             : sorted.length === 0
-              ? <div className="col-span-full rounded-[14px] border border-dash-border bg-dash-card p-10 text-center text-sm text-dash-muted">No locations yet. Add your first warehouse or shop.</div>
+              ? <EmptyState bordered title="No locations yet" description="Add your first warehouse or shop." className="col-span-full" />
               : sorted.map((l) => {
                 const st = TYPE_STYLE[l.type || "Shop"] ?? TYPE_STYLE.Shop
                 return (
-                  <article key={l.id} className="flex flex-col gap-3 rounded-[14px] border border-dash-border bg-dash-card p-[18px]">
+                  <Card key={l.id} className="gap-3 p-4">
                     <div className="flex items-center gap-3">
-                      <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl", st.tint)}><st.Icon className="size-5" /></span>
+                      <UserAvatar shape="square" className="size-11" fallback={<st.Icon className="size-5" />} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 text-base font-bold">
                           <span className="truncate">{l.name}</span>
-                          {l.isDefault && <span className="rounded-md bg-dash-ink px-1.5 py-px text-[11px] font-bold text-dash-card">Default</span>}
+                          {l.isDefault && <Badge>Default</Badge>}
                         </div>
-                        <div className="truncate text-xs text-dash-muted">{l.type || "Shop"} · {[l.address, l.district].filter(Boolean).join(", ")}</div>
-                        {(l.phone || l.manager) && <div className="truncate text-xs text-dash-muted">{[l.manager, l.phone].filter(Boolean).join(" · ")}</div>}
+                        <div className="truncate text-xs text-muted-foreground">{l.type || "Shop"} · {[l.address, l.district].filter(Boolean).join(", ")}</div>
+                        {(l.phone || l.manager) && <div className="truncate text-xs text-muted-foreground">{[l.manager, l.phone].filter(Boolean).join(" · ")}</div>}
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[["Stock value", formatCurrency(l.stockValue ?? 0)], ["SKUs", String(l.skus ?? 0)], ["Staff", String(l.staffCount ?? 0)]].map(([k, v]) => (
-                        <div key={k} className="min-w-0 rounded-[10px] bg-dash-neutral-soft p-2">
-                          <div className="text-[11px] text-dash-muted">{k}</div>
+                        <Card key={k} className="min-w-0 gap-0 p-2 shadow-none">
+                          <div className="text-xs text-muted-foreground">{k}</div>
                           <div className="truncate font-bold tabular-nums">{v}</div>
-                        </div>
+                        </Card>
                       ))}
                     </div>
-                    <div className="flex flex-col gap-2 text-sm">
+                    <div className="flex flex-col gap-2">
                       {([["Sells in POS", "sellsInPos"], ["Ships online orders", "shipsOnline"]] as const).map(([label, key]) => {
                         const on = !!l[key]
                         return (
-                          <div key={key} className="flex items-center justify-between">
-                            <span>{label}</span>
-                            <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => toggle(l, key)}
-                              className={cn("flex h-5 w-9 items-center rounded-full p-0.5 transition-colors", on ? "bg-dash-accent justify-end" : "bg-dash-border justify-start")}>
-                              <span className="size-4 rounded-full bg-white" />
-                            </button>
-                          </div>
+                          <FormField key={key} orientation="horizontal" label={label} htmlFor={`loc-${l.id}-${key}`}>
+                            <Switch id={`loc-${l.id}-${key}`} checked={on} aria-label={label} onCheckedChange={() => toggle(l, key)} />
+                          </FormField>
                         )
                       })}
                     </div>
                     <div className="flex gap-1.5">
-                      <button type="button" aria-label="Edit" className={iconBtn} onClick={() => startEdit(l)}><Pencil className="size-4" /></button>
-                      <button type="button" aria-label="Delete" className={cn(iconBtn, "text-dash-danger-fg")} onClick={() => remove(l)}><Trash2 className="size-4" /></button>
-                      {!l.isDefault && <button type="button" onClick={() => makeDefault(l)} className="h-9 rounded-lg border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">Set default</button>}
-                      <Link href="/dashboard/inventory" className="flex h-9 flex-1 items-center justify-center rounded-lg border border-dash-border text-[13px] font-semibold hover:bg-dash-neutral-soft">View stock</Link>
+                      <Button type="button" variant="outline" size="icon" aria-label="Edit" onClick={() => startEdit(l)}><Pencil className="size-4" /></Button>
+                      <Button type="button" variant="destructive" size="icon" aria-label="Delete" onClick={() => remove(l)}><Trash2 className="size-4" /></Button>
+                      {!l.isDefault && <Button type="button" variant="outline" onClick={() => makeDefault(l)}>Set default</Button>}
+                      <Button asChild variant="outline" className="flex-1"><Link href="/dashboard/inventory">View stock</Link></Button>
                     </div>
-                  </article>
+                  </Card>
                 )
               })}
         </section>
 
-        <aside className="flex flex-[1_1_340px] flex-col gap-3.5 self-start rounded-[14px] border border-dash-border bg-dash-card p-5">
-          <h2 className="font-dash-display text-lg font-bold">{editing ? "Edit location" : "Add location"}</h2>
-          {err && <p className="text-[13px] text-dash-danger-fg">{err}</p>}
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-            Type
+        <aside className="flex-[1_1_340px] self-start">
+        <SectionCard title={editing ? "Edit location" : "Add location"} contentClassName="flex flex-col gap-3.5">
+          {err && <p className="text-sm text-destructive">{err}</p>}
+          <div className="flex flex-col gap-1.5">
+            <p className="text-sm font-medium">Type</p>
             <div role="radiogroup" aria-label="Type" className="grid grid-cols-3 gap-1.5">
               {TYPES.map((t) => {
                 const on = form.type === t
                 return (
-                  <button key={t} type="button" role="radio" aria-checked={on} onClick={() => setForm({ ...form, type: t })}
-                    className={cn("min-h-11 rounded-[10px] border-2 px-2 py-1.5 text-[13px] font-bold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                  <Button key={t} type="button" role="radio" aria-checked={on} onClick={() => setForm({ ...form, type: t })}
+                    variant={on ? "default" : "outline"} className="h-auto min-h-9 whitespace-normal">
                     {t}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Name *
-            <input className={input} value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setErr("") }} placeholder="e.g. Dhanmondi Outlet" />
-          </label>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Address *
-            <input className={input} value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErr("") }} placeholder="House, road, area" />
-          </label>
+          <FormField label="Name *" htmlFor="loc-name">
+            <Input id="loc-name" className="w-full" value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setErr("") }} placeholder="e.g. Dhanmondi Outlet" />
+          </FormField>
+          <FormField label="Address *" htmlFor="loc-address">
+            <Input id="loc-address" className="w-full" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErr("") }} placeholder="House, road, area" />
+          </FormField>
           <div className="grid grid-cols-2 gap-3">
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">District
-              <select className={input} value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })}>
-                {Array.from(new Set([...DISTRICTS, form.district])).map((d) => <option key={d}>{d}</option>)}
-              </select>
-            </label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Phone
-              <input className={input} type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="01XXX-XXXXXX" />
-            </label>
+            <FormField label="District" htmlFor="loc-district" className="min-w-0">
+              <Select value={form.district || undefined} onValueChange={(v) => setForm({ ...form, district: v })}>
+                <SelectTrigger id="loc-district" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from(new Set([...DISTRICTS, form.district])).filter(Boolean).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Phone" htmlFor="loc-phone" className="min-w-0">
+              <Input id="loc-phone" className="w-full" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="01XXX-XXXXXX" />
+            </FormField>
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Manager
+          <FormField label="Manager" htmlFor="loc-manager">
             {managers.length > 0 ? (
-              <select className={input} value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })}>
-                <option value="">No manager</option>
-                {Array.from(new Set([...managers, ...(form.manager ? [form.manager] : [])])).map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <Select value={form.manager || "__none"} onValueChange={(v) => setForm({ ...form, manager: v === "__none" ? "" : v })}>
+                <SelectTrigger id="loc-manager" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">No manager</SelectItem>
+                  {Array.from(new Set([...managers, ...(form.manager ? [form.manager] : [])])).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
             ) : (
-              <input className={input} value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} placeholder="Manager name (no staff yet)" />
+              <Input id="loc-manager" className="w-full" value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} placeholder="Manager name (no staff yet)" />
             )}
-          </label>
-          <div className="rounded-[10px] bg-dash-accent-soft px-3 py-2.5 text-[13px] text-dash-accent-fg">
-            {planLimits ? (unlimitedBranches ? "Your plan allows unlimited locations. " : `Your plan allows ${planLimits.maxBranches} location${planLimits.maxBranches === 1 ? "" : "s"}. `) : ""}Stock starts at 0 — use Transfers to move items in.
-          </div>
+          </FormField>
+          <Alert role="note">
+            <AlertDescription>
+              {planLimits ? (unlimitedBranches ? "Your plan allows unlimited locations. " : `Your plan allows ${planLimits.maxBranches} location${planLimits.maxBranches === 1 ? "" : "s"}. `) : ""}Stock starts at 0 — use Transfers to move items in.
+            </AlertDescription>
+          </Alert>
           <div className="flex justify-end gap-2">
-            <button type="button" className={outlineBtn} onClick={reset}>Clear</button>
-            <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-60">
+            <Button type="button" variant="outline" onClick={reset}>Clear</Button>
+            <Button type="button" disabled={saving} onClick={save}>
               {saving ? "Saving…" : editing ? "Save changes" : "Add location"}
-            </button>
+            </Button>
           </div>
+        </SectionCard>
         </aside>
       </div>
 

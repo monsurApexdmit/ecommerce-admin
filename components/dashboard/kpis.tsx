@@ -1,5 +1,7 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useDashboardFilters } from "./dashboard-context"
 import type { RangePreset } from "./dashboard-context"
@@ -9,11 +11,11 @@ import { useDashboardSection } from "./use-dashboard-section"
 
 type Tone = "up" | "down" | "flat" | "warn"
 
-const TONE: Record<Tone, string> = {
-  up: "bg-dash-success-soft text-dash-success-fg",
-  down: "bg-dash-danger-soft text-dash-danger-fg",
-  flat: "bg-dash-neutral-soft text-dash-neutral-fg",
-  warn: "bg-dash-warn-soft text-dash-warn-fg",
+const TONE: Record<Tone, "default" | "destructive" | "outline" | "secondary"> = {
+  up: "default",
+  down: "destructive",
+  flat: "outline",
+  warn: "secondary",
 }
 
 const PERIOD_LABEL: Record<RangePreset, string> = { today: "Today", "7d": "Last 7 days", "30d": "Last 30 days", year: "This year" }
@@ -56,7 +58,7 @@ export function Kpis() {
   if (loading && !data) {
     return (
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
-        {Array.from({ length: 6 }).map((_, i) => <Bar key={i} className="h-[170px] rounded-[18px]" />)}
+        {Array.from({ length: 6 }).map((_, i) => <Bar key={i} className="h-[170px] rounded-xl" />)}
       </div>
     )
   }
@@ -130,15 +132,15 @@ export function Kpis() {
   return (
     <section aria-label="Key metrics" className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
       {cards.map((c) => (
-        <article key={c.label} className="surface surface-hover flex min-w-0 flex-col gap-2.5 p-[18px]">
+        <Card key={c.label} className="min-w-0 gap-2.5 p-[18px]">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[13px] font-medium text-dash-muted">{c.label}</span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${TONE[c.tone]}`}>{c.chip}</span>
+            <span className="text-sm font-medium text-muted-foreground">{c.label}</span>
+            <Badge variant={TONE[c.tone]}>{c.chip}</Badge>
           </div>
-          <span className="font-dash-display text-[26px] font-extrabold tracking-[-0.03em] text-dash-ink tabular-nums">{c.value}</span>
+          <span className="text-2xl font-semibold tracking-tight tabular-nums">{c.value}</span>
           <Sparkline values={c.series} color={c.color} />
-          <span className="text-xs text-dash-muted">{c.sub}</span>
-        </article>
+          <span className="text-xs text-muted-foreground">{c.sub}</span>
+        </Card>
       ))}
     </section>
   )

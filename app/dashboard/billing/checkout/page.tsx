@@ -4,12 +4,21 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
 import { saasBillingApi, type Plan } from "@/lib/saasBillingApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { AlertCircle, Loader, Lock, Check } from "lucide-react"
+import { AlertCircle, Lock, Check } from "lucide-react"
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -144,9 +153,9 @@ export default function CheckoutPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
-          <p className="text-gray-600">Loading checkout...</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Spinner className="size-8" />
+          <p className="text-muted-foreground">Loading checkout...</p>
         </div>
       </div>
     )
@@ -154,15 +163,15 @@ export default function CheckoutPage() {
 
   if (!plan) {
     return (
-      <Card className="bg-red-50 border-red-200 p-6 max-w-2xl mx-auto">
-        <div className="flex items-center gap-3 text-red-800">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <p>{error || "Plan not found"}</p>
-        </div>
-        <Button onClick={() => router.push("/dashboard/billing/plans")} className="mt-4">
+      <div className="mx-auto flex max-w-2xl flex-col gap-4">
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertDescription>{error || "Plan not found"}</AlertDescription>
+        </Alert>
+        <Button onClick={() => router.push("/dashboard/billing/plans")} className="self-start">
           Back to Plans
         </Button>
-      </Card>
+      </div>
     )
   }
 
@@ -172,8 +181,8 @@ export default function CheckoutPage() {
   const finalAmount = totalAmount + taxAmount
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Complete Your Purchase</h1>
+    <div className="max-w-4xl mx-auto flex flex-col gap-8">
+      <PageHeader title="Complete Your Purchase" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left: Payment Form */}
@@ -181,70 +190,45 @@ export default function CheckoutPage() {
           <Card className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Billing Period Selection */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <label className="text-sm font-semibold text-gray-900 block mb-3">
-                  Billing Period
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("monthly")}
-                    className={`p-3 rounded-lg border-2 font-medium transition-all ${
-                      billingPeriod === "monthly"
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                        : "border-gray-200 bg-white text-gray-900 hover:border-gray-300"
-                    }`}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("yearly")}
-                    className={`p-3 rounded-lg border-2 font-medium transition-all relative ${
-                      billingPeriod === "yearly"
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                        : "border-gray-200 bg-white text-gray-900 hover:border-gray-300"
-                    }`}
-                  >
-                    Yearly
-                    <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded">
-                      Save 20%
-                    </span>
-                  </button>
+              <FormField label="Billing Period">
+                <div className="flex flex-wrap items-center gap-3">
+                  <SegmentedControl
+                    aria-label="Billing Period"
+                    size="default"
+                    value={billingPeriod}
+                    onValueChange={(v) => setBillingPeriod(v as "monthly" | "yearly")}
+                    options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly" }]}
+                  />
+                  <Badge>Save 20%</Badge>
                 </div>
-              </div>
+              </FormField>
 
-              <div className="border-t pt-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Billing Information</h3>
+              <Separator />
+              <div>
+                <h3 className="font-semibold mb-4">Billing Information</h3>
 
                 {/* Email */}
-                <div className="mb-4">
-                  <Label htmlFor="billingEmail" className="text-sm font-medium">
-                    Billing Email
-                  </Label>
+                <FormField label="Billing Email" htmlFor="billingEmail">
                   <Input
                     id="billingEmail"
                     name="billingEmail"
                     type="email"
                     value={formData.billingEmail}
                     onChange={handleInputChange}
-                    className="h-10 mt-2"
                     disabled={processing}
                   />
-                </div>
+                </FormField>
               </div>
 
-              <div className="border-t pt-6">
-                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-emerald-600" />
+              <Separator />
+              <div className="flex flex-col gap-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Lock className="size-5 text-muted-foreground" />
                   Payment Method
                 </h3>
 
                 {/* Cardholder Name */}
-                <div className="mb-4">
-                  <Label htmlFor="cardName" className="text-sm font-medium">
-                    Cardholder Name
-                  </Label>
+                <FormField label="Cardholder Name" htmlFor="cardName">
                   <Input
                     id="cardName"
                     name="cardName"
@@ -252,16 +236,12 @@ export default function CheckoutPage() {
                     placeholder="John Smith"
                     value={formData.cardName}
                     onChange={handleInputChange}
-                    className="h-10 mt-2"
                     disabled={processing}
                   />
-                </div>
+                </FormField>
 
                 {/* Card Number */}
-                <div className="mb-4">
-                  <Label htmlFor="cardNumber" className="text-sm font-medium">
-                    Card Number
-                  </Label>
+                <FormField label="Card Number" htmlFor="cardNumber" description="Test card: 4242 4242 4242 4242 | Exp: 12/25 | CVC: 123">
                   <Input
                     id="cardNumber"
                     name="cardNumber"
@@ -269,20 +249,14 @@ export default function CheckoutPage() {
                     placeholder="4242 4242 4242 4242"
                     value={formData.cardNumber}
                     onChange={handleInputChange}
-                    className="h-10 mt-2 font-mono"
+                    className="font-mono"
                     disabled={processing}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Test card: 4242 4242 4242 4242 | Exp: 12/25 | CVC: 123
-                  </p>
-                </div>
+                </FormField>
 
                 {/* Expiry & CVC */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <Label htmlFor="expiry" className="text-sm font-medium">
-                      Expiry (MM/YY)
-                    </Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Expiry (MM/YY)" htmlFor="expiry">
                     <Input
                       id="expiry"
                       name="expiry"
@@ -290,14 +264,10 @@ export default function CheckoutPage() {
                       placeholder="12/25"
                       value={formData.expiry}
                       onChange={handleInputChange}
-                      className="h-10 mt-2"
                       disabled={processing}
                     />
-                  </div>
-                  <div>
-                    <Label htmlFor="cvc" className="text-sm font-medium">
-                      CVC
-                    </Label>
+                  </FormField>
+                  <FormField label="CVC" htmlFor="cvc">
                     <Input
                       id="cvc"
                       name="cvc"
@@ -305,57 +275,51 @@ export default function CheckoutPage() {
                       placeholder="123"
                       value={formData.cvc}
                       onChange={handleInputChange}
-                      className="h-10 mt-2"
                       disabled={processing}
                     />
-                  </div>
+                  </FormField>
                 </div>
               </div>
 
               {/* Auto-renew Checkbox */}
-              <div className="border-t pt-6">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoRenew}
-                    onChange={(e) => setAutoRenew(e.target.checked)}
-                    className="w-4 h-4 accent-emerald-600 rounded"
-                    disabled={processing}
-                  />
-                  <span className="text-sm text-gray-700">
-                    Automatically renew my subscription when it expires
-                  </span>
-                </label>
-              </div>
+              <Separator />
+              <FormField orientation="horizontal" label="Automatically renew my subscription when it expires" htmlFor="autoRenew" className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
+                <Checkbox
+                  id="autoRenew"
+                  checked={autoRenew}
+                  onCheckedChange={(v) => setAutoRenew(v === true)}
+                  disabled={processing}
+                />
+              </FormField>
 
               {/* Error */}
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {error}
-                </div>
+                <Alert variant="destructive">
+                  <AlertCircle />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
 
               {/* Submit Button */}
-              <div className="border-t pt-6">
-                <Button
-                  type="submit"
-                  disabled={processing}
-                  className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-lg"
-                >
-                  {processing ? (
-                    <>
-                      <Loader className="w-5 h-5 animate-spin mr-2" />
-                      Processing...
-                    </>
-                  ) : (
-                    `Pay ${formatCurrency(finalAmount / 100)}`
-                  )}
-                </Button>
-              </div>
+              <Separator />
+              <Button
+                type="submit"
+                size="lg"
+                disabled={processing}
+                className="w-full"
+              >
+                {processing ? (
+                  <>
+                    <Spinner />
+                    Processing...
+                  </>
+                ) : (
+                  `Pay ${formatCurrency(finalAmount / 100)}`
+                )}
+              </Button>
 
               {/* Security Info */}
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-xs text-muted-foreground text-center">
                 🔒 Your payment information is encrypted and secure. We never store your full card details.
               </p>
             </form>
@@ -364,81 +328,63 @@ export default function CheckoutPage() {
 
         {/* Right: Order Summary */}
         <div>
-          <Card className="p-6 sticky top-20 bg-gradient-to-br from-gray-50 to-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4">Order Summary</h3>
-
+          <SectionCard title="Order Summary" className="sticky top-20" contentClassName="flex flex-col gap-4">
             {/* Plan Details */}
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <p className="font-semibold text-gray-900">{plan.name} Plan</p>
-              <p className="text-sm text-gray-600 mb-2">{plan.description}</p>
+            <Card className="gap-2 bg-muted/50 p-4 shadow-none">
+              <p className="font-semibold">{plan.name} Plan</p>
+              <p className="text-sm text-muted-foreground">{plan.description}</p>
 
               {/* Plan Features Checklist */}
-              <div className="space-y-2 text-xs text-gray-700">
+              <div className="space-y-2 text-xs">
                 {plan.features.slice(0, 3).map((feature, index) => {
                   const featureName = typeof feature === "string" ? feature : (feature.name || "");
                   return (
                     <div key={`${featureName}-${index}`} className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      <Check className="size-4 text-primary flex-shrink-0" />
                       <span>{featureName}</span>
                     </div>
                   );
                 })}
                 {plan.features.length > 3 && (
-                  <p className="text-gray-500 ml-6">+ {plan.features.length - 3} more features</p>
+                  <p className="text-muted-foreground ml-6">+ {plan.features.length - 3} more features</p>
                 )}
               </div>
-            </div>
+            </Card>
 
             {/* Pricing Breakdown */}
-            <div className="space-y-3 border-b pb-4 mb-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Plan Price ({billingPeriod}):</span>
-                <span className="font-medium text-gray-900">
-                  {formatCurrency(totalAmount / 100)}
-                </span>
-              </div>
-
+            <InfoList>
+              <InfoRow label={`Plan Price (${billingPeriod}):`} value={formatCurrency(totalAmount / 100)} />
               {savings > 0 && (
-                <div className="flex items-center justify-between text-sm bg-emerald-50 p-2 rounded -mx-2 px-2">
-                  <span className="text-emerald-700 font-medium">Annual Savings:</span>
-                  <span className="text-emerald-700 font-bold">
-                    -{formatCurrency(savings / 100)}
-                  </span>
-                </div>
+                <InfoRow label="Annual Savings:" value={`-${formatCurrency(savings / 100)}`} />
               )}
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Tax (10%):</span>
-                <span className="font-medium text-gray-900">
-                  {formatCurrency(taxAmount / 100)}
-                </span>
-              </div>
-            </div>
+              <InfoRow label="Tax (10%):" value={formatCurrency(taxAmount / 100)} />
+            </InfoList>
+            <Separator />
 
             {/* Total */}
-            <div className="flex items-center justify-between mb-6">
-              <span className="font-bold text-gray-900">Total:</span>
-              <span className="text-2xl font-bold text-emerald-600">
+            <div className="flex items-center justify-between">
+              <span className="font-bold">Total:</span>
+              <span className="text-2xl font-bold">
                 {formatCurrency(finalAmount / 100)}
               </span>
             </div>
 
             {/* Guarantees */}
-            <div className="space-y-3 text-xs text-gray-600">
+            <div className="space-y-3 text-xs text-muted-foreground">
               <div className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
                 <span>30-day money-back guarantee</span>
               </div>
               <div className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
                 <span>Cancel anytime, no questions asked</span>
               </div>
               <div className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
                 <span>Instant access after payment</span>
               </div>
             </div>
-          </Card>
+          </SectionCard>
         </div>
       </div>
     </div>

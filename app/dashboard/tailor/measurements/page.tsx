@@ -5,6 +5,19 @@ import Link from "next/link"
 import { Printer, Search, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { AccessDenied } from "@/components/ui/access-denied"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
@@ -40,9 +53,6 @@ const garmentId = (t: string) => {
   return hit ? hit[0] : "other"
 }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 const fmtD = (d?: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "never")
 const esc = (t: unknown) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
@@ -227,94 +237,90 @@ export default function MeasurementsPage() {
   const lastAt = sets.map((s) => s.measuredAt).filter(Boolean).sort().pop() ?? selCust?.lastMeasuredAt ?? null
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Measurements</h1>
-          <p className="mt-1 text-sm text-dash-muted">Saved body measurements per customer and garment — no more paper slips.</p>
-        </div>
-        {writable && <button type="button" onClick={startNew} className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">+ New customer measurement</button>}
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Measurements"
+        description="Saved body measurements per customer and garment — no more paper slips."
+        actions={writable ? <Button type="button" onClick={startNew}>+ New customer measurement</Button> : undefined}
+      />
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="flex w-full shrink-0 flex-col gap-2.5 rounded-[14px] border border-dash-border bg-dash-card p-4 xl:w-[340px]">
-          <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search</span>
-            <input type="search" placeholder="Name or phone…" value={q} onChange={(e) => setQ(e.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
+        <Card className="w-full shrink-0 gap-2.5 p-4 xl:w-[340px]">
+          <InputGroup>
+            <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+            <InputGroupInput type="search" aria-label="Search" placeholder="Name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </InputGroup>
           {canWrite("TailorOrders") && (
             addOpen ? (
-              <div className="flex flex-col gap-2 rounded-[10px] bg-dash-bg p-3">
-                <input className={input} placeholder="Customer name" value={addName} onChange={(e) => setAddName(e.target.value)} />
-                <input type="tel" className={input} placeholder="Phone" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} />
-                <div className="flex gap-2"><button type="button" onClick={() => setAddOpen(false)} className={cn(outlineBtn, "flex-1")}>Cancel</button>
-                  <button type="button" onClick={addCustomer} className="h-11 flex-1 rounded-[10px] bg-dash-accent text-sm font-semibold text-white">Save</button></div>
-              </div>
+              <Card className="gap-2 p-3 shadow-none">
+                <Input aria-label="Customer name" placeholder="Customer name" value={addName} onChange={(e) => setAddName(e.target.value)} />
+                <Input aria-label="Phone" type="tel" placeholder="Phone" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} />
+                <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setAddOpen(false)} className="flex-1">Cancel</Button>
+                  <Button type="button" onClick={addCustomer} className="flex-1">Save</Button></div>
+              </Card>
             ) : (
               <>
-              <button type="button" onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 self-start text-[13px] font-semibold text-dash-accent hover:underline"><UserPlus className="size-4" aria-hidden /> Add customer</button>
-              <Link href="/dashboard/customers?add=1" className="self-start text-xs font-semibold text-dash-muted hover:text-dash-accent hover:underline">Open the full customer form</Link>
+              <Button type="button" variant="link" onClick={() => setAddOpen(true)} className="self-start"><UserPlus className="size-4" aria-hidden /> Add customer</Button>
+              <Link href="/dashboard/customers?add=1" className="self-start text-xs font-medium text-muted-foreground underline-offset-4 hover:text-primary hover:underline">Open the full customer form</Link>
               </>
             )
           )}
-          {loading ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 rounded-[10px]" />) :
+          {loading ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />) :
             customers.length === 0 ? (
-              <div className="rounded-[10px] border border-dashed border-dash-border p-5 text-center text-sm text-dash-muted">{qD ? "No customers match your search." : "No customers yet. Add a customer to save measurements."}</div>
+              <EmptyState bordered className="p-5 md:p-5" title="No customers" description={qD ? "No customers match your search." : "No customers yet. Add a customer to save measurements."} />
             ) : customers.map((c) => {
               const on = selCust?.id === c.id
               return (
-                <button key={c.id} type="button" aria-pressed={on} onClick={() => setSelCust(c)}
-                  className={cn("flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-left", on ? "bg-dash-accent-soft" : "hover:bg-dash-neutral-soft")}>
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-dash-card text-sm font-bold text-dash-accent-fg ring-1 ring-dash-border">{initials(c.name)}</span>
-                  <span className="flex min-w-0 flex-col"><span className="truncate font-semibold">{c.name}</span>
-                    <span className="truncate text-xs text-dash-muted">{c.phone || "—"} · {c.garments.length ? c.garments.join(", ") : "No measurements yet"}</span></span>
-                </button>
+                <Button key={c.id} type="button" aria-pressed={on} onClick={() => setSelCust(c)}
+                  variant={on ? "secondary" : "ghost"} className="h-auto w-full justify-start gap-3 text-left whitespace-normal">
+                  <UserAvatar name={c.name} className="size-10" />
+                  <span className="flex min-w-0 flex-col"><span className="truncate font-medium">{c.name}</span>
+                    <span className="truncate text-xs text-muted-foreground">{c.phone || "—"} · {c.garments.length ? c.garments.join(", ") : "No measurements yet"}</span></span>
+                </Button>
               )
             })}
           {!loading && total > 0 && (
             <PaginationControl currentPage={page} totalPages={pagination?.last_page ?? 1} itemsPerPage={perPage} totalItems={total}
               onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
           )}
-        </section>
+        </Card>
 
-        <section className="flex w-full min-w-0 flex-1 flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-dash-display text-xl font-bold">{selCust?.name ?? "No customer selected"}</h2>
-              <span className="text-[13px] text-dash-muted">{selCust?.phone || "—"} · last measured {fmtD(lastAt)}</span>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={printCard} className={outlineBtn}><Printer className="size-4" aria-hidden /> Print card</button>
-              {selCust && canRead("TailorOrders") && (
-                <Link href={`/dashboard/tailor/orders/new?customerId=${selCust.id}`} className={outlineBtn}>New order with these</Link>
-              )}
-            </div>
-          </div>
-
+        <SectionCard
+          className="w-full min-w-0 flex-1"
+          contentClassName="flex flex-col gap-4"
+          title={<span className="text-xl">{selCust?.name ?? "No customer selected"}</span>}
+          description={`${selCust?.phone || "—"} · last measured ${fmtD(lastAt)}`}
+          actions={<>
+            <Button type="button" variant="outline" onClick={printCard}><Printer className="size-4" aria-hidden /> Print card</Button>
+            {selCust && canRead("TailorOrders") && (
+              <Button asChild variant="outline"><Link href={`/dashboard/tailor/orders/new?customerId=${selCust.id}`}>New order with these</Link></Button>
+            )}
+          </>}
+        >
           {!selCust ? (
-            <div className="rounded-[10px] border border-dashed border-dash-border p-10 text-center text-sm text-dash-muted">Select or add a customer to see their measurements.</div>
+            <EmptyState bordered title="No customer selected" description="Select or add a customer to see their measurements." />
           ) : (
             <>
               <div role="tablist" aria-label="Garment" className="flex flex-wrap gap-2">
                 {sets.map((m) => {
                   const on = m.id === selM
-                  return <button key={m.id} type="button" role="tab" aria-selected={on} onClick={() => { setSelM(m.id); setShowHist(false) }}
-                    className={cn("h-10 rounded-full border px-3.5 text-[13px] font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{setLabel(m)}</button>
+                  return <Button key={m.id} type="button" role="tab" aria-selected={on} onClick={() => { setSelM(m.id); setShowHist(false) }}
+                    variant={on ? "default" : "outline"}>{setLabel(m)}</Button>
                 })}
-                {writable && <button type="button" role="tab" aria-selected={selM === "new"} onClick={startNew}
-                  className={cn("h-10 rounded-full border px-3.5 text-[13px] font-semibold", selM === "new" ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dashed border-dash-border bg-dash-bg text-dash-neutral-fg")}>{selM === "new" ? "New garment" : "+ Add garment"}</button>}
+                {writable && <Button type="button" role="tab" aria-selected={selM === "new"} onClick={startNew}
+                  variant={selM === "new" ? "default" : "outline"}>{selM === "new" ? "New garment" : "+ Add garment"}</Button>}
               </div>
-              {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+              {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
 
-              {setsLoading ? <Skeleton className="h-64 rounded-[10px]" /> : (
+              {setsLoading ? <Skeleton className="h-64" /> : (
                 <fieldset disabled={!writable} className="flex flex-col gap-4 border-0 p-0">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Garment type
-                      <select className={input} value={draft.garment} onChange={(e) => patch({ garment: e.target.value })}>
-                        {Object.entries(NM).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                      </select></label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Label<input className={input} value={draft.label} onChange={(e) => patch({ label: e.target.value })} placeholder="e.g. Eid 2026" /></label>
+                    <FormField label="Garment type" htmlFor="meas-garment">
+                      <Select value={draft.garment} onValueChange={(v) => patch({ garment: v })}>
+                        <SelectTrigger id="meas-garment" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>{Object.entries(NM).map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent>
+                      </Select></FormField>
+                    <FormField label="Label" htmlFor="meas-label"><Input id="meas-label" value={draft.label} onChange={(e) => patch({ label: e.target.value })} placeholder="e.g. Eid 2026" /></FormField>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -326,68 +332,74 @@ export default function MeasurementsPage() {
                         diff = dv === 0 ? "Same as before" : `${dv > 0 ? "+" : "−"}${Math.abs(dv)} since last`; warn = dv !== 0
                       }
                       return (
-                        <label key={k} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">{l}
-                          <span className="flex h-[42px] items-center overflow-hidden rounded-[10px] border border-dash-border bg-dash-card focus-within:border-dash-accent">
-                            <input type="number" step="0.25" min="0" value={cur} onChange={(e) => patch({ values: { ...draft.values, [k]: e.target.value } })}
-                              className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm font-normal outline-none" />
-                            <span className="pr-3 text-xs font-normal text-dash-muted">{draft.unit}</span>
-                          </span>
-                          <span className={cn("min-h-4 text-xs font-normal", warn ? "text-amber-600" : "text-dash-muted/70")}>{diff}</span>
-                        </label>
+                        <FormField key={k} className="min-w-0 gap-1.5" label={l} htmlFor={`meas-${k}`}>
+                          <InputGroup>
+                            <InputGroupInput id={`meas-${k}`} type="number" step="0.25" min="0" value={cur} onChange={(e) => patch({ values: { ...draft.values, [k]: e.target.value } })} />
+                            <InputGroupAddon align="inline-end"><InputGroupText>{draft.unit}</InputGroupText></InputGroupAddon>
+                          </InputGroup>
+                          <span className={cn("min-h-4 text-xs font-normal", warn ? "text-amber-600" : "text-muted-foreground")}>{diff}</span>
+                        </FormField>
                       )
                     })}
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between"><span className="text-[13px] font-semibold">Extra measurements <span className="font-normal text-dash-muted">(anything not listed above)</span></span>
-                      <button type="button" onClick={() => patch({ custom: [...draft.custom, { k: "", v: "" }] })} className="text-[13px] font-semibold text-dash-accent hover:underline">+ Add</button></div>
+                    <div className="flex items-center justify-between"><span className="text-sm font-medium">Extra measurements <span className="font-normal text-muted-foreground">(anything not listed above)</span></span>
+                      <Button type="button" variant="link" size="sm" onClick={() => patch({ custom: [...draft.custom, { k: "", v: "" }] })}>+ Add</Button></div>
                     {draft.custom.map((c, i) => (
                       <div key={i} className="flex gap-2">
-                        <input aria-label="Measurement name" className={input} placeholder="e.g. Back length" value={c.k} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, k: e.target.value } : x) })} />
-                        <input aria-label="Measurement value" className={input} placeholder="Value" value={c.v} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, v: e.target.value } : x) })} />
-                        <button type="button" aria-label="Remove" onClick={() => patch({ custom: draft.custom.filter((_, j) => j !== i) })} className={outlineBtn}>Remove</button>
+                        <Input aria-label="Measurement name" placeholder="e.g. Back length" value={c.k} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, k: e.target.value } : x) })} />
+                        <Input aria-label="Measurement value" placeholder="Value" value={c.v} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, v: e.target.value } : x) })} />
+                        <Button type="button" variant="outline" aria-label="Remove" onClick={() => patch({ custom: draft.custom.filter((_, j) => j !== i) })}>Remove</Button>
                       </div>
                     ))}
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Measured on<input type="date" className={input} max={today} value={draft.measuredAt} onChange={(e) => patch({ measuredAt: e.target.value })} /></label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Unit
-                      <select className={input} value={draft.unit} onChange={(e) => patch({ unit: e.target.value as "in" | "cm" })}><option value="in">Inches (in)</option><option value="cm">Centimetres (cm)</option></select></label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Fit preference
-                      <select className={input} value={draft.fit} onChange={(e) => patch({ fit: e.target.value })}><option>Regular</option><option>Slim</option><option>Loose</option></select></label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note<input className={input} placeholder="e.g. Prefers longer sleeves" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} /></label>
+                    <FormField label="Measured on" htmlFor="meas-date"><Input id="meas-date" type="date" max={today} value={draft.measuredAt} onChange={(e) => patch({ measuredAt: e.target.value })} /></FormField>
+                    <FormField label="Unit" htmlFor="meas-unit">
+                      <Select value={draft.unit} onValueChange={(v) => patch({ unit: v as "in" | "cm" })}>
+                        <SelectTrigger id="meas-unit" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="in">Inches (in)</SelectItem><SelectItem value="cm">Centimetres (cm)</SelectItem></SelectContent>
+                      </Select></FormField>
+                    <FormField label="Fit preference" htmlFor="meas-fit">
+                      <Select value={draft.fit} onValueChange={(v) => patch({ fit: v })}>
+                        <SelectTrigger id="meas-fit" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="Regular">Regular</SelectItem><SelectItem value="Slim">Slim</SelectItem><SelectItem value="Loose">Loose</SelectItem></SelectContent>
+                      </Select></FormField>
+                    <FormField label="Note" htmlFor="meas-note"><Input id="meas-note" placeholder="e.g. Prefers longer sleeves" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} /></FormField>
                   </div>
                 </fieldset>
               )}
 
               {showHist && rec && (
-                <div className="flex flex-col gap-2 rounded-[10px] bg-dash-bg p-3.5">
-                  <strong className="text-sm">Version history</strong>
-                  {rec.history.length === 0 ? <span className="text-[13px] text-dash-muted">No earlier versions yet.</span> :
+                <Card className="gap-2 p-3.5 shadow-none">
+                  <SectionTitle>Version history</SectionTitle>
+                  {rec.history.length === 0 ? <span className="text-sm text-muted-foreground">No earlier versions yet.</span> :
                     rec.history.slice().reverse().map((h, i) => (
-                      <div key={i} className="flex flex-wrap justify-between gap-3 text-[13px]">
-                        <span className="font-semibold">{fmtD(h.at)}</span>
-                        <span className="text-dash-muted">{Object.entries(h.values).slice(0, 4).map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`).join(", ")}{Object.keys(h.values).length > 4 ? "…" : ""}</span>
+                      <div key={i} className="flex flex-wrap justify-between gap-3 text-sm">
+                        <span className="font-medium">{fmtD(h.at)}</span>
+                        <span className="text-muted-foreground">{Object.entries(h.values).slice(0, 4).map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`).join(", ")}{Object.keys(h.values).length > 4 ? "…" : ""}</span>
                       </div>
                     ))}
-                </div>
+                </Card>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dash-border-soft pt-4">
-                <span className="text-xs text-dash-muted">Grey text shows change since last version · history keeps every version</span>
+              <Separator />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">Grey text shows change since last version · history keeps every version</span>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setShowHist((s) => !s)} disabled={!rec} className={cn(outlineBtn, "disabled:opacity-50")}>{showHist ? "Hide history" : "View history"}</button>
+                  <Button type="button" variant="outline" onClick={() => setShowHist((s) => !s)} disabled={!rec}>{showHist ? "Hide history" : "View history"}</Button>
                   {writable && <>
-                    <button type="button" onClick={duplicate} className={outlineBtn}>Duplicate</button>
-                    <button type="button" onClick={remove} className={outlineBtn}>Delete</button>
-                    <button type="button" onClick={save} disabled={saving} className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-60">{saving ? "Saving…" : rec ? "Save measurements" : "Add measurements"}</button>
+                    <Button type="button" variant="outline" onClick={duplicate}>Duplicate</Button>
+                    <Button type="button" variant="destructive" onClick={remove}>Delete</Button>
+                    <Button type="button" onClick={save} disabled={saving}>{saving ? "Saving…" : rec ? "Save measurements" : "Add measurements"}</Button>
                   </>}
                 </div>
               </div>
             </>
           )}
-        </section>
+        </SectionCard>
       </div>
     </div>
   )

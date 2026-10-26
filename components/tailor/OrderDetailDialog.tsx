@@ -1,11 +1,23 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { Printer } from "lucide-react"
 import { toast } from "sonner"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionCard } from "@/components/common/SectionCard"
+import { StatusBadge } from "@/components/common/StatusBadge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { saasCompanyApi } from "@/lib/saasCompanyApi"
 import {
@@ -15,7 +27,7 @@ import {
 import { measurementText, printInvoice, printJobCard } from "@/lib/tailorOrderPrint"
 import { cn } from "@/lib/utils"
 import {
-  PayBadge, StageBadge, UrgentBadge, WORK_LABEL, apiError, fmtDate, tInput, tOutlineBtn, tPrimaryBtn, todayIso, whenText,
+  PayBadge, StageBadge, UrgentBadge, WORK_LABEL, apiError, fmtDate, todayIso, whenText,
 } from "./order-ui"
 
 interface Props {
@@ -29,8 +41,6 @@ interface Props {
 
 const STATUS_OPTS: { id: TailorStage; label: string }[] = TAILOR_STAGES.map((s) => ({ id: s.id as TailorStage, label: s.label }))
 
-const label = "flex flex-col gap-1.5 text-[13px] font-semibold"
-const sectionTitle = "text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted"
 
 export function OrderDetailDialog({ orderId, focusPay, canWrite, onClose, onChanged }: Props) {
   const { formatCurrency } = useCompanySettings()
@@ -146,137 +156,141 @@ export function OrderDetailDialog({ orderId, focusPay, canWrite, onClose, onChan
   return (
     <>
     <Dialog open={orderId != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[860px]">
+      <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-[860px]">
         {loading && !d ? (
           <div className="flex flex-col gap-3 p-6">
             <DialogTitle className="sr-only">Order details</DialogTitle>
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16" />)}
           </div>
         ) : d && c ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dash-border-soft px-6 py-4 pr-14">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 pr-14">
               <div className="flex flex-wrap items-center gap-2">
-                <DialogTitle className="font-dash-display text-xl font-bold">{d.orderNumber}</DialogTitle>
+                <DialogTitle className="text-xl">{d.orderNumber}</DialogTitle>
                 <StageBadge stage={d.stage} />
                 <PayBadge status={d.paymentStatus} />
                 {d.isUrgent && <UrgentBadge />}
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className={cn(tOutlineBtn, "h-9")} onClick={() => { if (!printInvoice(d, businessName, formatCurrency)) toast.error("Allow pop-ups to print.") }}><Printer className="size-4" aria-hidden /> Print invoice</button>
-                <button type="button" className={cn(tOutlineBtn, "h-9")} onClick={() => { if (!printJobCard(d)) toast.error("Allow pop-ups to print.") }}>Print job card</button>
-                {canWrite && open && <button type="button" className={cn(tOutlineBtn, "h-9 text-dash-danger-fg")} onClick={() => { setCancelOpen(true); setCancelErr("") }}>Cancel order</button>}
-                {canWrite && open && <Link href={`/dashboard/tailor/orders/${d.id}/edit`} className={cn(tOutlineBtn, "h-9")}>Edit</Link>}
+                <Button type="button" variant="outline" onClick={() => { if (!printInvoice(d, businessName, formatCurrency)) toast.error("Allow pop-ups to print.") }}><Printer className="size-4" aria-hidden /> Print invoice</Button>
+                <Button type="button" variant="outline" onClick={() => { if (!printJobCard(d)) toast.error("Allow pop-ups to print.") }}>Print job card</Button>
+                {canWrite && open && <Button type="button" variant="destructive" onClick={() => { setCancelOpen(true); setCancelErr("") }}>Cancel order</Button>}
+                {canWrite && open && <Button asChild variant="outline"><Link href={`/dashboard/tailor/orders/${d.id}/edit`}>Edit</Link></Button>}
               </div>
             </div>
+            <Separator />
             <DialogDescription className="sr-only">Order details, payments and status for {d.orderNumber}</DialogDescription>
 
             <div className="flex flex-col gap-5 p-6 text-sm">
-              <div className="grid gap-3 rounded-xl bg-dash-bg p-4 sm:grid-cols-2 lg:grid-cols-5">
-                <div><div className={sectionTitle}>Customer</div><div className="font-semibold">{d.customer?.name ?? "—"}</div><div className="text-xs text-dash-muted">{d.customer?.phone}</div><div className="text-xs text-dash-muted">{d.customer?.address}</div></div>
-                <div><div className={sectionTitle}>Order date</div><div className="font-semibold">{fmtDate(d.orderDate)}</div></div>
-                <div><div className={sectionTitle}>Delivery</div><div className="font-semibold">{fmtDate(d.deliveryDate)}</div><div className={cn("text-xs font-semibold", when?.cls)}>{open ? when?.text : ""}</div></div>
-                <div><div className={sectionTitle}>Dorji</div><div className="font-semibold">{d.dorjiNames.join(", ") || "Not assigned"}</div></div>
-                <div><div className={sectionTitle}>Total / paid / due</div><div className="font-semibold tabular-nums">{formatCurrency(c.total)} · {formatCurrency(c.paid)} · {formatCurrency(c.due)}</div></div>
-              </div>
+              <Card className="p-4">
+                <InfoList className="gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <InfoRow layout="stacked" label="Customer">{d.customer?.name ?? "—"}<span className="block text-xs font-normal text-muted-foreground">{d.customer?.phone}</span><span className="block text-xs font-normal text-muted-foreground">{d.customer?.address}</span></InfoRow>
+                  <InfoRow layout="stacked" label="Order date" value={fmtDate(d.orderDate)} />
+                  <InfoRow layout="stacked" label="Delivery">{fmtDate(d.deliveryDate)}<span className={cn("block text-xs", when?.cls)}>{open ? when?.text : ""}</span></InfoRow>
+                  <InfoRow layout="stacked" label="Dorji" value={d.dorjiNames.join(", ") || "Not assigned"} />
+                  <InfoRow layout="stacked" label="Total / paid / due"><span className="tabular-nums">{formatCurrency(c.total)} · {formatCurrency(c.paid)} · {formatCurrency(c.due)}</span></InfoRow>
+                </InfoList>
+              </Card>
 
-              {d.notes && <div className="rounded-[10px] bg-dash-warn-soft px-3.5 py-2.5 text-[13px] text-dash-warn-fg"><strong>Order notes:</strong> {d.notes}</div>}
+              {d.notes && <Alert><AlertDescription><p><strong>Order notes:</strong> {d.notes}</p></AlertDescription></Alert>}
 
-              <div className="flex flex-col rounded-xl border border-dash-border">
-                {d.items.map((it) => {
-                  const fabric = it.fabricSource === "shop" && it.fabric
-                    ? `${it.fabric.name} · ${it.fabricQuantity} ${it.fabric.unit}${it.fabricUnitPrice ? ` @ ${formatCurrency(it.fabricUnitPrice)}` : ""}`
-                    : `Customer fabric${it.ownFabricNote ? `: ${it.ownFabricNote}` : ""}`
-                  const sub = [fabric, measurementText(it.measurement) || "No measurement", ...it.styleOptions, it.notes].filter(Boolean).join(" — ")
-                  return (
-                    <div key={it.id} className="flex items-start justify-between gap-3 border-b border-dash-border-soft px-3.5 py-3 last:border-0">
-                      <div className="min-w-0"><div className="font-semibold">{it.productType} ×{it.quantity}</div><div className="text-xs text-dash-muted">{sub}</div></div>
-                      <div className="font-bold tabular-nums">{formatCurrency(it.lineTotal)}</div>
-                    </div>
-                  )
-                })}
-              </div>
+              <Card className="gap-0 py-0">
+                <ItemGroup>
+                  {d.items.map((it, idx) => {
+                    const fabric = it.fabricSource === "shop" && it.fabric
+                      ? `${it.fabric.name} · ${it.fabricQuantity} ${it.fabric.unit}${it.fabricUnitPrice ? ` @ ${formatCurrency(it.fabricUnitPrice)}` : ""}`
+                      : `Customer fabric${it.ownFabricNote ? `: ${it.ownFabricNote}` : ""}`
+                    const sub = [fabric, measurementText(it.measurement) || "No measurement", ...it.styleOptions, it.notes].filter(Boolean).join(" — ")
+                    return (
+                      <Fragment key={it.id}>
+                        {idx > 0 && <ItemSeparator />}
+                        <Item size="sm" className="items-start">
+                          <ItemContent className="min-w-0"><ItemTitle>{it.productType} ×{it.quantity}</ItemTitle><ItemDescription className="text-xs">{sub}</ItemDescription></ItemContent>
+                          <ItemActions className="font-semibold tabular-nums">{formatCurrency(it.lineTotal)}</ItemActions>
+                        </Item>
+                      </Fragment>
+                    )
+                  })}
+                </ItemGroup>
+              </Card>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-1.5 rounded-xl border border-dash-border p-3.5">
-                  <div className={sectionTitle}>Charges</div>
-                  {[["Stitching", stitch], ["Fabric", c.fabric], ...(c.urgent > 0 ? [["Urgent charge", c.urgent]] : []), ...(c.extra > 0 ? [["Extra charge", c.extra]] : []), ...(c.discount > 0 ? [["Discount", -c.discount]] : []), ["Grand total", c.total], ["Paid", c.paid], ["Due", c.due]].map(([l, v]) => (
-                    <div key={l as string} className="flex justify-between"><span className="text-dash-muted">{l}</span><strong className="tabular-nums">{(v as number) < 0 ? "− " : ""}{formatCurrency(Math.abs(v as number))}</strong></div>
-                  ))}
-                </div>
-                <div className="flex flex-col gap-1.5 rounded-xl border border-dash-border p-3.5">
-                  <div className={sectionTitle}>Dorji assignments</div>
+                <SectionCard title="Charges">
+                  <InfoList>
+                    {[["Stitching", stitch], ["Fabric", c.fabric], ...(c.urgent > 0 ? [["Urgent charge", c.urgent]] : []), ...(c.extra > 0 ? [["Extra charge", c.extra]] : []), ...(c.discount > 0 ? [["Discount", -c.discount]] : []), ["Grand total", c.total], ["Paid", c.paid], ["Due", c.due]].map(([l, v]) => (
+                      <InfoRow key={l as string} label={l as string}><span className="tabular-nums">{(v as number) < 0 ? "− " : ""}{formatCurrency(Math.abs(v as number))}</span></InfoRow>
+                    ))}
+                  </InfoList>
+                </SectionCard>
+                <SectionCard title="Dorji assignments" contentClassName="flex flex-col gap-1.5">
                   {d.assignments.map((a) => (
                     <div key={a.id} className="flex items-start justify-between gap-2">
                       <span>{a.dorjiName ?? "Dorji"}{a.task ? ` · ${a.task} ×${a.pieces ?? 1}` : a.adminNotes ? ` · ${a.adminNotes}` : ""}
-                        <span className="block text-xs text-dash-muted">{a.expectedCompletion ? `Back by ${fmtDate(a.expectedCompletion)} · ` : ""}Charge {formatCurrency(a.dorjiCharge)}</span></span>
-                      <strong className="whitespace-nowrap text-xs">{WORK_LABEL[a.workStatus] ?? a.workStatus}</strong>
+                        <span className="block text-xs text-muted-foreground">{a.expectedCompletion ? `Back by ${fmtDate(a.expectedCompletion)} · ` : ""}Charge {formatCurrency(a.dorjiCharge)}</span></span>
+                      <StatusBadge status={a.workStatus} label={WORK_LABEL[a.workStatus] ?? a.workStatus} />
                     </div>
                   ))}
-                  {d.assignments.length === 0 && <span className="text-dash-muted">No dorji assigned yet. <Link href="/dashboard/tailor/assignments" className="font-semibold text-dash-accent hover:underline">Assign work</Link></span>}
-                </div>
+                  {d.assignments.length === 0 && <span className="text-muted-foreground">No dorji assigned yet. <Button asChild variant="link" className="h-auto p-0"><Link href="/dashboard/tailor/assignments">Assign work</Link></Button></span>}
+                </SectionCard>
               </div>
 
-              <div className="flex flex-col gap-1.5 rounded-xl border border-dash-border p-3.5">
-                <div className={sectionTitle}>Customer payments</div>
+              <SectionCard title="Customer payments" contentClassName="flex flex-col gap-1.5">
                 {d.payments.map((p) => (
                   <div key={p.id} className="flex items-start justify-between gap-2">
                     <span>{fmtDate(p.paymentDate)} · {payLabel(p)} · {tailorMethodLabel(p.paymentMethod)}
-                      <span className="block text-xs text-dash-muted">{[p.reference, payLabel(p) !== "Payment" ? "" : p.notes].filter(Boolean).join(" · ")}</span></span>
+                      <span className="block text-xs text-muted-foreground">{[p.reference, payLabel(p) !== "Payment" ? "" : p.notes].filter(Boolean).join(" · ")}</span></span>
                     <strong className="tabular-nums">{formatCurrency(p.amount)}</strong>
                   </div>
                 ))}
-                {d.payments.length === 0 && <span className="text-dash-muted">No payments recorded.</span>}
-              </div>
+                {d.payments.length === 0 && <span className="text-muted-foreground">No payments recorded.</span>}
+              </SectionCard>
 
               {canWrite && d.dueAmount > 0 && d.stage !== "cancelled" && (
-                <div ref={payRef} className="flex flex-col gap-3 rounded-xl border border-dash-border bg-dash-bg p-4">
-                  <div className={sectionTitle}>Record payment · due {formatCurrency(d.dueAmount)}</div>
+                <SectionCard ref={payRef} title={`Record payment · due ${formatCurrency(d.dueAmount)}`} contentClassName="flex flex-col gap-3">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <label className={label}>Amount<input type="number" min={0} className={tInput} value={amt} onChange={(e) => { setAmt(e.target.value); setPayErr("") }} /></label>
-                    <label className={label}>Method<select className={tInput} value={method} onChange={(e) => setMethod(e.target.value)}>{TAILOR_PAY_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></label>
-                    <label className={label}>Date<input type="date" max={todayIso()} className={tInput} value={date} onChange={(e) => setDate(e.target.value)} /></label>
-                    <label className={label}>Reference<input className={tInput} value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Txn ID (optional)" /></label>
-                    <label className={label}>Notes<input className={tInput} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></label>
+                    <FormField label="Amount" htmlFor="tod-pay-amount"><Input id="tod-pay-amount" type="number" min={0} value={amt} onChange={(e) => { setAmt(e.target.value); setPayErr("") }} /></FormField>
+                    <FormField label="Method" htmlFor="tod-pay-method"><Select value={method} onValueChange={(v) => setMethod(v)}><SelectTrigger id="tod-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{TAILOR_PAY_METHODS.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}</SelectContent></Select></FormField>
+                    <FormField label="Date" htmlFor="tod-pay-date"><Input id="tod-pay-date" type="date" max={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
+                    <FormField label="Reference" htmlFor="tod-pay-ref"><Input id="tod-pay-ref" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Txn ID (optional)" /></FormField>
+                    <FormField label="Notes" htmlFor="tod-pay-notes"><Input id="tod-pay-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></FormField>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{payErr}</span>
-                    <button type="button" disabled={paying} onClick={recordPay} className={tPrimaryBtn}>{paying ? "Recording…" : "Record payment"}</button>
+                    <span role="alert" className="text-sm font-medium text-destructive">{payErr}</span>
+                    <Button type="button" disabled={paying} onClick={recordPay}>{paying ? "Recording…" : "Record payment"}</Button>
                   </div>
-                </div>
+                </SectionCard>
               )}
 
               {canWrite && (
-                <div className="flex flex-col gap-3 rounded-xl border border-dash-border bg-dash-bg p-4">
-                  <div className={sectionTitle}>Update status</div>
+                <SectionCard title="Update status" contentClassName="flex flex-col gap-3">
                   <div className="grid gap-3 sm:grid-cols-[220px_1fr]">
-                    <label className={label}>New status<select className={tInput} value={sel} onChange={(e) => { setSel(e.target.value as TailorStage); setSErr("") }}>{STATUS_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select></label>
-                    <label className={label}>Note (optional)<input className={tInput} value={sNote} onChange={(e) => setSNote(e.target.value)} placeholder="e.g. Trial done, collar to be fixed" /></label>
+                    <FormField label="New status" htmlFor="tod-status"><Select value={sel} onValueChange={(v) => { setSel(v as TailorStage); setSErr("") }}><SelectTrigger id="tod-status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTS.map((o) => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}</SelectContent></Select></FormField>
+                    <FormField label="Note (optional)" htmlFor="tod-status-note"><Input id="tod-status-note" value={sNote} onChange={(e) => setSNote(e.target.value)} placeholder="e.g. Trial done, collar to be fixed" /></FormField>
                   </div>
                   {sel === "delivered" && d.dueAmount > 0 && (
-                    <span className="text-xs text-dash-muted">Delivering collects the remaining {formatCurrency(d.dueAmount)} in cash and marks the order as paid.</span>
+                    <span className="text-xs text-muted-foreground">Delivering collects the remaining {formatCurrency(d.dueAmount)} in cash and marks the order as paid.</span>
                   )}
                   {sel !== "new" && !d.fabricDeducted && d.items.some((i) => i.fabricSource === "shop" && i.fabricQuantity > 0) && (
-                    <span className="text-xs text-dash-muted">Shop fabric is taken out of stock when the order first moves past Received.</span>
+                    <span className="text-xs text-muted-foreground">Shop fabric is taken out of stock when the order first moves past Received.</span>
                   )}
                   <div className="flex items-center justify-between gap-3">
-                    <span role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{sErr}</span>
-                    <button type="button" disabled={moving} onClick={applyStatus} className={tPrimaryBtn}>{moving ? "Applying…" : "Apply status"}</button>
+                    <span role="alert" className="text-sm font-medium text-destructive">{sErr}</span>
+                    <Button type="button" disabled={moving} onClick={applyStatus}>{moving ? "Applying…" : "Apply status"}</Button>
                   </div>
-                </div>
+                </SectionCard>
               )}
 
-              <div className="flex flex-col gap-2 rounded-xl border border-dash-border p-3.5">
-                <div className={sectionTitle}>Status timeline</div>
+              <SectionCard title="Status timeline" contentClassName="flex flex-col gap-2">
                 {[...d.statusLogs].reverse().map((g) => (
                   <div key={g.id} className="flex items-start gap-2.5">
-                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-dash-accent" aria-hidden />
+                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-hidden />
                     <span><strong>{g.fromStatus ? `${stageName(g.fromStatus)} → ${stageName(g.toStatus)}` : stageName(g.toStatus)}</strong>{" "}
-                      <span className="text-xs text-dash-muted" title={fmtDate(g.createdAt)}>· {fmtDate(g.createdAt)} ({ago(g.createdAt)})</span>
-                      {g.note && <span className="block text-xs text-dash-muted">{g.note}</span>}</span>
+                      <span className="text-xs text-muted-foreground" title={fmtDate(g.createdAt)}>· {fmtDate(g.createdAt)} ({ago(g.createdAt)})</span>
+                      {g.note && <span className="block text-xs text-muted-foreground">{g.note}</span>}</span>
                   </div>
                 ))}
-                {d.statusLogs.length === 0 && <span className="text-dash-muted">No status changes yet.</span>}
-              </div>
+                {d.statusLogs.length === 0 && <span className="text-muted-foreground">No status changes yet.</span>}
+              </SectionCard>
             </div>
           </>
         ) : null}
@@ -284,26 +298,25 @@ export function OrderDetailDialog({ orderId, focusPay, canWrite, onClose, onChan
     </Dialog>
 
       <Dialog open={cancelOpen} onOpenChange={(o) => !moving && setCancelOpen(o)}>
-        <DialogContent className="gap-0 border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-md">
-          <div className="border-b border-dash-border-soft px-6 py-4">
-            <DialogTitle className="font-dash-display text-xl font-bold">Cancel {d?.orderNumber}</DialogTitle>
-            <DialogDescription className="text-[13px]">This cannot be undone from here.</DialogDescription>
-          </div>
-          <div className="flex flex-col gap-3 px-6 py-4 text-[13px]">
-            {d && d.paidAmount > 0 && <div className="rounded-[10px] bg-dash-warn-soft px-3 py-2 text-dash-warn-fg">{formatCurrency(d.paidAmount)} already paid is not refunded automatically — refund the customer separately.</div>}
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel {d?.orderNumber}</DialogTitle>
+            <DialogDescription>This cannot be undone from here.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 text-sm">
+            {d && d.paidAmount > 0 && <Alert><AlertDescription>{formatCurrency(d.paidAmount)} already paid is not refunded automatically — refund the customer separately.</AlertDescription></Alert>}
             {d && !d.fabricDeducted && d.items.some((i) => i.fabricSource === "shop" && i.fabricQuantity > 0) && (
-              <div className="rounded-[10px] bg-dash-neutral-soft px-3 py-2 text-dash-muted">The fabric for this order has not been cut yet, so no stock is touched.</div>
+              <Alert><AlertDescription>The fabric for this order has not been cut yet, so no stock is touched.</AlertDescription></Alert>
             )}
             {d && d.fabricDeducted && d.items.some((i) => i.fabricSource === "shop" && i.fabricQuantity > 0) && (
-              <div className="rounded-[10px] bg-dash-neutral-soft px-3 py-2 text-dash-muted">The fabric already taken out of stock for this order will be returned to stock.</div>
+              <Alert><AlertDescription>The fabric already taken out of stock for this order will be returned to stock.</AlertDescription></Alert>
             )}
-            <label className={label}>Reason<textarea rows={3} className={cn(tInput, "h-auto py-2")} value={cancelReason} onChange={(e) => { setCancelReason(e.target.value); setCancelErr("") }} placeholder="e.g. Customer changed their mind" /></label>
-            <span role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{cancelErr}</span>
+            <FormField label="Reason" htmlFor="tod-cancel-reason" error={cancelErr || undefined}><Textarea id="tod-cancel-reason" rows={3} value={cancelReason} onChange={(e) => { setCancelReason(e.target.value); setCancelErr("") }} placeholder="e.g. Customer changed their mind" /></FormField>
           </div>
-          <div className="flex justify-end gap-2 px-6 pb-4">
-            <button type="button" className={tOutlineBtn} disabled={moving} onClick={() => setCancelOpen(false)}>Keep order</button>
-            <button type="button" className={tPrimaryBtn} disabled={moving} onClick={cancelOrder}>{moving ? "Cancelling…" : "Cancel order"}</button>
-          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={moving} onClick={() => setCancelOpen(false)}>Keep order</Button>
+            <Button type="button" variant="destructive" disabled={moving} onClick={cancelOrder}>{moving ? "Cancelling…" : "Cancel order"}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

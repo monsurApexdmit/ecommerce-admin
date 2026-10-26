@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import Link from "next/link"
-import { Barcode, Building2, LayoutGrid, Grid2X2, List, Maximize2, Package, PanelLeft, Search, ShoppingCart, Tag } from "lucide-react"
+import { Barcode, Building2, Circle, LayoutGrid, Grid2X2, List, Maximize2, Package, PanelLeft, Search, ShoppingCart, Tag } from "lucide-react"
 import { toast } from "sonner"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { PosProductCard, cardPrice, variantUnitPrice, productUnitPrice, stockPill, type PosTint } from "@/components/pos/pos-product-card"
 import { PosCartItem } from "@/components/pos/pos-cart-item"
 import { PosPayment, NEEDS_TXN, POS_METHODS, type PosPaymentMethod } from "@/components/pos/pos-payment"
@@ -35,6 +34,24 @@ import { settingsApi, getPaymentMethods, sellMethodForSlug } from "@/lib/setting
 import inventoryApi from "@/lib/inventoryApi"
 import { locationApi, type LocationResponse } from "@/lib/locationApi"
 import { cn } from "@/lib/utils"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { EmptyState } from "@/components/common/EmptyState"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Kbd } from "@/components/ui/kbd"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 interface CartItem {
     id: string
@@ -67,8 +84,6 @@ const SORTS: [SortKey, string][] = [
     ["best", "Best selling"], ["stock", "Most stock"], ["name", "Name"], ["price_asc", "Price: low to high"], ["price_desc", "Price: high to low"],
 ]
 
-const panel = "surface"
-const outlineBtn = "inline-flex h-11 items-center justify-center rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
 const r2 = (v: number) => Math.round(v * 100) / 100
 
 export default function PosPage() {
@@ -687,26 +702,27 @@ export default function PosPage() {
     const canCharge = cart.length > 0 && !isSubmitting
 
     return (
-        <div data-pos-page="" className={`${bricolage.variable} ${instrument.variable} font-dash-body flex h-full flex-col overflow-hidden text-dash-ink`}>
+        <div data-pos-page="" className="flex h-full min-w-0 flex-col overflow-hidden">
             {/* Top bar */}
             <header className="app-header flex flex-wrap items-center gap-3 px-5 py-3">
-                <button type="button" onClick={toggleSidebar} aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+B)" className="shell-btn">
-                    <PanelLeft className="size-5" strokeWidth={1.8} aria-hidden />
-                </button>
-                <label className="flex h-12 min-w-[260px] flex-1 items-center gap-2.5 rounded-xl border-2 border-dash-accent bg-dash-card px-3.5 text-dash-muted">
-                    <Barcode className="size-5 shrink-0" aria-hidden />
-                    <span className="sr-only">Scan barcode or search products</span>
-                    <input
+                <WithTooltip content="Toggle sidebar (Ctrl+B)">
+                    <Button type="button" variant="outline" size="icon" onClick={toggleSidebar} aria-label="Toggle sidebar">
+                        <PanelLeft className="size-5" strokeWidth={1.8} aria-hidden />
+                    </Button>
+                </WithTooltip>
+                <InputGroup className="min-w-[260px] flex-1">
+                    <InputGroupAddon><Barcode aria-hidden /></InputGroupAddon>
+                    <InputGroupInput
                         ref={searchRef}
                         type="search"
+                        aria-label="Scan barcode or search products"
                         placeholder="Scan barcode or search name / SKU…"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={onSearchKey}
-                        className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-dash-ink outline-none placeholder:text-dash-muted"
                     />
-                    <kbd className="rounded-md border border-dash-border px-1.5 py-0.5 text-xs">F2</kbd>
-                </label>
+                    <InputGroupAddon align="inline-end"><Kbd>F2</Kbd></InputGroupAddon>
+                </InputGroup>
 
                 {/* Barcode scanner - hidden but active for keyboard input */}
                 <div className="hidden">
@@ -719,30 +735,29 @@ export default function PosPage() {
                 </div>
 
                 <Select value={selectedWarehouseId} onValueChange={changeWarehouse}>
-                    <SelectTrigger aria-label="Warehouse" className="h-12 min-w-[240px] rounded-xl border-dash-border bg-dash-card px-3.5 text-left">
-                        <Building2 className="size-[18px] text-dash-muted" aria-hidden />
+                    <SelectTrigger aria-label="Warehouse" className="h-auto min-w-[240px] text-left data-[size=default]:h-auto">
+                        <Building2 className="size-[18px] text-muted-foreground" aria-hidden />
                         <span className="flex flex-1 flex-col leading-tight">
-                            <span className="text-[11px] text-dash-muted">Selling from</span>
+                            <span className="text-xs text-muted-foreground">Selling from</span>
                             <span className="text-sm font-semibold">{selectedWarehouse?.name ?? "Select warehouse"}</span>
                         </span>
                     </SelectTrigger>
-                    <SelectContent align="start" className="min-w-[300px] border-dash-border bg-dash-card p-1.5">
+                    <SelectContent align="start" className="min-w-[300px]">
                         {posLocations.map((wh) => {
                             const n = stockByLoc[wh.id]
                             const meta = locMeta[wh.id]
                             const sub = [meta?.district, wh.address].filter(Boolean).join(" · ") || "—"
                             return (
-                                <SelectItem key={wh.id} value={String(wh.id)} className="rounded-lg py-2 pr-2 focus:bg-dash-accent-soft data-[state=checked]:bg-dash-accent-soft [&>span:first-child]:hidden">
+                                <SelectItem key={wh.id} value={String(wh.id)} className="pr-2 [&>span:first-child]:hidden">
                                     <span className="flex w-[260px] items-center justify-between gap-3">
                                         <span className="flex min-w-0 flex-col leading-tight">
                                             <span className="text-sm font-semibold">{wh.name}</span>
-                                            <span className="truncate text-xs text-dash-muted">{sub}</span>
+                                            <span className="truncate text-xs text-muted-foreground">{sub}</span>
                                         </span>
                                         {n !== undefined && (
-                                            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
-                                                n > 0 ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-danger-soft text-dash-danger-fg")}>
+                                            <Badge variant={n > 0 ? "secondary" : "destructive"} className="tabular-nums">
                                                 {n > 0 ? `${n} in stock` : "No stock"}
-                                            </span>
+                                            </Badge>
                                         )}
                                     </span>
                                 </SelectItem>
@@ -752,184 +767,165 @@ export default function PosPage() {
                 </Select>
 
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                    <button
+                    <Button
                         type="button"
+                        variant="outline"
                         aria-label="Cash drawer"
                         onClick={() => { setDrawerError(""); setDrawerOpen(true) }}
-                        className={cn(
-                            "inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[13px] font-bold",
-                            session ? "border-dash-success/30 bg-dash-success-soft text-dash-success-fg" : "border-dash-warn/40 bg-dash-warn-soft text-dash-warn-fg",
-                        )}
                     >
-                        <span className={cn("size-2 rounded-full", session ? "bg-dash-success" : "bg-dash-warn")} aria-hidden />
+                        <Circle className={cn("size-2", session ? "fill-primary text-primary" : "fill-destructive text-destructive")} aria-hidden />
                         {session ? `${session.register} · Cash ${formatCurrency(session.summary?.expected ?? session.expectedCash ?? 0)}` : "Shift closed · Open shift"}
-                    </button>
+                    </Button>
 
                     <Popover open={heldOpen} onOpenChange={setHeldOpen}>
                         <PopoverTrigger asChild>
-                            <button type="button" aria-expanded={heldOpen} className={cn(outlineBtn, "gap-2")}>
+                            <Button type="button" variant="outline" aria-expanded={heldOpen}>
                                 Held sales
-                                <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-dash-warn px-1.5 text-xs font-bold text-[#1F1300]">{held.length}</span>
-                            </button>
+                                <Badge variant="secondary" className="h-5 min-w-5 rounded-full px-1 tabular-nums">{held.length}</Badge>
+                            </Button>
                         </PopoverTrigger>
                         <PopoverContent align="end" className="w-[340px] p-2">
-                            {held.length === 0 && <p className="px-2 py-3 text-sm text-dash-muted">No held sales. Use Hold to park the current cart.</p>}
+                            {held.length === 0 && <p className="px-2 py-3 text-sm text-muted-foreground">No held sales. Use Hold to park the current cart.</p>}
                             {held.map((h) => (
-                                <div key={h.id} className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-dash-neutral-soft">
-                                    <span className="flex min-w-0 flex-1 flex-col">
-                                        <span className="text-sm font-semibold">{h.label}</span>
-                                        <span className="truncate text-xs text-dash-muted">
+                                <Item key={h.id} size="sm" className="flex-nowrap gap-2 px-2 py-2 hover:bg-accent/50">
+                                    <ItemContent className="min-w-0 gap-0">
+                                        <ItemTitle>{h.label}</ItemTitle>
+                                        <ItemDescription className="truncate text-xs">
                                             {h.itemCount} items · {formatCurrency(h.total)} · {(h.payload as any)?.customerName || "Walk-in"}
-                                        </span>
-                                    </span>
-                                    <button type="button" onClick={() => resumeHeld(h)} className="h-8 rounded-lg bg-dash-accent px-3 text-xs font-bold text-white">Resume</button>
-                                    <button type="button" aria-label="Discard held sale" onClick={() => dropHeld(h)} className="flex size-8 items-center justify-center rounded-lg text-dash-danger-fg hover:bg-dash-danger-soft">×</button>
-                                </div>
+                                        </ItemDescription>
+                                    </ItemContent>
+                                    <ItemActions className="gap-2">
+                                        <Button type="button" size="sm" onClick={() => resumeHeld(h)}>Resume</Button>
+                                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Discard held sale" onClick={() => dropHeld(h)}>×</Button>
+                                    </ItemActions>
+                                </Item>
                             ))}
                         </PopoverContent>
                     </Popover>
 
-                    <Link href="/dashboard/returns/customer" className={outlineBtn}>Return / exchange</Link>
-                    <button type="button" aria-label="Full screen" onClick={toggleFullscreen} className="shell-btn">
+                    <Button asChild variant="outline"><Link href="/dashboard/returns/customer">Return / exchange</Link></Button>
+                    <Button type="button" variant="outline" size="icon" aria-label="Full screen" onClick={toggleFullscreen}>
                         <Maximize2 className="size-[18px]" aria-hidden />
-                    </button>
+                    </Button>
                     <ThemeAccentControls />
                 </div>
             </header>
 
             <div className="app-canvas flex min-h-0 flex-1 flex-wrap items-stretch gap-4 overflow-y-auto p-4 lg:flex-nowrap lg:overflow-hidden">
                 {/* Categories */}
-                <aside aria-label="Categories" className={`${panel} flex w-full shrink-0 flex-col gap-1 self-start p-2.5 pt-3.5 lg:max-h-full lg:w-[220px] lg:overflow-y-auto`}>
-                    <span className="px-2.5 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Categories</span>
+                <Card role="complementary" aria-label="Categories" className="w-full shrink-0 gap-1 self-start p-2.5 pt-3.5 lg:max-h-full lg:w-[220px] lg:overflow-y-auto">
+                    <SectionTitle as="h2" className="px-2.5 pb-2">Categories</SectionTitle>
                     {[{ id: "all", name: "All items", sub: false }, ...categories].map((cat) => {
                         const sel = selectedCategory === cat.id
                         const ids = cat.id === "all" ? null : descend(cat.id)
                         const n = products.filter((p) => (!ids || (p.categoryId ? ids.includes(p.categoryId) : false)) && getAvailableStock(p) > 0).length
                         const tint = cat.id === "all" ? NEUTRAL : categoryTint(cat.id)
                         return (
-                            <button
+                            <Button
                                 key={cat.id}
                                 type="button"
+                                variant={sel ? "default" : "ghost"}
                                 aria-pressed={sel}
                                 onClick={() => setSelectedCategory(cat.id)}
-                                className={cn(
-                                    "flex min-h-11 items-center gap-2.5 rounded-[10px] px-2.5 text-left transition-colors",
-                                    sel ? "bg-dash-ink text-dash-bg" : "text-dash-ink hover:bg-dash-neutral-soft",
-                                )}
+                                className="h-auto min-h-11 w-full justify-start gap-2.5 px-2.5 text-left"
                             >
                                 <span className="flex size-[30px] shrink-0 items-center justify-center rounded-lg" style={{ background: tint.bg, color: tint.fg }}>
                                     {cat.id === "all" ? <LayoutGrid className="size-4" aria-hidden /> : <Tag className="size-4" aria-hidden />}
                                 </span>
                                 <span className="flex-1 truncate text-sm font-semibold">{cat.sub ? "– " : ""}{cat.name}</span>
-                                <span className={cn(
-                                    "min-w-6 rounded-full px-1.5 py-0.5 text-center text-xs font-bold tabular-nums",
-                                    sel ? "bg-white/15 text-inherit" : n > 0 ? "bg-dash-neutral-soft text-dash-neutral-fg" : "bg-dash-danger-soft text-dash-danger-fg",
-                                )}>{n}</span>
-                            </button>
+                                <Badge variant={n > 0 || sel ? "secondary" : "destructive"} className="min-w-6 rounded-full px-1.5 tabular-nums">{n}</Badge>
+                            </Button>
                         )
                     })}
-                    <div className="mx-1 my-2.5 h-px bg-dash-border-soft" />
-                    <span className="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Filters</span>
-                    <button
-                        type="button"
-                        role="switch"
-                        aria-checked={hideOut}
-                        onClick={() => setHideOut((v) => !v)}
-                        className="flex min-h-11 items-center justify-between rounded-[10px] px-2.5 text-sm hover:bg-dash-neutral-soft"
-                    >
+                    <Separator className="mx-1 my-2.5 data-[orientation=horizontal]:w-auto" />
+                    <SectionTitle as="h2" className="px-2.5 pb-1.5">Filters</SectionTitle>
+                    <Label htmlFor="pos-hide-out" className="min-h-11 justify-between px-2.5">
                         <span>Hide out of stock</span>
-                        <span className={cn("flex h-5 w-9 items-center rounded-full p-0.5 transition-colors", hideOut ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}>
-                            <span className="size-4 rounded-full bg-white" />
-                        </span>
-                    </button>
-                    <Link href="/dashboard/categories" className="flex min-h-10 items-center px-2.5 text-[13px] font-semibold text-dash-accent hover:underline">
-                        Manage categories →
-                    </Link>
-                </aside>
+                        <Switch id="pos-hide-out" checked={hideOut} onCheckedChange={(v) => setHideOut(v === true)} />
+                    </Label>
+                    <Button asChild variant="link" className="min-h-10 justify-start px-2.5">
+                        <Link href="/dashboard/categories">Manage categories →</Link>
+                    </Button>
+                </Card>
 
                 {/* Products */}
-                <section aria-label="Products" className={`${panel} flex min-h-[420px] min-w-0 flex-1 flex-col lg:min-h-0`}>
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dash-border-soft px-[18px] py-4">
+                <Card role="region" aria-label="Products" className="min-h-[420px] min-w-0 flex-1 gap-0 py-0 lg:min-h-0">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-4">
                         <div>
-                            <h1 className="font-dash-display text-xl font-bold">{catTitle}</h1>
-                            <p className="mt-0.5 text-[13px] text-dash-muted">
-                                <strong className="text-dash-ink">{availableCount}</strong> products available{selectedWarehouse ? ` at ${selectedWarehouse.name}` : ""}
+                            <h1 className="text-xl font-semibold">{catTitle}</h1>
+                            <p className="mt-0.5 text-sm text-muted-foreground">
+                                <strong className="text-foreground">{availableCount}</strong> products available{selectedWarehouse ? ` at ${selectedWarehouse.name}` : ""}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <button type="button" onClick={cycleSort} className={cn(outlineBtn, "h-10")}>Sort: {sortLabel} ▾</button>
-                            <div role="radiogroup" aria-label="View" className="flex gap-0.5 rounded-[10px] bg-dash-neutral-soft p-[3px]">
+                            <Button type="button" variant="outline" onClick={cycleSort}>Sort: {sortLabel} ▾</Button>
+                            <ButtonGroup role="radiogroup" aria-label="View">
                                 {([
                                     ["large", "Large grid", LayoutGrid],
                                     ["compact", "Compact grid", Grid2X2],
                                     ["list", "List", List],
                                 ] as const).map(([mode, label, Icon]) => (
-                                    <button
-                                        key={mode}
-                                        type="button"
-                                        role="radio"
-                                        aria-checked={viewMode === mode}
-                                        aria-label={label}
-                                        title={label}
-                                        onClick={() => setViewMode(mode)}
-                                        className={cn(
-                                            "flex h-[34px] w-[38px] items-center justify-center rounded-lg",
-                                            viewMode === mode ? "bg-dash-card text-dash-accent shadow-sm" : "text-dash-muted hover:text-dash-ink",
-                                        )}
-                                    >
-                                        <Icon className="size-4" aria-hidden />
-                                    </button>
+                                    <WithTooltip key={mode} content={label}>
+                                        <Button
+                                            type="button"
+                                            variant={viewMode === mode ? "secondary" : "outline"}
+                                            size="icon"
+                                            role="radio"
+                                            aria-checked={viewMode === mode}
+                                            aria-label={label}
+                                            onClick={() => setViewMode(mode)}
+                                        >
+                                            <Icon className="size-4" aria-hidden />
+                                        </Button>
+                                    </WithTooltip>
                                 ))}
-                            </div>
+                            </ButtonGroup>
                         </div>
                     </div>
+                    <Separator />
 
                     <div className="min-h-0 flex-1 overflow-auto px-[18px] py-4">
                         {productsLoading && products.length === 0 ? (
-                            <div className="flex h-64 items-center justify-center text-dash-muted">Loading products…</div>
+                            <div className="flex h-64 items-center justify-center gap-2 text-muted-foreground"><Spinner />Loading products…</div>
                         ) : inStockHere.length === 0 ? (
-                            <div className="flex min-h-[320px] flex-col items-center justify-center gap-2.5 p-6 text-center">
-                                <span className="flex size-16 items-center justify-center rounded-2xl bg-dash-warn-soft text-dash-warn-fg">
-                                    <Package className="size-[30px]" aria-hidden />
-                                </span>
-                                <h2 className="mt-1 text-[17px] font-bold">{products.length ? `No stock at ${selectedWarehouse?.name ?? "this location"}` : "No products yet"}</h2>
-                                <p className="max-w-[380px] text-sm leading-relaxed text-dash-muted">
-                                    {products.length
-                                        ? "None of your products have stock at this location. Switch location, or move stock here with a transfer before selling."
-                                        : "Add products to your catalogue and receive stock before selling."}
-                                </p>
-                                <div className="mt-1.5 flex flex-wrap justify-center gap-2">
+                            <EmptyState
+                                icon={Package}
+                                className="min-h-[320px]"
+                                title={products.length ? `No stock at ${selectedWarehouse?.name ?? "this location"}` : "No products yet"}
+                                description={products.length
+                                    ? "None of your products have stock at this location. Switch location, or move stock here with a transfer before selling."
+                                    : "Add products to your catalogue and receive stock before selling."}
+                                action={<div className="flex flex-wrap justify-center gap-2">
                                     {otherWarehouse ? (
-                                        <button type="button" onClick={() => changeWarehouse(String(otherWarehouse.id))}
-                                            className="inline-flex h-11 items-center rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white">
+                                        <Button type="button" onClick={() => changeWarehouse(String(otherWarehouse.id))}>
                                             Switch to {otherWarehouse.name}
-                                        </button>
+                                        </Button>
                                     ) : (
-                                        <Link href="/dashboard/products" className="inline-flex h-11 items-center rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white">Open catalogue</Link>
+                                        <Button asChild><Link href="/dashboard/products">Open catalogue</Link></Button>
                                     )}
-                                    <Link href="/dashboard/inventory/transfer" className={`${outlineBtn} px-4 text-sm`}>Transfer stock here</Link>
-                                    <Link href="/dashboard/vendors/purchase-orders" className={`${outlineBtn} px-4 text-sm`}>Receive stock</Link>
-                                </div>
-                            </div>
+                                    <Button asChild variant="outline"><Link href="/dashboard/inventory/transfer">Transfer stock here</Link></Button>
+                                    <Button asChild variant="outline"><Link href="/dashboard/vendors/purchase-orders">Receive stock</Link></Button>
+                                </div>}
+                            />
                         ) : filteredProducts.length === 0 ? (
-                            <div className="flex min-h-[260px] flex-col items-center justify-center gap-1.5 text-center">
-                                <h2 className="text-[17px] font-bold">No products match</h2>
-                                <p className="text-sm text-dash-muted">
-                                    {searchQuery ? `Nothing matches "${searchQuery}" in ${catTitle}.` : "Nothing to show for the current filters."}
-                                </p>
-                            </div>
+                            <EmptyState
+                                icon={Search}
+                                className="min-h-[260px]"
+                                title="No products match"
+                                description={searchQuery ? `Nothing matches "${searchQuery}" in ${catTitle}.` : "Nothing to show for the current filters."}
+                            />
                         ) : viewMode === "list" ? (
-                            <table className="w-full min-w-[560px] border-collapse text-sm">
-                                <thead>
-                                    <tr className="text-left">
-                                        <th scope="col" className="th-label border-b border-dash-border p-2">Product</th>
-                                        <th scope="col" className="th-label border-b border-dash-border p-2">Category</th>
-                                        <th scope="col" className="th-label border-b border-dash-border p-2">Stock</th>
-                                        <th scope="col" className="th-label border-b border-dash-border p-2 text-right">Price</th>
-                                        <th scope="col" className="th-label border-b border-dash-border p-2"><span className="sr-only">Action</span></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                            <Table className="min-w-[560px]">
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead scope="col">Product</TableHead>
+                                        <TableHead scope="col">Category</TableHead>
+                                        <TableHead scope="col">Stock</TableHead>
+                                        <TableHead scope="col" className="text-right">Price</TableHead>
+                                        <TableHead scope="col"><span className="sr-only">Action</span></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {filteredProducts.map((product) => {
                                         const avail = getAvailableStock(product)
                                         const pill = stockPill(avail, lowAt(product))
@@ -937,32 +933,31 @@ export default function PosPage() {
                                         const qty = cartQty(product.id)
                                         const cp = cardPrice(product)
                                         return (
-                                            <tr key={product.id} className={avail <= 0 ? "opacity-50" : ""}>
-                                                <td className="border-b border-dash-border-soft p-2">
+                                            <TableRow key={product.id} className={avail <= 0 ? "opacity-50" : ""}>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2.5">
                                                         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg" style={{ background: tint.bg, color: tint.fg }}>
                                                             <Package className="size-[18px]" aria-hidden />
                                                         </span>
                                                         <span className="flex flex-col">
                                                             <span className="font-semibold">{product.name}</span>
-                                                            <span className="text-xs text-dash-muted">{product.sku || "—"}{product.variants?.length ? ` · ${product.variants.length} variants` : ""}</span>
+                                                            <span className="text-xs text-muted-foreground">{product.sku || "—"}{product.variants?.length ? ` · ${product.variants.length} variants` : ""}</span>
                                                         </span>
                                                     </div>
-                                                </td>
-                                                <td className="border-b border-dash-border-soft p-2 text-dash-muted">{product.category || categoryName(product.categoryId) || "—"}</td>
-                                                <td className="border-b border-dash-border-soft p-2"><span className={cn("rounded-full px-2 py-0.5 text-xs font-bold", pill.cls)}>{pill.text}</span></td>
-                                                <td className="border-b border-dash-border-soft p-2 text-right font-bold tabular-nums">{cp.from ? "From " : ""}{formatCurrency(cp.price)}</td>
-                                                <td className="border-b border-dash-border-soft p-2 text-right">
-                                                    <button type="button" disabled={avail <= 0} onClick={() => addProduct(product)} aria-label={`Add ${product.name}`}
-                                                        className={cn("h-9 rounded-lg border bg-dash-card px-3 text-[13px] font-semibold disabled:cursor-not-allowed", qty > 0 ? "border-dash-accent" : "border-dash-border")}>
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground">{product.category || categoryName(product.categoryId) || "—"}</TableCell>
+                                                <TableCell><Badge variant={pill.variant}>{pill.text}</Badge></TableCell>
+                                                <TableCell className="text-right font-bold tabular-nums">{cp.from ? "From " : ""}{formatCurrency(cp.price)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button type="button" variant={qty > 0 ? "secondary" : "outline"} size="sm" disabled={avail <= 0} onClick={() => addProduct(product)} aria-label={`Add ${product.name}`}>
                                                         {qty > 0 ? `Add (${qty})` : "Add"}
-                                                    </button>
-                                                </td>
-                                            </tr>
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
                                         )
                                     })}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         ) : (
                             <div className={cn("grid gap-3", viewMode === "large" ? "grid-cols-[repeat(auto-fill,minmax(170px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2")}>
                                 {filteredProducts.map((product) => (
@@ -980,30 +975,25 @@ export default function PosPage() {
                             </div>
                         )}
                     </div>
-                </section>
+                </Card>
 
                 {/* Cart */}
-                <aside aria-label="Current sale" className={`${panel} flex w-full shrink-0 flex-col overflow-hidden lg:w-[380px] xl:w-[400px]`}>
-                    <div className="flex flex-col gap-2.5 border-b border-dash-border-soft px-4 py-3.5">
+                <Card role="complementary" aria-label="Current sale" className="w-full shrink-0 gap-0 overflow-hidden py-0 lg:w-[380px] xl:w-[400px]">
+                    <div className="flex flex-col gap-2.5 px-4 py-3.5">
                         <div className="flex items-center justify-between">
-                            <h2 className="font-dash-display text-lg font-bold">Current sale</h2>
-                            <span className="text-xs text-dash-muted">Draft · {itemCount} item{itemCount === 1 ? "" : "s"}</span>
+                            <h2 className="text-lg font-semibold">Current sale</h2>
+                            <span className="text-xs text-muted-foreground">Draft · {itemCount} item{itemCount === 1 ? "" : "s"}</span>
                         </div>
                         <PosCustomerPicker
                             value={selectedCustomerId}
                             onChange={(id, name) => { setSelectedCustomerId(id); setSelectedCustomerName(name); setError("") }}
                         />
                     </div>
+                    <Separator />
 
                     <div className="flex min-h-[160px] flex-1 flex-col overflow-y-auto px-4 py-1">
                         {cart.length === 0 ? (
-                            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center text-dash-muted">
-                                <span className="flex size-16 items-center justify-center rounded-2xl bg-dash-accent-soft text-dash-accent-fg">
-                                    <ShoppingCart className="size-[30px]" strokeWidth={1.6} aria-hidden />
-                                </span>
-                                <span className="text-[15px] font-semibold text-dash-ink">Cart is empty</span>
-                                <span className="text-[13px]">Scan a barcode or tap a product to start a sale</span>
-                            </div>
+                            <EmptyState icon={ShoppingCart} title="Cart is empty" description="Scan a barcode or tap a product to start a sale" className="py-10 md:py-10" />
                         ) : (
                             cart.map((item) => (
                                 <PosCartItem key={item.id} item={item} onVerifyQuantity={updateQuantity} onRemove={removeFromCart} />
@@ -1011,82 +1001,76 @@ export default function PosPage() {
                         )}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 border-t border-dash-border-soft px-4 py-3">
-                        <button type="button" onClick={() => setDiscOpen((v) => !v)} aria-pressed={manualDiscount > 0}
-                            className={cn("h-10 min-w-0 truncate rounded-[10px] border px-2 text-[13px] font-semibold",
-                                manualDiscount > 0 ? "border-dash-success bg-dash-success-soft text-dash-success-fg" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
+                    <Separator />
+                    <div className="grid grid-cols-3 gap-2 px-4 py-3">
+                        <Button type="button" variant={manualDiscount > 0 ? "secondary" : "outline"} onClick={() => setDiscOpen((v) => !v)} aria-pressed={manualDiscount > 0}
+                            className="min-w-0 truncate">
                             % Discount
-                        </button>
-                        <button type="button" onClick={() => setCouponOpen((v) => !v)} aria-pressed={!!coupon}
-                            className={cn("h-10 min-w-0 truncate rounded-[10px] border px-2 text-[13px] font-semibold",
-                                coupon ? "border-dash-success bg-dash-success-soft text-dash-success-fg" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
+                        </Button>
+                        <Button type="button" variant={coupon ? "secondary" : "outline"} onClick={() => setCouponOpen((v) => !v)} aria-pressed={!!coupon}
+                            className="min-w-0 truncate">
                             {coupon ? coupon.code : "Coupon"}
-                        </button>
-                        <button type="button" onClick={() => (cart.length ? setIsResetOpen(true) : resetSale())}
-                            className="h-10 min-w-0 rounded-[10px] border border-dash-border bg-dash-card px-2 text-[13px] font-semibold text-dash-danger-fg hover:bg-dash-danger-soft">
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={() => (cart.length ? setIsResetOpen(true) : resetSale())}
+                            className="min-w-0">
                             Reset
-                        </button>
+                        </Button>
                     </div>
 
+                    {discOpen && <Separator />}
                     {discOpen && (
-                        <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 border-t border-dash-border-soft px-4 py-3">
+                        <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 px-4 py-3">
                             {([["flat", "Flat"], ["percent", "Percent %"]] as const).map(([id, label]) => (
-                                <button key={id} type="button" aria-pressed={discType === id} onClick={() => { setDiscType(id); setError("") }}
-                                    className={cn("h-10 rounded-lg border-2 text-[13px] font-semibold",
-                                        discType === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                                <Button key={id} type="button" variant={discType === id ? "default" : "outline"} aria-pressed={discType === id} onClick={() => { setDiscType(id); setError("") }}>
                                     {label}
-                                </button>
+                                </Button>
                             ))}
-                            <input type="text" inputMode="decimal" aria-label="Discount value" value={discValue}
+                            <Input type="text" inputMode="decimal" aria-label="Discount value" value={discValue}
                                 onChange={(e) => { setDiscValue(e.target.value); setError("") }}
-                                placeholder={discType === "percent" ? "Percent, e.g. 10" : "Amount, e.g. 100"}
-                                className="h-10 rounded-lg border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent" />
+                                placeholder={discType === "percent" ? "Percent, e.g. 10" : "Amount, e.g. 100"} />
                         </div>
                     )}
 
+                    {couponOpen && <Separator />}
                     {couponOpen && (
-                        <div className="flex flex-col gap-2 border-t border-dash-border-soft px-4 py-3">
+                        <div className="flex flex-col gap-2 px-4 py-3">
                             <div className="flex gap-2">
-                                <input type="text" aria-label="Coupon code" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                                <Input type="text" aria-label="Coupon code" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === "Enter") applyCoupon() }}
                                     placeholder="Coupon code"
-                                    className="h-10 min-w-0 flex-1 rounded-lg border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent" />
-                                <button type="button" onClick={() => applyCoupon()} className="h-10 rounded-lg bg-dash-ink px-3.5 text-[13px] font-bold text-dash-bg">Apply</button>
-                                {coupon && <button type="button" onClick={removeCoupon} className="h-10 rounded-lg border border-dash-border px-3 text-[13px] font-semibold">Remove</button>}
+                                    className="min-w-0 flex-1" />
+                                <Button type="button" onClick={() => applyCoupon()}>Apply</Button>
+                                {coupon && <Button type="button" variant="outline" onClick={removeCoupon}>Remove</Button>}
                             </div>
-                            <span className={cn("text-xs", coupon && !couponProblem ? "text-dash-success-fg" : couponMsg || couponProblem ? "text-dash-danger-fg" : "text-dash-muted")}>
+                            <span className={cn("text-xs", coupon && !couponProblem ? "text-foreground" : couponMsg || couponProblem ? "text-destructive" : "text-muted-foreground")}>
                                 {coupon ? (couponProblem || `${coupon.campaignName || coupon.code} applied: −${formatCurrency(couponDiscount)}`) : couponMsg || "Enter a code and press Apply."}
                             </span>
                             {couponChoices.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5">
                                     {couponChoices.map((c) => (
-                                        <button key={c.id} type="button" onClick={() => applyCoupon(c.code)}
-                                            title={`${c.campaignName}${c.minOrderAmount > 0 ? ` · min ${formatCurrency(c.minOrderAmount)}` : ""}`}
-                                            className="h-8 rounded-full border border-dash-border bg-dash-card px-3 text-xs font-semibold hover:bg-dash-neutral-soft">
-                                            {c.code} · {c.type === "percentage" ? `${c.discount}%` : formatCurrency(c.discount)}
-                                        </button>
+                                        <WithTooltip key={c.id} content={`${c.campaignName}${c.minOrderAmount > 0 ? ` · min ${formatCurrency(c.minOrderAmount)}` : ""}`}>
+                                            <Button type="button" variant="outline" size="sm" onClick={() => applyCoupon(c.code)}>
+                                                {c.code} · {c.type === "percentage" ? `${c.discount}%` : formatCurrency(c.discount)}
+                                            </Button>
+                                        </WithTooltip>
                                     ))}
                                 </div>
                             )}
                         </div>
                     )}
 
-                    <div className="flex flex-col gap-3 border-t border-dash-border bg-dash-bg px-4 pb-4 pt-3.5">
-                        <div className="flex flex-col gap-1.5 text-sm tabular-nums">
-                            <div className="flex justify-between"><span className="text-dash-muted">Subtotal</span><span className="font-semibold">{formatCurrency(subtotal)}</span></div>
-                            <div className="flex justify-between">
-                                <span className="text-dash-muted">Discount{manualDiscount > 0 && discType === "percent" ? ` (${discValue}%)` : ""}</span>
-                                <span className="font-semibold text-dash-success-fg">{manualDiscount > 0 ? "−" : ""}{formatCurrency(manualDiscount)}</span>
-                            </div>
+                    <Separator />
+                    <div className="flex flex-col gap-3 bg-muted/50 px-4 pb-4 pt-3.5">
+                        <InfoList className="gap-1.5 tabular-nums">
+                            <InfoRow label="Subtotal" value={formatCurrency(subtotal)} />
+                            <InfoRow label={`Discount${manualDiscount > 0 && discType === "percent" ? ` (${discValue}%)` : ""}`} value={`${manualDiscount > 0 ? "−" : ""}${formatCurrency(manualDiscount)}`} />
                             {coupon && (
-                                <div className="flex justify-between"><span className="text-dash-muted">Coupon {coupon.code}</span><span className="font-semibold text-dash-success-fg">−{formatCurrency(couponDiscount)}</span></div>
+                                <InfoRow label={`Coupon ${coupon.code}`} value={`−${formatCurrency(couponDiscount)}`} />
                             )}
-                            <div className="flex justify-between"><span className="text-dash-muted">{formatTaxLabel()}</span><span className="font-semibold">{formatCurrency(tax)}</span></div>
-                            <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
-                                <span className="font-bold">Total</span>
-                                <span className="font-dash-display text-[30px] font-bold tracking-tight">{formatCurrency(total)}</span>
-                            </div>
-                        </div>
+                            <InfoRow label={formatTaxLabel()} value={formatCurrency(tax)} />
+                            <Separator />
+                            <InfoRow label={<span className="font-bold text-foreground">Total</span>} value={<span className="text-3xl font-bold tracking-tight">{formatCurrency(total)}</span>} className="items-baseline" />
+                        </InfoList>
 
                         <PosPayment
                             total={total}
@@ -1103,25 +1087,25 @@ export default function PosPage() {
                             onTxnChange={setTxnId}
                         />
 
-                        {sectionError && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{sectionError}</p>}
+                        {sectionError && <Alert variant="destructive" role="alert"><AlertDescription>{sectionError}</AlertDescription></Alert>}
 
                         <div className="flex gap-2">
-                            <button type="button" onClick={hold} disabled={cart.length === 0}
-                                className="h-14 rounded-xl border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-40">
+                            <Button type="button" variant="outline" size="lg" onClick={hold} disabled={cart.length === 0}>
                                 Hold
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 type="button"
+                                size="lg"
                                 disabled={!canCharge}
                                 onClick={handleCheckout}
-                                className="flex h-14 flex-1 items-center justify-center gap-2.5 rounded-xl bg-dash-accent text-base font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+                                className="flex-1"
                             >
                                 {isSubmitting ? "Processing…" : `Charge ${formatCurrency(total)}`}
-                                {!isSubmitting && <kbd className="rounded-md border border-white/50 px-1.5 py-0.5 text-[11px] font-semibold">F8</kbd>}
-                            </button>
+                                {!isSubmitting && <Kbd>F8</Kbd>}
+                            </Button>
                         </div>
                     </div>
-                </aside>
+                </Card>
             </div>
 
             <PosCashDrawer
@@ -1146,15 +1130,15 @@ export default function PosPage() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleResetCart} className="bg-red-600 hover:bg-red-700">Clear sale</AlertDialogAction>
+                        <AlertDialogAction onClick={handleResetCart} className={buttonVariants({ variant: "destructive" })}>Clear sale</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
 
             {/* Variant picker */}
             <Dialog open={!!selectedProductForVariant} onOpenChange={(open) => !open && setSelectedProductForVariant(null)}>
-                <DialogContent className="gap-3 rounded-2xl border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
-                    <DialogTitle className="font-dash-display text-lg font-bold">Choose variant · {selectedProductForVariant?.name}</DialogTitle>
+                <DialogContent className="gap-3 sm:max-w-md">
+                    <DialogTitle>Choose variant · {selectedProductForVariant?.name}</DialogTitle>
                     <DialogDescription className="sr-only">Pick which variant to add to the sale</DialogDescription>
                     <div className="flex flex-col gap-2">
                         {selectedProductForVariant?.variants?.map((variant) => {
@@ -1162,25 +1146,23 @@ export default function PosPage() {
                             const out = left <= 0
                             const inCart = cart.find((c) => c.id === `${selectedProductForVariant.id}-${variant.id}`)
                             return (
-                                <button
+                                <Button
                                     key={variant.id}
                                     type="button"
+                                    variant={inCart ? "secondary" : "outline"}
                                     disabled={out}
                                     onClick={() => addToCart(selectedProductForVariant, variant)}
-                                    className={cn(
-                                        "flex items-center justify-between gap-3 rounded-xl border p-3 text-left hover:bg-dash-neutral-soft disabled:cursor-not-allowed disabled:opacity-50",
-                                        inCart ? "border-2 border-dash-accent" : "border-dash-border",
-                                    )}
+                                    className="h-auto justify-between gap-3 whitespace-normal p-3 text-left"
                                 >
                                     <span className="flex flex-col">
                                         <span className="text-sm font-semibold">{variant.name}</span>
-                                        <span className="text-xs text-dash-muted">{[variant.sku, inCart ? `${inCart.quantity} in cart` : ""].filter(Boolean).join(" · ") || "No SKU"}</span>
+                                        <span className="text-xs text-muted-foreground">{[variant.sku, inCart ? `${inCart.quantity} in cart` : ""].filter(Boolean).join(" · ") || "No SKU"}</span>
                                     </span>
                                     <span className="flex flex-col items-end">
                                         <span className="text-sm font-bold tabular-nums">{formatCurrency(variantUnitPrice(selectedProductForVariant, variant))}</span>
-                                        <span className={cn("text-xs font-semibold", out ? "text-dash-danger-fg" : "text-dash-success-fg")}>{out ? "Out of stock" : `${left} available`}</span>
+                                        <span className={cn("text-xs font-semibold", out ? "text-destructive" : "text-muted-foreground")}>{out ? "Out of stock" : `${left} available`}</span>
                                     </span>
-                                </button>
+                                </Button>
                             )
                         })}
                     </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { Fragment, useState, useMemo, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
@@ -9,6 +9,27 @@ import {
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { Toolbar } from "@/components/common/Toolbar"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -39,12 +60,6 @@ import productApi, { type ProductImportResult } from "@/lib/productApi"
 type Tab = "all" | "ok" | "low" | "out" | "hidden"
 type StockState = "ok" | "low" | "out"
 
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
-const ghostBtn =
-  "inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const barBtn = "inline-flex h-9 items-center rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10"
 
 // Reorder point 0 (or unset) means the low-stock alert is off.
 const reorderOf = (p: Product) => (p.reorderPoint && p.reorderPoint > 0 ? p.reorderPoint : 0)
@@ -370,57 +385,59 @@ export default function ProductsPage() {
   const money = (n: number) => formatCurrency(n || 0)
 
   const emptyState = (
-    <div className="py-14 text-center">
-      <Boxes className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-      <p className="font-semibold">No products found</p>
-      <p className="mb-3 text-sm text-dash-muted">{hasFilters ? "Nothing matches these filters." : "Add your first product to get started."}</p>
-      <div className="flex justify-center gap-2">
-        {hasFilters && <button type="button" onClick={resetFilters} className={ghostBtn}>Clear filters</button>}
-        {canWrite("Products") && (
-          <button type="button" onClick={handleAdd} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
-            <Plus className="size-4" aria-hidden /> Add product
-          </button>
-        )}
-      </div>
-    </div>
+    <EmptyState
+      icon={Boxes}
+      title="No products found"
+      description={hasFilters ? "Nothing matches these filters." : "Add your first product to get started."}
+      action={(hasFilters || canWrite("Products")) ? (
+        <div className="flex justify-center gap-2">
+          {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>Clear filters</Button>}
+          {canWrite("Products") && (
+            <Button type="button" onClick={handleAdd}>
+              <Plus className="size-4" aria-hidden /> Add product
+            </Button>
+          )}
+        </div>
+      ) : undefined}
+    />
   )
+  const stockStatus = (st: StockState) => (st === "out" ? "out of stock" : st === "low" ? "low stock" : "in stock")
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Products</h1>
-          <p className="mt-1 text-sm text-dash-muted">
-            Everything you sell — prices, margins and stock at a glance.
-            {planLimits && <span className="ml-1 tabular-nums">({planLimits.currentProducts} / {planLimits.maxProducts} used on your plan)</span>}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/products/print-barcode" className={ghostBtn}>
-            <Printer className="size-4" aria-hidden /> Print barcodes
-          </Link>
+      <PageHeader
+        title="Products"
+        description={<>
+          Everything you sell — prices, margins and stock at a glance.
+          {planLimits && <span className="ml-1 tabular-nums">({planLimits.currentProducts} / {planLimits.maxProducts} used on your plan)</span>}
+        </>}
+        actions={<>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/products/print-barcode">
+              <Printer className="size-4" aria-hidden /> Print barcodes
+            </Link>
+          </Button>
           {canWrite("Products") && (
-            <button type="button" onClick={() => setImportOpen(true)} className={ghostBtn}>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="size-4" aria-hidden /> Import
-            </button>
+            </Button>
           )}
-          {mayExport && <button type="button" onClick={handleExport} disabled={exporting} className={cn(ghostBtn, "disabled:opacity-50")}>
+          {mayExport && <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}>
             <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}
-          </button>}
+          </Button>}
           {canWrite("Products") && (
-            <button type="button" onClick={handleAdd}
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+            <Button type="button" onClick={handleAdd}>
               <Plus className="size-4" aria-hidden /> Add product
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* KPIs */}
       {isLoading && items.length === 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px] rounded-xl" />)}
         </div>
       ) : (
         <StatsCards stats={[
@@ -435,7 +452,7 @@ export default function ProductsPage() {
         ]} />
       )}
 
-      <section className="min-w-0 rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="min-w-0 gap-0 py-0">
         <div className="px-4">
           <StatusTabs
             value={tab}
@@ -450,16 +467,26 @@ export default function ProductsPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search products</span>
-            <input type="search" placeholder="Search name, SKU, barcode, supplier or variant SKU…" value={search}
+        <Toolbar className="p-4" actions={
+          <div role="radiogroup" aria-label="View" className="flex gap-1">
+            {([["table", "Table view", List], ["grid", "Grid view", LayoutGrid]] as const).map(([id, label, Icon]) => (
+              <WithTooltip key={id} content={label}>
+                <Button type="button" size="icon" variant={view === id ? "default" : "outline"} role="radio" aria-checked={view === id} aria-label={label} onClick={() => setView(id)}>
+                  <Icon className="size-4" aria-hidden />
+                </Button>
+              </WithTooltip>
+            ))}
+          </div>
+        }>
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Label htmlFor="product-search" className="sr-only">Search products</Label>
+            <Input id="product-search" type="search" placeholder="Search name, SKU, barcode, supplier or variant SKU…" value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
+              className="pl-8" />
+          </div>
           <Select value={category} onValueChange={(v) => { setCategory(v); setPage(1) }}>
-            <SelectTrigger aria-label="Category" className={cn(filterSelect, "w-[160px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Category" className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Category: All</SelectItem>
               <SelectItem value="none">No category</SelectItem>
@@ -469,7 +496,7 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
           <Select value={vendor} onValueChange={(v) => { setVendor(v); setPage(1) }}>
-            <SelectTrigger aria-label="Supplier" className={cn(filterSelect, "w-[160px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Supplier" className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Supplier: All</SelectItem>
               <SelectItem value="none">Supplier: None</SelectItem>
@@ -477,7 +504,7 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
           <Select value={brand} onValueChange={(v) => { setBrand(v); setPage(1) }}>
-            <SelectTrigger aria-label="Brand" className={cn(filterSelect, "w-[160px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Brand" className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Brand: All</SelectItem>
               <SelectItem value="none">No brand</SelectItem>
@@ -485,14 +512,14 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
           <Select value={warehouse} onValueChange={(v) => { setWarehouse(v); setPage(1) }}>
-            <SelectTrigger aria-label="Warehouse" className={cn(filterSelect, "w-[170px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Warehouse" className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Warehouse: All</SelectItem>
               {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1) }}>
-            <SelectTrigger aria-label="Sort" className={cn(filterSelect, "w-[170px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Sort" className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="recent">Sort: Newest</SelectItem>
               <SelectItem value="name">Sort: Name</SelectItem>
@@ -503,45 +530,32 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
           {hasFilters && (
-            <button type="button" onClick={resetFilters} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+            <Button type="button" variant="ghost" onClick={resetFilters}>
               <X className="size-4" aria-hidden /> Clear
-            </button>
+            </Button>
           )}
-          <div role="radiogroup" aria-label="View" className="ml-auto flex gap-0.5 rounded-[10px] bg-dash-neutral-soft p-[3px]">
-            {([["table", "Table view", List], ["grid", "Grid view", LayoutGrid]] as const).map(([id, label, Icon]) => (
-              <button key={id} type="button" role="radio" aria-checked={view === id} aria-label={label} title={label} onClick={() => setView(id)}
-                className={cn("flex h-[34px] w-[38px] items-center justify-center rounded-lg", view === id ? "bg-dash-card text-dash-accent shadow-sm" : "text-dash-muted hover:text-dash-ink")}>
-                <Icon className="size-4" aria-hidden />
-              </button>
-            ))}
-          </div>
-        </div>
+        </Toolbar>
 
-        {checked.size > 0 && (
-          <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
-            <span className="text-sm font-semibold">{checked.size} selected</span>
+        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
             {canWrite("Products") && (
               <>
-                <button type="button" onClick={() => setPublished(selected, true)} className={barBtn}>Show online</button>
-                <button type="button" onClick={() => setPublished(selected, false)} className={barBtn}>Hide online</button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Show online</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Hide online</Button>
               </>
             )}
-            {canWrite("Products") && <button type="button" onClick={() => setPriceOpen(true)} className={barBtn}>Update price</button>}
-            {canWrite("Products") && <button type="button" onClick={() => openAdjust(selected)} className={barBtn}>Adjust stock</button>}
-            <button type="button" onClick={() => printBarcodes(selected)} className={barBtn}>Print barcodes</button>
-            {mayExport && <button type="button" onClick={handleExport} className={barBtn}>Export selected</button>}
+            {canWrite("Products") && <Button type="button" variant="outline" size="sm" onClick={() => setPriceOpen(true)}>Update price</Button>}
+            {canWrite("Products") && <Button type="button" variant="outline" size="sm" onClick={() => openAdjust(selected)}>Adjust stock</Button>}
+            <Button type="button" variant="outline" size="sm" onClick={() => printBarcodes(selected)}>Print barcodes</Button>
+            {mayExport && <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>}
             {canDelete("Products") && (
-              <button type="button" onClick={() => setDeleteTargets(selected)}
-                className="inline-flex h-9 items-center rounded-lg border border-red-400/50 px-3 text-[13px] font-semibold text-red-300 hover:bg-white/10">Delete</button>
+              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
             )}
-            <button type="button" onClick={() => setChecked(new Set())} className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">Clear</button>
-          </div>
-        )}
+        </BulkBar>
 
         {view === "grid" ? (
           <div className="grid gap-3 p-4 pt-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {isLoading && items.length === 0 ? (
-              [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-56 rounded-[14px]" />)
+              [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-56 rounded-xl" />)
             ) : rows.length === 0 ? (
               <div className="col-span-full">{emptyState}</div>
             ) : rows.map((p) => {
@@ -551,68 +565,62 @@ export default function ProductsPage() {
               const offer = offerFinalOf(p)
               const ck = checked.has(p.id)
               return (
-                <article key={p.id} className={cn("flex flex-col gap-2.5 rounded-[14px] border bg-dash-card p-3", ck ? "border-dash-accent" : "border-dash-border")}>
+                <Card key={p.id} className={cn("gap-2.5 p-3", ck && "border-primary")}>
                   <div className="flex items-start justify-between gap-2">
                     <Checkbox checked={ck} onCheckedChange={() => toggleOne(p.id)} aria-label={`Select ${p.name}`} />
-                    <button type="button" role="switch" aria-checked={p.published} aria-label={`Show ${p.name} online`} disabled={!canWrite("Products")}
-                      onClick={() => setPublished([p], !p.published)}
-                      className={cn("flex h-5 w-9 items-center rounded-full p-0.5 disabled:opacity-50", p.published ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}>
-                      <span className="size-4 rounded-full bg-white" />
-                    </button>
+                    <Switch checked={p.published} aria-label={`Show ${p.name} online`} disabled={!canWrite("Products")}
+                      onCheckedChange={() => setPublished([p], !p.published)} />
                   </div>
-                  <button type="button" onClick={() => setViewing(p)} className="flex flex-col gap-2 text-left">
+                  <Button type="button" variant="ghost" onClick={() => setViewing(p)} className="h-auto flex-col items-stretch gap-2 whitespace-normal p-0 text-left font-normal">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.image || "/placeholder.svg"} alt="" className="aspect-[4/3] w-full rounded-[10px] bg-dash-bg object-cover"
+                    <img src={p.image || "/placeholder.svg"} alt="" className="aspect-[4/3] w-full rounded-md bg-muted object-cover"
                       onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }} />
                     <span className="flex items-center gap-1.5 font-semibold">
                       <span className="truncate">{p.name}</span>
-                      {p.isBundle && <span className="rounded bg-dash-accent-soft px-1.5 py-px text-[10px] font-bold text-dash-accent-fg">Bundle</span>}
+                      {p.isBundle && <Badge variant="secondary">Bundle</Badge>}
                     </span>
-                    <span className="text-xs text-dash-muted">{p.sku || "No SKU"} · {p.category || "—"}{p.brandName ? ` · ${p.brandName}` : ""}</span>
-                  </button>
+                    <span className="text-xs text-muted-foreground">{p.sku || "No SKU"} · {p.category || "—"}{p.brandName ? ` · ${p.brandName}` : ""}</span>
+                  </Button>
                   <div className="mt-auto flex items-end justify-between">
                     <span className="font-bold tabular-nums">{money(offer ?? p.salePrice)}</span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
-                      st === "out" ? "bg-dash-danger-soft text-dash-danger-fg" : st === "low" ? "bg-dash-warn-soft text-dash-warn-fg" : "bg-dash-success-soft text-dash-success-fg")}>
-                      {st === "out" ? "Out of stock" : `${gStock}${p.unitName ? ` ${p.unitName}` : ""}${st === "low" ? " · Low" : " in stock"}`}
-                    </span>
+                    <StatusBadge status={stockStatus(st)} className="tabular-nums"
+                      label={st === "out" ? "Out of stock" : `${gStock}${p.unitName ? ` ${p.unitName}` : ""}${st === "low" ? " · Low" : " in stock"}`} />
                   </div>
-                  {seeCost && gMargin !== null && <div className="text-xs text-dash-muted tabular-nums">Margin {gMargin}%</div>}
+                  {seeCost && gMargin !== null && <div className="text-xs text-muted-foreground tabular-nums">Margin {gMargin}%</div>}
                   <div className="flex gap-2">
                     {canWrite("Products") && (
-                      <button type="button" onClick={() => openForm(p)} className="h-9 flex-1 rounded-lg border border-dash-border text-[13px] font-semibold hover:bg-dash-neutral-soft">Edit</button>
+                      <Button type="button" variant="outline" onClick={() => openForm(p)} className="flex-1">Edit</Button>
                     )}
                     {canDelete("Products") && (
-                      <button type="button" aria-label={`Delete ${p.name}`} onClick={() => setDeleteTargets([p])}
-                        className="flex size-9 items-center justify-center rounded-lg border border-dash-border text-dash-danger hover:bg-dash-neutral-soft"><Trash2 className="size-4" /></button>
+                      <Button type="button" variant="outline" size="icon" aria-label={`Delete ${p.name}`} onClick={() => setDeleteTargets([p])}><Trash2 className="size-4" /></Button>
                     )}
                   </div>
-                </article>
+                </Card>
               )
             })}
           </div>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th scope="col" className="w-5 py-3 pl-4 pr-2"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all on this page" /></th>
-                <th scope="col" className="px-2 py-3 font-semibold">Product</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Category</th>
-                {seeCost && <th scope="col" className="px-2 py-3 text-right font-semibold">Cost</th>}
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Price</th>
-                {seeCost && <th scope="col" className="px-2 py-3 font-semibold">Margin</th>}
-                <th scope="col" className="px-2 py-3 font-semibold">Stock</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Online</th>
-                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div>
+          <Table className="min-w-[980px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all on this page" /></TableHead>
+                <TableHead scope="col">Product</TableHead>
+                <TableHead scope="col">Category</TableHead>
+                {seeCost && <TableHead scope="col" className="text-right">Cost</TableHead>}
+                <TableHead scope="col" className="text-right">Price</TableHead>
+                {seeCost && <TableHead scope="col">Margin</TableHead>}
+                <TableHead scope="col">Stock</TableHead>
+                <TableHead scope="col">Online</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {isLoading && items.length === 0 ? (
-                [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={9} className="px-4 py-3"><Skeleton className="h-12 rounded" /></td></tr>)
+                [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={9} className="px-4"><Skeleton className="h-12 rounded" /></TableCell></TableRow>)
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9}>{emptyState}</td>
-                </tr>
+                <TableRow><TableCell colSpan={9}>{emptyState}</TableCell>
+                </TableRow>
               ) : (
                 rows.map((p) => {
                   const st = stockState(p, warehouse)
@@ -624,87 +632,79 @@ export default function ProductsPage() {
                   const unit = p.unitName ? ` ${p.unitName}` : ""
                   const sup = supplierName(p)
                   return (
-                    <tr key={p.id} className={ck ? "bg-dash-bg" : ""}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                    <TableRow key={p.id} data-state={ck ? "selected" : undefined}>
+                      <TableCell className="pl-4">
                         <Checkbox checked={ck} onCheckedChange={() => toggleOne(p.id)} aria-label={`Select ${p.name}`} />
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <button type="button" onClick={() => setViewing(p)} className="flex items-center gap-2.5 text-left">
+                      </TableCell>
+                      <TableCell>
+                        <Button type="button" variant="ghost" onClick={() => setViewing(p)} className="h-auto justify-start gap-2.5 p-0 text-left font-normal">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.image || "/placeholder.svg"} alt="" className="size-10 shrink-0 rounded-[10px] bg-dash-bg object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }} />
+                          <UserAvatar shape="square" src={p.image || "/placeholder.svg"} alt="" name={p.name} className="size-10" />
                           <span className="flex min-w-0 flex-col">
                             <span className="flex items-center gap-1.5 font-semibold">
                               <span className="max-w-[220px] truncate">{p.name}</span>
-                              {p.isBestSeller && <span className="rounded bg-dash-warn-soft px-1.5 py-px text-[10px] font-bold text-dash-warn-fg">Best seller</span>}
-                              {p.isHotDeal && <span className="rounded bg-dash-danger-soft px-1.5 py-px text-[10px] font-bold text-dash-danger-fg">Hot deal</span>}
-                              {p.tag && <span className="rounded bg-dash-neutral-soft px-1.5 py-px text-[10px] font-bold text-dash-neutral-fg">{p.tag}</span>}
-                              {p.isBundle && <span className="rounded bg-dash-accent-soft px-1.5 py-px text-[10px] font-bold text-dash-accent-fg">Bundle</span>}
+                              {p.isBestSeller && <Badge variant="secondary">Best seller</Badge>}
+                              {p.isHotDeal && <Badge variant="destructive">Hot deal</Badge>}
+                              {p.tag && <Badge variant="outline">{p.tag}</Badge>}
+                              {p.isBundle && <Badge variant="secondary">Bundle</Badge>}
                             </span>
-                            <span className="text-xs text-dash-muted">
+                            <span className="text-xs text-muted-foreground">
                               {p.sku || "No SKU"}{p.variants && p.variants.length > 0 ? ` · ${p.variants.length} variant${p.variants.length === 1 ? "" : "s"}` : ""}
                             </span>
                           </span>
-                        </button>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        </Button>
+                      </TableCell>
+                      <TableCell>
                         <div>{p.category || "—"}</div>
-                        {p.brandName && <div className="text-xs text-dash-muted">{p.brandName}</div>}
-                        {sup && <div className="text-xs text-dash-muted">{sup}</div>}
-                      </td>
-                      {seeCost && <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums text-dash-muted">
+                        {p.brandName && <div className="text-xs text-muted-foreground">{p.brandName}</div>}
+                        {sup && <div className="text-xs text-muted-foreground">{sup}</div>}
+                      </TableCell>
+                      {seeCost && <TableCell className="text-right tabular-nums text-muted-foreground">
                         {p.costPrice ? money(p.costPrice) : "—"}
-                      </td>}
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">
+                      </TableCell>}
+                      <TableCell className="text-right font-bold tabular-nums">
                         {money(offer ?? p.salePrice)}
                         {offer !== null && (
-                          <div className="text-xs font-normal text-dash-muted">
+                          <div className="text-xs font-normal text-muted-foreground">
                             <span className="line-through">{money(p.salePrice)}</span>{" "}
-                            <span className="font-semibold text-dash-warn-fg">
+                            <span className="font-semibold text-foreground">
                               {p.offerType === "percentage" ? `${p.offerPrice}% off` : `${money(p.offerPrice!)} off`}
                             </span>
                           </div>
                         )}
-                      </td>
-                      {seeCost && <td className="border-b border-dash-border-soft px-2 py-3">
-                        {margin === null ? <span className="text-dash-muted/60">—</span> : (
-                          <span className={cn("rounded-md px-2 py-[3px] text-xs font-bold tabular-nums",
-                            margin >= 35 ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-warn-soft text-dash-warn-fg")}>
+                      </TableCell>
+                      {seeCost && <TableCell>
+                        {margin === null ? <span className="text-muted-foreground/60">—</span> : (
+                          <Badge variant={margin >= 35 ? "secondary" : "outline"} className="tabular-nums">
                             {margin}%
-                          </span>
+                          </Badge>
                         )}
-                      </td>}
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                      </TableCell>}
+                      <TableCell>
                         <div className="flex items-center gap-1.5 tabular-nums">
-                          <span className={cn("font-bold", st === "out" ? "text-dash-danger" : st === "low" ? "text-dash-warn-fg" : "")}>
+                          <span className={cn("font-bold", st === "out" && "text-destructive")}>
                             {st === "out" ? "Out of stock" : `${rowStock}${unit}`}
                           </span>
-                          {st === "low" && <span className="text-[11px] font-bold uppercase text-dash-warn-fg">Low</span>}
+                          {st === "low" && <StatusBadge status="low stock" label="Low" />}
                         </div>
-                        {rop > 0 && <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-dash-neutral-soft" aria-hidden>
-                          <div className={cn("h-full rounded-full", st === "out" ? "bg-dash-danger" : st === "low" ? "bg-dash-warn" : "bg-dash-success")}
-                            style={{ width: `${Math.min(100, Math.round((Math.max(0, rowStock) / (rop * 4)) * 100))}%` }} />
-                        </div>}
-                        <div className="mt-1 text-xs text-dash-muted tabular-nums">{rop > 0 ? `Reorder at ${rop}${unit}` : "No reorder alert"}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <button type="button" role="switch" aria-checked={p.published} aria-label={`Show ${p.name} online`}
+                        {rop > 0 && <Progress aria-hidden className="mt-1 h-1.5 w-24"
+                          value={Math.min(100, Math.round((Math.max(0, rowStock) / (rop * 4)) * 100))} />}
+                        <div className="mt-1 text-xs text-muted-foreground tabular-nums">{rop > 0 ? `Reorder at ${rop}${unit}` : "No reorder alert"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Switch checked={p.published} aria-label={`Show ${p.name} online`}
                           disabled={!canWrite("Products")}
-                          onClick={() => setPublished([p], !p.published)}
-                          className={cn("flex h-6 w-11 items-center rounded-full p-0.5 transition-colors disabled:opacity-50",
-                            p.published ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}>
-                          <span className="size-5 rounded-full bg-white shadow" />
-                        </button>
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                          onCheckedChange={() => setPublished([p], !p.published)} />
+                      </TableCell>
+                      <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <button type="button" aria-label={`View ${p.name}`} onClick={() => setViewing(p)} className={iconBtn}><Eye className="size-4" /></button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`View ${p.name}`} onClick={() => setViewing(p)}><Eye className="size-4" /></Button>
                           {canWrite("Products") && (
-                            <button type="button" aria-label={`Edit ${p.name}`} onClick={() => openForm(p)} className={iconBtn}><Pencil className="size-4" /></button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openForm(p)}><Pencil className="size-4" /></Button>
                           )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button type="button" aria-label={`More actions for ${p.name}`} className={iconBtn}><MoreHorizontal className="size-4" /></button>
+                              <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${p.name}`}><MoreHorizontal className="size-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setViewing(p)}>View details</DropdownMenuItem>
@@ -718,7 +718,7 @@ export default function ProductsPage() {
                               {canDelete("Products") && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-dash-danger focus:text-dash-danger" onClick={() => setDeleteTargets([p])}>
+                                  <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([p])}>
                                     <Trash2 className="size-4" /> Delete product
                                   </DropdownMenuItem>
                                 </>
@@ -726,19 +726,21 @@ export default function ProductsPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         )}
 
         {!(isLoading && items.length === 0) && filtered.length > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
-            <p className="mb-2 text-xs text-dash-muted tabular-nums">
+          <>
+          <Separator />
+          <div className="p-4 pt-3">
+            <p className="mb-2 text-xs text-muted-foreground tabular-nums">
               Showing {rows.length} of {filtered.length} products · Inventory value {money(kpi.value)} at cost
             </p>
             <PaginationControl
@@ -750,8 +752,9 @@ export default function ProductsPage() {
               onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
             />
           </div>
+          </>
         )}
-      </section>
+      </Card>
 
       <ProductFormDialog open={formOpen} editingProduct={editing} onClose={closeForm} />
 
@@ -765,18 +768,16 @@ export default function ProductsPage() {
           <div className="flex flex-col gap-3">
             <div role="radiogroup" aria-label="Change type" className="grid grid-cols-2 gap-2">
               {([["up", "Increase %"], ["down", "Decrease %"]] as const).map(([id, label]) => (
-                <button key={id} type="button" role="radio" aria-checked={priceMode === id} onClick={() => setPriceMode(id)}
-                  className={cn("h-10 rounded-[10px] border-2 text-[13px] font-semibold", priceMode === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{label}</button>
+                <Button key={id} type="button" variant={priceMode === id ? "default" : "outline"} role="radio" aria-checked={priceMode === id} onClick={() => setPriceMode(id)}>{label}</Button>
               ))}
             </div>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Percentage
-              <input type="number" min={0} step="any" value={priceValue} onChange={(e) => setPriceValue(e.target.value)} placeholder="e.g. 10"
-                className="h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent" />
-            </label>
+            <FormField label="Percentage" htmlFor="bulk-price-pct">
+              <Input id="bulk-price-pct" type="number" min={0} step="any" value={priceValue} onChange={(e) => setPriceValue(e.target.value)} placeholder="e.g. 10" />
+            </FormField>
           </div>
           <DialogFooter>
-            <button type="button" onClick={() => setPriceOpen(false)} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-            <button type="button" disabled={priceBusy} onClick={applyBulkPrice} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">{priceBusy ? "Updating…" : "Apply"}</button>
+            <Button type="button" variant="outline" onClick={() => setPriceOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={priceBusy} onClick={applyBulkPrice}>{priceBusy ? "Updating…" : "Apply"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -817,96 +818,90 @@ export default function ProductsPage() {
                 <DialogHeader>
                   <div className="flex items-start gap-3.5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={viewing.image || "/placeholder.svg"} alt="" className="size-20 shrink-0 rounded-xl bg-dash-bg object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }} />
+                    <UserAvatar shape="square" src={viewing.image || "/placeholder.svg"} alt="" name={viewing.name} className="size-20" />
                     <div className="min-w-0 text-left">
                       <DialogTitle className="font-dash-display text-xl font-bold">{viewing.name}</DialogTitle>
                       <DialogDescription className="line-clamp-2">{viewing.description || "No description."}</DialogDescription>
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        <span className={cn("rounded-md px-2 py-[3px] text-xs font-bold",
-                          st === "ok" ? "bg-dash-success-soft text-dash-success-fg" : st === "low" ? "bg-dash-warn-soft text-dash-warn-fg" : "bg-dash-danger-soft text-dash-danger-fg")}>
-                          {st === "ok" ? "In stock" : st === "low" ? "Low stock" : "Out of stock"}
-                        </span>
-                        <span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-bold text-dash-neutral-fg">
-                          {viewing.published ? "Online" : "Hidden online"}
-                        </span>
-                        {viewing.isBestSeller && <span className="rounded-md bg-dash-warn-soft px-2 py-[3px] text-xs font-bold text-dash-warn-fg">Best seller</span>}
-                        {viewing.isHotDeal && <span className="rounded-md bg-dash-danger-soft px-2 py-[3px] text-xs font-bold text-dash-danger-fg">Hot deal</span>}
-                        {viewing.tag && <span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-bold text-dash-neutral-fg">{viewing.tag}</span>}
-                        {viewing.isFeatured && <span className="rounded-md bg-dash-accent-soft px-2 py-[3px] text-xs font-bold text-dash-accent-fg">Featured</span>}
+                        <StatusBadge status={stockStatus(st)} label={st === "ok" ? "In stock" : st === "low" ? "Low stock" : "Out of stock"} />
+                        <Badge variant="outline">{viewing.published ? "Online" : "Hidden online"}</Badge>
+                        {viewing.isBestSeller && <Badge variant="secondary">Best seller</Badge>}
+                        {viewing.isHotDeal && <Badge variant="destructive">Hot deal</Badge>}
+                        {viewing.tag && <Badge variant="outline">{viewing.tag}</Badge>}
+                        {viewing.isFeatured && <Badge>Featured</Badge>}
                       </div>
                     </div>
                   </div>
                 </DialogHeader>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <InfoList className="grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
                   {info.map(([k, v]) => (
-                    <div key={k} className="rounded-[10px] bg-dash-bg p-3">
-                      <div className="text-xs text-dash-muted">{k}</div>
-                      <div className="truncate text-sm font-bold tabular-nums">{v}</div>
-                    </div>
+                    <InfoRow key={k} layout="stacked" className="min-w-0" label={<span className="text-xs">{k}</span>}
+                      value={<span className="block truncate tabular-nums">{v}</span>} />
                   ))}
-                </div>
+                </InfoList>
                 {(viewing.gallery?.length ?? 0) > 1 && (
                   <div className="flex gap-2 overflow-x-auto">
                     {viewing.gallery!.map((src, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img key={i} src={src} alt="" className="size-16 shrink-0 rounded-[10px] bg-dash-bg object-cover"
+                      <img key={i} src={src} alt="" className="size-16 shrink-0 rounded-md bg-muted object-cover"
                         onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }} />
                     ))}
                   </div>
                 )}
                 {viewing.isBundle && (viewing.bundleItems?.length ?? 0) > 0 && (
                   <div>
-                    <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.06em] text-dash-muted">Bundle contents</h3>
-                    <div className="flex flex-col rounded-[10px] border border-dash-border">
-                      {viewing.bundleItems!.map((bi, i) => (
-                        <div key={bi.id ?? i} className="flex items-center justify-between gap-3 border-b border-dash-border-soft px-3 py-2 text-sm last:border-0">
-                          <span className="font-semibold">{bi.productName}{bi.variantName ? ` · ${bi.variantName}` : ""}</span>
-                          <span className="text-dash-muted tabular-nums">× {bi.quantity}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <SectionTitle className="mb-2">Bundle contents</SectionTitle>
+                    <Card className="gap-0 py-0">
+                      <ItemGroup>
+                        {viewing.bundleItems!.map((bi, i) => (
+                          <Fragment key={bi.id ?? i}>
+                            {i > 0 && <ItemSeparator />}
+                            <Item role="listitem" size="sm" className="justify-between">
+                              <ItemTitle>{bi.productName}{bi.variantName ? ` · ${bi.variantName}` : ""}</ItemTitle>
+                              <span className="text-muted-foreground tabular-nums">× {bi.quantity}</span>
+                            </Item>
+                          </Fragment>
+                        ))}
+                      </ItemGroup>
+                    </Card>
                   </div>
                 )}
                 {viewing.variants && viewing.variants.length > 0 && (
                   <div>
-                    <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.06em] text-dash-muted">Variants ({viewing.variants.length})</h3>
-                    <div className="overflow-x-auto rounded-[10px] border border-dash-border">
-                      <table className="w-full min-w-[460px] border-collapse text-sm">
-                        <thead>
-                          <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                            <th scope="col" className="px-3 py-2 font-semibold">Variant</th>
-                            <th scope="col" className="px-3 py-2 font-semibold">SKU</th>
-                            <th scope="col" className="px-3 py-2 text-right font-semibold">Price</th>
-                            <th scope="col" className="px-3 py-2 text-right font-semibold">Stock</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    <SectionTitle className="mb-2">Variants ({viewing.variants.length})</SectionTitle>
+                    <Card className="gap-0 overflow-x-auto py-0">
+                      <Table className="min-w-[460px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead scope="col">Variant</TableHead>
+                            <TableHead scope="col">SKU</TableHead>
+                            <TableHead scope="col" className="text-right">Price</TableHead>
+                            <TableHead scope="col" className="text-right">Stock</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {viewing.variants.map((v) => (
-                            <tr key={v.id}>
-                              <td className="border-t border-dash-border-soft px-3 py-2 font-semibold">{v.name}</td>
-                              <td className="border-t border-dash-border-soft px-3 py-2 text-dash-muted">{v.sku || "—"}</td>
-                              <td className="border-t border-dash-border-soft px-3 py-2 text-right tabular-nums">{money(v.salePrice || v.price)}</td>
-                              <td className={cn("border-t border-dash-border-soft px-3 py-2 text-right font-bold tabular-nums", v.stock <= 0 && "text-dash-danger")}>{v.stock}</td>
-                            </tr>
+                            <TableRow key={v.id}>
+                              <TableCell className="font-semibold">{v.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{v.sku || "—"}</TableCell>
+                              <TableCell className="text-right tabular-nums">{money(v.salePrice || v.price)}</TableCell>
+                              <TableCell className={cn("text-right font-bold tabular-nums", v.stock <= 0 && "text-destructive")}>{v.stock}</TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        </TableBody>
+                      </Table>
+                    </Card>
                   </div>
                 )}
                 <DialogFooter>
-                  <button type="button" onClick={() => setViewing(null)}
-                    className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Close</button>
-                  <button type="button" onClick={() => printBarcodes([viewing])}
-                    className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">
+                  <Button type="button" variant="outline" onClick={() => setViewing(null)}>Close</Button>
+                  <Button type="button" variant="outline" onClick={() => printBarcodes([viewing])}>
                     <Printer className="size-4" aria-hidden /> Print barcode
-                  </button>
+                  </Button>
                   {canWrite("Products") && (
-                    <button type="button" onClick={() => { const p = viewing; setViewing(null); openForm(p) }}
-                      className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+                    <Button type="button" onClick={() => { const p = viewing; setViewing(null); openForm(p) }}>
                       <Pencil className="size-4" aria-hidden /> Edit product
-                    </button>
+                    </Button>
                   )}
                 </DialogFooter>
               </>
@@ -925,32 +920,42 @@ export default function ProductsPage() {
               Category, brand, supplier and unit are matched by name. Opening stock goes to the default warehouse. Invalid rows are skipped and listed.
             </DialogDescription>
           </DialogHeader>
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleImport} disabled={importBusy}
-            className="block w-full rounded-[10px] border border-dashed border-dash-border bg-dash-bg p-4 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-dash-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white" />
-          {importBusy && <p className="text-sm text-dash-muted">Importing…</p>}
+          <Input ref={fileRef} type="file" accept=".csv" onChange={handleImport} disabled={importBusy} aria-label="CSV file" className="w-full" />
+          {importBusy && <p className="text-sm text-muted-foreground">Importing…</p>}
           {importResult && (
             <div className="flex flex-col gap-2">
               <p className="text-sm font-semibold">Imported {importResult.imported}, skipped {importResult.skipped.length}</p>
               {(importResult.warnings?.length ?? 0) > 0 && (
-                <ul className="max-h-32 overflow-y-auto rounded-[10px] border border-dash-border bg-dash-warn-soft text-xs text-dash-warn-fg">
-                  {importResult.warnings!.map((w, i) => <li key={i} className="px-3 py-1.5">Row {w.row}: {w.message}</li>)}
-                </ul>
+                <Alert>
+                  <AlertTriangle />
+                  <AlertDescription>
+                    <ul className="max-h-32 w-full space-y-1 overflow-y-auto text-xs">
+                      {importResult.warnings!.map((w, i) => <li key={i}>Row {w.row}: {w.message}</li>)}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
               )}
               {importResult.skipped.length > 0 && (
-                <ul className="max-h-48 overflow-y-auto rounded-[10px] border border-dash-border text-sm">
-                  {importResult.skipped.map((r, i) => (
-                    <li key={i} className="border-b border-dash-border-soft px-3 py-2 last:border-0">
-                      <span className="font-semibold">Row {r.row}{r.name ? ` · ${r.name}` : ""}</span>
-                      <span className="block text-xs text-dash-muted">{r.reason}</span>
-                    </li>
-                  ))}
-                </ul>
+                <Card className="max-h-48 gap-0 overflow-y-auto py-0">
+                  <ItemGroup>
+                    {importResult.skipped.map((r, i) => (
+                      <Fragment key={i}>
+                        {i > 0 && <ItemSeparator />}
+                        <Item role="listitem" size="sm">
+                          <ItemContent className="gap-0.5">
+                            <ItemTitle>Row {r.row}{r.name ? ` · ${r.name}` : ""}</ItemTitle>
+                            <ItemDescription className="text-xs">{r.reason}</ItemDescription>
+                          </ItemContent>
+                        </Item>
+                      </Fragment>
+                    ))}
+                  </ItemGroup>
+                </Card>
               )}
             </div>
           )}
           <DialogFooter>
-            <button type="button" onClick={() => setImportOpen(false)}
-              className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Close</button>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -965,35 +970,34 @@ export default function ProductsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Location
+            <FormField label="Location" htmlFor="adjust-loc">
               <Select value={adjustLoc} onValueChange={setAdjustLoc}>
-                <SelectTrigger aria-label="Location" className={cn(filterSelect, "w-full")}><SelectValue placeholder="Select location" /></SelectTrigger>
+                <SelectTrigger id="adjust-loc" aria-label="Location" className="w-full"><SelectValue placeholder="Select location" /></SelectTrigger>
                 <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
               </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Quantity change
-              <input type="number" step={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} placeholder="e.g. 5 to add, -3 to remove"
-                className="h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent" />
-            </label>
+            </FormField>
+            <FormField label="Quantity change" htmlFor="adjust-qty">
+              <Input id="adjust-qty" type="number" step={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} placeholder="e.g. 5 to add, -3 to remove" />
+            </FormField>
             {adjustTargets.length === 1 && adjustTargets[0].variants && adjustTargets[0].variants.length > 0 && (
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Variant
+              <FormField label="Variant" htmlFor="adjust-variant">
                 <Select value={adjustVariant} onValueChange={setAdjustVariant}>
-                  <SelectTrigger aria-label="Variant" className={cn(filterSelect, "w-full")}><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="adjust-variant" aria-label="Variant" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>{adjustTargets[0].variants.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
                 </Select>
-              </label>
+              </FormField>
             )}
             {adjustTargets.length === 1 && adjustLoc && !adjustTargets[0].variants?.length && (
-              <p className="text-xs text-dash-muted tabular-nums">
+              <p className="text-xs text-muted-foreground tabular-nums">
                 Now {qtyAt(adjustTargets[0], adjustLoc)}
                 {Number.isInteger(Number(adjustQty)) && adjustQty !== "" ? ` → ${qtyAt(adjustTargets[0], adjustLoc) + Number(adjustQty)}` : ""}
               </p>
             )}
-            {adjustTargets.length > 1 && <p className="text-xs text-dash-muted">Bundles are skipped, and products with variants must be adjusted one at a time.</p>}
+            {adjustTargets.length > 1 && <p className="text-xs text-muted-foreground">Bundles are skipped, and products with variants must be adjusted one at a time.</p>}
           </div>
           <DialogFooter>
-            <button type="button" disabled={adjustBusy} onClick={() => setAdjustTargets([])} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-            <button type="button" disabled={adjustBusy} onClick={applyAdjust} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">{adjustBusy ? "Saving…" : "Apply"}</button>
+            <Button type="button" variant="outline" disabled={adjustBusy} onClick={() => setAdjustTargets([])}>Cancel</Button>
+            <Button type="button" disabled={adjustBusy} onClick={applyAdjust}>{adjustBusy ? "Saving…" : "Apply"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1007,7 +1011,7 @@ export default function ProductsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmDelete() }} disabled={deleting} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmDelete() }} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

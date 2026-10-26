@@ -5,13 +5,20 @@ import { useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Printer, Eye, Download, Mail, ShoppingBag } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePagination } from "@/hooks/use-pagination"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { StatusBadge } from "@/components/ui/status-badge"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { PageHeader } from "@/components/common/PageHeader"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
@@ -485,9 +492,7 @@ export default function SellsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-900">Sells</h1>
-            </div>
+            <PageHeader title="Sells" />
 
             <Card className="p-6">
                 <div className="space-y-4 mb-6">
@@ -552,16 +557,16 @@ export default function SellsPage() {
                             </SelectContent>
                         </Select>
 
-                        <Button onClick={handleDownloadAllSells} className="bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap">
-                            <Download className="w-4 h-4 mr-2" />
+                        <Button onClick={handleDownloadAllSells} className="whitespace-nowrap">
+                            <Download className="size-4" />
                             Download All Sells
                         </Button>
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-4">
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                        <FormField label="Start Date" htmlFor="sells-start-date" className="flex-1">
                             <Input
+                                id="sells-start-date"
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => {
@@ -569,11 +574,11 @@ export default function SellsPage() {
                                     handleFilterChange()
                                 }}
                             />
-                        </div>
+                        </FormField>
 
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                        <FormField label="End Date" htmlFor="sells-end-date" className="flex-1">
                             <Input
+                                id="sells-end-date"
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => {
@@ -581,10 +586,10 @@ export default function SellsPage() {
                                     handleFilterChange()
                                 }}
                             />
-                        </div>
+                        </FormField>
 
                         <div className="flex items-end gap-2">
-                            <Button onClick={() => { }} className="bg-emerald-600 hover:bg-emerald-700">
+                            <Button onClick={() => { }}>
                                 Filter
                             </Button>
                             <Button onClick={handleReset} variant="outline">
@@ -594,66 +599,65 @@ export default function SellsPage() {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b bg-gray-50">
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice No</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Sell Time</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer Name</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Method</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Amount</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Action</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Invoice No</TableHead>
+                                <TableHead>Sell Time</TableHead>
+                                <TableHead>Customer Name</TableHead>
+                                <TableHead>Method</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Action</TableHead>
+                                <TableHead>Invoice</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {isLoading
                                 ? Array.from({ length: 3 }).map((_, index) => (
-                                    <tr key={index} className="border-b last:border-0 hover:bg-gray-50">
-                                        <td className="py-3 px-4">
+                                    <TableRow key={index}>
+                                        <TableCell>
                                             <Skeleton className="h-4 w-12" />
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
                                             <Skeleton className="h-4 w-32" />
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
                                             <Skeleton className="h-4 w-24" />
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
                                             <Skeleton className="h-4 w-16" />
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
                                             <Skeleton className="h-4 w-16" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-6 w-16 rounded-full" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-8 w-32 rounded" />
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
+                                            <Skeleton className="h-6 w-16" />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Skeleton className="h-8 w-32" />
+                                        </TableCell>
+                                        <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Skeleton className="h-8 w-8 rounded" />
-                                                <Skeleton className="h-8 w-8 rounded" />
+                                                <Skeleton className="size-8" />
+                                                <Skeleton className="size-8" />
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))
                                 : currentSells.map((sell) => (
-                                    <tr key={sell.invoiceNo} className="border-b last:border-0 hover:bg-gray-50">
-                                        <td className="py-3 px-4">
-                                            <span className="font-semibold text-gray-900">{sell.invoiceNo}</span>
-                                        </td>
-                                        <td className="py-3 px-4 text-sm text-gray-600">{sell.orderTime}</td>
-                                        <td className="py-3 px-4 text-sm text-gray-900">{sell.customerName}</td>
-                                        <td className="py-3 px-4 text-sm text-gray-900">{sell.method}</td>
-                                        <td className="py-3 px-4 text-sm font-semibold text-gray-900">{formatCurrency(sell.amount)}</td>
-                                        <td className="py-3 px-4">
+                                    <TableRow key={sell.invoiceNo}>
+                                        <TableCell>
+                                            <span className="font-semibold">{sell.invoiceNo}</span>
+                                        </TableCell>
+                                        <TableCell>{sell.orderTime}</TableCell>
+                                        <TableCell>{sell.customerName}</TableCell>
+                                        <TableCell>{sell.method}</TableCell>
+                                        <TableCell>{formatCurrency(sell.amount)}</TableCell>
+                                        <TableCell>
                                             <StatusBadge status={sell.status} />
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
                                             <Select
                                                 value={sell.status}
                                                 onValueChange={(value) => handleStatusChange(sell.invoiceNo, value as Sell["status"])}
@@ -667,27 +671,28 @@ export default function SellsPage() {
                                                     <SelectItem value="Pending">Pending</SelectItem>
                                                 </SelectContent>
                                             </Select>
-                                        </td>
-                                        <td className="py-3 px-4">
+                                        </TableCell>
+                                        <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handlePrintInvoice(sell)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600">
-                                                    <Printer className="w-4 h-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="sm" onClick={() => handleViewDetails(sell)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600">
-                                                    <Eye className="w-4 h-4" />
-                                                </Button>
+                                                <WithTooltip content="Print invoice">
+                                                    <Button variant="ghost" size="icon" aria-label={`Print invoice ${sell.invoiceNo}`} onClick={() => handlePrintInvoice(sell)}>
+                                                        <Printer className="size-4" />
+                                                    </Button>
+                                                </WithTooltip>
+                                                <WithTooltip content="View details">
+                                                    <Button variant="ghost" size="icon" aria-label={`View ${sell.invoiceNo}`} onClick={() => handleViewDetails(sell)}>
+                                                        <Eye className="size-4" />
+                                                    </Button>
+                                                </WithTooltip>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableBody>
+                    </Table>
 
                 {filteredSells.length === 0 && (
-                    <div className="text-center py-12">
-                        <p className="text-gray-500">No sells found</p>
-                    </div>
+                    <EmptyState title="No sells found" className="p-4 md:p-6" />
                 )}
             </Card>
 
@@ -703,7 +708,7 @@ export default function SellsPage() {
             <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
                 <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-bold">Invoice</DialogTitle>
+                        <DialogTitle>Invoice</DialogTitle>
                     </DialogHeader>
 
                     {selectedSell && (
@@ -713,119 +718,119 @@ export default function SellsPage() {
                                 <div>
                                     <h1 className="text-4xl font-bold mb-3">INVOICE</h1>
                                     <div className="flex items-center gap-3">
-                                        <span className="font-semibold text-gray-700">STATUS</span>
+                                        <span className="font-semibold text-muted-foreground">STATUS</span>
                                         <StatusBadge status={selectedSell.status} />
                                     </div>
                                 </div>
                                 <div className="text-right">
                                     <div className="flex items-center gap-2 justify-end mb-2">
-                                        <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                                            <ShoppingBag className="w-5 h-5 text-white" />
-                                        </div>
-                                        <span className="text-2xl font-bold text-emerald-600">Admin</span>
+                                        <UserAvatar shape="square" name="Admin" className="size-8" fallback={<ShoppingBag className="size-5" />} />
+                                        <span className="text-2xl font-bold">Admin</span>
                                     </div>
-                                    <p className="text-sm text-gray-600">59 Station Rd, Purls Bridge, United Kingdom</p>
-                                    <p className="text-sm text-gray-600">019579034</p>
-                                    <p className="text-sm text-gray-600">kachabazar@gmail.com</p>
-                                    <p className="text-sm text-gray-600">kachabazar-admin.vercel.app</p>
+                                    <p className="text-sm text-muted-foreground">59 Station Rd, Purls Bridge, United Kingdom</p>
+                                    <p className="text-sm text-muted-foreground">019579034</p>
+                                    <p className="text-sm text-muted-foreground">kachabazar@gmail.com</p>
+                                    <p className="text-sm text-muted-foreground">kachabazar-admin.vercel.app</p>
                                 </div>
                             </div>
 
                             {/* Invoice Meta */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                                 <div>
-                                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Date</h3>
-                                    <p className="text-sm text-gray-900">
+                                    <SectionTitle className="mb-2">Date</SectionTitle>
+                                    <p className="text-sm text-foreground">
                                         {selectedSell.orderTime.split(" ")[0]} {selectedSell.orderTime.split(" ")[1]}{" "}
                                         {selectedSell.orderTime.split(" ")[2]}
                                     </p>
                                 </div>
                                 <div>
-                                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice No</h3>
-                                    <p className="text-sm text-gray-900">#{selectedSell.invoiceNo}</p>
+                                    <SectionTitle className="mb-2">Invoice No</SectionTitle>
+                                    <p className="text-sm text-foreground">#{selectedSell.invoiceNo}</p>
                                 </div>
                                 <div className="sm:text-right">
-                                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice To</h3>
-                                    <p className="text-sm font-semibold text-gray-900">{selectedSell.customerName}</p>
-                                    <p className="text-xs text-gray-600">hram8251@gmail.com</p>
-                                    <p className="text-xs text-gray-600">123456789</p>
-                                    <p className="text-xs text-gray-600">state, cuntyre, 1235</p>
+                                    <SectionTitle className="mb-2">Invoice To</SectionTitle>
+                                    <p className="text-sm font-semibold text-foreground">{selectedSell.customerName}</p>
+                                    <p className="text-xs text-muted-foreground">hram8251@gmail.com</p>
+                                    <p className="text-xs text-muted-foreground">123456789</p>
+                                    <p className="text-xs text-muted-foreground">state, cuntyre, 1235</p>
                                 </div>
                             </div>
 
                             {/* Products Table */}
-                            <div className="border rounded-lg overflow-x-auto">
-                                <table className="w-full min-w-[600px]">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">SR.</th>
-                                            <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">
+                            <Card className="gap-0 overflow-x-auto py-0">
+                                <Table className="min-w-[600px]">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>SR.</TableHead>
+                                            <TableHead>
                                                 Product Title
-                                            </th>
-                                            <th className="text-center py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Quantity</th>
-                                            <th className="text-right py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Item Price</th>
-                                            <th className="text-right py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr className="border-t">
-                                            <td className="py-5 px-4 text-sm text-gray-900">1</td>
-                                            <td className="py-5 px-4 text-sm text-gray-900">Fresh Mustard Oil</td>
-                                            <td className="py-5 px-4 text-sm text-center text-gray-900">1</td>
-                                            <td className="py-5 px-4 text-sm text-right text-gray-900">
+                                            </TableHead>
+                                            <TableHead className="text-center">Quantity</TableHead>
+                                            <TableHead className="text-right">Item Price</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell>1</TableCell>
+                                            <TableCell>Fresh Mustard Oil</TableCell>
+                                            <TableCell className="text-center">1</TableCell>
+                                            <TableCell className="text-right">
                                                 {formatCurrency(selectedSell.amount - 60)}
-                                            </td>
-                                            <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">
+                                            </TableCell>
+                                            <TableCell className="text-right">
                                                 {formatCurrency(selectedSell.amount - 60)}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </Card>
 
                             {/* Summary Section */}
-                            <div className="bg-gray-50 p-6 rounded-lg">
+                            <Card className="p-6">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
                                     <div>
-                                        <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Payment Method</h3>
-                                        <p className="text-base font-semibold text-gray-900">{selectedSell.method}</p>
+                                        <SectionTitle className="mb-2">Payment Method</SectionTitle>
+                                        <p className="text-base font-semibold text-foreground">{selectedSell.method}</p>
                                     </div>
                                     <div>
-                                        <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Shipping Cost</h3>
-                                        <p className="text-base font-semibold text-gray-600">{formatCurrency(60)}</p>
+                                        <SectionTitle className="mb-2">Shipping Cost</SectionTitle>
+                                        <p className="text-base font-semibold text-muted-foreground">{formatCurrency(60)}</p>
                                     </div>
                                     <div>
-                                        <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Discount</h3>
-                                        <p className="text-base font-semibold text-gray-600">{formatCurrency(0)}</p>
+                                        <SectionTitle className="mb-2">Discount</SectionTitle>
+                                        <p className="text-base font-semibold text-muted-foreground">{formatCurrency(0)}</p>
                                     </div>
                                     <div>
-                                        <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Total Amount</h3>
-                                        <p className="text-2xl font-bold text-red-600">{formatCurrency(selectedSell.amount)}</p>
+                                        <SectionTitle className="mb-2">Total Amount</SectionTitle>
+                                        <p className="text-2xl font-bold">{formatCurrency(selectedSell.amount)}</p>
                                     </div>
                                 </div>
-                            </div>
+                            </Card>
 
                             {/* Action Buttons */}
                             <div className="flex flex-col sm:flex-row gap-3 pt-4">
                                 <Button
                                     onClick={() => handleDownloadInvoice(selectedSell)}
-                                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                                    variant="outline"
+                                    className="flex-1"
                                 >
-                                    <Download className="w-4 h-4 mr-2" />
+                                    <Download className="size-4" />
                                     Download Invoice
                                 </Button>
                                 <Button
                                     onClick={() => handleEmailInvoice(selectedSell)}
-                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    variant="outline"
+                                    className="flex-1"
                                 >
-                                    <Mail className="w-4 h-4 mr-2" />
+                                    <Mail className="size-4" />
                                     Email Invoice
                                 </Button>
                                 <Button
                                     onClick={() => handlePrintInvoice(selectedSell)}
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                    className="flex-1"
                                 >
-                                    <Printer className="w-4 h-4 mr-2" />
+                                    <Printer className="size-4" />
                                     Print Invoice
                                 </Button>
                             </div>

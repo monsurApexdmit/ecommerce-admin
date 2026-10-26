@@ -16,6 +16,21 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "@/components/ui/field"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 type Tab = "all" | "rec" | "salary" | "manual"
 type Period = "month" | "last" | "d30" | "year" | "all" | "custom"
@@ -25,10 +40,7 @@ const EVERY = ["Week", "Month", "Quarter", "Year"]
 const PERIODS: [Period, string][] = [["month", "This month"], ["last", "Last month"], ["d30", "Last 30 days"], ["year", "This year"], ["all", "All time"], ["custom", "Custom range"]]
 const PALETTE = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const filterSelCls = "h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
+const NONE = "__none"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -256,20 +268,18 @@ export default function ExpensesPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Expenses</h1>
-          <p className="mt-1 text-sm text-dash-muted">Track every taka going out — rent, bills, salaries — and see what is left as profit.</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={exportCsv} disabled={exporting} className={cn(outlineBtn, "disabled:opacity-50")}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}</button>
-          <button type="button" onClick={() => startEdit(null)} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white"><Plus className="size-4" aria-hidden /> New expense</button>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
+      <PageHeader
+        title="Expenses"
+        description="Track every taka going out — rent, bills, salaries — and see what is left as profit."
+        actions={<>
+          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}</Button>
+          <Button type="button" onClick={() => startEdit(null)}><Plus className="size-4" aria-hidden /> New expense</Button>
+        </>}
+      />
 
       {!stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
           { label: "Spent this month", value: formatCurrency(stats.spentThisMonth), icon: <Wallet className="size-4" />, color: "yellow",
@@ -287,34 +297,32 @@ export default function ExpensesPage() {
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <div className="flex w-full min-w-0 flex-1 flex-col gap-5">
           <div className="grid gap-5 lg:grid-cols-2">
-            <section className="rounded-[14px] border border-dash-border bg-dash-card p-5">
-              <h2 className="font-dash-display text-base font-bold">Where the money went · {win.label}</h2>
-              {byCat.length === 0 ? <p className="py-6 text-sm text-dash-muted">No expenses in this period.</p> : (
-                <div className="mt-3 flex flex-col gap-3">
+            <SectionCard title={`Where the money went · ${win.label}`}>
+              {byCat.length === 0 ? <p className="py-6 text-sm text-muted-foreground">No expenses in this period.</p> : (
+                <div className="flex flex-col gap-3">
                   {byCat.slice(0, 6).map((b, i) => (
                     <div key={`${b.categoryId}-${b.name}`} className="flex flex-col gap-1.5">
-                      <div className="flex justify-between text-[13px]"><span className="font-semibold">{b.name}</span><span className="tabular-nums text-dash-muted">{formatCurrency(b.amount)} · {Math.round(b.pct)}%</span></div>
-                      <div className="h-2 overflow-hidden rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.round(b.pct))}%`, background: b.color || PALETTE[i % PALETTE.length] }} /></div>
+                      <div className="flex justify-between text-sm"><span className="font-medium">{b.name}</span><span className="tabular-nums text-muted-foreground">{formatCurrency(b.amount)} · {Math.round(b.pct)}%</span></div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.round(b.pct))}%`, background: b.color || PALETTE[i % PALETTE.length] }} /></div>
                     </div>
                   ))}
                 </div>
               )}
-            </section>
-            <section className="rounded-[14px] border border-dash-border bg-dash-card p-5">
-              <h2 className="font-dash-display text-base font-bold">Last 6 months</h2>
-              <div className="mt-4 flex h-[150px] items-end gap-2">
+            </SectionCard>
+            <SectionCard title="Last 6 months">
+              <div className="flex h-[150px] items-end gap-2">
                 {trend.map((t) => (
                   <div key={t.month} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
-                    <span className="text-[10px] font-semibold tabular-nums text-dash-muted">{t.amount ? formatCurrency(t.amount).replace(/\.00$/, "") : ""}</span>
-                    <div className="w-full rounded-t-md bg-dash-accent" style={{ height: `${Math.max(2, Math.round((t.amount / trendMax) * 110))}px` }} />
+                    <span className="text-[10px] font-medium tabular-nums text-muted-foreground">{t.amount ? formatCurrency(t.amount).replace(/\.00$/, "") : ""}</span>
+                    <div className="w-full rounded-t-md bg-primary" style={{ height: `${Math.max(2, Math.round((t.amount / trendMax) * 110))}px` }} />
                   </div>
                 ))}
               </div>
-              <div className="mt-1.5 flex gap-2">{trend.map((t) => <span key={t.month} className="min-w-0 flex-1 text-center text-[11px] text-dash-muted">{t.label}</span>)}</div>
-            </section>
+              <div className="mt-1.5 flex gap-2">{trend.map((t) => <span key={t.month} className="min-w-0 flex-1 text-center text-[11px] text-muted-foreground">{t.label}</span>)}</div>
+            </SectionCard>
           </div>
 
-          <section className="rounded-[14px] border border-dash-border bg-dash-card">
+          <Card className="gap-0 py-0">
             <div className="px-4">
               <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }} tabs={[
                 { value: "all", label: "All", count: counts.all }, { value: "rec", label: "Recurring", count: counts.rec },
@@ -322,144 +330,168 @@ export default function ExpensesPage() {
               ]} />
             </div>
             <div className="flex flex-wrap items-center gap-2.5 p-4">
-              <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-                <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search expenses</span>
-                <input type="search" placeholder="Search title, note, category, paid to or reference…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
-                  className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-              </label>
-              <select aria-label="Category" className={filterSelCls} value={fCat} onChange={(e) => { setFCat(e.target.value); setPage(1) }}><option value="all">Category: All</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-              <select aria-label="Paid from" className={filterSelCls} value={fMethod} onChange={(e) => { setFMethod(e.target.value); setPage(1) }}><option value="all">Paid from: All</option>{METHODS.map((m) => <option key={m}>{m}</option>)}</select>
-              <select aria-label="Location" className={filterSelCls} value={fLoc} onChange={(e) => { setFLoc(e.target.value); setPage(1) }}><option value="all">Location: All</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
-              <select aria-label="Supplier" className={filterSelCls} value={fVendor} onChange={(e) => { setFVendor(e.target.value); setPage(1) }}><option value="all">Supplier: All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
-              <select aria-label="Period" className={filterSelCls} value={period} onChange={(e) => { setPeriod(e.target.value as Period); setPage(1) }}>{PERIODS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}</select>
+              <div className="relative min-w-[220px] flex-1">
+                <Label htmlFor="expense-search" className="sr-only">Search expenses</Label>
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input id="expense-search" type="search" placeholder="Search title, note, category, paid to or reference…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
+                  className="pl-9" />
+              </div>
+              <Select value={fCat} onValueChange={(v) => { setFCat(v); setPage(1) }}>
+                <SelectTrigger aria-label="Category"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Category: All</SelectItem>{cats.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={fMethod} onValueChange={(v) => { setFMethod(v); setPage(1) }}>
+                <SelectTrigger aria-label="Paid from"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Paid from: All</SelectItem>{METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={fLoc} onValueChange={(v) => { setFLoc(v); setPage(1) }}>
+                <SelectTrigger aria-label="Location"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Location: All</SelectItem>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={fVendor} onValueChange={(v) => { setFVendor(v); setPage(1) }}>
+                <SelectTrigger aria-label="Supplier"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Supplier: All</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={period} onValueChange={(v) => { setPeriod(v as Period); setPage(1) }}>
+                <SelectTrigger aria-label="Period"><SelectValue /></SelectTrigger>
+                <SelectContent>{PERIODS.map(([id, l]) => <SelectItem key={id} value={id}>{l}</SelectItem>)}</SelectContent>
+              </Select>
               {period === "custom" && (
                 <>
-                  <input type="date" aria-label="From" className={filterSelCls} value={cFrom} onChange={(e) => { setCFrom(e.target.value); setPage(1) }} />
-                  <input type="date" aria-label="To" className={filterSelCls} value={cTo} onChange={(e) => { setCTo(e.target.value); setPage(1) }} />
+                  <Input type="date" aria-label="From" className="w-auto" value={cFrom} onChange={(e) => { setCFrom(e.target.value); setPage(1) }} />
+                  <Input type="date" aria-label="To" className="w-auto" value={cTo} onChange={(e) => { setCTo(e.target.value); setPage(1) }} />
                 </>
               )}
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse text-sm">
-                <thead>
-                  <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                    <th className="py-3 pl-4 pr-2 font-semibold">Expense</th><th className="px-2 py-3 font-semibold">Category</th><th className="px-2 py-3 font-semibold">Date</th>
-                    <th className="px-2 py-3 font-semibold">Paid from</th><th className="px-2 py-3 text-right font-semibold">Amount</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={6} className="px-4 py-3"><Skeleton className="h-11 rounded" /></td></tr>) :
+              <Table className="min-w-[760px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Expense</TableHead><TableHead>Category</TableHead><TableHead>Date</TableHead>
+                    <TableHead>Paid from</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={6} className="px-4"><Skeleton className="h-11 rounded" /></TableCell></TableRow>) :
                     rows.length === 0 ? (
-                      <tr><td colSpan={6} className="py-14 text-center">
-                        <Wallet className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                        <p className="font-semibold">No expenses found</p>
-                        <p className="text-sm text-dash-muted">{hasFilter ? "Try clearing the filters." : "Record the first expense with the form."}</p>
-                      </td></tr>
+                      <TableRow><TableCell colSpan={6}>
+                        <EmptyState icon={Wallet} title="No expenses found" description={hasFilter ? "Try clearing the filters." : "Record the first expense with the form."} className="p-4 md:p-6" />
+                      </TableCell></TableRow>
                     ) : rows.map((r) => (
-                      <tr key={r.id} className={editing?.id === r.id ? "bg-dash-accent-soft/40" : ""}>
-                        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
-                          <div className="font-semibold">{r.title}{r.isRecurring && <span className="ml-2 rounded-full bg-dash-accent-soft px-2 py-px text-[11px] font-bold text-dash-accent-fg">↻ {String(r.recurringFrequency ?? "")}{r.recurringEndDate ? ` until ${fmtD(r.recurringEndDate)}` : ""}</span>}</div>
-                          <div className="text-xs text-dash-muted">{[r.vendorName ?? r.paidTo, r.referenceNo && `#${r.referenceNo}`].filter(Boolean).join(" · ") || "—"}</div>
-                          {r.notes && <div className="max-w-[260px] truncate text-xs text-dash-muted">{r.notes}</div>}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-dash-neutral-soft px-2.5 py-[3px] text-xs font-semibold">
+                      <TableRow key={r.id} data-state={editing?.id === r.id ? "selected" : undefined}>
+                        <TableCell className="pl-4">
+                          <div className="font-medium">{r.title}{r.isRecurring && <Badge variant="secondary" className="ml-2">↻ {String(r.recurringFrequency ?? "")}{r.recurringEndDate ? ` until ${fmtD(r.recurringEndDate)}` : ""}</Badge>}</div>
+                          <div className="text-xs text-muted-foreground">{[r.vendorName ?? r.paidTo, r.referenceNo && `#${r.referenceNo}`].filter(Boolean).join(" · ") || "—"}</div>
+                          {r.notes && <div className="max-w-[260px] truncate text-xs text-muted-foreground">{r.notes}</div>}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
                             <span className="size-2 rounded-full" style={{ background: r.categoryColor || catColor[r.expenseCategoryId] || PALETTE[0] }} />{r.categoryName ?? "—"}
-                          </span>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-dash-muted">{fmtD(r.expenseDate)}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">{r.paymentMethod || "—"}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">{formatCurrency(r.amount)}</td>
-                        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{fmtD(r.expenseDate)}</TableCell>
+                        <TableCell>{r.paymentMethod || "—"}</TableCell>
+                        <TableCell className="text-right font-bold tabular-nums">{formatCurrency(r.amount)}</TableCell>
+                        <TableCell className="pr-4">
                           <div className="flex justify-end gap-1">
-                            {r.locked || r.source === "salary" ? <span className="text-xs text-dash-muted">Paid via Salary</span> : (
+                            {r.locked || r.source === "salary" ? <span className="text-xs text-muted-foreground">Paid via Salary</span> : (
                               <>
-                                <button type="button" aria-label={`Edit ${r.title}`} className={iconBtn} onClick={() => startEdit(r)}><Pencil className="size-4" /></button>
-                                <button type="button" aria-label={`Delete ${r.title}`} className={iconBtn} onClick={() => remove(r)}><Trash2 className="size-4" /></button>
+                                <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button>
+                                <Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.title}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>
                               </>
                             )}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-            <div className="px-4 pt-3.5 text-[13px] text-dash-muted tabular-nums">{total} expenses · {formatCurrency(rowSum)}{total > rows.length ? " on this page" : ""}</div>
+            <div className="px-4 pt-3.5 pb-4 text-sm text-muted-foreground tabular-nums">{total} expenses · {formatCurrency(rowSum)}{total > rows.length ? " on this page" : ""}</div>
             {!loading && total > 0 && (
-              <div className="p-4 pt-3">
+              <div className="p-4 pt-0">
                 <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
                   onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
               </div>
             )}
-          </section>
+          </Card>
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[380px]">
-          <h2 className="font-dash-display text-lg font-bold">{editing ? "Edit expense" : "New expense"}</h2>
-          {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+        <aside className="w-full shrink-0 xl:w-[380px]">
+         <SectionCard title={editing ? "Edit expense" : "New expense"} contentClassName="flex flex-col gap-3.5">
+          {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
           {!editing && templates.length > 0 && (
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Repeat a recent expense
+            <FormField label="Repeat a recent expense">
               <div role="group" aria-label="Templates" className="flex flex-wrap gap-1.5">
                 {templates.map((t, i) => (
-                  <button key={i} type="button" onClick={() => applyTemplate(t)} className="h-8 rounded-full border border-dash-border bg-dash-card px-3 text-xs font-semibold hover:bg-dash-neutral-soft">{t.title}</button>
+                  <Button key={i} type="button" variant="outline" size="sm" onClick={() => applyTemplate(t)}>{t.title}</Button>
                 ))}
               </div>
-            </div>
+            </FormField>
           )}
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Amount *
-            <input type="number" min={0} step="any" className={input} value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0.00" /></label>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">What for *
-            <input className={input} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Shop rent" /></label>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Category *
+          <FormField label="Amount" required htmlFor="exp-amount">
+            <Input id="exp-amount" type="number" min={0} step="any" className="tabular-nums" value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0.00" /></FormField>
+          <FormField label="What for" required htmlFor="exp-title">
+            <Input id="exp-title" value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Shop rent" /></FormField>
+          <FormField label="Category" required>
             <div role="group" aria-label="Category" className="flex flex-wrap gap-1.5">
               {(editing && !cats.some((c) => c.id === editing.expenseCategoryId) ? [...cats, ...allCats.filter((c) => c.id === editing.expenseCategoryId)] : cats).map((c) => (
-                <button key={c.id} type="button" aria-pressed={form.categoryId === String(c.id)} onClick={() => set("categoryId", String(c.id))}
-                  className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", form.categoryId === String(c.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{c.name}{c.status === false ? " (inactive)" : ""}</button>
+                <Button key={c.id} type="button" size="sm" variant={form.categoryId === String(c.id) ? "default" : "outline"} aria-pressed={form.categoryId === String(c.id)} onClick={() => set("categoryId", String(c.id))}>{c.name}{c.status === false ? " (inactive)" : ""}</Button>
               ))}
-              <Link href="/dashboard/expenses/categories" className="inline-flex h-9 items-center px-2 text-[13px] font-semibold text-dash-accent hover:underline">+ New</Link>
+              <Button asChild variant="link" size="sm"><Link href="/dashboard/expenses/categories">+ New</Link></Button>
             </div>
-          </div>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Paid from *
+          </FormField>
+          <FormField label="Paid from" required>
             <div role="radiogroup" aria-label="Paid from" className="flex flex-wrap gap-1.5">
               {METHODS.map((m) => (
-                <button key={m} type="button" role="radio" aria-checked={form.method === m} onClick={() => set("method", m)}
-                  className={cn("h-9 rounded-[10px] border-2 px-3 text-[13px] font-semibold", form.method === m ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{m}</button>
+                <Button key={m} type="button" size="sm" variant={form.method === m ? "default" : "outline"} role="radio" aria-checked={form.method === m} onClick={() => set("method", m)}>{m}</Button>
               ))}
             </div>
-          </div>
+          </FormField>
           <div className="grid grid-cols-2 gap-2.5">
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Date *<input type="date" className={input} value={form.date} onChange={(e) => set("date", e.target.value)} /></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Paid to<input className={input} value={form.paidTo} onChange={(e) => set("paidTo", e.target.value)} placeholder="Vendor or person" /></label>
+            <FormField label="Date" required htmlFor="exp-date"><Input id="exp-date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></FormField>
+            <FormField label="Paid to" htmlFor="exp-paid-to"><Input id="exp-paid-to" value={form.paidTo} onChange={(e) => set("paidTo", e.target.value)} placeholder="Vendor or person" /></FormField>
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Supplier (optional)
-            <select className={input} value={form.vendorId} onChange={(e) => pickVendor(e.target.value)}><option value="">None</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
+          <FormField label="Supplier (optional)" htmlFor="exp-vendor">
+            <Select value={form.vendorId || NONE} onValueChange={(v) => pickVendor(v === NONE ? "" : v)}>
+              <SelectTrigger id="exp-vendor" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={NONE}>None</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+            </Select></FormField>
           <div className="grid grid-cols-2 gap-2.5">
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Location
-              <select className={input} value={form.locationId} onChange={(e) => set("locationId", e.target.value)}><option value="">All / none</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Reference / bill no.<input className={input} value={form.ref} onChange={(e) => set("ref", e.target.value)} placeholder="Optional" /></label>
+            <FormField label="Location" htmlFor="exp-location">
+              <Select value={form.locationId || NONE} onValueChange={(v) => set("locationId", v === NONE ? "" : v)}>
+                <SelectTrigger id="exp-location" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value={NONE}>All / none</SelectItem>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+              </Select></FormField>
+            <FormField label="Reference / bill no." htmlFor="exp-ref"><Input id="exp-ref" value={form.ref} onChange={(e) => set("ref", e.target.value)} placeholder="Optional" /></FormField>
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note
-            <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Optional" /></label>
-          <button type="button" role="switch" aria-checked={form.recurring} onClick={toggleRecurring}
-            className="flex items-center justify-between gap-3 rounded-xl border border-dash-border px-3.5 py-3 text-left">
-            <span className="flex flex-col"><span className="text-sm font-semibold">Repeats every month</span><span className="text-xs text-dash-muted">Marks it as a repeating bill</span></span>
-            <span className={cn("flex h-5 w-9 items-center rounded-full p-0.5", form.recurring ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}><span className="size-4 rounded-full bg-white" /></span>
-          </button>
+          <FormField label="Note" htmlFor="exp-note">
+            <Textarea id="exp-note" rows={2} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Optional" /></FormField>
+          <FieldLabel htmlFor="exp-recurring">
+            <Field orientation="horizontal">
+              <FieldContent><FieldTitle>Repeats every month</FieldTitle><FieldDescription>Marks it as a repeating bill</FieldDescription></FieldContent>
+              <Switch id="exp-recurring" checked={form.recurring} onCheckedChange={toggleRecurring} />
+            </Field>
+          </FieldLabel>
           {form.recurring && (
             <div className="grid gap-2.5 sm:grid-cols-3">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Every<select className={input} value={form.every} onChange={(e) => changeEvery(e.target.value)}>{EVERY.map((x) => <option key={x}>{x}</option>)}</select></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Next due<input type="date" className={input} value={form.nextDue} onChange={(e) => set("nextDue", e.target.value)} /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Stop repeating after<input type="date" className={input} value={form.recEnd} onChange={(e) => set("recEnd", e.target.value)} /></label>
+              <FormField label="Every" htmlFor="exp-every">
+                <Select value={form.every} onValueChange={(v) => changeEvery(v)}>
+                  <SelectTrigger id="exp-every" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{EVERY.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}</SelectContent>
+                </Select></FormField>
+              <FormField label="Next due" htmlFor="exp-next-due"><Input id="exp-next-due" type="date" value={form.nextDue} onChange={(e) => set("nextDue", e.target.value)} /></FormField>
+              <FormField label="Stop repeating after" htmlFor="exp-rec-end"><Input id="exp-rec-end" type="date" value={form.recEnd} onChange={(e) => set("recEnd", e.target.value)} /></FormField>
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => startEdit(null)} className={outlineBtn}>Clear</button>
-            <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+            <Button type="button" disabled={saving} onClick={save}>
               {saving ? "Saving…" : `${editing ? "Save changes" : "Save expense"}${amtVal > 0 ? ` · ${formatCurrency(amtVal)}` : ""}`}
-            </button>
+            </Button>
           </div>
+         </SectionCard>
         </aside>
       </div>
     </div>

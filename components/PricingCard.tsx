@@ -1,7 +1,10 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { SectionTitle } from "@/components/common/SectionTitle"
 import { Check } from "lucide-react"
 import { saasBillingApi, type Plan } from "@/lib/saasBillingApi"
 import { useState } from "react"
@@ -38,44 +41,32 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
 
   return (
     <Card
-      className={`relative flex flex-col h-full p-6 transition-all duration-300 ${
-        plan.isPopular
-          ? "ring-2 ring-emerald-500 shadow-xl md:scale-105"
-          : "hover:shadow-lg"
-      } ${isCurrentPlan ? "bg-emerald-50" : ""}`}
+      className={cn("relative h-full gap-0 p-6", plan.isPopular && "border-primary ring-1 ring-primary", isCurrentPlan && "bg-muted/50")}
     >
       {/* Popular Badge */}
       {plan.isPopular && (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <span className="bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-            POPULAR
-          </span>
-        </div>
+        <Badge className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">POPULAR</Badge>
       )}
 
       {/* Current Plan Badge */}
       {isCurrentPlan && (
-        <div className="mb-3 inline-block">
-          <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1 rounded">
-            Current Plan
-          </span>
-        </div>
+        <Badge variant="secondary" className="mb-3">Current Plan</Badge>
       )}
 
       {/* Plan Name */}
-      <h3 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+      <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
 
       {/* Description */}
-      <p className="text-sm text-gray-600 mb-6">{plan.description}</p>
+      <p className="text-sm text-muted-foreground mb-6">{plan.description}</p>
 
       {/* Pricing */}
       <div className="mb-6">
         {plan.price > 0 ? (
           <div>
-            <span className="text-4xl font-bold text-gray-900">
+            <span className="text-4xl font-bold">
               {formattedPrice}
             </span>
-            <span className="text-gray-600 text-sm">
+            <span className="text-muted-foreground text-sm">
               {plan.billingPeriod === "monthly" && " / month"}
               {plan.billingPeriod === "yearly" && " / year"}
               {plan.billingPeriod === "custom" && " / custom"}
@@ -83,16 +74,16 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
           </div>
         ) : (
           <div>
-            <span className="text-3xl font-bold text-gray-900">Custom</span>
-            <p className="text-sm text-gray-600">Contact us for pricing</p>
+            <span className="text-3xl font-bold">Custom</span>
+            <p className="text-sm text-muted-foreground">Contact us for pricing</p>
           </div>
         )}
       </div>
 
       {/* Limits */}
-      <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <p className="text-xs font-semibold text-gray-700 uppercase mb-3">Limits</p>
-        <div className="space-y-2 text-sm text-gray-700">
+      <Card className="mb-6 gap-0 bg-muted/50 p-4 shadow-none">
+        <SectionTitle as="p" className="mb-3">Limits</SectionTitle>
+        <div className="space-y-2 text-sm">
           {plan.maxUsers !== null && (
             <p>👥 Up to {plan.maxUsers} users</p>
           )}
@@ -114,11 +105,11 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
             <p>📦 Unlimited products</p>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Features List */}
       <div className="mb-6 flex-grow">
-        <p className="text-xs font-semibold text-gray-700 uppercase mb-3">Features</p>
+        <SectionTitle as="p" className="mb-3">Features</SectionTitle>
         <ul className="space-y-3">
           {plan.features.map((feature, index) => {
             const featureName = typeof feature === "string" ? feature : (feature.name || "");
@@ -127,8 +118,8 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
               <li key={`${featureName}-${index}`} className="flex items-start gap-3">
                 <Check className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{featureName}</p>
-                  {featureDesc && <p className="text-xs text-gray-600">{featureDesc}</p>}
+                  <p className="text-sm font-medium">{featureName}</p>
+                  {featureDesc && <p className="text-xs text-muted-foreground">{featureDesc}</p>}
                 </div>
               </li>
             );
@@ -140,17 +131,14 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
       <Button
         onClick={handleSelectPlan}
         disabled={loading || isCurrentPlan}
-        className={`w-full h-11 font-medium transition-all ${
-          plan.isPopular
-            ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-            : "bg-gray-900 hover:bg-gray-800 text-white"
-        } ${isCurrentPlan ? "opacity-60 cursor-not-allowed" : ""}`}
+        variant={plan.isPopular ? "default" : "outline"}
+        className="w-full"
       >
         {loading ? "Loading..." : isCurrentPlan ? "Current Plan" : "Select Plan"}
       </Button>
 
       {/* Money Back Guarantee */}
-      <p className="text-xs text-gray-500 text-center mt-4">
+      <p className="text-xs text-muted-foreground text-center mt-4">
         ✓ 30-day money-back guarantee
       </p>
     </Card>

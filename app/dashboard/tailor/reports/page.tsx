@@ -1,11 +1,25 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Printer } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { StatTile } from "@/components/common/StatTile"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
-import { tailorApi, type TailorKpi, type TailorReport, type TailorReportCell, type TailorReportType, type TailorTone } from "@/lib/tailorApi"
+import { tailorApi, type TailorKpi, type TailorReport, type TailorReportCell, type TailorReportType } from "@/lib/tailorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
@@ -18,22 +32,14 @@ const RANGES = [
 ] as const
 type RangeId = (typeof RANGES)[number][0]
 
-const TONE: Record<TailorTone, string> = {
-  blue: "bg-dash-accent-soft text-dash-accent-fg",
-  teal: "bg-dash-success-soft text-dash-success-fg",
-  purple: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300",
-  amber: "bg-dash-warn-soft text-dash-warn-fg",
-  red: "bg-dash-danger-soft text-dash-danger-fg",
-}
-const SUB_TONE: Record<string, string> = { muted: "text-dash-muted", red: "text-dash-danger-fg", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
+const SUB_TONE: Record<string, string> = { muted: "text-muted-foreground", red: "text-destructive", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
 const MIX_COLORS = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
+/** Report cell tone -> status text for StatusBadge's variant mapping. */
 const PILL: Record<string, string> = {
-  paid: "bg-dash-success-soft text-dash-success-fg", partial: "bg-dash-warn-soft text-dash-warn-fg", unpaid: "bg-dash-danger-soft text-dash-danger-fg",
-  "stage:new": "bg-dash-neutral-soft text-dash-neutral-fg", "stage:cutting": "bg-dash-warn-soft text-dash-warn-fg", "stage:stitching": "bg-dash-accent-soft text-dash-accent-fg",
-  "stage:trial": "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300", "stage:ready": "bg-dash-success-soft text-dash-success-fg",
-  "stage:delivered": "bg-dash-neutral-soft text-dash-muted", "stage:cancelled": "bg-dash-danger-soft text-dash-danger-fg",
-  "fabric:ok": "bg-dash-success-soft text-dash-success-fg", "fabric:low": "bg-dash-warn-soft text-dash-warn-fg",
-  "fabric:out-of-stock": "bg-dash-danger-soft text-dash-danger-fg", "fabric:inactive": "bg-dash-neutral-soft text-dash-muted",
+  paid: "paid", partial: "partial", unpaid: "unpaid",
+  "stage:new": "new", "stage:cutting": "cutting", "stage:stitching": "stitching", "stage:trial": "trial",
+  "stage:ready": "ready", "stage:delivered": "delivered", "stage:cancelled": "cancelled",
+  "fabric:ok": "in stock", "fabric:low": "low stock", "fabric:out-of-stock": "out of stock", "fabric:inactive": "inactive",
 }
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -132,126 +138,116 @@ export default function TailorReportsPage() {
   const rows = table ? table.rows.slice((page - 1) * perPage, page * perPage) : []
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Tailor reports</h1>
-          <p className="mt-1 text-sm text-dash-muted">{report?.subtitle ?? "How the workshop is doing — orders, fabric and dorjis."}</p>
-        </div>
-        <div className="flex gap-2 print:hidden">
-          <button type="button" onClick={() => window.print()} className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"><Printer className="size-4" aria-hidden /> Print</button>
-          <button type="button" onClick={handleExport} className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"><Download className="size-4" aria-hidden /> Export CSV</button>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Tailor reports"
+        description={report?.subtitle ?? "How the workshop is doing — orders, fabric and dorjis."}
+        actions={<div className="flex gap-2 print:hidden">
+          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> Print</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+        </div>}
+      />
 
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <div role="tablist" aria-label="Report" className="flex flex-wrap gap-1 rounded-xl bg-dash-neutral-soft p-1">
-          {TABS.map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={type === id} onClick={() => setType(id)}
-              className={cn("h-10 rounded-[9px] px-4 text-sm font-semibold", type === id ? "bg-dash-card shadow-sm" : "text-dash-muted hover:text-dash-ink")}>{label}</button>
-          ))}
-        </div>
-        <div role="group" aria-label="Date range" className="flex flex-wrap gap-1.5 md:ml-auto">
-          {RANGES.map(([id, label]) => (
-            <button key={id} type="button" aria-pressed={range === id} onClick={() => setRange(id)}
-              className={cn("h-10 rounded-full border px-3.5 text-[13px] font-semibold", range === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{label}</button>
-          ))}
-        </div>
+        <SegmentedControl aria-label="Report" size="default" value={type} onValueChange={(v) => setType(v as TailorReportType)}
+          options={TABS.map(([id, label]) => ({ value: id, label }))} />
+        <SegmentedControl aria-label="Date range" className="md:ml-auto" value={range} onValueChange={(v) => setRange(v as RangeId)}
+          options={RANGES.map(([id, label]) => ({ value: id, label }))} />
       </div>
 
       {range === "custom" && (
         <div className="flex flex-wrap gap-3 print:hidden">
-          <label className="flex items-center gap-2 text-[13px] font-semibold">From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent" /></label>
-          <label className="flex items-center gap-2 text-[13px] font-semibold">To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent" /></label>
+          <FormField orientation="horizontal" className="w-auto gap-2" label="From" htmlFor="rep-from">
+            <Input id="rep-from" type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField>
+          <FormField orientation="horizontal" className="w-auto gap-2" label="To" htmlFor="rep-to">
+            <Input id="rep-to" type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} /></FormField>
         </div>
       )}
-      <p className="text-[13px] text-dash-muted">{periodTxt}</p>
+      <p className="text-sm text-muted-foreground">{periodTxt}</p>
 
-      {error && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3.5 py-3 text-sm font-semibold text-dash-danger-fg">{error}</p>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
       {loading && !report ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : report ? (
         <>
           <section aria-label="Summary" className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length >= 5 ? "xl:grid-cols-5" : "xl:grid-cols-4", loading && "opacity-60")}>
             {report.kpis.map((k) => (
-              <article key={k.label} className="rounded-[14px] border border-dash-border bg-dash-card p-[18px]">
-                <div className="flex items-center justify-between"><span className="text-[13px] font-medium text-dash-muted">{k.label}</span><span className={cn("flex size-8 items-center justify-center rounded-lg", TONE[k.tone])} aria-hidden><KpiIcon label={k.label} /></span></div>
-                <div className="mt-2 font-dash-display text-[26px] font-bold tracking-tight tabular-nums">{fmtKpi(k)}</div>
-                <div className={cn("mt-1 text-xs", SUB_TONE[k.subTone ?? "muted"])}>{k.sub}</div>
-              </article>
+              <StatTile key={k.label} label={k.label} value={fmtKpi(k)} icon={<KpiIcon label={k.label} />}
+                hint={k.sub ? <span className={SUB_TONE[k.subTone ?? "muted"]}>{k.sub}</span> : undefined} />
             ))}
           </section>
 
           <div className="grid gap-4 lg:grid-cols-[2fr_1fr] print:grid-cols-1">
-            <section className="min-w-0 rounded-[14px] border border-dash-border bg-dash-card p-5 print:break-inside-avoid">
-              <h2 className="font-dash-display text-lg font-bold">{report.chart?.title}</h2>
-              {bars.length === 0 ? <p className="mt-4 text-sm text-dash-muted">{table?.empty}</p> : (
+            <SectionCard className="min-w-0 print:break-inside-avoid" title={report.chart?.title}>
+              {bars.length === 0 ? <p className="text-sm text-muted-foreground">{table?.empty}</p> : (
                 <div className="overflow-x-auto">
-                  <div className="mt-4 flex h-[200px] items-end gap-2 border-b border-dash-border" style={{ minWidth: bars.length * 34 }}>
+                  <div className="flex h-[200px] items-end gap-2 border-b" style={{ minWidth: bars.length * 34 }}>
                     {bars.map((b) => (
                       <div key={b.label} className="flex h-full min-w-[26px] flex-1 flex-col items-center justify-end gap-1" title={`${b.label}: ${fmtNum(b.value, chartKind, report.chart?.unit)}`}>
-                        <span className="text-[11px] font-bold text-dash-neutral-fg">{b.value ? (chartKind === "money" ? short(b.value) : String(Number(b.value.toFixed(1)))) : ""}</span>
-                        <div className="w-full max-w-[34px] rounded-t-md bg-dash-accent" style={{ height: `${Math.round((Math.abs(b.value) / maxBar) * 160)}px` }} />
+                        <span className="text-[11px] font-semibold text-muted-foreground">{b.value ? (chartKind === "money" ? short(b.value) : String(Number(b.value.toFixed(1)))) : ""}</span>
+                        <div className="w-full max-w-[34px] rounded-t-md bg-primary" style={{ height: `${Math.round((Math.abs(b.value) / maxBar) * 160)}px` }} />
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2" style={{ minWidth: bars.length * 34 }}>{bars.map((b) => <span key={b.label} className="min-w-[26px] flex-1 pt-1.5 text-center text-[11px] text-dash-muted">{b.label}</span>)}</div>
+                  <div className="flex gap-2" style={{ minWidth: bars.length * 34 }}>{bars.map((b) => <span key={b.label} className="min-w-[26px] flex-1 pt-1.5 text-center text-[11px] text-muted-foreground">{b.label}</span>)}</div>
                 </div>
               )}
-            </section>
+            </SectionCard>
 
-            <section className="flex flex-col gap-3 rounded-[14px] border border-dash-border bg-dash-card p-5 print:break-inside-avoid">
+            <Card className="gap-3 p-5 print:break-inside-avoid">
               {report.mixes.map((mx, mi) => {
                 const top = mx.items.slice(0, 6)
                 const peak = Math.max(1, ...top.map((i) => Math.abs(i.value)))
                 return (
                   <div key={mx.title} className={cn("flex flex-col gap-3", mi > 0 && "mt-3")}>
-                    <h2 className="font-dash-display text-lg font-bold">{mx.title}</h2>
-                    {top.length === 0 ? <p className="text-sm text-dash-muted">Nothing to show for this period.</p> : top.map((m, i) => (
+                    <h2 className="leading-none font-semibold">{mx.title}</h2>
+                    {top.length === 0 ? <p className="text-sm text-muted-foreground">Nothing to show for this period.</p> : top.map((m, i) => (
                       <div key={m.label}>
-                        <div className="flex justify-between text-sm"><span className="font-semibold">{m.label}</span><span className="tabular-nums text-dash-neutral-fg">{fmtNum(m.value, mx.kind, mx.unit)}</span></div>
-                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full" style={{ width: `${Math.round((Math.abs(m.value) / peak) * 100)}%`, background: MIX_COLORS[i % MIX_COLORS.length] }} /></div>
+                        <div className="flex justify-between text-sm"><span className="font-medium">{m.label}</span><span className="tabular-nums text-muted-foreground">{fmtNum(m.value, mx.kind, mx.unit)}</span></div>
+                        <Progress value={Math.round((Math.abs(m.value) / peak) * 100)} aria-label={m.label}
+                          className="mt-1.5 [&>[data-slot=progress-indicator]]:bg-(--mix)" style={{ "--mix": MIX_COLORS[i % MIX_COLORS.length] } as CSSProperties} />
                       </div>
                     ))}
                   </div>
                 )
               })}
-            </section>
+            </Card>
           </div>
 
           {table && (
-            <section className="rounded-[14px] border border-dash-border bg-dash-card">
+            <Card className="gap-0 py-0">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] border-collapse text-sm">
-                  <thead>
-                    <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                      {table.columns.map((c, i) => <th key={c + i} scope="col" className="px-4 py-3 font-semibold">{c}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="min-w-[700px]">
+                  <TableHeader>
+                    <TableRow>
+                      {table.columns.map((c, i) => <TableHead key={c + i} scope="col">{c}</TableHead>)}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {rows.map((r, ri) => (
-                      <tr key={ri}>
+                      <TableRow key={ri}>
                         {r.map((c, ci) => (
-                          <td key={ci} className={cn("border-b border-dash-border-soft px-4 py-3 tabular-nums", c.bold && "font-bold")}>
-                            {c.tone && PILL[c.tone] ? <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", PILL[c.tone])}>{fmt(c)}</span> : fmt(c)}
-                          </td>
+                          <TableCell key={ci} className={cn("tabular-nums", c.bold && "font-bold")}>
+                            {c.tone && PILL[c.tone] ? <StatusBadge status={PILL[c.tone]} label={fmt(c)} /> : fmt(c)}
+                          </TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
-              {table.rows.length === 0 && <p className="p-4 text-sm text-dash-muted">{table.empty}</p>}
+              {table.rows.length === 0 && <EmptyState className="p-4 md:p-6" title={table.empty || "No rows for this period"} />}
               {table.rows.length > 10 && (
-                <div className="border-t border-dash-border-soft p-4 print:hidden">
+                <div className="print:hidden">
+                  <Separator />
+                  <div className="p-4">
                   <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(table.rows.length / perPage))} itemsPerPage={perPage} totalItems={table.rows.length}
                     onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
+                  </div>
                 </div>
               )}
-            </section>
+            </Card>
           )}
         </>
       ) : null}

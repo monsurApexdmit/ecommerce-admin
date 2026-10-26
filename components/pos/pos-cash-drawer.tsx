@@ -1,12 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { X } from "lucide-react"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { apiError, posApi, REGISTERS, type RegisterSession } from "@/lib/posApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Props {
     open: boolean
@@ -20,9 +31,6 @@ interface Props {
     onChanged: () => void | Promise<void>
     initialError?: string
 }
-
-const field =
-    "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
 
 /** Cash drawer: open a shift, record cash in/out, close with a count. */
 export function PosCashDrawer({ open, onOpenChange, register, onRegisterChange, locationId, session, history, onChanged, initialError }: Props) {
@@ -103,133 +111,136 @@ export function PosCashDrawer({ open, onOpenChange, register, onRegisterChange, 
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 showCloseButton={false}
-                className="max-h-[92vh] w-[calc(100%-2rem)] gap-0 overflow-y-auto rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[560px]"
+                className="max-h-[92vh] w-[calc(100%-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[560px]"
             >
-                <div className="flex items-start justify-between gap-3 border-b border-dash-border px-6 py-[18px]">
-                    <div>
-                        <DialogTitle className="font-dash-display text-[22px] font-bold">Cash drawer</DialogTitle>
-                        <DialogDescription className="mt-0.5 text-[13px] text-dash-muted">
+                <DialogHeader className="flex-row items-start justify-between gap-3 px-6 py-[18px] text-left">
+                    <div className="flex flex-col gap-0.5">
+                        <DialogTitle>Cash drawer</DialogTitle>
+                        <DialogDescription>
                             {session
                                 ? `${session.register} · opened ${new Date(session.openedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} by ${session.openedBy || "staff"}`
                                 : "Start a shift to take cash and track the drawer"}
                         </DialogDescription>
                     </div>
-                    <button type="button" aria-label="Close" onClick={() => onOpenChange(false)}
-                        className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-dash-border hover:bg-dash-neutral-soft">
+                    <Button type="button" variant="outline" size="icon" aria-label="Close" onClick={() => onOpenChange(false)}>
                         <X className="size-[18px]" />
-                    </button>
-                </div>
+                    </Button>
+                </DialogHeader>
+                <Separator />
 
                 <div className="flex flex-col gap-5 px-6 py-5">
-                    {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2.5 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+                    {err && <Alert variant="destructive" role="alert"><AlertDescription>{err}</AlertDescription></Alert>}
 
                     {!session && (
                         <div className="flex flex-col gap-3">
-                            <div className="rounded-xl bg-dash-warn-soft p-3.5 text-[13px] text-dash-warn-fg">
-                                No shift is open. Count the cash in the drawer and start a shift to begin selling.
-                            </div>
-                            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Register
-                                <select value={register} onChange={(e) => onRegisterChange(e.target.value)} className={field}>
-                                    {REGISTERS.map((r) => <option key={r} value={r}>{r}</option>)}
-                                </select>
-                            </label>
-                            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Opening cash (float)
-                                <input type="number" min={0} step="0.01" placeholder="0.00" value={openAmt} onChange={(e) => setOpenAmt(e.target.value)} className={field} />
-                            </label>
-                            <button type="button" onClick={doOpen} disabled={busy}
-                                className="h-12 rounded-xl bg-dash-accent text-[15px] font-bold text-white disabled:opacity-50">
+                            <Alert>
+                                <AlertDescription>No shift is open. Count the cash in the drawer and start a shift to begin selling.</AlertDescription>
+                            </Alert>
+                            <FormField label="Register" htmlFor="pos-register">
+                                <Select value={register} onValueChange={onRegisterChange}>
+                                    <SelectTrigger id="pos-register" className="w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent>{REGISTERS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                                </Select>
+                            </FormField>
+                            <FormField label="Opening cash (float)" htmlFor="pos-opening-cash">
+                                <Input id="pos-opening-cash" type="number" min={0} step="0.01" placeholder="0.00" value={openAmt} onChange={(e) => setOpenAmt(e.target.value)} />
+                            </FormField>
+                            <Button type="button" size="lg" onClick={doOpen} disabled={busy}>
                                 {busy ? "Opening…" : "Open shift"}
-                            </button>
+                            </Button>
                         </div>
                     )}
 
                     {session && s && (
                         <>
-                            <div className="flex items-start justify-between gap-3 rounded-xl bg-dash-accent-soft p-4 text-dash-accent-fg">
+                            <Card className="flex-row items-start justify-between gap-3 bg-muted/50 p-4 shadow-none">
                                 <div>
-                                    <div className="text-xs">Cash on hand</div>
-                                    <div className="font-dash-display text-[28px] font-bold tabular-nums">{fc(expected)}</div>
+                                    <div className="text-xs text-muted-foreground">Cash on hand</div>
+                                    <div className="text-3xl font-bold tabular-nums">{fc(expected)}</div>
                                 </div>
-                                <div className="text-right text-xs">{session.no}<br />since {new Date(session.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                            </div>
+                                <div className="text-right text-xs text-muted-foreground">{session.no}<br />since {new Date(session.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                            </Card>
 
                             <div className="flex flex-col text-sm tabular-nums">
-                                {rows.map(([k, v, tone]) => (
-                                    <div key={k} className="flex justify-between border-b border-dash-border-soft py-2">
-                                        <span className="text-dash-muted">{k}</span>
-                                        <span className={cn("font-semibold", tone === "pos" && "text-dash-success-fg", tone === "neg" && "text-dash-danger-fg")}>{v}</span>
-                                    </div>
-                                ))}
-                                <div className="flex justify-between py-2 text-xs text-dash-muted">
+                                <InfoList className="gap-0">
+                                    {rows.map(([k, v, tone]) => (
+                                        <Fragment key={k}>
+                                            <InfoRow label={k} className="py-2" value={<span className={cn("font-semibold", tone === "neg" && "text-destructive")}>{v}</span>} />
+                                            <Separator />
+                                        </Fragment>
+                                    ))}
+                                </InfoList>
+                                <div className="flex justify-between py-2 text-xs text-muted-foreground">
                                     <span>Non-cash sales this shift (not in drawer)</span>
                                     <span className="font-semibold">{fc(s.nonCashSales)}</span>
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2.5 rounded-xl border border-dash-border p-3.5">
+                            <Card className="gap-2.5 p-3.5 shadow-none">
                                 <div className="grid grid-cols-2 gap-1.5">
                                     {(["in", "out"] as const).map((t) => (
-                                        <button key={t} type="button" onClick={() => setMvType(t)}
-                                            className={cn("h-10 rounded-[10px] border-2 text-[13px] font-bold",
-                                                mvType === t
-                                                    ? t === "in" ? "border-dash-success bg-dash-success-soft text-dash-success-fg" : "border-dash-danger bg-dash-danger-soft text-dash-danger-fg"
-                                                    : "border-dash-border text-dash-muted")}>
+                                        <Button key={t} type="button" onClick={() => setMvType(t)}
+                                            variant={mvType === t ? (t === "in" ? "default" : "destructive") : "outline"}>
                                             {t === "in" ? "+ Cash in" : "− Cash out"}
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
                                 <div className="grid grid-cols-[110px_1fr_auto] gap-2">
-                                    <input type="number" min={0} step="0.01" aria-label="Amount" placeholder="Amount" value={mvAmt} onChange={(e) => setMvAmt(e.target.value)} className={field} />
-                                    <input aria-label="Reason" value={mvReason} onChange={(e) => setMvReason(e.target.value)}
-                                        placeholder={mvType === "in" ? "Reason (e.g. float top-up)" : "Reason (e.g. bank deposit, petty cash)"} className={field} />
-                                    <button type="button" onClick={doMove} disabled={busy} className="h-[42px] rounded-[10px] bg-dash-ink px-4 text-[13px] font-bold text-dash-bg disabled:opacity-50">Record</button>
+                                    <Input type="number" min={0} step="0.01" aria-label="Amount" placeholder="Amount" value={mvAmt} onChange={(e) => setMvAmt(e.target.value)} />
+                                    <Input aria-label="Reason" value={mvReason} onChange={(e) => setMvReason(e.target.value)}
+                                        placeholder={mvType === "in" ? "Reason (e.g. float top-up)" : "Reason (e.g. bank deposit, petty cash)"} />
+                                    <Button type="button" onClick={doMove} disabled={busy}>Record</Button>
                                 </div>
                                 {s.movements.length > 0 && (
-                                    <ul className="flex flex-col text-[13px]">
+                                    <ul className="flex flex-col text-sm">
                                         {[...s.movements].reverse().slice(0, 6).map((m) => (
-                                            <li key={m.id} className="flex justify-between border-t border-dash-border-soft py-1.5">
-                                                <span>
-                                                    <strong className={m.type === "in" ? "text-dash-success-fg" : "text-dash-danger-fg"}>{m.type === "in" ? "+" : "−"}</strong> {m.reason}{" "}
-                                                    <span className="text-dash-muted">· {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                                </span>
-                                                <span className="font-semibold tabular-nums">{fc(m.amount)}</span>
+                                            <li key={m.id} className="flex flex-col">
+                                                <Separator />
+                                                <div className="flex justify-between py-1.5">
+                                                    <span>
+                                                        <strong className={m.type === "in" ? "text-foreground" : "text-destructive"}>{m.type === "in" ? "+" : "−"}</strong> {m.reason}{" "}
+                                                        <span className="text-muted-foreground">· {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                                    </span>
+                                                    <span className="font-semibold tabular-nums">{fc(m.amount)}</span>
+                                                </div>
                                             </li>
                                         ))}
                                     </ul>
                                 )}
-                            </div>
+                            </Card>
 
-                            <div className="flex flex-col gap-2.5 rounded-xl border border-dash-border p-3.5">
-                                <div className="text-sm font-bold">Close shift</div>
-                                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Cash counted in the drawer
-                                    <input type="number" min={0} step="0.01" placeholder="0.00" value={counted} onChange={(e) => { setCounted(e.target.value); setErr("") }} className={field} />
-                                </label>
+                            <SectionCard title="Close shift" className="gap-2.5 py-3.5 shadow-none" contentClassName="flex flex-col gap-2.5 px-3.5">
+                                <FormField label="Cash counted in the drawer" htmlFor="pos-counted-cash">
+                                    <Input id="pos-counted-cash" type="number" min={0} step="0.01" placeholder="0.00" value={counted} onChange={(e) => { setCounted(e.target.value); setErr("") }} />
+                                </FormField>
                                 {diff !== null && (
-                                    <div className={cn("rounded-[10px] px-3 py-2 text-[13px] font-semibold tabular-nums", diff === 0 ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-danger-soft text-dash-danger-fg")}>
-                                        {diff === 0 ? "Matches the expected cash" : `${diff > 0 ? "Over by" : "Short by"} ${fc(Math.abs(diff))}`}
-                                    </div>
+                                    <Alert variant={diff === 0 ? "default" : "destructive"} className="font-semibold tabular-nums">
+                                        <AlertDescription>{diff === 0 ? "Matches the expected cash" : `${diff > 0 ? "Over by" : "Short by"} ${fc(Math.abs(diff))}`}</AlertDescription>
+                                    </Alert>
                                 )}
-                                <input aria-label="Closing note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (required when the count does not match)" className={field} />
-                                <button type="button" onClick={doClose} disabled={busy}
-                                    className="h-11 rounded-[10px] border border-dash-danger text-sm font-bold text-dash-danger-fg hover:bg-dash-danger-soft disabled:opacity-50">
+                                <Input aria-label="Closing note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (required when the count does not match)" />
+                                <Button type="button" variant="destructive" onClick={doClose} disabled={busy}>
                                     Close shift
-                                </button>
-                            </div>
+                                </Button>
+                            </SectionCard>
                         </>
                     )}
 
                     {history.length > 0 && (
                         <div className="flex flex-col gap-1.5">
-                            <div className="text-xs font-bold uppercase tracking-[0.06em] text-dash-muted">Recent shifts</div>
+                            <SectionTitle as="h3">Recent shifts</SectionTitle>
                             {history.map((h) => {
                                 const v = h.variance ?? 0
                                 return (
-                                    <div key={h.id} className="flex justify-between gap-3 border-t border-dash-border-soft py-2 text-[13px]">
-                                        <span>{h.register} · {h.no}<br /><span className="text-xs text-dash-muted">{h.closedAt ? new Date(h.closedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</span></span>
-                                        <span className="text-right tabular-nums">Counted {fc(h.countedCash ?? 0)}<br />
-                                            <strong className={v === 0 ? "text-dash-success-fg" : "text-dash-danger-fg"}>{v === 0 ? "Matched" : `${v > 0 ? "Over" : "Short"} ${fc(Math.abs(v))}`}</strong>
-                                        </span>
-                                    </div>
+                                    <Fragment key={h.id}>
+                                        <Separator />
+                                        <div className="flex justify-between gap-3 py-2 text-sm">
+                                            <span>{h.register} · {h.no}<br /><span className="text-xs text-muted-foreground">{h.closedAt ? new Date(h.closedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</span></span>
+                                            <span className="text-right tabular-nums">Counted {fc(h.countedCash ?? 0)}<br />
+                                                <StatusBadge status={v === 0 ? "matched" : "short"} variant={v === 0 ? "default" : "destructive"} label={v === 0 ? "Matched" : `${v > 0 ? "Over" : "Short"} ${fc(Math.abs(v))}`} />
+                                            </span>
+                                        </div>
+                                    </Fragment>
                                 )
                             })}
                         </div>

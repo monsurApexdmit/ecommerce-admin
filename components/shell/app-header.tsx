@@ -4,6 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { PanelLeft, Plus } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { NotificationBell } from "@/components/notification-bell"
 import { ThemeAccentControls } from "@/components/theme-accent-controls"
 import { GlobalSearch } from "./global-search"
@@ -61,15 +63,17 @@ export function AppHeader() {
 
   return (
     <header className="app-header sticky top-0 z-20 flex min-h-[68px] shrink-0 flex-wrap items-center gap-3 px-4 py-2 lg:px-8">
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label={label}
-        title={`${label} (Ctrl+B)`}
-        className="shell-btn"
-      >
-        <PanelLeft className="size-5" strokeWidth={1.8} aria-hidden />
-      </button>
+      <WithTooltip content={`${label} (Ctrl+B)`}>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={toggleSidebar}
+          aria-label={label}
+        >
+          <PanelLeft className="size-5" strokeWidth={1.8} aria-hidden />
+        </Button>
+      </WithTooltip>
 
       {!onDashboard && <Breadcrumbs />}
 
@@ -82,10 +86,12 @@ export function AppHeader() {
         {onDashboard && <DashboardControls />}
         <ThemeAccentControls />
         <NotificationBell />
-        <Link href="/dashboard/sales?new=1" className="brand-btn">
-          <Plus className="size-4" strokeWidth={2.4} aria-hidden />
-          <span className="hidden sm:inline">New sale</span>
-        </Link>
+        <Button asChild>
+          <Link href="/dashboard/sales?new=1" aria-label="New sale">
+            <Plus className="size-4" strokeWidth={2.4} aria-hidden />
+            <span className="hidden sm:inline">New sale</span>
+          </Link>
+        </Button>
       </div>
     </header>
   )

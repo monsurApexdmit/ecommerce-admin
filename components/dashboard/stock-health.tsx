@@ -1,6 +1,8 @@
 "use client"
 
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import { wholeMoney } from "./format"
 import { CardTitle, DashCard, SectionError, SectionSkeleton } from "./section"
 import { useDashboardSection } from "./use-dashboard-section"
@@ -40,25 +42,26 @@ export function StockHealth() {
         </div>
         <div className="grid grid-cols-2 gap-2.5">
           {SEGMENTS.map((s) => (
-            <div key={s.key} className="flex flex-col gap-1 rounded-[10px] border border-dash-border-soft p-3">
-              <span className="flex items-center gap-1.5 text-xs text-dash-muted">
+            <Card key={s.key} className="gap-1 p-3 shadow-none">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="size-2 rounded-sm" style={{ background: s.color }} aria-hidden />
                 {s.label}
               </span>
-              <span className="text-xl font-bold text-dash-ink tabular-nums">{data.segments[s.key]}</span>
-            </div>
+              <span className="text-xl font-semibold tabular-nums">{data.segments[s.key]}</span>
+            </Card>
           ))}
         </div>
-        <dl className="grid grid-cols-2 gap-2.5 border-t border-dash-border-soft pt-3.5">
+        <Separator />
+        <dl className="grid grid-cols-2 gap-2.5">
           {metrics.map((m) => (
             <div key={m.label} className="flex flex-col gap-0.5">
-              <dt className="text-xs text-dash-muted">{m.label}</dt>
-              <dd className="text-[17px] font-bold text-dash-ink tabular-nums">{m.value}</dd>
-              <span className="text-[11px] text-dash-muted">{m.hint}</span>
+              <dt className="text-xs text-muted-foreground">{m.label}</dt>
+              <dd className="text-lg font-semibold tabular-nums">{m.value}</dd>
+              <span className="text-[11px] text-muted-foreground">{m.hint}</span>
             </div>
           ))}
         </dl>
-        <p className="text-[11px] text-dash-muted">Overstock: {data.overstockRule.toLowerCase()}.</p>
+        <p className="text-[11px] text-muted-foreground">Overstock: {data.overstockRule.toLowerCase()}.</p>
       </>
     )
   }

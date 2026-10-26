@@ -1,7 +1,10 @@
 "use client"
 
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { FormField } from "@/components/common/FormField"
 
 /** Values stored on the sale (`sells.method`). */
 export type PosPaymentMethod = "Cash" | "Card" | "bKash" | "Nagad" | "Bank" | "COD"
@@ -51,21 +54,16 @@ export function PosPayment({
                 {methods.map((m) => {
                     const sel = method === m
                     return (
-                        <button
+                        <Button
                             key={m}
                             type="button"
+                            variant={sel ? "default" : "outline"}
                             role="radio"
                             aria-checked={sel}
                             onClick={() => onMethodChange(m)}
-                            className={cn(
-                                "h-[46px] rounded-[10px] border-2 text-[13px] font-bold transition-colors",
-                                sel
-                                    ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg"
-                                    : "border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft",
-                            )}
                         >
                             {m}
-                        </button>
+                        </Button>
                     )
                 })}
             </div>
@@ -76,21 +74,20 @@ export function PosPayment({
                         {(["exact", ...quickTenders(total)] as const).map((t) => {
                             const sel = tender === t
                             return (
-                                <button
+                                <Button
                                     key={String(t)}
                                     type="button"
+                                    variant={sel ? "default" : "outline"}
+                                    size="sm"
                                     onClick={() => onTenderChange(t)}
-                                    className={cn(
-                                        "h-[38px] rounded-lg border text-[13px] font-semibold tabular-nums",
-                                        sel ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card text-dash-ink",
-                                    )}
+                                    className="tabular-nums"
                                 >
                                     {t === "exact" ? "Exact" : formatCurrency(t).replace(/\.00$/, "")}
-                                </button>
+                                </Button>
                             )
                         })}
                     </div>
-                    <input
+                    <Input
                         type="text"
                         inputMode="decimal"
                         aria-label="Amount received"
@@ -100,38 +97,33 @@ export function PosPayment({
                             onTenderInput(e.target.value)
                             onTenderChange(e.target.value.trim() === "" ? "exact" : "custom")
                         }}
-                        className="h-10 rounded-lg border border-dash-border bg-dash-card px-3 text-sm text-dash-ink outline-none focus-visible:border-dash-accent"
                     />
-                    <div
-                        className={cn(
-                            "flex justify-between rounded-[10px] px-3 py-2.5 text-sm tabular-nums",
-                            isShort ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-success-soft text-dash-success-fg",
-                        )}
-                    >
+                    <Alert variant={isShort ? "destructive" : "default"} className="flex justify-between tabular-nums">
                         <span>Received {formatCurrency(received)}</span>
                         <span className="font-bold">
                             {isShort ? (hasCustomer ? "Due" : "Short") : "Change"} {formatCurrency(isShort ? short : received - total)}
                         </span>
-                    </div>
+                    </Alert>
                 </div>
             )}
 
             {method === "COD" && (
-                <p className="rounded-[10px] bg-dash-warn-soft p-3 text-[13px] leading-snug text-dash-warn-fg">
-                    Cash on delivery: nothing is collected now. The full total stays as a due balance on the customer, so a customer is required.
-                </p>
+                <Alert>
+                    <AlertDescription>
+                        Cash on delivery: nothing is collected now. The full total stays as a due balance on the customer, so a customer is required.
+                    </AlertDescription>
+                </Alert>
             )}
 
             {NEEDS_TXN.includes(method) && (
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-                    Transaction ID
-                    <input
+                <FormField label="Transaction ID" htmlFor="pos-txn-id">
+                    <Input
+                        id="pos-txn-id"
                         value={txnId}
                         onChange={(e) => onTxnChange(e.target.value)}
                         placeholder="e.g. 9JK4XY2LQ8"
-                        className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
                     />
-                </label>
+                </FormField>
             )}
         </div>
     )

@@ -1,5 +1,6 @@
 'use client'
 
+import { cn } from "@/lib/utils"
 import { Suspense, useState, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { productApi, type ProductResponse, type ProductVariantResponse } from '@/lib/productApi'
@@ -10,9 +11,21 @@ import { useSaasAuth } from '@/contexts/saas-auth-context'
 import { useModuleGuard } from '@/hooks/use-module-guard'
 import Barcode from 'react-barcode'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card } from '@/components/ui/card'
+import { Spinner } from '@/components/ui/spinner'
+import { Item, ItemActions, ItemContent } from '@/components/ui/item'
+import { PageHeader } from '@/components/common/PageHeader'
+import { SectionCard } from '@/components/common/SectionCard'
+import { EmptyState } from '@/components/common/EmptyState'
+import { FormField } from '@/components/common/FormField'
+import { ChoiceCard, ChoiceCardGroup } from '@/components/common/ChoiceCard'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { bricolage, instrument } from '@/components/dashboard/fonts'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Trash2, Loader2, Minus, Plus, Printer, Eye, ChevronLeft, ChevronRight, ShoppingCart, Eraser } from 'lucide-react'
+import { Search, Trash2, Minus, Plus, Printer, Eye, ChevronLeft, ChevronRight, ShoppingCart, Eraser } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useCompanySettings } from '@/contexts/company-settings-context'
 
@@ -58,8 +71,6 @@ const LABEL_FIELDS: { key: keyof LabelSettings; sizeKey: keyof FontSizes; label:
 const DEFAULT_LABELS: LabelSettings = { showProductName: true, showProductVariation: true, showProductPrice: true, showBusinessName: true, showSku: false, showPackingDate: false }
 const DEFAULT_SIZES: FontSizes = { productName: 12, productVariation: 11, productPrice: 13, businessName: 11, sku: 9, packingDate: 9 }
 const PREF_KEY = 'barcode-label-prefs'
-
-const FIELD_CLS = 'h-11 rounded-[10px] border border-dash-border bg-dash-bg px-3 text-sm text-dash-ink outline-none focus:border-dash-accent'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -304,179 +315,162 @@ function PrintBarcodeInner() {
   // ============ JSX ============
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Print barcode labels</h1>
-        <p className="mt-1 text-sm text-dash-muted">Pick products, choose what to show, and print, with a live preview.</p>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader title="Print barcode labels" description="Pick products, choose what to show, and print, with a live preview." />
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-5">
           {/* 1 Products */}
-          <section className="rounded-[14px] border border-dash-border bg-dash-card p-5">
-            <h2 className="font-dash-display text-lg font-bold">1 · Products</h2>
-            <div className="relative mt-3">
-              <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-                <Search className="size-[18px]" aria-hidden />
-                <span className="sr-only">Search products</span>
-                <input
+          <SectionCard title="1 · Products">
+            <div className="relative">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Label htmlFor="barcode-product-search" className="sr-only">Search products</Label>
+                <Input
+                  id="barcode-product-search"
                   type="search"
                   placeholder="Search products to add…"
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
-                  className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted"
+                  className="pl-8 pr-8"
                 />
-                {isSearching && <Loader2 className="size-4 animate-spin text-dash-accent" aria-hidden />}
-              </label>
+                {isSearching && <Spinner className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />}
+              </div>
               {showDropdown && searchResults.length > 0 && (
-                <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-[10px] border border-dash-border bg-dash-card shadow-lg">
+                <Card className="absolute z-50 mt-1 max-h-64 w-full gap-0 overflow-y-auto py-0 shadow-lg">
                   {searchResults.map(product => (
-                    <button key={product.id} type="button" onClick={() => handleAddProduct(product)}
-                      className="flex w-full items-center justify-between border-b border-dash-border-soft px-4 py-2.5 text-left last:border-0 hover:bg-dash-neutral-soft">
+                    <Button key={product.id} type="button" variant="ghost" onClick={() => handleAddProduct(product)}
+                      className="h-auto w-full justify-between rounded-none text-left font-normal">
                       <span>
                         <span className="block text-sm font-semibold">{product.name}</span>
-                        <span className="block text-xs text-dash-muted">{product.sku}</span>
+                        <span className="block text-xs text-muted-foreground">{product.sku}</span>
                       </span>
                       <span className="text-sm font-semibold">{(product.variants?.length ?? 0) > 0 ? `${product.variants!.length} variants` : formatCurrency(labelOf({ key: '', product, variant: null, quantity: 1, packingDate: '' }).price)}</span>
-                    </button>
+                    </Button>
                   ))}
-                </div>
+                </Card>
               )}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={addFromLastPurchase} disabled={loadingPo}
-                className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50">
-                {loadingPo ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ShoppingCart className="size-4" aria-hidden />} Add from last purchase
-              </button>
-              <button type="button" onClick={() => setPrintItems([])} disabled={printItems.length === 0}
-                className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-40">
+              <Button type="button" variant="outline" onClick={addFromLastPurchase} disabled={loadingPo}>
+                {loadingPo ? <Spinner /> : <ShoppingCart className="size-4" aria-hidden />} Add from last purchase
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setPrintItems([])} disabled={printItems.length === 0}>
                 <Eraser className="size-4" aria-hidden /> Clear list
-              </button>
+              </Button>
             </div>
 
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-dash-border-soft text-left text-xs font-semibold uppercase tracking-wide text-dash-muted">
-                    <th className="px-3 py-2.5">Product</th>
-                    <th className="px-3 py-2.5">Labels</th>
-                    <th className="px-3 py-2.5">Packed on</th>
-                    <th className="w-12 px-3 py-2.5"><span className="sr-only">Remove</span></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-dash-border-soft">
+            <div className="mt-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Labels</TableHead>
+                    <TableHead>Packed on</TableHead>
+                    <TableHead className="w-12"><span className="sr-only">Remove</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {printItems.length === 0 ? (
-                    <tr><td colSpan={4} className="py-8 text-center text-dash-muted">Search and add products above, or pick them on the Products page.</td></tr>
+                    <TableRow><TableCell colSpan={4}><EmptyState className="p-4 md:p-6" title="No products added" description="Search and add products above, or pick them on the Products page." /></TableCell></TableRow>
                   ) : printItems.map(item => (
-                    <tr key={item.key}>
-                      <td className="px-3 py-2.5">
-                        <div className="font-semibold">{item.product.name}{item.variant ? <span className="font-normal text-dash-muted"> · {item.variant.name}</span> : null}</div>
-                        <div className="text-xs text-dash-muted">{labelOf(item).code} · {formatCurrency(labelOf(item).price)}</div>
-                      </td>
-                      <td className="px-3 py-2.5">
+                    <TableRow key={item.key}>
+                      <TableCell>
+                        <div className="font-semibold">{item.product.name}{item.variant ? <span className="font-normal text-muted-foreground"> · {item.variant.name}</span> : null}</div>
+                        <div className="text-xs text-muted-foreground">{labelOf(item).code} · {formatCurrency(labelOf(item).price)}</div>
+                      </TableCell>
+                      <TableCell>
                         <div className="inline-flex items-center gap-1">
-                          <button type="button" aria-label="Fewer labels" onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })}
-                            className="grid size-9 place-items-center rounded-[10px] border border-dash-border hover:bg-dash-neutral-soft"><Minus className="size-4" aria-hidden /></button>
-                          <input type="number" min={1} aria-label={`Labels for ${item.product.name}`} value={item.quantity}
+                          <Button type="button" variant="outline" size="icon" aria-label="Fewer labels" onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })}><Minus className="size-4" aria-hidden /></Button>
+                          <Input type="number" min={1} aria-label={`Labels for ${item.product.name}`} value={item.quantity}
                             onChange={e => updateItem(item.key, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
-                            className="h-9 w-14 rounded-[10px] border border-dash-border bg-dash-bg text-center text-sm outline-none focus:border-dash-accent" />
-                          <button type="button" aria-label="More labels" onClick={() => updateItem(item.key, { quantity: item.quantity + 1 })}
-                            className="grid size-9 place-items-center rounded-[10px] border border-dash-border hover:bg-dash-neutral-soft"><Plus className="size-4" aria-hidden /></button>
+                            className="w-14 text-center tabular-nums" />
+                          <Button type="button" variant="outline" size="icon" aria-label="More labels" onClick={() => updateItem(item.key, { quantity: item.quantity + 1 })}><Plus className="size-4" aria-hidden /></Button>
                         </div>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <input type="date" aria-label="Packing date" value={item.packingDate}
+                      </TableCell>
+                      <TableCell>
+                        <Input type="date" aria-label="Packing date" value={item.packingDate}
                           onChange={e => updateItem(item.key, { packingDate: e.target.value })}
-                          className={`${FIELD_CLS} h-10 w-40`} />
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <button type="button" aria-label={`Remove ${item.product.name}`} onClick={() => removeItem(item.key)}
-                          className="grid size-9 place-items-center rounded-[10px] text-dash-danger-fg hover:bg-dash-danger-soft"><Trash2 className="size-4" aria-hidden /></button>
-                      </td>
-                    </tr>
+                          className="w-40" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${item.product.name}`} onClick={() => removeItem(item.key)}><Trash2 className="size-4" aria-hidden /></Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-            <p className="mt-3 text-xs font-semibold text-dash-muted">{totalLabels} labels · {sheets} sheet{sheets === 1 ? '' : 's'}</p>
-          </section>
+            <p className="mt-3 text-xs font-semibold text-muted-foreground">{totalLabels} labels · {sheets} sheet{sheets === 1 ? '' : 's'}</p>
+          </SectionCard>
 
           {/* 2 What to show */}
-          <section className="rounded-[14px] border border-dash-border bg-dash-card p-5">
-            <h2 className="font-dash-display text-lg font-bold">2 · What to show</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <SectionCard title="2 · What to show">
+            <div className="grid gap-3 sm:grid-cols-2">
               {LABEL_FIELDS.map(field => {
                 const checked = labelSettings[field.key]
                 return (
-                  <div key={field.key}
-                    className={`flex items-center justify-between gap-3 rounded-[10px] border px-3.5 py-2.5 ${checked ? 'border-dash-accent bg-dash-accent-soft' : 'border-dash-border bg-dash-card'}`}>
-                    <label className="flex cursor-pointer items-center gap-2.5 text-sm font-semibold">
-                      <Checkbox checked={checked} onCheckedChange={v => setLabelSettings(prev => ({ ...prev, [field.key]: !!v }))} />
-                      {field.label}
-                    </label>
-                    <label className="flex items-center gap-1.5 text-xs text-dash-muted">
-                      <span>Size</span>
-                      <input type="number" min={6} max={40} disabled={!checked} value={fontSizes[field.sizeKey]}
-                        aria-label={`${field.label} font size`}
-                        onChange={e => setFontSizes(prev => ({ ...prev, [field.sizeKey]: parseInt(e.target.value) || 10 }))}
-                        className="h-8 w-14 rounded-lg border border-dash-border bg-dash-bg px-2 text-center text-sm text-dash-ink outline-none focus:border-dash-accent disabled:opacity-40" />
-                    </label>
-                  </div>
+                  <Item key={field.key} variant="outline" size="sm" data-state={checked ? 'checked' : 'unchecked'}
+                    className="justify-between data-[state=checked]:border-primary data-[state=checked]:bg-primary/5">
+                    <ItemContent>
+                      <Label className="cursor-pointer">
+                        <Checkbox checked={checked} onCheckedChange={v => setLabelSettings(prev => ({ ...prev, [field.key]: !!v }))} />
+                        {field.label}
+                      </Label>
+                    </ItemContent>
+                    <ItemActions>
+                      <Label className="text-xs text-muted-foreground">
+                        <span>Size</span>
+                        <Input type="number" min={6} max={40} disabled={!checked} value={fontSizes[field.sizeKey]}
+                          aria-label={`${field.label} font size`}
+                          onChange={e => setFontSizes(prev => ({ ...prev, [field.sizeKey]: parseInt(e.target.value) || 10 }))}
+                          className="w-14 text-center tabular-nums" />
+                      </Label>
+                    </ItemActions>
+                  </Item>
                 )
               })}
             </div>
-            <label className="mt-4 block text-sm font-semibold">
-              Price shown
+            <FormField label="Price shown" htmlFor="price-shown" className="mt-4"
+              description={<>Products with an active offer print the offer price{hasOffer ? ' (some in your list do)' : ''}. Variants print their own selling price.</>}>
               <Select value={showPrice} onValueChange={v => setShowPrice(v as 'inc' | 'exc')}>
-                <SelectTrigger className="mt-1.5 h-[42px] w-full max-w-xs rounded-[10px] border-dash-border bg-dash-card font-normal"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="price-shown" className="w-full max-w-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="inc">Including tax{rate ? ` (${rate}%)` : ''}</SelectItem>
                   <SelectItem value="exc">Excluding tax</SelectItem>
                 </SelectContent>
               </Select>
-              <span className="mt-1.5 block text-xs font-normal text-dash-muted">
-                Products with an active offer print the offer price{hasOffer ? ' (some in your list do)' : ''}. Variants print their own selling price.
-              </span>
-            </label>
-          </section>
+            </FormField>
+          </SectionCard>
 
           {/* 3 Paper */}
-          <section className="rounded-[14px] border border-dash-border bg-dash-card p-5">
-            <h2 className="font-dash-display text-lg font-bold">3 · Paper</h2>
-            <div role="radiogroup" aria-label="Paper" className="mt-3 grid gap-3 sm:grid-cols-2">
-              {PAPER_SIZES.map(ps => {
-                const on = ps.id === selectedPaperSizeId
-                return (
-                  <button key={ps.id} type="button" role="radio" aria-checked={on} onClick={() => { setSelectedPaperSizeId(ps.id); setSheetNo(1) }}
-                    className={`rounded-[10px] border px-3.5 py-3 text-left ${on ? 'border-dash-accent bg-dash-accent-soft' : 'border-dash-border bg-dash-card hover:bg-dash-neutral-soft'}`}>
-                    <span className="block text-sm font-semibold">{ps.label}</span>
-                    <span className="mt-0.5 block text-xs text-dash-muted">{ps.sub}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <p className="mt-3 text-xs text-dash-muted">Tip: for thermal label printers choose “Label roll” — one label per page. Codes follow each product’s barcode type; values that do not fit it (and QR) print as Code 128.</p>
-          </section>
+          <SectionCard title="3 · Paper">
+            <ChoiceCardGroup aria-label="Paper" className="gap-3 sm:grid-cols-2"
+              value={selectedPaperSizeId} onValueChange={(id) => { setSelectedPaperSizeId(id); setSheetNo(1) }}>
+              {PAPER_SIZES.map(ps => (
+                <ChoiceCard key={ps.id} value={ps.id} title={ps.label} description={ps.sub} />
+              ))}
+            </ChoiceCardGroup>
+            <p className="mt-3 text-xs text-muted-foreground">Tip: for thermal label printers choose “Label roll” — one label per page. Codes follow each product’s barcode type; values that do not fit it (and QR) print as Code 128.</p>
+          </SectionCard>
         </div>
 
         {/* Preview */}
-        <aside aria-label="Preview" className="flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:sticky xl:top-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-dash-display text-lg font-bold">Preview</h2>
-            <span className="text-xs text-dash-muted">{totalLabels} labels · {sheets} sheet{sheets === 1 ? '' : 's'}</span>
-          </div>
-          <div className="rounded-[10px] border border-dash-border-soft bg-dash-bg p-3">
+        <aside aria-label="Preview" className="xl:sticky xl:top-4">
+        <SectionCard title="Preview" contentClassName="flex flex-col gap-4"
+          actions={<span className="text-xs text-muted-foreground">{totalLabels} labels · {sheets} sheet{sheets === 1 ? '' : 's'}</span>}>
+          <Card className="bg-muted/50 p-3 shadow-none">
             {previewLabels.length === 0 ? (
-              <p className="py-10 text-center text-sm text-dash-muted">Add products to see a preview.</p>
+              <EmptyState className="p-6 md:p-6" title="Add products to see a preview." />
             ) : (
               <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${paper.cols}, minmax(0, 1fr))` }}>
                 {previewLabels.map((item, idx) => {
                   const l = labelOf(item)
                   const z = (n: number) => Math.max(6, Math.round(n * 0.7))
                   return (
-                    <div key={idx} className="flex min-h-20 flex-col items-center justify-center overflow-hidden rounded-md border border-dash-border bg-white p-1.5 text-center text-black">
+                    <div key={idx} className="flex min-h-20 flex-col items-center justify-center overflow-hidden rounded-md border bg-white p-1.5 text-center text-black">
                       {labelSettings.showBusinessName && <span className="max-w-full truncate font-bold uppercase" style={{ fontSize: z(fontSizes.businessName) }}>{businessName}</span>}
                       {labelSettings.showProductName && <span className="line-clamp-2 font-semibold leading-tight" style={{ fontSize: z(fontSizes.productName) }}>{l.name}</span>}
                       {labelSettings.showProductVariation && l.variant && <span className="max-w-full truncate text-neutral-600" style={{ fontSize: z(fontSizes.productVariation) }}>{l.variant}</span>}
@@ -489,26 +483,23 @@ function PrintBarcodeInner() {
                 })}
               </div>
             )}
-          </div>
+          </Card>
           {sheets > 1 && (
-            <div className="flex items-center justify-between text-xs text-dash-muted">
-              <button type="button" aria-label="Previous sheet" disabled={pageN <= 1} onClick={() => setSheetNo(pageN - 1)}
-                className="grid size-8 place-items-center rounded-lg border border-dash-border hover:bg-dash-neutral-soft disabled:opacity-40"><ChevronLeft className="size-4" aria-hidden /></button>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <Button type="button" variant="outline" size="icon-sm" aria-label="Previous sheet" disabled={pageN <= 1} onClick={() => setSheetNo(pageN - 1)}><ChevronLeft className="size-4" aria-hidden /></Button>
               <span>Sheet {pageN} of {sheets}</span>
-              <button type="button" aria-label="Next sheet" disabled={pageN >= sheets} onClick={() => setSheetNo(pageN + 1)}
-                className="grid size-8 place-items-center rounded-lg border border-dash-border hover:bg-dash-neutral-soft disabled:opacity-40"><ChevronRight className="size-4" aria-hidden /></button>
+              <Button type="button" variant="outline" size="icon-sm" aria-label="Next sheet" disabled={pageN >= sheets} onClick={() => setSheetNo(pageN + 1)}><ChevronRight className="size-4" aria-hidden /></Button>
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => openPrint(false)} disabled={printItems.length === 0}
-              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={() => openPrint(false)} disabled={printItems.length === 0} className="flex-1">
               <Eye className="size-4" aria-hidden /> Preview
-            </button>
-            <button type="button" onClick={() => openPrint(true)} disabled={printItems.length === 0}
-              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+            </Button>
+            <Button type="button" onClick={() => openPrint(true)} disabled={printItems.length === 0} className="flex-1">
               <Printer className="size-4" aria-hidden /> Print {totalLabels} labels
-            </button>
+            </Button>
           </div>
+        </SectionCard>
         </aside>
       </div>
     </div>

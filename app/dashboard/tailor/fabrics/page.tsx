@@ -5,6 +5,22 @@ import Link from "next/link"
 import { AlertTriangle, Layers, PackagePlus, Pencil, Plus, Scissors, Search, Trash2, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SwatchPicker } from "@/components/common/SwatchPicker"
+import { FilterBar } from "@/components/common/Toolbar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
@@ -24,10 +40,6 @@ const PATTERNS = ["Plain", "Striped", "Checked", "Printed", "Embroidered", "Text
 const COLOURS: [string, string][] = [["White", "#F4F1EA"], ["Beige", "#D9C7A4"], ["Maroon", "#7B1E2B"], ["Navy", "#1F2F5C"], ["Green", "#2F6B4F"], ["Black", "#1A1A1A"]]
 const UNITS: [string, string][] = [["m", "Metre (m)"], ["goj", "Goj"], ["gaj", "Gaj"]]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const filterSelCls = "h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100)
 const num = (v: string) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0 }
@@ -46,7 +58,10 @@ const fromRow = (r: TailorFabricRow): FormState => ({
   vendorId: r.vendorId ? String(r.vendorId) : "", unit: r.unit || "m", status: r.status,
 })
 
-const barColor: Record<string, string> = { out: "#B42318", low: "#F59E0B", inactive: "#9AA3B5", ok: "#0F766E" }
+const barColor: Record<string, string> = {
+  out: "[&>[data-slot=progress-indicator]]:bg-destructive", low: "[&>[data-slot=progress-indicator]]:bg-amber-500",
+  inactive: "[&>[data-slot=progress-indicator]]:bg-muted-foreground", ok: "[&>[data-slot=progress-indicator]]:bg-teal-700",
+}
 
 function csvCell(v: unknown) { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
 
@@ -209,20 +224,18 @@ export default function TailorFabricsPage() {
   const unitSuffix = st?.unit ? ` ${st.unit}` : " units"
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Fabric inventory</h1>
-          <p className="mt-1 text-sm text-dash-muted">Fabric stock by metre, goj or gaj — cost, stock value and margin.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={exportCsv} className={outlineBtn}>Export</button>
-          <Link href="/dashboard/vendors/purchase-orders" className={outlineBtn}><Plus className="size-4" aria-hidden /> Order fabric</Link>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Fabric inventory"
+        description="Fabric stock by metre, goj or gaj — cost, stock value and margin."
+        actions={<>
+          <Button type="button" variant="outline" onClick={exportCsv}>Export</Button>
+          <Button asChild variant="outline"><Link href="/dashboard/vendors/purchase-orders"><Plus className="size-4" aria-hidden /> Order fabric</Link></Button>
+        </>}
+      />
 
       {!st ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <div className="[&>div]:lg:grid-cols-4">
           <StatsCards stats={[
@@ -235,7 +248,7 @@ export default function TailorFabricsPage() {
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }} tabs={[
               { value: "all", label: "All", count: counts?.all }, { value: "ok", label: "In stock", count: counts?.ok },
@@ -243,74 +256,74 @@ export default function TailorFabricsPage() {
               { value: "inactive", label: "Inactive", count: counts?.inactive },
             ]} />
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search fabrics</span>
-              <input type="search" placeholder="Search fabric, type or colour…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            <select aria-label="Type" className={filterSelCls} value={fType} onChange={(e) => { setFType(e.target.value); setPage(1) }}>
-              <option value="all">Type: All</option>{(ov?.types ?? []).map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <select aria-label="Supplier" className={filterSelCls} value={fSup} onChange={(e) => { setFSup(e.target.value); setPage(1) }}>
-              <option value="all">Supplier: All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
-          </div>
+          <FilterBar className="gap-2.5 p-4">
+            <InputGroup className="min-w-[220px] flex-1">
+              <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+              <InputGroupInput type="search" aria-label="Search fabrics" placeholder="Search fabric, type or colour…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
+            </InputGroup>
+            <Select value={fType} onValueChange={(v) => { setFType(v); setPage(1) }}>
+              <SelectTrigger aria-label="Type"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Type: All</SelectItem>{(ov?.types ?? []).map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={fSup} onValueChange={(v) => { setFSup(v); setPage(1) }}>
+              <SelectTrigger aria-label="Supplier"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Supplier: All</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </FilterBar>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th className="py-3 pl-4 pr-2 font-semibold">Fabric</th><th className="px-2 py-3 font-semibold">Stock</th>
-                  <th className="px-2 py-3 font-semibold">Cost / sell per unit</th><th className="px-2 py-3 font-semibold">Margin</th>
-                  <th className="px-2 py-3 font-semibold">Supplier</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && !ov ? [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={6} className="px-4 py-3"><Skeleton className="h-11 rounded" /></td></tr>) :
+            <Table className="min-w-[760px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fabric</TableHead><TableHead>Stock</TableHead>
+                  <TableHead>Cost / sell per unit</TableHead><TableHead>Margin</TableHead>
+                  <TableHead>Supplier</TableHead><TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading && !ov ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-11" /></TableCell></TableRow>) :
                   rows.length === 0 ? (
-                    <tr><td colSpan={6} className="py-14 text-center">
-                      <Layers className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                      <p className="font-semibold">No fabrics found</p>
-                      <p className="text-sm text-dash-muted">{hasFilter ? "No fabrics match the current filters." : "No fabrics yet. Add your first fabric using the form."}</p>
-                    </td></tr>
+                    <TableRow><TableCell colSpan={6} className="whitespace-normal">
+                      <EmptyState icon={Layers} title="No fabrics found" className="p-4 md:p-6"
+                        description={hasFilter ? "No fabrics match the current filters." : "No fabrics yet. Add your first fabric using the form."} />
+                    </TableCell></TableRow>
                   ) : rows.map((r) => {
                     const stock = r.stockQuantity, rop = r.reorderLevel ?? 0
                     const w = rop > 0 ? Math.min(100, Math.round((stock / (rop * 3)) * 100)) : stock > 0 ? 100 : 0
                     const sub = [r.fabricType, r.color].filter(Boolean).join(" · ") || "—"
                     const extra = (r.pattern && r.pattern !== "Plain" ? ` · ${r.pattern}` : "") + (r.code ? ` · ${r.code}` : "") + (r.status === "inactive" ? " · Inactive" : "")
                     return (
-                      <tr key={r.id} className={editing?.id === r.id || restocking?.id === r.id ? "bg-dash-accent-soft/40" : ""}>
-                        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                      <TableRow key={r.id} data-state={editing?.id === r.id || restocking?.id === r.id ? "selected" : undefined}>
+                        <TableCell>
                           <div className="flex items-center gap-3">
-                            <span className="size-8 shrink-0 rounded-lg border border-dash-border" style={{ background: r.hexColor || "#E3E6EE" }} aria-hidden />
-                            <span className="min-w-0"><span className="block font-semibold">{r.name}</span><span className="block text-xs text-dash-muted">{sub}{extra}</span></span>
+                            <span className="size-8 shrink-0 rounded-md border" style={{ background: r.hexColor || "#E3E6EE" }} aria-hidden />
+                            <span className="min-w-0"><span className="block font-medium">{r.name}</span><span className="block text-xs text-muted-foreground">{sub}{extra}</span></span>
                           </div>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-baseline gap-2">
-                            <strong className={cn("tabular-nums", r.stockState === "out" && "text-dash-danger-fg")}>{r.stockState === "out" ? "Out of stock" : `${fmt(stock)} ${r.unit}`}</strong>
-                            <span className="text-xs text-dash-muted">min {fmt(rop)} {r.unit}</span>
+                            <strong className={cn("tabular-nums", r.stockState === "out" && "text-destructive")}>{r.stockState === "out" ? "Out of stock" : `${fmt(stock)} ${r.unit}`}</strong>
+                            <span className="text-xs text-muted-foreground">min {fmt(rop)} {r.unit}</span>
                           </div>
-                          <div className="mt-1.5 h-1.5 w-28 overflow-hidden rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full" style={{ width: `${w}%`, background: barColor[r.stockState] }} /></div>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 tabular-nums">{formatCurrency(r.purchasePrice)} / <strong>{r.sellingPrice ? formatCurrency(r.sellingPrice) : "—"}</strong></td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <span className="inline-flex rounded-full bg-dash-success-soft px-2.5 py-[3px] text-xs font-bold text-dash-success-fg">{r.marginPct != null ? `${r.marginPct}%` : "—"}</span>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">{r.vendorName ?? "—"}</td>
-                        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                          <Progress value={w} aria-label={`${r.name} stock level`} className={cn("mt-1.5 h-1.5 w-28", barColor[r.stockState])} />
+                        </TableCell>
+                        <TableCell className="tabular-nums">{formatCurrency(r.purchasePrice)} / <strong>{r.sellingPrice ? formatCurrency(r.sellingPrice) : "—"}</strong></TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{r.marginPct != null ? `${r.marginPct}%` : "—"}</Badge>
+                        </TableCell>
+                        <TableCell>{r.vendorName ?? "—"}</TableCell>
+                        <TableCell>
                           <div className="flex justify-end gap-1">
-                            {mayWrite && <button type="button" aria-label={`Add stock to ${r.name}`} title="Add stock" className={iconBtn} onClick={() => startRestock(r)}><PackagePlus className="size-4" /></button>}
-                            {mayWrite && <button type="button" aria-label={`Edit ${r.name}`} className={iconBtn} onClick={() => startEdit(r)}><Pencil className="size-4" /></button>}
-                            {mayDelete && <button type="button" aria-label={`Delete ${r.name}`} className={iconBtn} onClick={() => remove(r)}><Trash2 className="size-4" /></button>}
+                            {mayWrite && <WithTooltip content="Add stock"><Button type="button" variant="outline" size="icon" aria-label={`Add stock to ${r.name}`} onClick={() => startRestock(r)}><PackagePlus className="size-4" /></Button></WithTooltip>}
+                            {mayWrite && <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button>}
+                            {mayDelete && <Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )
                   })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           {total > 0 && (
             <div className="p-4 pt-3.5">
@@ -318,85 +331,97 @@ export default function TailorFabricsPage() {
                 onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
             </div>
           )}
-        </section>
+        </Card>
 
         <aside aria-label="Fabric form" className="flex w-full shrink-0 flex-col gap-3.5 xl:w-[380px]">
           {restocking && (
-            <div className="flex flex-col gap-3.5 rounded-[14px] border border-dash-accent bg-dash-card p-5">
-              <div>
-                <h2 className="font-dash-display text-lg font-bold">Restock {restocking.name}</h2>
-                <span className="text-xs text-dash-muted">Current stock {fmt(restocking.stockQuantity)} {restocking.unit}</span>
-              </div>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Quantity to add ({restocking.unit}) *
-                <input type="number" min={0} step="any" className={input} value={rQty} onChange={(e) => { setRQty(e.target.value); setRErr("") }} placeholder="e.g. 25" autoFocus /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Supplier (optional)
-                <select className={input} value={rSup} onChange={(e) => setRSup(e.target.value)}><option value="">None</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
-              {rErr && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{rErr}</p>}
+            <SectionCard title={`Restock ${restocking.name}`} description={`Current stock ${fmt(restocking.stockQuantity)} ${restocking.unit}`} contentClassName="flex flex-col gap-3.5">
+              <FormField label={`Quantity to add (${restocking.unit})`} required htmlFor="restock-qty">
+                <Input id="restock-qty" type="number" min={0} step="any" value={rQty} onChange={(e) => { setRQty(e.target.value); setRErr("") }} placeholder="e.g. 25" autoFocus /></FormField>
+              <FormField label="Supplier (optional)" htmlFor="restock-supplier">
+                <Select value={rSup || "__none"} onValueChange={(v) => setRSup(v === "__none" ? "" : v)}>
+                  <SelectTrigger id="restock-supplier" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="__none">None</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+                </Select></FormField>
+              {rErr && <Alert variant="destructive"><AlertDescription>{rErr}</AlertDescription></Alert>}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => { setRestocking(null); setRErr("") }} className={outlineBtn}>Cancel</button>
-                <button type="button" disabled={rSaving} onClick={doRestock} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">{rSaving ? "Adding…" : "Add stock"}</button>
+                <Button type="button" variant="outline" onClick={() => { setRestocking(null); setRErr("") }}>Cancel</Button>
+                <Button type="button" disabled={rSaving} onClick={doRestock}>{rSaving ? "Adding…" : "Add stock"}</Button>
               </div>
-            </div>
+            </SectionCard>
           )}
 
-          <div className="flex flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5">
-            <h2 className="font-dash-display text-lg font-bold">{editing ? "Edit fabric" : "Add fabric"}</h2>
-            {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Fabric name *
-              <input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Premium cotton" /></label>
+          <SectionCard title={editing ? "Edit fabric" : "Add fabric"} contentClassName="flex flex-col gap-3.5">
+            {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+            <FormField label="Fabric name" required htmlFor="fabric-f1">
+              <Input id="fabric-f1" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Premium cotton" /></FormField>
             <div className="grid grid-cols-2 gap-2.5">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Type
-                <select className={input} value={form.type} onChange={(e) => set("type", e.target.value)}>{typeOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Pattern
-                <select className={input} value={form.pattern} onChange={(e) => set("pattern", e.target.value)}>{patternOptions.map((t) => <option key={t}>{t}</option>)}</select></label>
+              <FormField label="Type" htmlFor="fabric-f2">
+                <Select value={form.type} onValueChange={(v) => set("type", v)}>
+                  <SelectTrigger id="fabric-f2" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{typeOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select></FormField>
+              <FormField label="Pattern" htmlFor="fabric-f3">
+                <Select value={form.pattern} onValueChange={(v) => set("pattern", v)}>
+                  <SelectTrigger id="fabric-f3" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{patternOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select></FormField>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Unit of measure
-                <select className={input} value={form.unit} onChange={(e) => set("unit", e.target.value)}>{UNITS.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Status
-                <select className={input} value={form.status} onChange={(e) => set("status", e.target.value as "active" | "inactive")}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+              <FormField label="Unit of measure" htmlFor="fabric-f4">
+                <Select value={form.unit} onValueChange={(v) => set("unit", v)}>
+                  <SelectTrigger id="fabric-f4" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{UNITS.map(([id, n]) => <SelectItem key={id} value={id}>{n}</SelectItem>)}</SelectContent>
+                </Select></FormField>
+              <FormField label="Status" htmlFor="fabric-f5">
+                <Select value={form.status} onValueChange={(v) => set("status", v as "active" | "inactive")}>
+                  <SelectTrigger id="fabric-f5" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+                </Select></FormField>
             </div>
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Colour
+            <FormField label="Colour" htmlFor="fabric-colour-name">
               <div className="flex flex-wrap items-center gap-2">
-                {COLOURS.map(([label, c]) => (
-                  <button key={label} type="button" aria-label={label} aria-pressed={form.hex === c} onClick={() => { set("color", label); set("hex", c) }}
-                    className={cn("size-8 rounded-full border-2", form.hex === c ? "border-dash-accent ring-2 ring-dash-accent-soft" : "border-white shadow-[0_0_0_1px_var(--dash-border)]")} style={{ background: c }} />
-                ))}
-                <input aria-label="Colour name" className={cn(input, "w-32 flex-1")} value={form.color} placeholder="Colour name"
+                <SwatchPicker size="sm" aria-label="Colour" value={COLOURS.some(([, c]) => c === form.hex) ? form.hex : undefined}
+                  options={COLOURS.map(([label, c]) => ({ value: c, label, color: c }))}
+                  onValueChange={(c) => { const label = COLOURS.find(([, h]) => h === c)?.[0] ?? ""; set("color", label); set("hex", c) }} />
+                <Input id="fabric-colour-name" aria-label="Colour name" className="w-32 flex-1" value={form.color} placeholder="Colour name"
                   onChange={(e) => { const v = e.target.value; const m = COLOURS.find((c) => c[0].toLowerCase() === v.trim().toLowerCase()); setForm((f) => ({ ...f, color: m ? m[0] : v, hex: m ? m[1] : f.hex })); setErr("") }} />
               </div>
+            </FormField>
+            <div className="grid grid-cols-2 gap-2.5">
+              <FormField label="Code" htmlFor="fabric-f6">
+                <Input id="fabric-f6" value={form.code} onChange={(e) => set("code", e.target.value)} placeholder="e.g. FAB-001" /></FormField>
+              <FormField label={`Stock (${form.unit})`} htmlFor="fabric-f7">
+                <Input id="fabric-f7" type="number" min={0} step="any" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="0" /></FormField>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Code
-                <input className={input} value={form.code} onChange={(e) => set("code", e.target.value)} placeholder="e.g. FAB-001" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Stock ({form.unit})
-                <input type="number" min={0} step="any" className={input} value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="0" /></label>
+              <FormField label={`Cost price / ${form.unit}`} htmlFor="fabric-f8">
+                <Input id="fabric-f8" type="number" min={0} step="any" value={form.buy} onChange={(e) => set("buy", e.target.value)} placeholder="0.00" /></FormField>
+              <FormField label={`Sell price / ${form.unit}`} htmlFor="fabric-f9">
+                <Input id="fabric-f9" type="number" min={0} step="any" value={form.sell} onChange={(e) => set("sell", e.target.value)} placeholder="0.00" /></FormField>
             </div>
+            <Card className="flex-row items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+              <span>Profit per {form.unit} <strong className="text-foreground">{formatCurrency(sellN - buyN)}</strong></span>
+              <span>margin <strong className="text-foreground">{sellN ? `${Math.round(((sellN - buyN) / sellN) * 100)}%` : "—"}</strong></span>
+            </Card>
             <div className="grid grid-cols-2 gap-2.5">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Cost price / {form.unit}
-                <input type="number" min={0} step="any" className={input} value={form.buy} onChange={(e) => set("buy", e.target.value)} placeholder="0.00" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Sell price / {form.unit}
-                <input type="number" min={0} step="any" className={input} value={form.sell} onChange={(e) => set("sell", e.target.value)} placeholder="0.00" /></label>
-            </div>
-            <div className="flex items-center justify-between rounded-[10px] bg-dash-neutral-soft px-3 py-2 text-[13px] text-dash-muted">
-              <span>Profit per {form.unit} <strong className="text-dash-ink">{formatCurrency(sellN - buyN)}</strong></span>
-              <span>margin <strong className="text-dash-ink">{sellN ? `${Math.round(((sellN - buyN) / sellN) * 100)}%` : "—"}</strong></span>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Low-stock alert at ({form.unit})
-                <input type="number" min={0} step="any" className={input} value={form.rop} onChange={(e) => set("rop", e.target.value)} placeholder="e.g. 10" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Supplier
-                <select className={input} value={form.vendorId} onChange={(e) => set("vendorId", e.target.value)}><option value="">None</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
+              <FormField label={`Low-stock alert at (${form.unit})`} htmlFor="fabric-f10">
+                <Input id="fabric-f10" type="number" min={0} step="any" value={form.rop} onChange={(e) => set("rop", e.target.value)} placeholder="e.g. 10" /></FormField>
+              <FormField label="Supplier" htmlFor="fabric-f11">
+                <Select value={form.vendorId || "__none"} onValueChange={(v) => set("vendorId", v === "__none" ? "" : v)}>
+                  <SelectTrigger id="fabric-f11" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="__none">None</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+                </Select></FormField>
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => startEdit(null)} className={outlineBtn}>Clear</button>
+              <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
               {mayWrite && (
-                <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+                <Button type="button" disabled={saving} onClick={save}>
                   {saving ? "Saving…" : editing ? "Save changes" : "Add fabric"}
-                </button>
+                </Button>
               )}
             </div>
-          </div>
+          </SectionCard>
         </aside>
       </div>
     </div>

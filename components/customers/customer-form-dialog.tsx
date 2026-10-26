@@ -6,6 +6,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { customerApi, type CustomerResponse } from "@/lib/customerApi"
 import { useCustomer } from "@/contexts/customer-context"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { FormField } from "@/components/common/FormField"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -23,10 +33,6 @@ const empty = {
   status: "active" as "active" | "inactive",
 }
 
-const legend = "mb-2.5 text-[13px] font-bold uppercase tracking-[0.06em] text-dash-muted"
-const label = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const input =
-  "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
 
 interface Props {
   open: boolean
@@ -181,190 +187,163 @@ export function CustomerFormDialog({ open, onOpenChange, customer, prefillPhone,
     { value: "wholesale", label: "Wholesale" },
     { value: "vip", label: "VIP", note: "5% auto discount" },
   ]
-  const err = (k: string) => errors[k] ? <span className="text-xs font-normal text-dash-danger">{errors[k]}</span> : null
+  const err = (k: string) => errors[k] || undefined
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[720px]">
-        <DialogHeader className="border-b border-dash-border px-6 py-[18px] text-left">
-          <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? "Edit customer" : "Add customer"}</DialogTitle>
-          <DialogDescription className="text-[13px] text-dash-muted">
+      <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
+        <DialogHeader className="px-6 py-4 text-left">
+          <DialogTitle>{editing ? "Edit customer" : "Add customer"}</DialogTitle>
+          <DialogDescription>
             Only name and phone are required. You can fill in the rest later.
           </DialogDescription>
         </DialogHeader>
+        <Separator />
 
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-          <div role="radiogroup" aria-label="Customer type" className="grid grid-cols-2 gap-2.5">
-            {types.map((t) => {
-              const on = form.type === t.value
-              return (
-                <button key={t.value} type="button" role="radio" aria-checked={on} onClick={() => set("type", t.value)}
-                  className={cn("flex min-h-[64px] items-center gap-3 rounded-xl border-2 px-3.5 py-2.5 text-left",
-                    on ? "border-dash-accent bg-dash-accent-soft/50" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
-                  <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", on ? "bg-dash-accent text-white" : "bg-dash-neutral-soft text-dash-neutral-fg")}>
-                    <t.icon className="size-[18px]" aria-hidden />
-                  </span>
-                  <span className="flex flex-col">
-                    <span className="text-sm font-semibold">{t.title}</span>
-                    <span className="text-xs text-dash-muted">{t.sub}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <ChoiceCardGroup value={form.type} onValueChange={(v) => set("type", v as Kind)} aria-label="Customer type" className="grid-cols-2 gap-2.5">
+            {types.map((t) => (
+              <ChoiceCard key={t.value} value={t.value} icon={<t.icon className="size-[18px]" aria-hidden />} title={t.title} description={t.sub} />
+            ))}
+          </ChoiceCardGroup>
 
           <fieldset>
-            <legend className={legend}>Basic info</legend>
+            <SectionTitle as="legend" className="mb-2.5">Basic info</SectionTitle>
             <div className="grid grid-cols-2 gap-2.5">
-              <label className={cn(label, form.type === "business" ? "" : "col-span-2")}>{form.type === "business" ? "Contact person *" : "Full name *"}
-                <input className={cn(input, errors.name && "border-dash-danger")} placeholder="e.g. Rahima Akter" value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
-                {err("name")}
-              </label>
+              <FormField label={form.type === "business" ? "Contact person *" : "Full name *"} htmlFor="cf-name" error={err("name")}
+                className={cn("min-w-0", form.type !== "business" && "col-span-2")}>
+                <Input id="cf-name" aria-invalid={!!errors.name} placeholder="e.g. Rahima Akter" value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus />
+              </FormField>
               {form.type === "business" && (
-                <label className={label}>Business name *
-                  <input className={cn(input, errors.businessName && "border-dash-danger")} placeholder="e.g. Akter Traders" value={form.businessName} onChange={(e) => set("businessName", e.target.value)} />
-                  {err("businessName")}
-                </label>
+                <FormField label="Business name *" htmlFor="cf-business" error={err("businessName")} className="min-w-0">
+                  <Input id="cf-business" aria-invalid={!!errors.businessName} placeholder="e.g. Akter Traders" value={form.businessName} onChange={(e) => set("businessName", e.target.value)} />
+                </FormField>
               )}
               {form.type === "business" && (
-                <label className={cn(label, "col-span-2")}>Trade licence / BIN
-                  <input className={input} value={form.licenceBin} onChange={(e) => set("licenceBin", e.target.value)} />
-                </label>
+                <FormField label="Trade licence / BIN" htmlFor="cf-bin" className="col-span-2 min-w-0">
+                  <Input id="cf-bin" value={form.licenceBin} onChange={(e) => set("licenceBin", e.target.value)} />
+                </FormField>
               )}
-              <label className={label}>Phone *
-                <input className={cn(input, (dupe || errors.phone) && "border-amber-500")} type="tel" placeholder="e.g. 01712-345678" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-                {err("phone")}
-                {dupe && (
-                  <span className="text-xs font-normal text-dash-warn-fg">
+              <FormField
+                label="Phone *" htmlFor="cf-phone" error={err("phone")} className="min-w-0"
+                description={dupe ? (
+                  <>
                     Already used by <strong>{dupe.name}</strong>{dupe.others > 0 ? ` and ${dupe.others} other${dupe.others === 1 ? "" : "s"}` : ""}.{" "}
                     {onOpenExisting && (
-                      <button type="button" className="font-semibold underline" onClick={() => { onOpenChange(false); onOpenExisting(form.phone.trim()) }}>
+                      <Button type="button" variant="link" className="h-auto p-0" onClick={() => { onOpenChange(false); onOpenExisting(form.phone.trim()) }}>
                         Open existing customer
-                      </button>
+                      </Button>
                     )}
-                  </span>
-                )}
-              </label>
-              <label className={label}>Email
-                <input className={cn(input, errors.email && "border-dash-danger")} type="email" placeholder="name@example.com" value={form.email} onChange={(e) => set("email", e.target.value)} />
-                {err("email")}
-              </label>
-              <label className={label}>Birthday
-                <input className={cn(input, errors.birthday && "border-dash-danger")} type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthday} onChange={(e) => set("birthday", e.target.value)} />
-                {err("birthday")}
-              </label>
-              <label className={label}>Status
-                <select className={input} value={form.status} onChange={(e) => set("status", e.target.value as "active" | "inactive")}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive (kept for history)</option>
-                </select>
-              </label>
+                  </>
+                ) : undefined}
+              >
+                <Input id="cf-phone" aria-invalid={!!errors.phone} type="tel" placeholder="e.g. 01712-345678" value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+              </FormField>
+              <FormField label="Email" htmlFor="cf-email" error={err("email")} className="min-w-0">
+                <Input id="cf-email" aria-invalid={!!errors.email} type="email" placeholder="name@example.com" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              </FormField>
+              <FormField label="Birthday" htmlFor="cf-birthday" error={err("birthday")} className="min-w-0">
+                <Input id="cf-birthday" aria-invalid={!!errors.birthday} type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthday} onChange={(e) => set("birthday", e.target.value)} />
+              </FormField>
+              <FormField label="Status" htmlFor="cf-status" className="min-w-0">
+                <Select value={form.status} onValueChange={(v) => set("status", v as "active" | "inactive")}>
+                  <SelectTrigger id="cf-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive (kept for history)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
           </fieldset>
 
           <fieldset>
-            <legend className={legend}>Group, credit &amp; tags</legend>
-            <div role="radiogroup" aria-label="Customer group" className="grid grid-cols-3 gap-2.5">
-              {groups.map((g) => {
-                const on = form.customerGroup === g.value
-                return (
-                  <button key={g.value} type="button" role="radio" aria-checked={on} onClick={() => set("customerGroup", g.value)}
-                    className={cn("flex min-h-[48px] flex-col items-start justify-center rounded-xl border-2 px-3 py-1.5 text-left",
-                      on ? "border-dash-accent bg-dash-accent-soft/50" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
-                    <span className="text-sm font-semibold">{g.label}</span>
-                    {g.note && <span className="text-xs text-dash-muted">{g.note}</span>}
-                  </button>
-                )
-              })}
-            </div>
+            <SectionTitle as="legend" className="mb-2.5">Group, credit &amp; tags</SectionTitle>
+            <ChoiceCardGroup value={form.customerGroup} onValueChange={(v) => set("customerGroup", v as Group)} aria-label="Customer group" className="grid-cols-3 gap-2.5">
+              {groups.map((g) => (
+                <ChoiceCard key={g.value} value={g.value} title={g.label} description={g.note} />
+              ))}
+            </ChoiceCardGroup>
             <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-              <label className={label}>Credit limit
-                <input className={cn(input, errors.creditLimit && "border-dash-danger")} type="number" min={0} step="0.01" placeholder="0.00" value={form.creditLimit} onChange={(e) => set("creditLimit", e.target.value)} />
-                {err("creditLimit")}
-              </label>
-              <label className={label}>Opening balance
-                <input className={cn(input, errors.openingBalance && "border-dash-danger")} type="number" min={0} step="0.01" placeholder="0.00" value={form.openingBalance} onChange={(e) => set("openingBalance", e.target.value)} />
-                {err("openingBalance")}
-              </label>
-              <div className={cn(label, "col-span-2")}>
-                Tags
-                <div className="flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-[10px] border border-dash-border bg-dash-card px-2 py-1.5 focus-within:border-dash-accent">
+              <FormField label="Credit limit" htmlFor="cf-credit" error={err("creditLimit")} className="min-w-0">
+                <Input id="cf-credit" aria-invalid={!!errors.creditLimit} type="number" min={0} step="0.01" placeholder="0.00" value={form.creditLimit} onChange={(e) => set("creditLimit", e.target.value)} />
+              </FormField>
+              <FormField label="Opening balance" htmlFor="cf-opening" error={err("openingBalance")} className="min-w-0">
+                <Input id="cf-opening" aria-invalid={!!errors.openingBalance} type="number" min={0} step="0.01" placeholder="0.00" value={form.openingBalance} onChange={(e) => set("openingBalance", e.target.value)} />
+              </FormField>
+              <FormField label="Tags" htmlFor="cf-tags" className="col-span-2 min-w-0">
+                <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-input px-2 py-1.5 shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
                   {tags.map((t) => (
-                    <span key={t} className="inline-flex items-center gap-1 rounded-md bg-dash-accent-soft px-2 py-0.5 text-xs font-semibold text-dash-accent-fg">
+                    <Badge key={t} variant="secondary" className="gap-1 pr-0.5">
                       {t}
-                      <button type="button" aria-label={`Remove tag ${t}`} onClick={() => setTags((p) => p.filter((x) => x !== t))}><X className="size-3" /></button>
-                    </span>
+                      <Button type="button" variant="ghost" size="icon" className="size-4" aria-label={`Remove tag ${t}`} onClick={() => setTags((p) => p.filter((x) => x !== t))}><X className="size-3" /></Button>
+                    </Badge>
                   ))}
-                  <input value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder={tags.length ? "" : "Type a tag, press Enter"}
+                  <Input id="cf-tags" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder={tags.length ? "" : "Type a tag, press Enter"}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagDraft) }
                       else if (e.key === "Backspace" && !tagDraft && tags.length) setTags((p) => p.slice(0, -1))
                     }}
                     onBlur={() => addTag(tagDraft)}
-                    className="min-w-[120px] flex-1 border-0 bg-transparent text-sm font-normal outline-none placeholder:text-dash-muted" />
+                    className="h-auto min-w-[120px] flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 dark:bg-transparent" />
                 </div>
-              </div>
-              <label className="col-span-2 flex items-center gap-2 text-[13px] font-semibold">
-                <Checkbox checked={form.smsOptIn} onCheckedChange={(v) => set("smsOptIn", v === true)} />
-                Agreed to receive SMS offers
-              </label>
+              </FormField>
+              <Field orientation="horizontal" className="col-span-2">
+                <Checkbox id="cf-sms" checked={form.smsOptIn} onCheckedChange={(v) => set("smsOptIn", v === true)} />
+                <FieldLabel htmlFor="cf-sms">Agreed to receive SMS offers</FieldLabel>
+              </Field>
             </div>
           </fieldset>
 
           <fieldset>
-            <legend className={legend}>Address</legend>
+            <SectionTitle as="legend" className="mb-2.5">Address</SectionTitle>
             <div className="grid grid-cols-2 gap-2.5">
-              <label className={cn(label, "col-span-2")}>Street address
-                <input className={input} placeholder="House, road" value={form.address} onChange={(e) => set("address", e.target.value)} />
-              </label>
-              <label className={label}>District
-                <input className={input} value={form.district} onChange={(e) => set("district", e.target.value)} />
-              </label>
-              <label className={label}>Area
-                <input className={input} value={form.area} onChange={(e) => set("area", e.target.value)} />
-              </label>
-              <label className={label}>Postcode
-                <input className={input} placeholder="1209" value={form.zipCode} onChange={(e) => set("zipCode", e.target.value)} />
-              </label>
-              <label className={label}>Country
-                <input className={input} value={form.country} onChange={(e) => set("country", e.target.value)} />
-              </label>
+              <FormField label="Street address" htmlFor="cf-address" className="col-span-2 min-w-0">
+                <Input id="cf-address" placeholder="House, road" value={form.address} onChange={(e) => set("address", e.target.value)} />
+              </FormField>
+              <FormField label="District" htmlFor="cf-district" className="min-w-0">
+                <Input id="cf-district" value={form.district} onChange={(e) => set("district", e.target.value)} />
+              </FormField>
+              <FormField label="Area" htmlFor="cf-area" className="min-w-0">
+                <Input id="cf-area" value={form.area} onChange={(e) => set("area", e.target.value)} />
+              </FormField>
+              <FormField label="Postcode" htmlFor="cf-zip" className="min-w-0">
+                <Input id="cf-zip" placeholder="1209" value={form.zipCode} onChange={(e) => set("zipCode", e.target.value)} />
+              </FormField>
+              <FormField label="Country" htmlFor="cf-country" className="min-w-0">
+                <Input id="cf-country" value={form.country} onChange={(e) => set("country", e.target.value)} />
+              </FormField>
             </div>
           </fieldset>
 
           <div>
-            <button type="button" aria-expanded={showMore} onClick={() => setShowMore((v) => !v)}
-              className="text-[13px] font-semibold text-dash-accent hover:underline">
+            <Button type="button" variant="link" className="h-auto p-0" aria-expanded={showMore} onClick={() => setShowMore((v) => !v)}>
               {showMore ? "Hide" : "More options"} — store credit and notes
-            </button>
+            </Button>
             {showMore && (
               <div className="mt-3 grid grid-cols-2 gap-2.5">
-                <label className={label}>Store credit
-                  <input className={cn(input, errors.storeCredit && "border-dash-danger")} type="number" min={0} step="0.01" placeholder="0.00" value={form.storeCredit} onChange={(e) => set("storeCredit", e.target.value)} />
-                  {err("storeCredit")}
-                </label>
-                <label className={cn(label, "col-span-2")}>Notes
-                  <textarea rows={2} placeholder="Measurements, preferences…" value={form.notes} onChange={(e) => set("notes", e.target.value)}
-                    className="resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none placeholder:text-dash-muted focus-visible:border-dash-accent" />
-                </label>
+                <FormField label="Store credit" htmlFor="cf-store-credit" error={err("storeCredit")} className="min-w-0">
+                  <Input id="cf-store-credit" aria-invalid={!!errors.storeCredit} type="number" min={0} step="0.01" placeholder="0.00" value={form.storeCredit} onChange={(e) => set("storeCredit", e.target.value)} />
+                </FormField>
+                <FormField label="Notes" htmlFor="cf-notes" className="col-span-2 min-w-0">
+                  <Textarea id="cf-notes" rows={2} placeholder="Measurements, preferences…" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+                </FormField>
               </div>
             )}
           </div>
         </div>
 
-        <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
-          <button type="button" onClick={() => onOpenChange(false)}
-            className="h-12 rounded-xl border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
+        <Separator />
+        <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 px-6 py-4">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {!editing && (
-            <button type="button" onClick={() => save(true)} disabled={saving}
-              className="h-12 rounded-xl border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={() => save(true)} disabled={saving}>
               Save &amp; add another
-            </button>
+            </Button>
           )}
-          <button type="button" onClick={() => save(false)} disabled={saving}
-            className="h-12 rounded-xl bg-dash-accent px-[22px] text-[15px] font-bold text-white disabled:opacity-40">
+          <Button type="button" onClick={() => save(false)} disabled={saving}>
             {saving ? "Saving…" : editing ? "Save changes" : "Save customer"}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

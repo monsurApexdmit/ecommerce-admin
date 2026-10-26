@@ -6,6 +6,10 @@ import Link from "next/link"
 import { ArrowLeftRight, BarChart3, Banknote, Boxes, ClipboardList, Download, Eye, Pencil, Search, Upload, X, AlertTriangle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
@@ -18,21 +22,26 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/common/PageHeader"
+import { Toolbar } from "@/components/common/Toolbar"
+import { BulkBar } from "@/components/common/BulkBar"
+import { FormField } from "@/components/common/FormField"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
 
 type Tab = "all" | "attention" | "ok" | "low" | "out" | "over"
 
-const HEALTH: Record<StockHealth, { label: string; cls: string }> = {
-  ok: { label: "Healthy", cls: "bg-dash-success-soft text-dash-success-fg" },
-  low: { label: "Low", cls: "bg-dash-warn-soft text-dash-warn-fg" },
-  out: { label: "Out of stock", cls: "bg-dash-danger-soft text-dash-danger-fg" },
-  over: { label: "Overstock", cls: "bg-dash-neutral-soft text-dash-neutral-fg" },
+const HEALTH: Record<StockHealth, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  ok: { label: "Healthy", variant: "default" },
+  low: { label: "Low", variant: "secondary" },
+  out: { label: "Out of stock", variant: "destructive" },
+  over: { label: "Overstock", variant: "outline" },
 }
 const QUICK_REASONS = ["Correction", "Damaged", "Lost", "Found", "Stock count"]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
 
 export default function InventoryPage() {
   return <Suspense fallback={null}><InventoryInner /></Suspense>
@@ -214,69 +223,66 @@ function InventoryInner() {
     const hasVariants = !nested && (r.variants?.length ?? 0) > 0
     const open = expanded.has(k)
     return (
-      <tr key={k} className={cn(nested && "bg-dash-bg/60", checked.has(k) && "bg-dash-accent-soft/40")}>
-        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+      <TableRow key={k} data-state={checked.has(k) ? "selected" : undefined} className={cn(nested && "bg-muted/30")}>
+        <TableCell className="pl-4">
           {!nested && selectable(r) && <Checkbox checked={checked.has(k)} onCheckedChange={() => toggleOne(k)} aria-label={`Select ${r.name}`} />}
-        </td>
-        <td className={cn("border-b border-dash-border-soft px-2 py-3", nested && "pl-8")}>
+        </TableCell>
+        <TableCell className={cn(nested && "pl-8")}>
           <div className="flex items-center gap-2">
             <span className="flex flex-col">
               <span className="font-semibold">
                 {nested ? r.variantName : r.name}
-                {hasVariants && <span className="ml-1.5 text-xs font-normal text-dash-muted">{r.variants!.length} variants</span>}
+                {hasVariants && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{r.variants!.length} variants</span>}
               </span>
-              <span className="text-xs text-dash-muted">{r.sku || "—"}</span>
+              <span className="text-xs text-muted-foreground">{r.sku || "—"}</span>
             </span>
             {hasVariants && (
-              <button type="button" aria-expanded={open} onClick={() => setExpanded((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })}
-                className="rounded-md border border-dash-border px-2 py-0.5 text-xs font-semibold hover:bg-dash-neutral-soft">
+              <Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={() => setExpanded((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })}>
                 {open ? "Hide" : "Show"}
-              </button>
+              </Button>
             )}
           </div>
-        </td>
+        </TableCell>
         {shownLocations.map((l) => (
-          <td key={l.id} className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
+          <TableCell key={l.id} className="text-right tabular-nums">
             {r.locations.find((x) => x.locationId === l.id)?.quantity ?? 0}
-          </td>
+          </TableCell>
         ))}
-        <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">{r.onHand}</td>
-        <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums text-dash-muted">{r.reserved}</td>
-        <td className="border-b border-dash-border-soft px-2 py-3 text-right font-semibold tabular-nums">{r.available}</td>
-        <td className="border-b border-dash-border-soft px-2 py-3">
-          <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", h.cls)}>{h.label}</span>
-          <div className="mt-0.5 text-xs text-dash-muted">Reorder at {r.reorderPoint}</div>
-        </td>
-        <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">{formatCurrency(r.value)}</td>
-        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+        <TableCell className="text-right font-bold tabular-nums">{r.onHand}</TableCell>
+        <TableCell className="text-right tabular-nums text-muted-foreground">{r.reserved}</TableCell>
+        <TableCell className="text-right font-semibold tabular-nums">{r.available}</TableCell>
+        <TableCell>
+          <StatusBadge status={r.health} label={h.label} variant={h.variant} />
+          <div className="mt-0.5 text-xs text-muted-foreground">Reorder at {r.reorderPoint}</div>
+        </TableCell>
+        <TableCell className="text-right tabular-nums">{formatCurrency(r.value)}</TableCell>
+        <TableCell className="pr-4">
           <div className="flex justify-end gap-1">
-            {!hasVariants && <button type="button" aria-label={`Adjust ${r.name}`} className={iconBtn} onClick={() => openAdjust(r)}><Pencil className="size-4" /></button>}
-            <Link href="/dashboard/inventory/transfer" aria-label="Transfer" className={iconBtn}><ArrowLeftRight className="size-4" /></Link>
-            <Link href="/dashboard/inventory/adjustment" aria-label="Stock history" className={iconBtn}><ClipboardList className="size-4" /></Link>
+            {!hasVariants && <Button type="button" variant="outline" size="icon" aria-label={`Adjust ${r.name}`} onClick={() => openAdjust(r)}><Pencil className="size-4" /></Button>}
+            <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/transfer" aria-label="Transfer"><ArrowLeftRight className="size-4" /></Link></Button>
+            <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/adjustment" aria-label="Stock history"><ClipboardList className="size-4" /></Link></Button>
           </div>
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
     )
   }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Stock overview</h1>
-          <p className="mt-1 text-sm text-dash-muted">How much you have, where it is, and what needs attention.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleImport} className={outlineBtn}><Upload className="size-4" aria-hidden /> Import CSV</button>
-          <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export CSV</button>
-          <Link href="/dashboard/inventory/adjustment" className={outlineBtn}>Adjust stock</Link>
-          <Link href="/dashboard/inventory/transfer" className="inline-flex h-11 items-center rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">Transfer stock</Link>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Stock overview"
+        description="How much you have, where it is, and what needs attention."
+        actions={<>
+          <Button type="button" variant="outline" onClick={handleImport}><Upload className="size-4" aria-hidden /> Import CSV</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+          <Button asChild variant="outline"><Link href="/dashboard/inventory/adjustment">Adjust stock</Link></Button>
+          <Button asChild><Link href="/dashboard/inventory/transfer">Transfer stock</Link></Button>
+        </>}
+      />
 
       {loading || !s ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px]" />)}
         </div>
       ) : (
         <StatsCards stats={[
@@ -289,7 +295,7 @@ function InventoryInner() {
         ]} />
       )}
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs
             value={tab}
@@ -305,105 +311,112 @@ function InventoryInner() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[260px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search stock</span>
-            <input type="search" placeholder="Search name, SKU or scan barcode…" value={search}
+        <Toolbar className="p-4">
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Label htmlFor="stock-search" className="sr-only">Search stock</Label>
+            <Input id="stock-search" type="search" placeholder="Search name, SKU or scan barcode…" value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
+              className="pl-9" />
+          </div>
           <Select value={loc} onValueChange={(v) => { setLoc(v); setPage(1) }}>
-            <SelectTrigger aria-label="Warehouse" className={cn(filterSelect, "w-[170px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Warehouse" className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Warehouse: All</SelectItem>
               {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={cat} onValueChange={(v) => { setCat(v); setPage(1) }}>
-            <SelectTrigger aria-label="Category" className={cn(filterSelect, "w-[170px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Category" className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Category: All</SelectItem>
               {(data?.categories ?? []).map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
+        </Toolbar>
 
-        {selectedRows.length > 0 && (
-          <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
-            <span className="text-sm font-semibold">{selectedRows.length} selected</span>
-            <Link href="/dashboard/inventory/transfer" className="inline-flex h-9 items-center rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Transfer</Link>
-            <Link href="/dashboard/inventory/adjustment" className="inline-flex h-9 items-center rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Adjust</Link>
-            <Link href={reorderHref} className="inline-flex h-9 items-center rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Reorder</Link>
-            <Link href="/dashboard/products/print-barcode" className="inline-flex h-9 items-center rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Print labels</Link>
-            <button type="button" onClick={() => setChecked(new Set())} className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">Clear</button>
-          </div>
-        )}
+        <BulkBar count={selectedRows.length} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/inventory/transfer">Transfer</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/inventory/adjustment">Adjust</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href={reorderHref}>Reorder</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/products/print-barcode">Print labels</Link></Button>
+        </BulkBar>
 
         {adj && (
-          <div className="mx-4 mb-3 grid gap-3 rounded-xl border border-dash-border bg-dash-bg p-4 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
+          <Card className="mx-4 mb-3 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.08em] text-dash-muted">Quick adjust</div>
+              <SectionTitle as="p">Quick adjust</SectionTitle>
               <div className="font-semibold">{adj.name}{adj.variantName ? ` · ${adj.variantName}` : ""}</div>
-              <div className="text-xs text-dash-muted">Current: {currentQty}</div>
+              <div className="text-xs text-muted-foreground">Current: {currentQty}</div>
             </div>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Location
-              <select className={input} value={adjLoc} onChange={(e) => onAdjLoc(e.target.value)}>
-                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">New quantity
-              <input type="number" min={0} step={1} inputMode="numeric" className={input} value={adjQty} placeholder={String(currentQty)}
+            <FormField label="Location" htmlFor="quick-adj-loc">
+              <Select value={adjLoc || undefined} onValueChange={onAdjLoc}>
+                <SelectTrigger id="quick-adj-loc" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="New quantity" htmlFor="quick-adj-qty">
+              <Input id="quick-adj-qty" type="number" min={0} step={1} inputMode="numeric" className="w-full" value={adjQty} placeholder={String(currentQty)}
                 onChange={(e) => { setAdjQty(e.target.value); setAdjErr("") }} />
-            </label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Reason
-              <select className={input} value={adjReason} onChange={(e) => setAdjReason(e.target.value)}>
-                {QUICK_REASONS.map((r) => <option key={r}>{r}</option>)}
-              </select>
-            </label>
+            </FormField>
+            <FormField label="Reason" htmlFor="quick-adj-reason">
+              <Select value={adjReason} onValueChange={setAdjReason}>
+                <SelectTrigger id="quick-adj-reason" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {QUICK_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
             <div className="flex items-end gap-2">
-              <button type="button" disabled={adjBusy} onClick={applyAdjust} className="h-[42px] rounded-[10px] bg-dash-accent px-4 text-[13px] font-semibold text-white disabled:opacity-40">Apply</button>
-              <button type="button" onClick={() => setAdj(null)} className="h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-4 text-[13px] font-semibold">Cancel</button>
+              <Button type="button" disabled={adjBusy} onClick={applyAdjust}>Apply</Button>
+              <Button type="button" variant="outline" onClick={() => setAdj(null)}>Cancel</Button>
             </div>
-            {adjErr && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg sm:col-span-2 lg:col-span-5">{adjErr}</p>}
-          </div>
+            {adjErr && <p role="alert" className="text-sm font-medium text-destructive sm:col-span-2 lg:col-span-5">{adjErr}</p>}
+          </Card>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th scope="col" className="w-5 py-3 pl-4 pr-2"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></th>
-                <th scope="col" className="px-2 py-3 font-semibold">Product</th>
-                {shownLocations.map((l) => <th key={l.id} scope="col" className="px-2 py-3 text-right font-semibold">{l.name}</th>)}
-                <th scope="col" className="px-2 py-3 text-right font-semibold">On hand</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Reserved</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Available</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Health</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Value</th>
-                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div>
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></TableHead>
+                <TableHead scope="col">Product</TableHead>
+                {shownLocations.map((l) => <TableHead key={l.id} scope="col" className="text-right">{l.name}</TableHead>)}
+                <TableHead scope="col" className="text-right">On hand</TableHead>
+                <TableHead scope="col" className="text-right">Reserved</TableHead>
+                <TableHead scope="col" className="text-right">Available</TableHead>
+                <TableHead scope="col">Health</TableHead>
+                <TableHead scope="col" className="text-right">Value</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={9 + shownLocations.length} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>)
+                [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={9 + shownLocations.length} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>)
               ) : pageRows.length === 0 ? (
-                <tr>
-                  <td colSpan={9 + shownLocations.length} className="py-14 text-center">
-                    <Boxes className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">No stock found</p>
-                    <p className="text-sm text-dash-muted">{search || tab !== "all" || loc !== "all" || cat !== "all" ? "Try clearing the search or filters." : "Add products to start tracking stock."}</p>
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={9 + shownLocations.length}>
+                    <EmptyState
+                      icon={Boxes}
+                      title="No stock found"
+                      description={search || tab !== "all" || loc !== "all" || cat !== "all" ? "Try clearing the search or filters." : "Add products to start tracking stock."}
+                      className="p-4 md:p-6"
+                    />
+                  </TableCell>
+                </TableRow>
               ) : (
                 pageRows.flatMap((r) => [renderRow(r), ...(expanded.has(key(r)) ? (r.variants ?? []).map((v) => renderRow(v, true)) : [])])
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {!loading && rows.length > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
+          <>
+          <Separator />
+          <div className="p-4 pt-3">
             <PaginationControl
               currentPage={page}
               totalPages={Math.max(1, Math.ceil(rows.length / perPage))}
@@ -413,11 +426,13 @@ function InventoryInner() {
               onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
             />
           </div>
+          </>
         )}
-        <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted">
+        <Separator />
+        <div className="px-4 py-3 text-xs text-muted-foreground">
           {rows.length} of {data?.counts.all ?? 0} SKUs across {locations.length} location{locations.length === 1 ? "" : "s"} · Reserved = held by unshipped orders
         </div>
-      </section>
+      </Card>
     </div>
   )
 }

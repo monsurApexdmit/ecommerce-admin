@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2 } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
+import { ColorPicker } from "@/components/common/ColorPicker"
+import { FormField } from "@/components/common/FormField"
 import { settingsApi } from "@/lib/settingsApi"
 import { useToast } from "@/hooks/use-toast"
 
@@ -61,36 +63,22 @@ export function StorefrontBrandColors() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {fields.map(({ label, key }) => (
-          <div key={key} className="flex flex-col gap-1.5">
-            <label className="text-xs text-muted-foreground">{label}</label>
-            <div className="flex items-center gap-2 border border-border rounded-lg px-2 py-1.5">
-              <input
-                type="color"
-                value={colors[key]}
-                disabled={loading}
-                onChange={(e) => set(key, e.target.value)}
-                className="w-8 h-8 rounded cursor-pointer border-0 p-0 bg-transparent shrink-0"
-              />
-              <input
-                type="text"
-                value={colors[key]}
-                disabled={loading}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) set(key, v)
-                }}
-                maxLength={7}
-                className="w-full text-xs font-mono uppercase bg-transparent outline-none text-foreground"
-                placeholder="#000000"
-              />
-            </div>
-          </div>
+          <FormField key={key} label={label} htmlFor={`brand-color-${key}`}>
+            <ColorPicker
+              showInput
+              id={`brand-color-${key}`}
+              value={colors[key]}
+              disabled={loading}
+              onChange={(hex) => set(key, hex)}
+              aria-label={`${label} picker`}
+            />
+          </FormField>
         ))}
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={save} disabled={saving || loading} className="bg-brand hover:brightness-110 text-brand-foreground">
-          {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Save colors"}
+        <Button onClick={save} disabled={saving || loading}>
+          {saving ? <><Spinner />Saving...</> : "Save colors"}
         </Button>
       </div>
     </div>

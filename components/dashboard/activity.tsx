@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { relativeTime } from "./format"
 import { CardTitle, DashCard, EmptyNote, SectionError, SectionSkeleton } from "./section"
 import { useDashboardSection } from "./use-dashboard-section"
@@ -30,10 +31,10 @@ export function Activity() {
       <ul>
         {data.items.map((a, i) => (
           <li key={`${a.createdAt}-${i}`} className="flex gap-3 py-2.5">
-            <span className={`mt-[5px] size-2.5 shrink-0 rounded-full ${DOT[a.type] ?? "bg-dash-danger"}`} aria-hidden />
+            <span className={cn("mt-[5px] size-2.5 shrink-0 rounded-full", DOT[a.type] ?? "bg-dash-danger")} aria-hidden />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-[13px] leading-snug text-dash-ink">{a.text}</span>
-              <span className="text-xs text-dash-muted">{relativeTime(a.createdAt)}</span>
+              <span className="text-sm leading-snug">{a.text}</span>
+              <span className="text-xs text-muted-foreground">{relativeTime(a.createdAt)}</span>
             </div>
           </li>
         ))}

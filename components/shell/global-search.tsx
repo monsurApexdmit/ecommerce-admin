@@ -8,6 +8,11 @@ import { sellsApi } from "@/lib/sellsApi"
 import { customerApi } from "@/lib/customerApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Kbd, KbdGroup } from "@/components/ui/kbd"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 
 const PAGES = [
   { label: "Dashboard", href: "/dashboard", module: "Dashboard" },
@@ -127,9 +132,11 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
 
   return (
     <div ref={wrapRef} className={cn("relative", className)}>
-      <div className="shell-search cursor-text focus-within:border-[#5B6BFF] focus-within:shadow-[0_0_0_4px_var(--brand-ring)]">
-        <Search className="size-[18px] flex-none" aria-hidden />
-        <input
+      <InputGroup>
+        <InputGroupAddon>
+          <Search aria-hidden />
+        </InputGroupAddon>
+        <InputGroupInput
           ref={inputRef}
           autoFocus={autoFocus}
           value={query}
@@ -141,48 +148,54 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
           aria-controls="global-search-list"
           aria-label="Search products, invoices, customers and pages"
           placeholder="Search products, SKUs, invoices, customers…"
-          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="min-w-0"
         />
-        {query ? (
-          <button type="button" aria-label="Clear search" onClick={() => { setQuery(""); inputRef.current?.focus() }} className="flex-none rounded p-0.5 hover:bg-black/5">
-            <X className="size-4" aria-hidden />
-          </button>
-        ) : (
-          <kbd className="hidden flex-none rounded-md border border-[var(--shell-line-strong)] px-1.5 py-0.5 text-xs sm:block">Ctrl K</kbd>
-        )}
-      </div>
+        <InputGroupAddon align="inline-end">
+          {query ? (
+            <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => { setQuery(""); inputRef.current?.focus() }}>
+              <X aria-hidden />
+            </InputGroupButton>
+          ) : (
+            <KbdGroup className="hidden flex-none sm:inline-flex">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>K</Kbd>
+            </KbdGroup>
+          )}
+        </InputGroupAddon>
+      </InputGroup>
       {showPanel && (
-        <div id="global-search-list" role="listbox" className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[70vh] overflow-auto rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+        <Card id="global-search-list" role="listbox" className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[70vh] gap-0 overflow-auto p-1.5 shadow-xl">
           {flat.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted-foreground">{q.length < 2 ? "Keep typing…" : "No results."}</div>}
           {groups.map((g) => {
             const Icon = ICONS[g.kind]
             return (
               <div key={g.kind} className="py-1">
-                <div className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{g.kind}</div>
+                <SectionTitle as="p" className="px-2.5 pb-1 pt-1">{g.kind}</SectionTitle>
                 {g.hits.map((h) => {
                   idx += 1
                   const i = idx
                   return (
-                    <button
+                    <Button
                       key={h.id}
                       type="button"
+                      variant="ghost"
                       role="option"
                       aria-selected={i === active}
                       onMouseEnter={() => setActive(i)}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => go(h)}
-                      className={cn("flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm", i === active && "bg-accent")}
+                      className={cn("w-full justify-start gap-2.5 text-left font-normal", i === active && "bg-accent")}
                     >
                       <Icon className="size-4 flex-none text-muted-foreground" aria-hidden />
                       <span className="min-w-0 flex-1 truncate">{h.label}</span>
                       {h.hint && <span className="flex-none truncate text-xs text-muted-foreground">{h.hint}</span>}
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
             )
           })}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -214,9 +227,9 @@ export function GlobalSearch({ variant = "bar", className }: { variant?: "bar" |
   if (variant === "icon") {
     return (
       <>
-        <button type="button" onClick={() => setOverlay(true)} aria-label="Search" className={cn("shell-btn", className)}>
+        <Button type="button" variant="outline" size="icon" onClick={() => setOverlay(true)} aria-label="Search" className={className}>
           <Search className="size-[18px]" aria-hidden />
-        </button>
+        </Button>
         {overlay && (
           <div className="fixed inset-x-0 top-0 z-50 bg-background/95 p-3 shadow-lg backdrop-blur">
             <SearchBox autoFocus inputRef={inputRef} onDone={() => setOverlay(false)} />

@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Globe, Heart, MapPin, Package, TrendingUp, Users } from "lucide-react"
+import { Globe, Heart, ImageUp, MapPin, Package, TrendingUp, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Switch as UISwitch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatsCards } from "@/components/ui/stats-card"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { settingsApi, resolveStorageUrl, type AuraShopHeroSlide } from "@/lib/settingsApi"
@@ -16,6 +22,17 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { SlideDots } from "@/components/common/SlideDots"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type Slide = Required<Pick<AuraShopHeroSlide, "id" | "imagePath" | "tag" | "title" | "subtitle" | "cta" | "link" | "gradient" | "enabled">>
 
@@ -62,11 +79,6 @@ const PAGES: [string, string][] = [
   ["/account", "My account"],
 ]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const textarea = "w-full resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const label = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const outlineBtn = "inline-flex h-11 items-center justify-center rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const card = "flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5"
 const URLRE = /^https?:\/\/[^\s/$.?#][^\s]*$/i
 
 const S = (v: unknown) => (typeof v === "string" ? v : "")
@@ -124,19 +136,12 @@ const imgBg = (path: string) => `center / cover no-repeat url("${resolveStorageU
 
 function Switch({ on, onClick, label: aria }: { on: boolean; onClick: () => void; label: string }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={aria} onClick={onClick}
-      className={cn("flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors", on ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}>
-      <span className="size-4 rounded-full bg-white" />
-    </button>
+    <UISwitch checked={on} aria-label={aria} onCheckedChange={() => onClick()} />
   )
 }
 
-function Bar({ pct, className }: { pct: number; className: string }) {
-  return (
-    <span className="h-2 w-full overflow-hidden rounded-full bg-dash-neutral-soft">
-      <span className={cn("block h-2 rounded-full", className)} style={{ width: `${pct}%` }} />
-    </span>
-  )
+function Bar({ pct }: { pct: number }) {
+  return <Progress value={pct} aria-hidden className="w-full" />
 }
 
 export default function OnlineStorePage() {
@@ -215,19 +220,19 @@ export default function OnlineStorePage() {
 
   const shell = `${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`
   const header = (
-    <div>
-      <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Online store</h1>
-      <p className="mt-1 text-sm text-dash-muted">Your online storefront: locations, wishlist analytics, details, policies and homepage slider, with a live preview.</p>
-    </div>
+    <PageHeader
+      title="Online store"
+      description="Your online storefront: locations, wishlist analytics, details, policies and homepage slider, with a live preview."
+    />
   )
 
   if (loading || !d || !saved) {
     return (
       <div className={shell}>
         {header}
-        <Skeleton className="h-20 w-full rounded-[14px]" />
-        <Skeleton className="h-96 w-full rounded-[14px]" />
-        <Skeleton className="h-96 w-full rounded-[14px]" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-96 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     )
   }
@@ -307,10 +312,9 @@ export default function OnlineStorePage() {
   }
 
   const text = (lbl: string, key: keyof Omit<Form, "slides" | "published">, placeholder = "", transform?: (v: string) => string) => (
-    <label className={label}>
-      {lbl}
-      <input type="text" className={input} value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: transform ? transform(e.target.value) : e.target.value })} />
-    </label>
+    <FormField label={lbl} htmlFor={`store-${key}`} className="min-w-0">
+      <Input id={`store-${key}`} type="text" className="w-full" value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: transform ? transform(e.target.value) : e.target.value })} />
+    </FormField>
   )
 
   const configured = !!(saved.name && saved.slug)
@@ -335,72 +339,79 @@ export default function OnlineStorePage() {
     ? `${wl.summary.totalItems} wishlist item${wl.summary.totalItems > 1 ? "s" : ""} from ${wl.summary.uniqueCustomers} customer${wl.summary.uniqueCustomers > 1 ? "s" : ""}`
     : "Customer wishlist activity and most-wanted products"
 
-  const hubCard = "flex items-center gap-3 rounded-[14px] border border-dash-border bg-dash-card p-4 hover:bg-dash-neutral-soft"
-
   return (
     <div className={shell}>
       {header}
 
       <nav aria-label="Store sections" className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
-        <Link href="/dashboard/store/locations" className={hubCard}>
-          <span className="flex size-10 items-center justify-center rounded-[10px] bg-dash-success-soft text-dash-success-fg"><MapPin className="size-5" /></span>
-          <span className="flex flex-col"><strong className="text-sm">Locations</strong><span className="text-[13px] text-dash-muted">Manage your warehouses and physical stores</span></span>
-        </Link>
+        <Item asChild variant="outline">
+          <Link href="/dashboard/store/locations">
+            <ItemMedia variant="icon"><MapPin /></ItemMedia>
+            <ItemContent><ItemTitle>Locations</ItemTitle><ItemDescription>Manage your warehouses and physical stores</ItemDescription></ItemContent>
+          </Link>
+        </Item>
         {(
-          <a href="#wishlist" className={hubCard}>
-            <span className="flex size-10 items-center justify-center rounded-[10px] bg-dash-danger-soft text-dash-danger-fg"><Heart className="size-5" /></span>
-            <span className="flex flex-col"><strong className="text-sm">Wishlist analytics</strong><span className="text-[13px] text-dash-muted">{wlHub}</span></span>
-          </a>
+          <Item asChild variant="outline">
+            <a href="#wishlist">
+              <ItemMedia variant="icon"><Heart /></ItemMedia>
+              <ItemContent><ItemTitle>Wishlist analytics</ItemTitle><ItemDescription>{wlHub}</ItemDescription></ItemContent>
+            </a>
+          </Item>
         )}
       </nav>
 
-      <section className="flex flex-wrap items-center gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-4">
-        <span className={cn("flex size-10 items-center justify-center rounded-[10px]", saved.published ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-neutral-soft text-dash-muted")}><Globe className="size-5" /></span>
-        <div className="min-w-[200px] flex-1">
-          <div className="text-sm font-bold">{saved.published ? `${saved.name} is live` : configured ? `${saved.name} is not published` : "Online store is not set up"}</div>
-          <div className="text-[13px] text-dash-muted">
-            {configured ? `${saved.published ? "Published at " : "Will be served at "}${saved.slug}${saved.companyId ? ` · Company ID ${saved.companyId}` : ""}` : "Add a store name and domain below, then publish."}
-          </div>
-        </div>
-        <div className="rounded-lg bg-dash-neutral-soft px-3 py-2 font-mono text-xs leading-5">{envLines[0]}<br />{envLines[1]}</div>
-        <button type="button" className={outlineBtn} onClick={copyEnv}>Copy .env</button>
-        {visitHref
-          ? <a href={visitHref} target="_blank" rel="noopener noreferrer" className={cn(outlineBtn, "text-dash-accent")}>Visit store ↗</a>
-          : <span className={cn(outlineBtn, "cursor-not-allowed opacity-50")} aria-disabled title={visitHint}>Visit store ↗</span>}
-      </section>
+      <Item asChild variant="outline" className="bg-card">
+        <section>
+          <ItemMedia variant="icon"><Globe /></ItemMedia>
+          <ItemContent className="min-w-[200px]">
+            <ItemTitle>{saved.published ? `${saved.name} is live` : configured ? `${saved.name} is not published` : "Online store is not set up"}</ItemTitle>
+            <ItemDescription>
+              {configured ? `${saved.published ? "Published at " : "Will be served at "}${saved.slug}${saved.companyId ? ` · Company ID ${saved.companyId}` : ""}` : "Add a store name and domain below, then publish."}
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions className="flex-wrap">
+            <Card className="gap-0 px-3 py-2 font-mono text-xs leading-5 shadow-none">{envLines[0]}<br />{envLines[1]}</Card>
+            <Button type="button" variant="outline" onClick={copyEnv}>Copy .env</Button>
+            {visitHref
+              ? <Button asChild variant="outline"><a href={visitHref} target="_blank" rel="noopener noreferrer">Visit store ↗</a></Button>
+              : <WithTooltip content={visitHint}><span tabIndex={0}><Button type="button" variant="outline" disabled>Visit store ↗</Button></span></WithTooltip>}
+          </ItemActions>
+        </section>
+      </Item>
 
-      <section aria-label="Store details" className={card}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-dash-display text-lg font-bold">Store details</h2>
-            <p className="mt-1 text-[13px] text-dash-muted">Name, address and visibility of your online store.</p>
-          </div>
-          <span className="flex items-center gap-2 text-[13px] font-semibold">
+      <SectionCard
+        aria-label="Store details"
+        title="Store details"
+        description="Name, address and visibility of your online store."
+        actions={
+          <span className="flex items-center gap-2 text-sm font-medium">
             {d.published ? "Published" : "Draft"}
             <Switch on={d.published} label="Publish store" onClick={() => patch({ published: !d.published })} />
           </span>
-        </div>
+        }
+        contentClassName="flex flex-col gap-4"
+      >
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
           {text("Store name *", "name", "e.g. My Boutique")}
           {text("Domain or store slug", "slug", "my-boutique or shop.example.com", (v) => v.toLowerCase())}
           {text("API base URL", "apiUrl", "https://")}
           {text("Company ID", "companyId", currentCompany ? String(currentCompany) : "")}
         </div>
-        <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-          Theme colour
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm font-medium">Theme colour</p>
           <div role="group" aria-label="Theme colour" className="flex flex-wrap gap-2">
             {THEMES.map(([color, l]) => (
-              <button key={color} type="button" aria-pressed={d.theme === color} onClick={() => patch({ theme: color })}
-                className={cn("flex h-9 items-center gap-2 rounded-full border bg-dash-card px-3 text-[13px] font-semibold", d.theme === color ? "border-dash-accent" : "border-dash-border")}>
+              <Button key={color} type="button" size="sm" aria-pressed={d.theme === color} onClick={() => patch({ theme: color })}
+                variant={d.theme === color ? "default" : "outline"}>
                 <span className="size-4 rounded-full" style={{ background: color }} />{l}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
-          <label className={label}>Returns policy<textarea rows={3} className={textarea} value={d.returns} placeholder="What customers can return and within how many days" onChange={(e) => patch({ returns: e.target.value })} /></label>
-          <label className={label}>Shipping policy<textarea rows={3} className={textarea} value={d.shipping} placeholder="Delivery areas, charges and timelines" onChange={(e) => patch({ shipping: e.target.value })} /></label>
-          <label className={label}>Privacy policy<textarea rows={3} className={textarea} value={d.privacy} placeholder="How you handle customer data" onChange={(e) => patch({ privacy: e.target.value })} /></label>
+          <FormField label="Returns policy" htmlFor="store-returns" className="min-w-0"><Textarea id="store-returns" rows={3} className="w-full" value={d.returns} placeholder="What customers can return and within how many days" onChange={(e) => patch({ returns: e.target.value })} /></FormField>
+          <FormField label="Shipping policy" htmlFor="store-shipping" className="min-w-0"><Textarea id="store-shipping" rows={3} className="w-full" value={d.shipping} placeholder="Delivery areas, charges and timelines" onChange={(e) => patch({ shipping: e.target.value })} /></FormField>
+          <FormField label="Privacy policy" htmlFor="store-privacy" className="min-w-0"><Textarea id="store-privacy" rows={3} className="w-full" value={d.privacy} placeholder="How you handle customer data" onChange={(e) => patch({ privacy: e.target.value })} /></FormField>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
           {text("Facebook", "facebook", "https://facebook.com/…")}
@@ -408,125 +419,143 @@ export default function OnlineStorePage() {
           {text("WhatsApp", "whatsapp", "+8801…")}
           {text("YouTube", "youtube", "https://youtube.com/…")}
         </div>
-      </section>
+      </SectionCard>
 
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
-        <section aria-label="Homepage hero" className={cn(card, "min-w-0 flex-[3]")}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-dash-display text-lg font-bold">Homepage hero</h2>
-              <p className="mt-1 text-[13px] text-dash-muted">The large slider on your store’s front page.</p>
-            </div>
-            <label className="flex items-center gap-2 text-[13px] font-semibold">
+        <SectionCard
+          aria-label="Homepage hero"
+          className="min-w-0 flex-[3]"
+          title="Homepage hero"
+          description="The large slider on your store’s front page."
+          actions={
+            <Label className="flex items-center gap-2">
               Change every
-              <input type="number" min={2} max={60} className={cn(input, "w-20")} value={d.secs} onChange={(e) => patch({ secs: e.target.value })} />
+              <Input type="number" min={2} max={60} className="w-20" value={d.secs} onChange={(e) => patch({ secs: e.target.value })} />
               seconds
-            </label>
-          </div>
-
+            </Label>
+          }
+          contentClassName="flex flex-col gap-4"
+        >
           <div aria-label="Live preview" className="relative flex h-[220px] flex-col justify-center gap-2.5 overflow-hidden rounded-2xl px-9 text-white" style={{ background: pv.bg }}>
             <span className="absolute inset-0" style={{ background: pv.over }} />
-            {pv.tag && <span className="relative self-start rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold">{pv.tag}</span>}
-            <span className="relative max-w-[560px] font-dash-display text-[28px] font-bold leading-[1.1]">{pv.title}</span>
+            {pv.tag && <Badge variant="secondary" className="relative self-start">{pv.tag}</Badge>}
+            <span className="relative max-w-[560px] text-[28px] font-bold leading-[1.1]">{pv.title}</span>
             <span className="relative max-w-[520px] text-sm opacity-90">{pv.sub}</span>
-            <span className="relative flex h-10 items-center self-start rounded-[10px] bg-white px-4 text-sm font-bold text-dash-ink">{pv.cta} →</span>
-            <span className="absolute right-3.5 top-3 rounded-md bg-black/35 px-2 py-[3px] text-[11px] font-bold">{pv.note}</span>
-            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-              {d.slides.map((_, i) => (
-                <button key={i} type="button" aria-label={`Show slide ${i + 1}`} onClick={() => setCur(i)} className="h-1.5 rounded-full bg-white" style={{ width: i === idx ? 22 : 6, opacity: i === idx ? 1 : 0.5 }} />
-              ))}
-            </div>
+            <span aria-hidden className={cn(buttonVariants({ variant: "secondary" }), "pointer-events-none relative self-start")}>{pv.cta} →</span>
+            <Badge variant="secondary" className="absolute right-3.5 top-3">{pv.note}</Badge>
+            <SlideDots tone="light" count={d.slides.length} current={idx} onSelect={setCur} className="absolute bottom-3 left-1/2 -translate-x-1/2" />
           </div>
 
           <div className="flex flex-wrap gap-2">
             {d.slides.map((s, i) => (
-              <button key={s.id + i} type="button" aria-pressed={i === idx} onClick={() => setCur(i)}
-                className={cn("flex min-w-[150px] max-w-[220px] items-center gap-2.5 rounded-[10px] border bg-dash-card p-2 text-left", i === idx ? "border-dash-accent" : "border-dash-border")}>
-                <span className="size-10 shrink-0 rounded-lg bg-dash-neutral-soft" style={s.imagePath ? { background: imgBg(s.imagePath) } : { background: overlay(s.gradient) }} />
+              <Button key={s.id + i} type="button" aria-pressed={i === idx} onClick={() => setCur(i)}
+                variant={i === idx ? "default" : "outline"}
+                className="h-auto min-w-[150px] max-w-[220px] justify-start gap-2.5 p-2 text-left whitespace-normal">
+                <span className="size-10 shrink-0 rounded-md bg-muted" style={s.imagePath ? { background: imgBg(s.imagePath) } : { background: overlay(s.gradient) }} />
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-[11px] text-dash-muted">Slide {i + 1} · {s.enabled ? "Showing" : "Hidden"}</span>
-                  <span className="truncate text-[13px] font-semibold">{s.title || "(untitled)"}</span>
+                  <span className="text-xs font-normal opacity-80">Slide {i + 1} · {s.enabled ? "Showing" : "Hidden"}</span>
+                  <span className="truncate">{s.title || "(untitled)"}</span>
                 </span>
-              </button>
+              </Button>
             ))}
-            <button type="button" className="h-[58px] rounded-[10px] border-2 border-dashed border-dash-border bg-dash-neutral-soft px-4 text-sm font-semibold hover:bg-dash-border/40"
+            <Button type="button" variant="outline" className="h-auto self-stretch"
               onClick={() => { patch({ slides: [...d.slides, { id: `aura-${Date.now().toString(36)}`, imagePath: "", tag: "", title: "New slide", subtitle: "", cta: "Shop now", link: "/shop", gradient: OVERLAYS[0][1], enabled: true }] }); setCur(d.slides.length) }}>
               + Add slide
-            </button>
+            </Button>
           </div>
-        </section>
+        </SectionCard>
 
-        <aside className={cn(card, "min-w-0 flex-[2]")}>
+        <aside className="min-w-0 flex-[2]">
+        <SectionCard
+          title={c ? `Edit slide ${idx + 1}` : undefined}
+          actions={c ? <span className="flex items-center gap-2 text-sm font-medium">Showing<Switch on={c.enabled} label="Slide enabled" onClick={() => patchSlide({ enabled: !c.enabled })} /></span> : undefined}
+          contentClassName="flex flex-col gap-4"
+        >
           {!c ? (
-            <p className="py-6 text-center text-sm text-dash-muted">No slides yet. Use “+ Add slide” to create your first homepage slide.</p>
+            <EmptyState title="No slides yet" description="Use “+ Add slide” to create your first homepage slide." className="p-4 md:p-6" />
           ) : (
             <>
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="font-dash-display text-lg font-bold">Edit slide {idx + 1}</h2>
-                <span className="flex items-center gap-2 text-[13px] font-semibold">Showing<Switch on={c.enabled} label="Slide enabled" onClick={() => patchSlide({ enabled: !c.enabled })} /></span>
-              </div>
-              <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-                Image
-                <label className="block cursor-pointer rounded-[10px] border-2 border-dashed border-dash-border bg-dash-neutral-soft p-3 text-center">
-                  <input type="file" accept="image/*" className="sr-only" disabled={uploading} onChange={(e) => { upload(e.target.files?.[0]); e.target.value = "" }} />
-                  <span className="block text-sm font-semibold text-dash-accent">{uploading ? "Uploading…" : c.imagePath ? "Change slide image" : "Click to upload"}</span>
-                  <span className="block text-xs font-normal text-dash-muted">PNG, JPG, WEBP · 1920×800 · 10 MB</span>
-                </label>
-                {c.imagePath && <button type="button" className="self-start text-xs font-semibold text-dash-danger-fg" onClick={() => patchSlide({ imagePath: "" })}>Remove image</button>}
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">Image</p>
+                <Input id="slide-image" type="file" accept="image/*" className="sr-only" disabled={uploading} onChange={(e) => { upload(e.target.files?.[0]); e.target.value = "" }} />
+                <EmptyState
+                  bordered
+                  icon={ImageUp}
+                  title={c.imagePath ? "Slide image set" : "No slide image"}
+                  description="PNG, JPG, WEBP · 1920×800 · 10 MB"
+                  className="border-dashed p-4 md:p-6"
+                  action={
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Button asChild variant="outline" size="sm" aria-disabled={uploading || undefined} className={cn("cursor-pointer", uploading && "pointer-events-none opacity-50")}>
+                        <Label htmlFor="slide-image">{uploading ? "Uploading…" : c.imagePath ? "Change slide image" : "Click to upload"}</Label>
+                      </Button>
+                      {c.imagePath && <Button type="button" variant="ghost" size="sm" onClick={() => patchSlide({ imagePath: "" })}>Remove image</Button>}
+                    </div>
+                  }
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <label className={label}>Badge<input type="text" className={input} value={c.tag} onChange={(e) => patchSlide({ tag: e.target.value })} /></label>
-                <label className={label}>Button text<input type="text" className={input} value={c.cta} onChange={(e) => patchSlide({ cta: e.target.value })} /></label>
+                <FormField label="Badge" htmlFor="slide-tag" className="min-w-0"><Input id="slide-tag" type="text" className="w-full" value={c.tag} onChange={(e) => patchSlide({ tag: e.target.value })} /></FormField>
+                <FormField label="Button text" htmlFor="slide-cta" className="min-w-0"><Input id="slide-cta" type="text" className="w-full" value={c.cta} onChange={(e) => patchSlide({ cta: e.target.value })} /></FormField>
               </div>
-              <label className={label}>Headline<input type="text" className={input} value={c.title} onChange={(e) => patchSlide({ title: e.target.value })} /></label>
-              <label className={label}>Subtitle<textarea rows={2} className={textarea} value={c.subtitle} onChange={(e) => patchSlide({ subtitle: e.target.value })} /></label>
-              <label className={label}>
-                Button goes to
-                <select className={cn(input, "px-2.5")} value={c.link} onChange={(e) => patchSlide({ link: e.target.value })}>
-                  <optgroup label="Pages">{PAGES.map(([v, l]) => <option key={v} value={v}>{l} ({v})</option>)}</optgroup>
-                  {linkOptions.cats.length > 0 && <optgroup label="Category">{linkOptions.cats.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</optgroup>}
-                  {linkOptions.prods.length > 0 && <optgroup label="Product">{linkOptions.prods.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</optgroup>}
-                  {slideLink && !knownLinks.has(slideLink) && <optgroup label="Current"><option value={slideLink}>{slideLink}</option></optgroup>}
-                </select>
-              </label>
-              <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-                Overlay colour
+              <FormField label="Headline" htmlFor="slide-title"><Input id="slide-title" type="text" className="w-full" value={c.title} onChange={(e) => patchSlide({ title: e.target.value })} /></FormField>
+              <FormField label="Subtitle" htmlFor="slide-subtitle"><Textarea id="slide-subtitle" rows={2} className="w-full" value={c.subtitle} onChange={(e) => patchSlide({ subtitle: e.target.value })} /></FormField>
+              <FormField label="Button goes to" htmlFor="slide-link" className="min-w-0">
+                <Select value={c.link || undefined} onValueChange={(v) => patchSlide({ link: v })}>
+                  <SelectTrigger id="slide-link" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup><SelectLabel>Pages</SelectLabel>{PAGES.map(([v, l]) => <SelectItem key={v} value={v}>{l} ({v})</SelectItem>)}</SelectGroup>
+                    {linkOptions.cats.length > 0 && <SelectGroup><SelectLabel>Category</SelectLabel>{linkOptions.cats.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectGroup>}
+                    {linkOptions.prods.length > 0 && <SelectGroup><SelectLabel>Product</SelectLabel>{linkOptions.prods.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectGroup>}
+                    {slideLink && !knownLinks.has(slideLink) && <SelectGroup><SelectLabel>Current</SelectLabel><SelectItem value={slideLink}>{slideLink}</SelectItem></SelectGroup>}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">Overlay colour</p>
                 <div role="group" aria-label="Overlay" className="flex flex-wrap gap-1.5">
                   {OVERLAYS.map(([l, g]) => (
-                    <button key={l} type="button" aria-pressed={c.gradient === g} onClick={() => patchSlide({ gradient: g })}
-                      className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", c.gradient === g ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{l}</button>
+                    <Button key={l} type="button" size="sm" aria-pressed={c.gradient === g} onClick={() => patchSlide({ gradient: g })}
+                      variant={c.gradient === g ? "default" : "outline"}>{l}</Button>
                   ))}
                 </div>
               </div>
               <div className="flex justify-between gap-2">
-                <button type="button" className={cn(outlineBtn, "text-dash-danger-fg")}
+                <Button type="button" variant="destructive"
                   onClick={() => { if (window.confirm(`Delete slide ${idx + 1}? Save changes to apply.`)) { patch({ slides: d.slides.filter((_, i) => i !== idx) }); setCur(0) } }}>
                   Delete slide
-                </button>
-                <button type="button" className={outlineBtn} disabled={idx === 0}
-                  onClick={() => { const a = d.slides.slice(); [a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; patch({ slides: a }); setCur(idx - 1) }}>Move earlier</button>
+                </Button>
+                <Button type="button" variant="outline" disabled={idx === 0}
+                  onClick={() => { const a = d.slides.slice(); [a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; patch({ slides: a }); setCur(idx - 1) }}>Move earlier</Button>
               </div>
             </>
           )}
+        </SectionCard>
         </aside>
       </div>
 
       {(
-        <section id="wishlist" aria-label="Wishlist analytics" className={cn(card, "scroll-mt-4")}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-dash-display text-lg font-bold">Wishlist analytics</h2>
-              <p className="mt-1 text-[13px] text-dash-muted">Customer wishlist activity and most-wanted products.</p>
-            </div>
-            <button type="button" className={cn(outlineBtn, "text-dash-danger-fg")} disabled={!canClearWishlist || clearing || wlLoading}
-              title={canClearWishlist ? undefined : "You do not have permission to clear wishlist data"} onClick={clearWishlist}>
+        <SectionCard
+          id="wishlist"
+          aria-label="Wishlist analytics"
+          className="scroll-mt-4"
+          title="Wishlist analytics"
+          description="Customer wishlist activity and most-wanted products."
+          actions={canClearWishlist ? (
+            <Button type="button" variant="destructive" disabled={clearing || wlLoading} onClick={clearWishlist}>
               {clearing ? "Clearing…" : "Clear wishlist data"}
-            </button>
-          </div>
-          {!canViewWishlist && <p className="text-sm text-dash-muted">You do not have permission to view wishlist analytics.</p>}
-          {canViewWishlist && wlError && <div className="rounded-[10px] border border-dash-danger-soft bg-dash-danger-soft px-3 py-2 text-sm text-dash-danger-fg">{wlError}</div>}
+            </Button>
+          ) : (
+            <WithTooltip content="You do not have permission to clear wishlist data">
+              <span tabIndex={0}><Button type="button" variant="destructive" disabled>Clear wishlist data</Button></span>
+            </WithTooltip>
+          )}
+          contentClassName="flex flex-col gap-4"
+        >
+          {!canViewWishlist && <p className="text-sm text-muted-foreground">You do not have permission to view wishlist analytics.</p>}
+          {canViewWishlist && wlError && <Alert variant="destructive"><AlertDescription>{wlError}</AlertDescription></Alert>}
           {wlLoading ? (
-            <div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-[14px]" />)}</div>
+            <div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}</div>
           ) : wl ? (
             <>
               <StatsCards stats={[
@@ -537,60 +566,60 @@ export default function OnlineStorePage() {
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="flex flex-col gap-3">
                   <h3 className="text-sm font-bold">Most wishlisted products</h3>
-                  {wl.topProducts.length === 0 && <p className="text-sm text-dash-muted">No wishlist data yet.</p>}
+                  {wl.topProducts.length === 0 && <p className="text-sm text-muted-foreground">No wishlist data yet.</p>}
                   {wl.topProducts.map((p, i) => (
                     <div key={p.productId} className="flex items-center gap-3">
-                      <span className="w-5 text-right text-sm text-dash-muted">{i + 1}</span>
+                      <span className="w-5 text-right text-sm text-muted-foreground">{i + 1}</span>
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate text-sm font-semibold">{p.name}</span>
-                        <span className="truncate text-xs text-dash-muted">{[p.categoryName, formatCurrency(Number(p.salePrice ?? p.price))].filter(Boolean).join(" · ")}</span>
+                        <span className="truncate text-xs text-muted-foreground">{[p.categoryName, formatCurrency(Number(p.salePrice ?? p.price))].filter(Boolean).join(" · ")}</span>
                       </span>
-                      <span className="w-24 shrink-0"><Bar pct={Math.round((p.wishlistCount / maxP) * 100)} className="bg-dash-accent" /></span>
+                      <span className="w-24 shrink-0"><Bar pct={Math.round((p.wishlistCount / maxP) * 100)} /></span>
                       <strong className="w-6 text-right text-sm tabular-nums">{p.wishlistCount}</strong>
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-col gap-3">
                   <h3 className="text-sm font-bold">Most active wishlist customers</h3>
-                  {wl.topCustomers.length === 0 && <p className="text-sm text-dash-muted">No wishlist data yet.</p>}
+                  {wl.topCustomers.length === 0 && <p className="text-sm text-muted-foreground">No wishlist data yet.</p>}
                   {wl.topCustomers.map((cu, i) => (
                     <div key={cu.customerId} className="flex items-center gap-3">
-                      <span className="w-5 text-right text-sm text-dash-muted">{i + 1}</span>
+                      <span className="w-5 text-right text-sm text-muted-foreground">{i + 1}</span>
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate text-sm font-semibold">{cu.name}</span>
-                        <span className="truncate text-xs text-dash-muted">{cu.email}</span>
+                        <span className="truncate text-xs text-muted-foreground">{cu.email}</span>
                       </span>
-                      <span className="w-24 shrink-0"><Bar pct={Math.round((cu.wishlistCount / maxC) * 100)} className="bg-dash-accent" /></span>
+                      <span className="w-24 shrink-0"><Bar pct={Math.round((cu.wishlistCount / maxC) * 100)} /></span>
                       <strong className="w-6 text-right text-sm tabular-nums">{cu.wishlistCount}</strong>
                     </div>
                   ))}
                 </div>
               </div>
               <div className="flex flex-col gap-2.5">
-                <h3 className="flex items-center gap-2 text-sm font-bold"><TrendingUp className="size-4 text-dash-success-fg" />Daily wishlist adds, last 30 days</h3>
-                {trend.length === 0 && <p className="text-sm text-dash-muted">No activity in the last 30 days.</p>}
+                <h3 className="flex items-center gap-2 text-sm font-bold"><TrendingUp className="size-4 text-muted-foreground" />Daily wishlist adds, last 30 days</h3>
+                {trend.length === 0 && <p className="text-sm text-muted-foreground">No activity in the last 30 days.</p>}
                 {trend.map((t) => (
                   <div key={t.date} className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 text-xs text-dash-muted">{fmtDay(t.date)}</span>
-                    <Bar pct={Math.round((t.count / maxD) * 100)} className="bg-dash-success-fg" />
+                    <span className="w-28 shrink-0 text-xs text-muted-foreground">{fmtDay(t.date)}</span>
+                    <Bar pct={Math.round((t.count / maxD) * 100)} />
                     <strong className="w-6 text-right text-xs tabular-nums">{t.count}</strong>
                   </div>
                 ))}
               </div>
             </>
           ) : null}
-        </section>
+        </SectionCard>
       )}
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2.5 rounded-[14px] border border-dash-border bg-dash-card px-4 py-3.5 shadow-[0_-6px_20px_rgba(14,21,37,0.06)]">
-        <span className={cn("text-[13px]", err ? "text-dash-danger-fg" : "text-dash-muted")}>{err || (dirty ? "You have unsaved changes." : "All changes saved.")}</span>
+      <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3.5">
+        <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>{err || (dirty ? "You have unsaved changes." : "All changes saved.")}</span>
         <div className="ml-auto flex gap-2">
-          <button type="button" className={outlineBtn} disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(0); toast.success("Changes discarded") }}>Discard</button>
-          <button type="button" className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-50" disabled={!dirty || saving || uploading} onClick={save}>
+          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(0); toast.success("Changes discarded") }}>Discard</Button>
+          <Button type="button" disabled={!dirty || saving || uploading} onClick={save}>
             {saving ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

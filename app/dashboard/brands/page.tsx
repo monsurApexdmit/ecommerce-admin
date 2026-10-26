@@ -1,10 +1,26 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Download, MoreHorizontal, Pencil, Plus, Search, Tag, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { Toolbar } from "@/components/common/Toolbar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -23,18 +39,6 @@ import { usePagination } from "@/hooks/use-pagination"
 import { useToast } from "@/hooks/use-toast"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 
-const TINTS = [
-  "bg-dash-accent-soft text-dash-accent-fg",
-  "bg-dash-warn-soft text-dash-warn-fg",
-  "bg-dash-success-soft text-dash-success-fg",
-  "bg-dash-danger-soft text-dash-danger-fg",
-  "bg-dash-neutral-soft text-dash-neutral-fg",
-]
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const fieldLabel = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const fieldInput =
-  "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
 const emptyForm = { brandName: "", logo: "", website: "", description: "", status: true }
 
 const initialsOf = (name: string) =>
@@ -185,23 +189,20 @@ export default function BrandsPage() {
   const activeCount = brands.filter((b) => b.status).length
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Brands</h1>
-          <p className="mt-1 text-sm text-dash-muted">Companies that make the products you sell.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setImportOpen(true)} className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"><Upload className="size-4" aria-hidden /> Import</button>
-          <button type="button" onClick={handleExport} className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"><Download className="size-4" aria-hidden /> Export</button>
-          <button type="button" onClick={() => openForm(null)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Brands"
+        description="Companies that make the products you sell."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> Import</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" onClick={() => openForm(null)}>
             <Plus className="size-4" aria-hidden /> Add brand
-          </button>
-        </div>
-      </div>
+          </Button>
+        </>}
+      />
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={setTab} tabs={[
             { value: "all", label: "All", count: brands.length },
@@ -210,104 +211,102 @@ export default function BrandsPage() {
           ]} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search brands</span>
-            <input type="search" placeholder="Search brands…" value={search} onChange={(e) => setSearch(e.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
+        <Toolbar className="p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Label htmlFor="brand-search" className="sr-only">Search brands</Label>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input id="brand-search" type="search" placeholder="Search brands…" value={search} onChange={(e) => setSearch(e.target.value)}
+              className="pl-9" />
+          </div>
           {search && (
-            <button type="button" onClick={() => setSearch("")} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+            <Button type="button" variant="ghost" onClick={() => setSearch("")}>
               <X className="size-4" aria-hidden /> Clear
-            </button>
+            </Button>
           )}
-        </div>
+        </Toolbar>
 
         <div className="px-4 pb-4">
           {loading ? (
             <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-[112px] rounded-[14px]" />)}
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-[112px] rounded-xl" />)}
             </div>
           ) : currentItems.length === 0 ? (
-            <div className="py-14 text-center">
-              <Tag className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-              <p className="font-semibold">{brands.length === 0 ? "No brands yet" : "No brands found"}</p>
-              <p className="text-sm text-dash-muted">{brands.length === 0 ? "Add a brand to use it on products." : "Try a different search or tab."}</p>
-            </div>
+            <EmptyState icon={Tag}
+              title={brands.length === 0 ? "No brands yet" : "No brands found"}
+              description={brands.length === 0 ? "Add a brand to use it on products." : "Try a different search or tab."} />
           ) : (
             <ul className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-              {currentItems.map((b, i) => {
+              {currentItems.map((b) => {
                 const hasLogo = !!b.logo && /^(https?:)?\/\//.test(b.logo)
                 return (
-                  <li key={b.id} className="flex flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-4">
+                  <li key={b.id}>
+                  <Card className="h-full gap-3.5 p-4">
                     <div className="flex items-center gap-3">
-                      {hasLogo ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={b.logo!} alt="" className="size-11 shrink-0 rounded-xl border border-dash-border object-contain" />
-                      ) : (
-                        <span aria-hidden className={`flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${TINTS[(currentPage * 7 + i) % TINTS.length]}`}>
-                          {initialsOf(b.brandName)}
-                        </span>
-                      )}
+                      <UserAvatar shape="square" src={hasLogo ? b.logo : null} alt="" fallback={initialsOf(b.brandName)} className="size-11" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold">{b.brandName}</div>
-                        <div className="text-xs tabular-nums text-dash-muted">
+                        <div className="text-xs tabular-nums text-muted-foreground">
                           {b.productsCount == null ? "—" : `${b.productsCount} product${b.productsCount === 1 ? "" : "s"}`}
                         </div>
                       </div>
-                      <Switch checked={b.status} aria-label={`Active: ${b.brandName}`} onCheckedChange={(v) => setActive(b, v)}
-                        className="data-[state=checked]:bg-dash-accent data-[state=unchecked]:bg-dash-neutral" />
+                      <Switch checked={b.status} aria-label={`Active: ${b.brandName}`} onCheckedChange={(v) => setActive(b, v)} />
                     </div>
-                    {b.description && <p className="line-clamp-2 text-xs leading-snug text-dash-muted">{b.description}</p>}
+                    {b.description && <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{b.description}</p>}
                     {b.website && /^https?:\/\//i.test(b.website) && (
-                      <a href={b.website} target="_blank" rel="noopener noreferrer" className="truncate text-xs font-semibold text-dash-accent hover:underline">{b.website.replace(/^https?:\/\//i, "")}</a>
+                      <Button asChild variant="link" size="sm" className="h-auto justify-start p-0 text-xs">
+                        <a href={b.website} target="_blank" rel="noopener noreferrer" className="truncate">{b.website.replace(/^https?:\/\//i, "")}</a>
+                      </Button>
                     )}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-dash-muted">Stock value</span>
-                      <span className="font-semibold tabular-nums">{b.stockValue == null ? "—" : formatCurrency(b.stockValue)}</span>
-                    </div>
-                    <Link href={`/dashboard/products?brand=${b.id}`} className="text-xs font-semibold text-dash-accent hover:underline">View products</Link>
-                    <div className="flex items-center justify-between border-t border-dash-border-soft pt-3">
-                      <span className={`rounded-md px-2 py-[3px] text-xs font-bold ${b.status ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-neutral-soft text-dash-neutral-fg"}`}>
-                        {b.status ? "Active" : "Inactive"}
-                      </span>
+                    <InfoList className="text-xs">
+                      <InfoRow label="Stock value" value={<span className="tabular-nums">{b.stockValue == null ? "—" : formatCurrency(b.stockValue)}</span>} />
+                    </InfoList>
+                    <Button asChild variant="link" size="sm" className="h-auto justify-start p-0 text-xs">
+                      <Link href={`/dashboard/products?brand=${b.id}`}>View products</Link>
+                    </Button>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <StatusBadge status={b.status ? "active" : "inactive"} label={b.status ? "Active" : "Inactive"} />
                       <div className="flex gap-1">
-                        <button type="button" aria-label={`Edit ${b.brandName}`} onClick={() => openForm(b)} className={iconBtn}><Pencil className="size-4" /></button>
+                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.brandName}`} onClick={() => openForm(b)}><Pencil className="size-4" /></Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button type="button" aria-label={`More actions for ${b.brandName}`} className={iconBtn}><MoreHorizontal className="size-4" /></button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${b.brandName}`}><MoreHorizontal className="size-4" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openForm(b)}>Edit brand</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setActive(b, !b.status)}>{b.status ? "Mark inactive" : "Mark active"}</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-dash-danger focus:text-dash-danger" onClick={() => setDeleteTarget(b)}>Delete brand</DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(b)}>Delete brand</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     </div>
+                  </Card>
                   </li>
                 )
               })}
               {tab === "all" && noBrandCount > 0 && (!term || "no brand".includes(term)) && (
-                <li className="flex flex-col gap-3.5 rounded-[14px] border border-dashed border-dash-border bg-dash-card p-4">
+                <li>
+                <Card className="h-full gap-3.5 border-dashed p-4">
                   <div className="flex items-center gap-3">
-                    <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-dash-neutral-soft text-sm font-bold text-dash-neutral-fg">—</span>
+                    <UserAvatar shape="square" aria-hidden fallback="—" className="size-11" />
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold">No brand</div>
-                      <div className="text-xs tabular-nums text-dash-muted">{noBrandCount} product{noBrandCount === 1 ? "" : "s"}</div>
+                      <div className="text-xs tabular-nums text-muted-foreground">{noBrandCount} product{noBrandCount === 1 ? "" : "s"}</div>
                     </div>
-                    <span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-bold text-dash-neutral-fg">Unassigned</span>
+                    <Badge variant="secondary">Unassigned</Badge>
                   </div>
-                  <Link href="/dashboard/products?brand=none" className="text-xs font-semibold text-dash-accent hover:underline">View products</Link>
+                  <Button asChild variant="link" size="sm" className="h-auto justify-start p-0 text-xs">
+                    <Link href="/dashboard/products?brand=none">View products</Link>
+                  </Button>
+                </Card>
                 </li>
               )}
               <li>
-                <button type="button" onClick={() => openForm(null)}
-                  className="flex h-full min-h-[112px] w-full items-center justify-center gap-2 rounded-[14px] border-2 border-dashed border-dash-border text-sm font-semibold text-dash-muted hover:bg-dash-neutral-soft">
+                <Button type="button" variant="outline" onClick={() => openForm(null)}
+                  className="h-full min-h-[112px] w-full border-dashed">
                   <Plus className="size-4" aria-hidden /> Add brand
-                </button>
+                </Button>
               </li>
             </ul>
           )}
@@ -317,7 +316,7 @@ export default function BrandsPage() {
           <PaginationControl currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}
             itemsPerPage={itemsPerPage} onItemsPerPageChange={handleItemsPerPageChange} totalItems={filtered.length} />
         </div>
-      </section>
+      </Card>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[480px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[480px]">
@@ -326,39 +325,39 @@ export default function BrandsPage() {
             <DialogDescription className="text-[13px] text-dash-muted">Brands help you group and filter products.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
-            <label className={fieldLabel}>Brand name *
-              <input className={fieldInput} placeholder="e.g. Aarong" value={form.brandName} autoFocus
+            <FormField label="Brand name" required htmlFor="brand-name" className="min-w-0">
+              <Input id="brand-name" placeholder="e.g. Aarong" value={form.brandName} autoFocus
                 onChange={(e) => setForm({ ...form, brandName: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") save() }} />
-            </label>
-            <label className={fieldLabel}>Logo URL
-              <input className={fieldInput} placeholder="https://…/logo.png" value={form.logo} onChange={(e) => setForm({ ...form, logo: e.target.value })} />
+            </FormField>
+            <FormField label="Logo URL" htmlFor="brand-logo" className="min-w-0">
+              <Input id="brand-logo" placeholder="https://…/logo.png" value={form.logo} onChange={(e) => setForm({ ...form, logo: e.target.value })} />
               {/^(https?:)?\/\//.test(form.logo.trim()) && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.logo.trim()} alt="" className="mt-1 size-14 rounded-xl border border-dash-border object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
+                <UserAvatar shape="square" src={form.logo.trim()} alt="" name={form.brandName} className="mt-1 size-14" />
               )}
-            </label>
-            <label className={fieldLabel}>Website
-              <input className={fieldInput} placeholder="https://brand.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
-            </label>
-            <label className={fieldLabel}>Short description
-              <textarea rows={2} className={`${fieldInput} h-auto py-2.5`} placeholder="What this brand is known for" value={form.description}
+            </FormField>
+            <FormField label="Website" htmlFor="brand-website" className="min-w-0">
+              <Input id="brand-website" placeholder="https://brand.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+            </FormField>
+            <FormField label="Short description" htmlFor="brand-description" className="min-w-0">
+              <Textarea id="brand-description" rows={2} placeholder="What this brand is known for" value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </label>
-            <div className="flex items-center justify-between gap-4 rounded-xl border border-dash-border px-3.5 py-3">
-              <span className="flex flex-col">
-                <span id="brand-active-label" className="text-sm font-semibold">Active</span>
-                <span className="text-xs text-dash-muted">Available when creating products</span>
-              </span>
-              <Switch checked={form.status} onCheckedChange={(v) => setForm({ ...form, status: v })} aria-labelledby="brand-active-label"
-                className="data-[state=checked]:bg-dash-accent data-[state=unchecked]:bg-dash-neutral" />
-            </div>
+            </FormField>
+            <Item variant="outline" size="sm">
+              <ItemContent>
+                <ItemTitle id="brand-active-label">Active</ItemTitle>
+                <ItemDescription>Available when creating products</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch checked={form.status} onCheckedChange={(v) => setForm({ ...form, status: v })} aria-labelledby="brand-active-label" />
+              </ItemActions>
+            </Item>
           </div>
           <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
-            <button type="button" onClick={() => setFormOpen(false)} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-            <button type="button" onClick={save} disabled={saving} className="h-11 rounded-[10px] bg-dash-accent px-[22px] text-sm font-bold text-white disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={save} disabled={saving}>
               {saving ? "Saving…" : editing ? "Save changes" : "Add brand"}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -369,9 +368,9 @@ export default function BrandsPage() {
             <DialogTitle className="font-dash-display text-[22px] font-bold">Import brands</DialogTitle>
             <DialogDescription className="text-[13px] text-dash-muted">Upload a CSV with the columns Name, Website, Description, Logo and Active (Yes/No). Existing names and invalid links are skipped.</DialogDescription>
           </DialogHeader>
-          <label className={fieldLabel}>CSV file
-            <input type="file" accept=".csv" onChange={handleImport} className="text-sm font-normal file:mr-3 file:h-9 file:rounded-lg file:border file:border-dash-border file:bg-dash-card file:px-3 file:text-[13px] file:font-semibold" />
-          </label>
+          <FormField label="CSV file" htmlFor="brand-import-file" className="min-w-0">
+            <Input id="brand-import-file" type="file" accept=".csv" onChange={handleImport} />
+          </FormField>
         </DialogContent>
       </Dialog>
 
@@ -383,7 +382,7 @@ export default function BrandsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-dash-danger text-white hover:bg-dash-danger-fg">
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

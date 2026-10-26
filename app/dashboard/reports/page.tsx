@@ -10,6 +10,17 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { StatTile } from "@/components/common/StatTile"
+import { FormField } from "@/components/common/FormField"
+import { Toolbar } from "@/components/common/Toolbar"
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const TABS: [ReportType, string][] = [
   ["sales", "Sales summary"], ["purchases", "Purchases"], ["stock", "Stock valuation"], ["dues", "Receivables & payables"], ["pnl", "Profit & loss"],
@@ -20,13 +31,13 @@ const RANGES = [
 type RangeId = (typeof RANGES)[number][0]
 
 const TONE: Record<Tone, string> = {
-  blue: "bg-dash-accent-soft text-dash-accent-fg",
-  teal: "bg-dash-success-soft text-dash-success-fg",
-  purple: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300",
-  amber: "bg-dash-warn-soft text-dash-warn-fg",
-  red: "bg-dash-danger-soft text-dash-danger-fg",
+  blue: "bg-blue-500",
+  teal: "bg-emerald-600",
+  purple: "bg-purple-500",
+  amber: "bg-amber-500",
+  red: "bg-destructive",
 }
-const SUB_TONE: Record<string, string> = { muted: "text-dash-muted", red: "text-dash-danger-fg", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
+const SUB_TONE: Record<string, string> = { muted: "", red: "text-destructive", amber: "text-amber-600", teal: "text-emerald-600" }
 const MIX_COLORS = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -59,43 +70,43 @@ function PagedTable({ table, fmt }: { table: ReportTable; fmt: (c: ReportCell) =
   const rows = table.rows.slice((page - 1) * perPage, page * perPage)
   const paged = table.rows.length > 10
   return (
-    <section className="rounded-[14px] border border-dash-border bg-dash-card print:break-inside-avoid">
-      <h2 className="px-5 pt-4 font-dash-display text-base font-bold">{table.title}</h2>
-      <div className="overflow-x-auto p-2 pt-3">
-        <table className="w-full min-w-[480px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-dash-bg text-xs text-dash-muted">
-              {table.columns.map((c, i) => <th key={c + i} scope="col" className={cn("px-3 py-2.5 font-semibold", i === 0 ? "text-left" : "text-right")}>{c}</th>)}
-            </tr>
-          </thead>
-          <tbody>
+    <SectionCard title={table.title} className="gap-3 print:break-inside-avoid" contentClassName="px-2">
+      <div className="overflow-x-auto">
+        <Table className="min-w-[480px]">
+          <TableHeader>
+            <TableRow>
+              {table.columns.map((c, i) => <TableHead key={c + i} scope="col" className={i === 0 ? "text-left" : "text-right"}>{c}</TableHead>)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((r, ri) => (
-              <tr key={ri}>
+              <TableRow key={ri}>
                 {r.map((c, ci) => (
-                  <td key={ci} className={cn("border-b border-dash-border-soft px-3 py-2.5 tabular-nums", ci === 0 ? "text-left" : "text-right", c.bold ? "font-bold" : c.t === "text" && ci === 0 ? "font-semibold" : "")}>{fmt(c)}</td>
+                  <TableCell key={ci} className={cn("tabular-nums", ci === 0 ? "text-left" : "text-right", c.bold ? "font-bold" : c.t === "text" && ci === 0 ? "font-semibold" : "")}>{fmt(c)}</TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
+          </TableBody>
           {table.totalRow && table.rows.length > 0 && (
-            <tfoot className="border-t-2 border-dash-border bg-dash-bg">
-              <tr>
+            <TableFooter>
+              <TableRow>
                 {table.totalRow.map((c, ci) => (
-                  <td key={ci} className={cn("px-3 py-2.5 font-bold tabular-nums", ci === 0 ? "text-left" : "text-right")}>{fmt(c)}</td>
+                  <TableCell key={ci} className={cn("font-bold tabular-nums", ci === 0 ? "text-left" : "text-right")}>{fmt(c)}</TableCell>
                 ))}
-              </tr>
-            </tfoot>
+              </TableRow>
+            </TableFooter>
           )}
-        </table>
+        </Table>
       </div>
-      {table.rows.length === 0 && <p className="px-5 pb-5 text-sm text-dash-muted">{table.empty}</p>}
+      {table.rows.length === 0 && <p className="px-3 text-sm text-muted-foreground">{table.empty}</p>}
       {paged && (
-        <div className="border-t border-dash-border-soft p-4 pt-3 print:hidden">
+        <div className="print:hidden">
+          <Separator className="mb-3" />
           <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(table.rows.length / perPage))} itemsPerPage={perPage} totalItems={table.rows.length}
             onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
         </div>
       )}
-    </section>
+    </SectionCard>
   )
 }
 
@@ -171,97 +182,95 @@ export default function ReportsPage() {
   const hasBars = bars.some((b) => b.value !== 0)
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Reports</h1>
-          <p className="mt-1 text-sm text-dash-muted">{report?.subtitle ?? "Sales, purchases, stock, dues and profit in one place."}</p>
-        </div>
-        <div className="flex gap-2 print:hidden">
-          <button type="button" onClick={() => window.print()} className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"><Printer className="size-4" aria-hidden /> Print</button>
-          <button type="button" onClick={handleExport} className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"><Download className="size-4" aria-hidden /> Export CSV</button>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
+      <PageHeader
+        title="Reports"
+        description={report?.subtitle ?? "Sales, purchases, stock, dues and profit in one place."}
+        actions={<div className="flex gap-2 print:hidden">
+          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> Print</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+        </div>}
+      />
 
-      <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <div role="tablist" aria-label="Report" className="flex flex-wrap gap-1 rounded-xl bg-dash-neutral-soft p-1">
-          {TABS.map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={type === id} onClick={() => setType(id)}
-              className={cn("h-10 rounded-[9px] px-3.5 text-[13px] font-semibold", type === id ? "bg-dash-card shadow-sm" : "text-dash-muted hover:text-dash-ink")}>{label}</button>
-          ))}
-        </div>
+      <Toolbar className="gap-3 print:hidden">
+        <Tabs value={type} onValueChange={(v) => setType(v as ReportType)}>
+          <TabsList aria-label="Report" className="h-auto flex-wrap">
+            {TABS.map(([id, label]) => (
+              <TabsTrigger key={id} value={id}>{label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         {showRange && (
           <div role="group" aria-label="Date range" className="flex flex-wrap gap-1.5">
             {RANGES.map(([id, label]) => (
-              <button key={id} type="button" aria-pressed={range === id} onClick={() => setRange(id)}
-                className={cn("h-10 rounded-full border px-3.5 text-[13px] font-semibold", range === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{label}</button>
+              <Button key={id} type="button" variant={range === id ? "default" : "outline"} aria-pressed={range === id} onClick={() => setRange(id)}>{label}</Button>
             ))}
           </div>
         )}
-      </div>
+      </Toolbar>
 
       {showRange && range === "custom" && (
         <div className="flex flex-wrap gap-3 print:hidden">
-          <label className="flex items-center gap-2 text-[13px] font-semibold">From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none" /></label>
-          <label className="flex items-center gap-2 text-[13px] font-semibold">To
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none" /></label>
+          <FormField orientation="horizontal" className="w-auto" label="From" htmlFor="report-from">
+            <Input id="report-from" type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField>
+          <FormField orientation="horizontal" className="w-auto" label="To" htmlFor="report-to">
+            <Input id="report-to" type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} /></FormField>
         </div>
       )}
-      <p className="text-[13px] text-dash-muted">{periodTxt}</p>
+      <p className="text-sm text-muted-foreground">{periodTxt}</p>
 
-      {error && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3.5 py-3 text-sm font-semibold text-dash-danger-fg">{error}</p>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
       {loading && !report ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : report ? (
         <>
           <section aria-label="Summary" className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length === 5 && "xl:grid-cols-5", report.kpis.length >= 6 && "xl:grid-cols-6", loading && "opacity-60")}>
             {report.kpis.map((k) => (
-              <article key={k.label} className="rounded-[14px] border border-dash-border bg-dash-card p-4">
-                <div className="flex items-center justify-between"><span className="text-[13px] text-dash-muted">{k.label}</span><span className={cn("size-3 rounded-full", TONE[k.tone].split(" ")[0])} /></div>
-                <div className="mt-2 font-dash-display text-2xl font-bold tabular-nums">{fmtKpi(k)}</div>
-                <div className={cn("mt-1 text-xs", SUB_TONE[k.subTone ?? "muted"])}>{k.subMoney ? `${k.subMoney.prefix}${formatCurrency(k.subMoney.amount)}${k.subMoney.suffix}` : k.sub}</div>
-              </article>
+              <StatTile
+                key={k.label}
+                label={k.label}
+                value={fmtKpi(k)}
+                icon={<span aria-hidden className={cn("block size-3 rounded-full", TONE[k.tone])} />}
+                hint={<span className={SUB_TONE[k.subTone ?? "muted"]}>{k.subMoney ? `${k.subMoney.prefix}${formatCurrency(k.subMoney.amount)}${k.subMoney.suffix}` : k.sub}</span>}
+              />
             ))}
           </section>
 
           <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr] print:grid-cols-1">
             {report.chart && (
-              <section className="rounded-[14px] border border-dash-border bg-dash-card p-5 print:break-inside-avoid">
-                <h2 className="font-dash-display text-base font-bold">{report.chart.title}</h2>
-                {!hasBars ? <p className="py-10 text-center text-sm text-dash-muted">Nothing to chart for this period.</p> : (
+              <SectionCard title={report.chart.title} className="print:break-inside-avoid">
+                {!hasBars ? <p className="py-10 text-center text-sm text-muted-foreground">Nothing to chart for this period.</p> : (
                   <>
-                    <div className="mt-4 flex h-[200px] items-end gap-1.5">
+                    <div className="flex h-[200px] items-end gap-1.5">
                       {bars.map((b) => (
                         <div key={b.label} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${b.label}: ${formatCurrency(b.value)}`}>
-                          <span className="text-[10px] font-semibold tabular-nums text-dash-muted">{b.value !== 0 ? short(b.value) : ""}</span>
-                          <div className="w-full rounded-t-md" style={{ height: `${Math.max(2, Math.round((Math.abs(b.value) / maxBar) * 160))}px`, background: b.value < 0 ? "#B42318" : "var(--dash-accent)" }} />
+                          <span className="text-[10px] font-medium tabular-nums text-muted-foreground">{b.value !== 0 ? short(b.value) : ""}</span>
+                          <div className="w-full rounded-t-md" style={{ height: `${Math.max(2, Math.round((Math.abs(b.value) / maxBar) * 160))}px`, background: b.value < 0 ? "var(--destructive)" : "var(--primary)" }} />
                         </div>
                       ))}
                     </div>
-                    <div className="mt-1.5 flex gap-1.5">{bars.map((b) => <span key={b.label} className="min-w-0 flex-1 truncate text-center text-[11px] text-dash-muted">{b.label}</span>)}</div>
+                    <div className="mt-1.5 flex gap-1.5">{bars.map((b) => <span key={b.label} className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground">{b.label}</span>)}</div>
                   </>
                 )}
-              </section>
+              </SectionCard>
             )}
             {report.mixes.map((mx) => {
               const top = mx.items.slice(0, 6)
               const peak = Math.max(1, ...top.map((i) => Math.abs(i.value)))
               return (
-                <section key={mx.title} className="rounded-[14px] border border-dash-border bg-dash-card p-5 print:break-inside-avoid">
-                  <h2 className="font-dash-display text-base font-bold">{mx.title}</h2>
-                  {top.length === 0 ? <p className="py-6 text-sm text-dash-muted">Nothing to show for this period.</p> : (
-                    <div className="mt-3 flex flex-col gap-3">
+                <SectionCard key={mx.title} title={mx.title} className="print:break-inside-avoid">
+                  {top.length === 0 ? <p className="py-6 text-sm text-muted-foreground">Nothing to show for this period.</p> : (
+                    <div className="flex flex-col gap-3">
                       {top.map((m, i) => (
                         <div key={m.label} className="flex flex-col gap-1.5">
-                          <div className="flex justify-between text-[13px]"><span className="font-semibold">{m.label}</span><span className="tabular-nums text-dash-muted">{fmtMix(mx.kind, m.value)}</span></div>
-                          <div className="h-2 overflow-hidden rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full" style={{ width: `${Math.round((Math.abs(m.value) / peak) * 100)}%`, background: MIX_COLORS[i % MIX_COLORS.length] }} /></div>
+                          <div className="flex justify-between text-sm"><span className="font-medium">{m.label}</span><span className="tabular-nums text-muted-foreground">{fmtMix(mx.kind, m.value)}</span></div>
+                          <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${Math.round((Math.abs(m.value) / peak) * 100)}%`, background: MIX_COLORS[i % MIX_COLORS.length] }} /></div>
                         </div>
                       ))}
                     </div>
                   )}
-                </section>
+                </SectionCard>
               )
             })}
           </div>

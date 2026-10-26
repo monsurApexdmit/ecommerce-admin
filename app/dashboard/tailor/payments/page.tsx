@@ -4,6 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { CalendarClock, Printer, Search, Users, Wallet, Banknote } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { FilterBar } from "@/components/common/Toolbar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
@@ -20,10 +39,6 @@ type Range = "all" | "month" | "today"
 const METHODS: [string, string][] = [["cash", "Cash"], ["bank", "Bank transfer"], ["bkash", "bKash"], ["nagad", "Nagad"], ["card", "Card"]]
 const RANGES: [Range, string][] = [["all", "All time"], ["month", "This month"], ["today", "Today"]]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const filterSelCls = "h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
@@ -32,11 +47,11 @@ const r2 = (v: number) => Math.round(v * 100) / 100
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 const csvCell = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
 
-const typeTone: Record<string, string> = {
-  advance: "bg-dash-accent-soft text-dash-accent-fg",
-  payment: "bg-dash-success-soft text-dash-success-fg",
-  final: "bg-dash-success-soft text-dash-success-fg",
-  payout: "bg-dash-warn-soft text-dash-warn-fg",
+const typeVariant: Record<string, "default" | "secondary" | "outline"> = {
+  advance: "secondary",
+  payment: "default",
+  final: "default",
+  payout: "outline",
 }
 
 export default function TailorPaymentsPage() {
@@ -193,17 +208,15 @@ export default function TailorPaymentsPage() {
   const tabCount = ledger?.counts[tab] ?? 0
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Payments</h1>
-          <p className="mt-1 text-sm text-dash-muted">Money in from customers and money out to dorjis.</p>
-        </div>
-        <button type="button" onClick={exportCsv} className={outlineBtn}>Export</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Payments"
+        description="Money in from customers and money out to dorjis."
+        actions={<Button type="button" variant="outline" onClick={exportCsv}>Export</Button>}
+      />
 
       {!st ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <div className="[&>div]:lg:grid-cols-4">
           <StatsCards stats={[
@@ -216,66 +229,66 @@ export default function TailorPaymentsPage() {
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(t) => { setTab(t as TailorLedgerKind); setPage(1) }} tabs={[
               { value: "customer", label: "From customers", count: ledger?.counts.customer }, { value: "dorji", label: "To dorjis", count: ledger?.counts.dorji },
             ]} />
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search payments</span>
-              <input type="search" placeholder="Search order, name or reference…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            <select aria-label="Method" className={filterSelCls} value={methodF} onChange={(e) => { setMethodF(e.target.value); setPage(1) }}>
-              <option value="all">Method: All</option>{METHODS.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
-            </select>
-            <select aria-label="Date range" className={filterSelCls} value={rangeF} onChange={(e) => { setRangeF(e.target.value as Range); setPage(1) }}>
-              {RANGES.map(([id, l]) => <option key={id} value={id}>{l}</option>)}
-            </select>
-            <label className="flex items-center gap-2 text-[13px] font-semibold">From
-              <input type="date" aria-label="From date" className={filterSelCls} value={fromD} onChange={(e) => { setFromD(e.target.value); setPage(1) }} /></label>
-            <label className="flex items-center gap-2 text-[13px] font-semibold">To
-              <input type="date" aria-label="To date" className={filterSelCls} value={toD} onChange={(e) => { setToD(e.target.value); setPage(1) }} /></label>
-          </div>
+          <FilterBar className="gap-2.5 p-4">
+            <InputGroup className="min-w-[220px] flex-1">
+              <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+              <InputGroupInput type="search" aria-label="Search payments" placeholder="Search order, name or reference…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
+            </InputGroup>
+            <Select value={methodF} onValueChange={(v) => { setMethodF(v); setPage(1) }}>
+              <SelectTrigger aria-label="Method"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Method: All</SelectItem>{METHODS.map(([id, l]) => <SelectItem key={id} value={id}>{l}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={rangeF} onValueChange={(v) => { setRangeF(v as Range); setPage(1) }}>
+              <SelectTrigger aria-label="Date range"><SelectValue /></SelectTrigger>
+              <SelectContent>{RANGES.map(([id, l]) => <SelectItem key={id} value={id}>{l}</SelectItem>)}</SelectContent>
+            </Select>
+            <FormField orientation="horizontal" className="w-auto gap-2" label="From" htmlFor="pay-from">
+              <Input id="pay-from" type="date" aria-label="From date" className="w-auto" value={fromD} onChange={(e) => { setFromD(e.target.value); setPage(1) }} /></FormField>
+            <FormField orientation="horizontal" className="w-auto gap-2" label="To" htmlFor="pay-to">
+              <Input id="pay-to" type="date" aria-label="To date" className="w-auto" value={toD} onChange={(e) => { setToD(e.target.value); setPage(1) }} /></FormField>
+          </FilterBar>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th className="py-3 pl-4 pr-2 font-semibold">Date</th>
-                  <th className="px-2 py-3 font-semibold">{tab === "customer" ? "Customer / order" : "Dorji / reference"}</th>
-                  <th className="px-2 py-3 font-semibold">Type</th><th className="px-2 py-3 font-semibold">Method</th>
-                  <th className="px-2 py-3 text-right font-semibold">Amount</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Receipt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && !ledger ? [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={6} className="px-4 py-3"><Skeleton className="h-11 rounded" /></td></tr>) :
+            <Table className="min-w-[640px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>{tab === "customer" ? "Customer / order" : "Dorji / reference"}</TableHead>
+                  <TableHead>Type</TableHead><TableHead>Method</TableHead>
+                  <TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Receipt</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading && !ledger ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-11" /></TableCell></TableRow>) :
                   rows.length === 0 ? (
-                    <tr><td colSpan={6} className="py-14 text-center">
-                      <Wallet className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                      <p className="font-semibold">No payments found</p>
-                      <p className="text-sm text-dash-muted">{tabCount ? "No payments match these filters." : tab === "customer" ? "No customer payments recorded yet." : "No dorji payouts recorded yet."}</p>
-                    </td></tr>
+                    <TableRow><TableCell colSpan={6} className="whitespace-normal">
+                      <EmptyState icon={Wallet} title="No payments found" className="p-4 md:p-6"
+                        description={tabCount ? "No payments match these filters." : tab === "customer" ? "No customer payments recorded yet." : "No dorji payouts recorded yet."} />
+                    </TableCell></TableRow>
                   ) : rows.map((p) => (
-                    <tr key={p.id}>
-                      <td className="whitespace-nowrap border-b border-dash-border-soft py-3 pl-4 pr-2 text-dash-muted">{fmtD(p.paymentDate)}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3"><div className="font-semibold">{p.who}</div><div className="text-xs text-dash-muted">{p.refLabel}</div></td>
-                      <td className="border-b border-dash-border-soft px-2 py-3"><span className={cn("inline-flex rounded-full px-2.5 py-[3px] text-xs font-bold", typeTone[p.type] ?? "bg-dash-neutral-soft")}>{p.typeLabel}</span></td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">{p.methodLabel}</td>
-                      <td className={cn("border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums", p.kind === "dorji" ? "text-dash-danger-fg" : "text-dash-success-fg")}>{p.kind === "dorji" ? "−" : "+"}{formatCurrency(p.amount)}</td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
-                        <div className="flex justify-end"><button type="button" aria-label="Print receipt" title="Print receipt" className={iconBtn} onClick={() => printReceipt(p)}><Printer className="size-4" /></button></div>
-                      </td>
-                    </tr>
+                    <TableRow key={p.id}>
+                      <TableCell>{fmtD(p.paymentDate)}</TableCell>
+                      <TableCell><div className="font-medium">{p.who}</div><div className="text-xs text-muted-foreground">{p.refLabel}</div></TableCell>
+                      <TableCell><Badge variant={typeVariant[p.type] ?? "outline"}>{p.typeLabel}</Badge></TableCell>
+                      <TableCell>{p.methodLabel}</TableCell>
+                      <TableCell className={cn("text-right font-bold tabular-nums", p.kind === "dorji" ? "text-destructive" : "text-dash-success-fg")}>{p.kind === "dorji" ? "−" : "+"}{formatCurrency(p.amount)}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end"><WithTooltip content="Print receipt"><Button type="button" variant="outline" size="icon" aria-label="Print receipt" onClick={() => printReceipt(p)}><Printer className="size-4" /></Button></WithTooltip></div>
+                      </TableCell>
+                    </TableRow>
                   ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 text-[13px] text-dash-muted tabular-nums">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 text-sm text-muted-foreground tabular-nums">
             <span>Showing {total} payment(s){hasFilter ? " (filtered)" : ""}</span>
-            <strong className="text-dash-ink">Total {formatCurrency(ledger?.totalAmount ?? 0)}</strong>
+            <strong className="text-foreground">Total {formatCurrency(ledger?.totalAmount ?? 0)}</strong>
           </div>
           {total > 0 && (
             <div className="p-4 pt-3">
@@ -283,66 +296,61 @@ export default function TailorPaymentsPage() {
                 onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
             </div>
           )}
-        </section>
+        </Card>
 
-        <aside className="flex w-full shrink-0 flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[380px]">
-          <h2 className="font-dash-display text-lg font-bold">Record payment</h2>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Payment for
-            <div role="radiogroup" aria-label="Payment for" className="flex gap-1.5">
-              {([["customer", "Customer order"], ["dorji", "Dorji payout"]] as [TailorLedgerKind, string][]).map(([id, label]) => (
-                <button key={id} type="button" role="radio" aria-checked={kind === id} onClick={() => { setKind(id); setErr("") }}
-                  className={cn("h-10 flex-1 rounded-[10px] border-2 px-3 text-[13px] font-semibold", kind === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{label}</button>
-              ))}
-            </div>
+        <SectionCard title="Record payment" className="w-full shrink-0 xl:w-[380px]" contentClassName="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-1.5">
+            <SectionTitle as="p">Payment for</SectionTitle>
+            <SegmentedControl aria-label="Payment for" size="default" className="w-full" value={kind}
+              onValueChange={(v) => { setKind(v as TailorLedgerKind); setErr("") }}
+              options={[{ value: "customer", label: "Customer order" }, { value: "dorji", label: "Dorji payout" }]} />
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">{kind === "customer" ? "Order" : "Dorji"}
-            <select className={input} value={pick} disabled={optsLoading || opts.length === 0}
-              onChange={(e) => { setPick(e.target.value); const o = opts.find((x) => String(x.id) === e.target.value); setAmt(o ? String(o.balance) : ""); setErr("") }}>
-              {opts.length === 0 ? <option value="">{optsLoading ? "Loading…" : kind === "customer" ? "No orders with a balance" : "No unpaid dorji work"}</option> :
-                opts.map((o) => <option key={o.id} value={o.id}>{fmtOpt(o)}</option>)}
-            </select>
-          </label>
-          <div className="flex items-center justify-between rounded-[10px] bg-dash-neutral-soft px-3 py-2.5 text-[13px]">
-            <span className="text-dash-muted">{kind === "customer" ? "Customer still owes" : "You owe"}</span><strong className="tabular-nums">{formatCurrency(bal)}</strong>
-          </div>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Amount
+          <FormField label={kind === "customer" ? "Order" : "Dorji"} htmlFor="pay-pick">
+            <Select value={pick || undefined} disabled={optsLoading || opts.length === 0}
+              onValueChange={(v) => { setPick(v); const o = opts.find((x) => String(x.id) === v); setAmt(o ? String(o.balance) : ""); setErr("") }}>
+              <SelectTrigger id="pay-pick" className="w-full"><SelectValue placeholder={optsLoading ? "Loading…" : kind === "customer" ? "No orders with a balance" : "No unpaid dorji work"} /></SelectTrigger>
+              <SelectContent>{opts.map((o) => <SelectItem key={o.id} value={String(o.id)}>{fmtOpt(o)}</SelectItem>)}</SelectContent>
+            </Select>
+          </FormField>
+          <Card className="px-3 py-2.5 shadow-none">
+            <InfoList><InfoRow label={kind === "customer" ? "Customer still owes" : "You owe"}><span className="tabular-nums">{formatCurrency(bal)}</span></InfoRow></InfoList>
+          </Card>
+          <FormField label="Amount" htmlFor="pay-amount">
             {chips.length > 0 && (
               <div role="group" aria-label="Quick amount" className="flex flex-wrap gap-1.5">
                 {chips.map((c) => (
-                  <button key={c.label} type="button" aria-pressed={amtN === c.v} onClick={() => { setAmt(String(c.v)); setErr("") }}
-                    className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", amtN === c.v ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{c.label}</button>
+                  <Button key={c.label} type="button" aria-pressed={amtN === c.v} onClick={() => { setAmt(String(c.v)); setErr("") }}
+                    variant={amtN === c.v ? "default" : "outline"} size="sm">{c.label}</Button>
                 ))}
               </div>
             )}
-            <input type="number" min={0} step="any" className={input} value={amt} onChange={(e) => { setAmt(e.target.value); setErr("") }} placeholder="0.00" />
-          </div>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Method
-            <div role="radiogroup" aria-label="Method" className="flex flex-wrap gap-1.5">
-              {METHODS.map(([id, label]) => (
-                <button key={id} type="button" role="radio" aria-checked={method === id} onClick={() => setMethod(id)}
-                  className={cn("h-9 rounded-[10px] border-2 px-3 text-[13px] font-semibold", method === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{label}</button>
-              ))}
-            </div>
+            <Input id="pay-amount" type="number" min={0} step="any" value={amt} onChange={(e) => { setAmt(e.target.value); setErr("") }} placeholder="0.00" />
+          </FormField>
+          <div className="flex flex-col gap-1.5">
+            <SectionTitle as="p">Method</SectionTitle>
+            <SegmentedControl aria-label="Method" value={method} onValueChange={setMethod}
+              options={METHODS.map(([id, label]) => ({ value: id, label }))} />
           </div>
           <div className="grid grid-cols-2 gap-2.5">
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Date<input type="date" className={input} max={todayStr()} value={date} onChange={(e) => { setDate(e.target.value); setErr("") }} /></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Reference<input className={input} value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Txn ID (optional)" /></label>
+            <FormField label="Date" htmlFor="pay-date"><Input id="pay-date" type="date" max={todayStr()} value={date} onChange={(e) => { setDate(e.target.value); setErr("") }} /></FormField>
+            <FormField label="Reference" htmlFor="pay-ref"><Input id="pay-ref" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Txn ID (optional)" /></FormField>
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Notes<input className={input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note" /></label>
-          <div className="flex items-center justify-between rounded-[10px] bg-dash-neutral-soft px-3 py-2.5 text-[13px]">
-            <span className="text-dash-muted">Balance after</span>
-            <strong className={cn("tabular-nums", after <= 0 ? "text-dash-success-fg" : "text-dash-warn-fg")}>{bal > 0 && after <= 0 ? "Fully paid" : `${formatCurrency(after)} left`}</strong>
-          </div>
-          <label className="flex items-center gap-2 text-[13px] font-semibold">
-            <input type="checkbox" checked={printAfter} onChange={(e) => setPrintAfter(e.target.checked)} className="size-4 accent-[var(--dash-accent)]" />Print receipt after saving
-          </label>
-          {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+          <FormField label="Notes" htmlFor="pay-notes"><Input id="pay-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note" /></FormField>
+          <Card className="px-3 py-2.5 shadow-none">
+            <InfoList>
+              <InfoRow label="Balance after"><span className={cn("tabular-nums", after <= 0 ? "text-dash-success-fg" : "text-dash-warn-fg")}>{bal > 0 && after <= 0 ? "Fully paid" : `${formatCurrency(after)} left`}</span></InfoRow>
+            </InfoList>
+          </Card>
+          <Label>
+            <Checkbox checked={printAfter} onCheckedChange={(v) => setPrintAfter(v === true)} />Print receipt after saving
+          </Label>
+          {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
           {mayWrite && (
-            <button type="button" disabled={saving || !current} onClick={record} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+            <Button type="button" disabled={saving || !current} onClick={record}>
               {saving ? "Saving…" : `Record ${formatCurrency(amtN)}`}
-            </button>
+            </Button>
           )}
-        </aside>
+        </SectionCard>
       </div>
     </div>
   )

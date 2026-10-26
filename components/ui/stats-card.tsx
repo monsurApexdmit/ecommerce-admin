@@ -50,7 +50,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
                 {stat.icon && (
-                  <div className={`p-2 rounded-lg ${colorClasses[stat.color || "blue"]}`}>
+                  <div className={cn("p-2 rounded-lg", colorClasses[stat.color || "blue"])}>
                     {stat.icon}
                   </div>
                 )}

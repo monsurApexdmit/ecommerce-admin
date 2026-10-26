@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Copy, Check, Upload } from "lucide-react"
 import { toast } from "sonner"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -12,6 +11,21 @@ import { cn } from "@/lib/utils"
 import { TIMEZONES } from "@/lib/timezones"
 import { settingsApi, type StoreHours } from "@/lib/settingsApi"
 import { saasCompanyApi, type CompanySettingsPayload } from "@/lib/saasCompanyApi"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 /* ------------------------------------------------------------------ */
 /* Static definitions (UI options, gateway field maps)                 */
@@ -124,11 +138,6 @@ const EMPTY_IMG: ImageState = { url: "", file: null, preview: "", removed: false
 /* Style tokens (shared with the finished dashboard pages)             */
 /* ------------------------------------------------------------------ */
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const card = "flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-[22px]"
-const timeInput = "h-[38px] rounded-lg border border-dash-border bg-dash-card px-2.5 text-sm outline-none focus-visible:border-dash-accent"
-
 const lakhGroup = (i: string) => i.replace(/\B(?=(\d\d)*\d{3}(?!\d))/g, ",")
 const intlGroup = (i: string) => i.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
 
@@ -138,48 +147,40 @@ const intlGroup = (i: string) => i.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className={card}>
-      <div>
-        <h2 className="font-dash-display text-lg font-bold">{title}</h2>
-        {sub && <p className="mt-1 text-[13px] text-dash-muted">{sub}</p>}
-      </div>
+    <SectionCard title={title} description={sub} contentClassName="flex flex-col gap-4">
       {children}
-    </section>
+    </SectionCard>
   )
 }
 
-function Toggle({ on, onClick, label, disabled }: { on: boolean; onClick: () => void; label: string; disabled?: boolean }) {
+function Toggle({ on, onClick, label, disabled, id }: { on: boolean; onClick: () => void; label: string; disabled?: boolean; id?: string }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onClick} disabled={disabled}
-      className={cn("flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 disabled:opacity-50", on ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}>
-      <span className="size-4 rounded-full bg-white" />
-    </button>
+    <Switch id={id} checked={on} aria-label={label} onCheckedChange={() => onClick()} disabled={disabled} />
   )
 }
 
 function Chips<T extends string>({ label, value, options, onPick }: { label: string; value: T; options: [T, string][]; onPick: (v: T) => void }) {
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
-      {options.map(([id, text]) => {
-        const on = value === id
-        return (
-          <button key={id} type="button" aria-pressed={on} onClick={() => onPick(id)}
-            className={cn("h-[38px] rounded-[10px] border px-3.5 text-[13px] font-semibold",
-              on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft")}>
-            {text}
-          </button>
-        )
-      })}
-    </div>
+    <SegmentedControl
+      aria-label={label}
+      value={value}
+      onValueChange={(x) => onPick(x as T)}
+      options={options.map(([id, text]) => ({ value: id, label: text }))}
+    />
   )
 }
 
 function SwitchRow({ title, sub, on, onClick }: { title: string; sub: string; on: boolean; onClick: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-dash-border px-3.5 py-3">
-      <span className="flex flex-col"><span className="font-semibold">{title}</span><span className="text-xs text-dash-muted">{sub}</span></span>
-      <Toggle on={on} onClick={onClick} label={title} />
-    </div>
+    <Item variant="outline" size="sm">
+      <ItemContent>
+        <ItemTitle>{title}</ItemTitle>
+        <ItemDescription>{sub}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Toggle on={on} onClick={onClick} label={title} />
+      </ItemActions>
+    </Item>
   )
 }
 
@@ -579,13 +580,10 @@ export default function GeneralSettingsPage() {
   /* ---------- render ---------- */
   if (blocked) return blocked
 
-  const wrapper = `${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`
+  const wrapper = "flex flex-col gap-5"
 
   const heading = (
-    <div>
-      <h1 className="font-dash-display text-[32px] font-bold tracking-tight">General settings</h1>
-      <p className="mt-1 text-sm text-dash-muted">Business details, logo and banner, region, receipts, opening hours, notifications and payment gateway credentials.</p>
-    </div>
+    <PageHeader title="General settings" description="Business details, logo and banner, region, receipts, opening hours, notifications and payment gateway credentials." />
   )
 
   if (loading || !v || !base) {
@@ -594,11 +592,11 @@ export default function GeneralSettingsPage() {
         {heading}
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-4">
-            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-64 rounded-[14px]" />)}
+            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-64" />)}
           </div>
           <div className="flex flex-[1_1_340px] flex-col gap-4">
-            <Skeleton className="h-96 rounded-[14px]" />
-            <Skeleton className="h-36 rounded-[14px]" />
+            <Skeleton className="h-96" />
+            <Skeleton className="h-36" />
           </div>
         </div>
       </div>
@@ -606,32 +604,39 @@ export default function GeneralSettingsPage() {
   }
 
   const fld = (label: string, key: FormKey, o: { type?: string; ph?: string } = {}) => (
-    <label key={key} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">{label}
-      <input className={input} type={o.type ?? "text"} placeholder={o.ph} value={v[key] as string} onChange={setText(key)} />
-    </label>
+    <FormField key={key} label={label} htmlFor={`gs-${key}`} className="min-w-0">
+      <Input id={`gs-${key}`} type={o.type ?? "text"} placeholder={o.ph} value={v[key] as string} onChange={setText(key)} />
+    </FormField>
   )
   const withCurrent = (opts: [string, string][], cur: string) => (opts.some(([a]) => a === cur) ? opts : [...opts, [cur, cur] as [string, string]])
 
   const imageBox = (kind: "logo" | "banner", s: ImageState, label: string, maxMb: number) => {
     const shown = shownImg(s)
     return (
-      <div className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">{label}
+      <FormField label={label} htmlFor={`gs-${kind}-file`} className="min-w-0">
         {shown && (
-          <span className="flex h-[130px] items-center justify-center overflow-hidden rounded-xl border border-dash-border bg-dash-bg">
+          <span className="flex h-[130px] items-center justify-center overflow-hidden rounded-md border bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={shown} alt={`${label} preview`} className="max-h-full max-w-full object-contain" />
           </span>
         )}
-        <label className={cn("relative flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-dash-border bg-dash-bg text-center text-[13px] font-semibold text-dash-neutral-fg", shown ? "h-16" : "h-[120px]")}>
-          <Upload className="size-[22px]" aria-hidden />
-          {shown ? `Change ${kind}` : "Click to upload"}
-          <span className="text-xs font-normal text-dash-muted">PNG or JPG · up to {maxMb} MB</span>
-          <input type="file" accept="image/*" aria-label={`${label} file`} onChange={pickImage(kind, maxMb)} className="absolute size-px opacity-0" />
-        </label>
+        <EmptyState
+          bordered
+          icon={shown ? undefined : Upload}
+          title={shown ? `Change ${kind}` : "Click to upload"}
+          description={`PNG or JPG · up to ${maxMb} MB`}
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Label htmlFor={`gs-${kind}-file`} className="cursor-pointer">{shown ? `Change ${kind}` : "Choose file"}</Label>
+            </Button>
+          }
+          className={shown ? "gap-2 p-3 md:p-3" : "gap-3 p-4 md:p-4"}
+        />
+        <Input id={`gs-${kind}-file`} type="file" accept="image/*" aria-label={`${label} file`} onChange={pickImage(kind, maxMb)} className="sr-only" />
         {shown && (
-          <button type="button" onClick={() => clearImage(kind)} className="self-start text-[13px] font-semibold text-dash-danger">Remove {kind}</button>
+          <Button type="button" variant="link" size="sm" onClick={() => clearImage(kind)} className="self-start">Remove {kind}</Button>
         )}
-      </div>
+      </FormField>
     )
   }
 
@@ -657,11 +662,14 @@ export default function GeneralSettingsPage() {
               {fld("Address", "address", { ph: "House, road, area" })}
               {fld("BIN / VAT reg. no.", "bin", { ph: "Optional" })}
               {fld("Trade licence no.", "licence", { ph: "Optional" })}
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Business type
-                <select className={input} value={v.bizType} onChange={setText("bizType")}>
-                  {withCurrent(BIZ_TYPES.map((t) => [t, t] as [string, string]), v.bizType).map(([a, b]) => <option key={a} value={a}>{b}</option>)}
-                </select>
-              </label>
+              <FormField label="Business type" htmlFor="gs-bizType" className="min-w-0">
+                <Select value={String(v.bizType)} onValueChange={(val) => set("bizType", val as never)}>
+                  <SelectTrigger id="gs-bizType" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(BIZ_TYPES.map((t) => [t, t] as [string, string]), v.bizType).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
               {fld("Registration number", "registration", { ph: "e.g. REG-2026-001" })}
               {fld("Website", "website", { ph: "https://" })}
               {fld("Facebook", "facebook", { ph: "https://facebook.com/…" })}
@@ -672,62 +680,73 @@ export default function GeneralSettingsPage() {
 
           <Section title="Region & format" sub="Your current pages show “$” in some places — this fixes it everywhere.">
             <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))]">
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Currency
-                <select className={input} value={v.currency} onChange={setText("currency")}>
-                  {withCurrent(CURRENCIES, v.currency).map(([a, b]) => <option key={a} value={a}>{b}</option>)}
-                </select>
-              </label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Time zone
-                <select className={input} value={v.timezone} onChange={setText("timezone")}>
-                  {withCurrent(TIMEZONES, v.timezone).map(([a, b]) => <option key={a} value={a}>{b}</option>)}
-                </select>
-              </label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Language
-                <select className={input} value={v.language} onChange={setText("language")}>
-                  {withCurrent(LANGUAGES, v.language).map(([a, b]) => <option key={a} value={a}>{b}</option>)}
-                </select>
-              </label>
+              <FormField label="Currency" htmlFor="gs-currency" className="min-w-0">
+                <Select value={String(v.currency)} onValueChange={(val) => set("currency", val as never)}>
+                  <SelectTrigger id="gs-currency" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(CURRENCIES, v.currency).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Time zone" htmlFor="gs-timezone" className="min-w-0">
+                <Select value={String(v.timezone)} onValueChange={(val) => set("timezone", val as never)}>
+                  <SelectTrigger id="gs-timezone" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(TIMEZONES, v.timezone).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Language" htmlFor="gs-language" className="min-w-0">
+                <Select value={String(v.language)} onValueChange={(val) => set("language", val as never)}>
+                  <SelectTrigger id="gs-language" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {withCurrent(LANGUAGES, v.language).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Number format
+            <FormField label="Number format">
               <Chips label="Number format" value={v.nf} onPick={(x) => set("nf", x)}
                 options={[["lakh", "1,00,000.00 (lakh)"], ["intl", "100,000.00"]]} />
-            </div>
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Date format
+            </FormField>
+            <FormField label="Date format">
               <Chips label="Date format" value={v.df} onPick={(x) => set("df", x)}
                 options={[["dmy", fmtDate(today, "dmy")], ["mdy", fmtDate(today, "mdy")], ["long", fmtDate(today, "long")]]} />
-            </div>
-            <div className="text-[13px] text-dash-muted">Preview: <strong className="text-dash-ink">{money(125450)}</strong> · <strong className="text-dash-ink">{fmtDate(today, v.df)}</strong></div>
+            </FormField>
+            <div className="text-sm text-muted-foreground">Preview: <strong className="text-foreground">{money(125450)}</strong> · <strong className="text-foreground">{fmtDate(today, v.df)}</strong></div>
           </Section>
 
           <Section title="Opening hours" sub="Used for online-store messages and staff schedules.">
             <div className="flex flex-col">
-              {DAYS.map((d) => {
+              {DAYS.map((d, di) => {
                 const h = v.hours[d]
                 return (
-                  <div key={d} className="grid min-h-[52px] items-center gap-3 border-b border-dash-border-soft [grid-template-columns:110px_40px_minmax(0,1fr)]">
-                    <span className="font-semibold">{DAY_LABEL[d]}</span>
+                  <div key={d}>
+                  {di > 0 && <Separator />}
+                  <div className="grid min-h-[52px] items-center gap-3 [grid-template-columns:110px_40px_minmax(0,1fr)]">
+                    <span className="font-medium">{DAY_LABEL[d]}</span>
                     <Toggle on={h.open} label={`Open on ${DAY_LABEL[d]}`} onClick={() => setDay(d, { open: !h.open })} />
                     {h.open ? (
                       <span className="flex flex-wrap items-center gap-2 text-sm">
-                        <input type="time" className={timeInput} value={h.from} aria-label={`${DAY_LABEL[d]} opens`} onChange={(e) => setDay(d, { from: e.target.value })} />
-                        <span className="text-dash-muted">to</span>
-                        <input type="time" className={timeInput} value={h.to} aria-label={`${DAY_LABEL[d]} closes`} onChange={(e) => setDay(d, { to: e.target.value })} />
+                        <Input type="time" className="w-auto" value={h.from} aria-label={`${DAY_LABEL[d]} opens`} onChange={(e) => setDay(d, { from: e.target.value })} />
+                        <span className="text-muted-foreground">to</span>
+                        <Input type="time" className="w-auto" value={h.to} aria-label={`${DAY_LABEL[d]} closes`} onChange={(e) => setDay(d, { to: e.target.value })} />
                       </span>
-                    ) : <span className="text-sm text-dash-muted">Closed</span>}
+                    ) : <span className="text-sm text-muted-foreground">Closed</span>}
+                  </div>
                   </div>
                 )
               })}
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={copyMonday} className={outlineBtn}>Copy Monday to weekdays</button>
-              <input type="date" className={cn(input, "h-11 w-auto")} value={holDraft} aria-label="Holiday date" onChange={(e) => setHolDraft(e.target.value)} />
-              <button type="button" onClick={addHoliday} className={outlineBtn}>+ Add holiday closure</button>
+              <Button type="button" variant="outline" onClick={copyMonday}>Copy Monday to weekdays</Button>
+              <Input type="date" className="w-auto" value={holDraft} aria-label="Holiday date" onChange={(e) => setHolDraft(e.target.value)} />
+              <Button type="button" variant="outline" onClick={addHoliday}>+ Add holiday closure</Button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {[...v.holidays].sort().map((iso) => (
-                <button key={iso} type="button" aria-label={`Remove holiday ${fmtHoliday(iso)}`}
-                  onClick={() => set("holidays", v.holidays.filter((x) => x !== iso))}
-                  className="h-[34px] rounded-full border border-dash-border bg-dash-bg px-3 text-[13px]">{fmtHoliday(iso)} ✕</button>
+                <Button key={iso} type="button" variant="outline" size="sm" aria-label={`Remove holiday ${fmtHoliday(iso)}`}
+                  onClick={() => set("holidays", v.holidays.filter((x) => x !== iso))}>{fmtHoliday(iso)} ✕</Button>
               ))}
             </div>
           </Section>
@@ -735,19 +754,19 @@ export default function GeneralSettingsPage() {
           <Section title="Promo banner" sub="A banner shown across the top of your online store.">
             <SwitchRow title="Show promo banner" sub="Turn off to hide it without losing the text." on={v.promo.on} onClick={() => set("promo", { ...v.promo, on: !v.promo.on })} />
             <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))]">
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Title
-                <input className={input} value={v.promo.title} onChange={(e) => set("promo", { ...v.promo, title: e.target.value })} /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Button text
-                <input className={input} value={v.promo.cta} onChange={(e) => set("promo", { ...v.promo, cta: e.target.value })} /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Subtitle
-                <input className={input} value={v.promo.sub} onChange={(e) => set("promo", { ...v.promo, sub: e.target.value })} /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Button link
-                <input className={input} value={v.promo.link} placeholder="/shop" onChange={(e) => set("promo", { ...v.promo, link: e.target.value })} /></label>
+              <FormField label="Title" htmlFor="gs-promo-title" className="min-w-0">
+                <Input id="gs-promo-title" value={v.promo.title} onChange={(e) => set("promo", { ...v.promo, title: e.target.value })} /></FormField>
+              <FormField label="Button text" htmlFor="gs-promo-cta" className="min-w-0">
+                <Input id="gs-promo-cta" value={v.promo.cta} onChange={(e) => set("promo", { ...v.promo, cta: e.target.value })} /></FormField>
+              <FormField label="Subtitle" htmlFor="gs-promo-sub" className="min-w-0">
+                <Input id="gs-promo-sub" value={v.promo.sub} onChange={(e) => set("promo", { ...v.promo, sub: e.target.value })} /></FormField>
+              <FormField label="Button link" htmlFor="gs-promo-link" className="min-w-0">
+                <Input id="gs-promo-link" value={v.promo.link} placeholder="/shop" onChange={(e) => set("promo", { ...v.promo, link: e.target.value })} /></FormField>
             </div>
-            <div className={cn("flex flex-wrap items-center justify-between gap-3 rounded-xl bg-dash-accent px-4 py-3 text-white", !v.promo.on && "opacity-45")}>
+            <Card className={cn("flex-row flex-wrap items-center justify-between gap-3 border-transparent bg-primary px-4 py-3 text-primary-foreground", !v.promo.on && "opacity-45")}>
               <span className="flex flex-col"><strong>{v.promo.title}</strong><span className="text-xs opacity-90">{v.promo.sub}</span></span>
-              <span className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-bold text-dash-accent">{v.promo.cta}</span>
-            </div>
+              <Badge variant="secondary">{v.promo.cta}</Badge>
+            </Card>
           </Section>
 
           <Section title="Notification settings" sub="Manage how you receive notifications.">
@@ -764,64 +783,70 @@ export default function GeneralSettingsPage() {
               const setGw = (patch: Partial<GwState>) => set("gw", { ...v.gw, [g.id]: { ...x, ...patch } })
               const showNote = g.sandbox ? x.enabled && x.sandbox : g.noteIf ? x.enabled && g.noteIf(x.fields) : false
               return (
-                <div key={g.id} className="flex flex-col gap-3 rounded-xl border border-dash-border p-3.5">
+                <Card key={g.id} className="gap-3 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="flex flex-col"><span className="font-semibold">{g.name}</span><span className="text-xs text-dash-muted">{g.sub}</span></span>
+                    <span className="flex flex-col"><span className="font-medium">{g.name}</span><span className="text-xs text-muted-foreground">{g.sub}</span></span>
                     <Toggle on={x.enabled} label={`Enable ${g.name}`} onClick={() => setGw({ enabled: !x.enabled })} />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {g.fields.map(([k, label, type, ph]) => (
-                      <label key={k} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">{label}
-                        <input className={input} type={type} autoComplete="off" placeholder={ph} value={x.fields[k] ?? ""}
+                      <FormField key={k} label={label} htmlFor={`gs-${g.id}-${k}`} className="min-w-0">
+                        <Input id={`gs-${g.id}-${k}`} type={type} autoComplete="off" placeholder={ph} value={x.fields[k] ?? ""}
                           onChange={(e) => setGw({ fields: { ...x.fields, [k]: e.target.value } })} />
-                      </label>
+                      </FormField>
                     ))}
                   </div>
                   {g.sandbox && (
-                    <span className="flex items-center gap-2 text-[13px]">
-                      <Toggle on={x.sandbox} label={`${g.name} sandbox mode`} onClick={() => setGw({ sandbox: !x.sandbox })} />
-                      Sandbox mode (turn off for live payments)
-                    </span>
+                    <FormField orientation="horizontal" label="Sandbox mode (turn off for live payments)" htmlFor={`gs-${g.id}-sandbox`}>
+                      <Toggle id={`gs-${g.id}-sandbox`} on={x.sandbox} label={`${g.name} sandbox mode`} onClick={() => setGw({ sandbox: !x.sandbox })} />
+                    </FormField>
                   )}
                   {showNote && (
-                    <div className="rounded-lg bg-dash-warn-soft px-3 py-2 text-xs text-dash-warn-fg"><strong>{g.note[0]}</strong> {g.note[1]}</div>
+                    <Alert>
+                      <AlertTitle>{g.note[0]}</AlertTitle>
+                      <AlertDescription>{g.note[1]}</AlertDescription>
+                    </Alert>
                   )}
-                </div>
+                </Card>
               )
             })}
-            <div className="flex flex-col gap-3 rounded-xl border border-dash-border p-3.5">
+            <Card className="gap-3 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="flex flex-col"><span className="font-semibold">COD shipping deposit</span>
-                  <span className="text-xs text-dash-muted">Require customers to pay shipping cost upfront before a Cash on Delivery order is confirmed.</span></span>
+                <span className="flex flex-col"><span className="font-medium">COD shipping deposit</span>
+                  <span className="text-xs text-muted-foreground">Require customers to pay shipping cost upfront before a Cash on Delivery order is confirmed.</span></span>
                 <Toggle on={v.cod.on} label="COD shipping deposit" onClick={() => set("cod", { ...v.cod, on: !v.cod.on })} />
               </div>
               {v.cod.on && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Payment gateway for deposit
-                    <select className={input} value={v.cod.gateway} onChange={(e) => set("cod", { ...v.cod, gateway: e.target.value as GwId })}>
-                      {GATEWAYS.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Fixed deposit amount (0 = use actual shipping cost)
-                    <input className={input} type="number" min={0} value={v.cod.amount} onChange={(e) => set("cod", { ...v.cod, amount: e.target.value })} />
-                  </label>
+                  <FormField label="Payment gateway for deposit" htmlFor="gs-cod-gateway" className="min-w-0">
+                    <Select value={String(v.cod.gateway)} onValueChange={(val) => set("cod", { ...v.cod, gateway: val as GwId })}>
+                      <SelectTrigger id="gs-cod-gateway" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {GATEWAYS.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label="Fixed deposit amount (0 = use actual shipping cost)" htmlFor="gs-cod-amount" className="min-w-0">
+                    <Input id="gs-cod-amount" type="number" min={0} value={v.cod.amount} onChange={(e) => set("cod", { ...v.cod, amount: e.target.value })} />
+                  </FormField>
                 </div>
               )}
-            </div>
+            </Card>
           </Section>
 
           <Section title="Aura Shop integration" sub="Connect your storefront to this company.">
-            <div className="flex flex-col gap-1 text-[13px] font-semibold">Your company ID
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium">Your company ID</span>
               <div className="font-mono text-2xl font-bold">{company?.id ?? "—"}</div>
             </div>
-            <div className="rounded-xl bg-dash-ink p-3.5 font-mono text-xs leading-relaxed text-dash-card">
-              {`VITE_API_BASE_URL=${apiUrl}`}<br />{`VITE_COMPANY_ID=${company?.id ?? ""}`}
-            </div>
+            <Card className="gap-0 bg-muted p-3.5 font-mono text-xs leading-relaxed shadow-none">
+              <span>{`VITE_API_BASE_URL=${apiUrl}`}</span><span>{`VITE_COMPANY_ID=${company?.id ?? ""}`}</span>
+            </Card>
             <div className="flex flex-wrap items-center gap-3">
-              <button type="button" onClick={copyEnv} className={outlineBtn}>
+              <Button type="button" variant="outline" onClick={copyEnv}>
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />} Copy .env
-              </button>
-              <span className="text-xs text-dash-muted">Set <code className="font-mono">VITE_COMPANY_ID</code> in the Aura Shop <code className="font-mono">.env</code> file. {apiUrlSaved ? "Change the company ID and API URL under Online store." : "No API URL saved yet, showing this site's /api. Set the real one under Online store."}</span>
+              </Button>
+              <span className="text-xs text-muted-foreground">Set <code className="font-mono">VITE_COMPANY_ID</code> in the Aura Shop <code className="font-mono">.env</code> file. {apiUrlSaved ? "Change the company ID and API URL under Online store." : "No API URL saved yet, showing this site's /api. Set the real one under Online store."}</span>
             </div>
           </Section>
         </div>
@@ -830,26 +855,26 @@ export default function GeneralSettingsPage() {
         <aside className="flex max-w-full flex-[1_1_340px] flex-col gap-4">
           <Section title="Receipts & invoices" sub="Live preview updates as you type.">
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Invoice prefix
-                <input className={cn(input, "font-mono")} value={v.prefix} onChange={setText("prefix")} /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Next number
-                <input className={input} type="number" value={v.nextNo} onChange={setText("nextNo")} /></label>
+              <FormField label="Invoice prefix" htmlFor="gs-prefix" className="min-w-0">
+                <Input id="gs-prefix" className="font-mono" value={v.prefix} onChange={setText("prefix")} /></FormField>
+              <FormField label="Next number" htmlFor="gs-nextNo" className="min-w-0">
+                <Input id="gs-nextNo" type="number" value={v.nextNo} onChange={setText("nextNo")} /></FormField>
             </div>
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr))]">
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">PO prefix
-                <input className={input} value={v.poPrefix} onChange={setText("poPrefix")} /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Tax rate (%)
-                <input className={input} type="number" min={0} max={100} step={0.01} value={v.taxRate} onChange={setText("taxRate")} /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Low-stock default
-                <input className={input} type="number" min={0} step={1} value={v.lowStock} onChange={setText("lowStock")} /></label>
+              <FormField label="PO prefix" htmlFor="gs-poPrefix" className="min-w-0">
+                <Input id="gs-poPrefix" value={v.poPrefix} onChange={setText("poPrefix")} /></FormField>
+              <FormField label="Tax rate (%)" htmlFor="gs-taxRate" className="min-w-0">
+                <Input id="gs-taxRate" type="number" min={0} max={100} step={0.01} value={v.taxRate} onChange={setText("taxRate")} /></FormField>
+              <FormField label="Low-stock default" htmlFor="gs-lowStock" className="min-w-0">
+                <Input id="gs-lowStock" type="number" min={0} step={1} value={v.lowStock} onChange={setText("lowStock")} /></FormField>
             </div>
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Receipt paper
+            <FormField label="Receipt paper">
               <Chips label="Paper" value={v.paper} options={PAPERS} onPick={(x) => set("paper", x)} />
-            </div>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Footer message
-              <input className={input} value={v.footer} onChange={setText("footer")} /></label>
+            </FormField>
+            <FormField label="Footer message" htmlFor="gs-footer">
+              <Input id="gs-footer" value={v.footer} onChange={setText("footer")} /></FormField>
             <div style={{ width: PAPER_WIDTH[v.paper] }}
-              className="flex max-w-full flex-col gap-1 self-center border border-dash-border bg-white p-4 text-center font-mono text-[11px] text-[#0E1525] shadow-[0_4px_16px_rgba(14,21,37,0.08)]">
+              className="flex max-w-full flex-col gap-1 self-center border bg-white p-4 text-center font-mono text-[11px] text-[#0E1525] shadow-[0_4px_16px_rgba(14,21,37,0.08)]">
               <strong className="text-[13px]">{v.storeName.toUpperCase()}</strong>
               <span>{v.phone}</span>
               <span>{v.prefix}{v.nextNo} · {fmtDate(today, v.df)}</span>
@@ -864,26 +889,25 @@ export default function GeneralSettingsPage() {
 
           <Section title="Data" sub="Back up or restore your settings (including logo and banner links, excluding secrets) as a JSON file.">
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={exportData} className={outlineBtn}>Export data</button>
-              <button type="button" onClick={discard} disabled={saving || !dirty} className={outlineBtn}>Reset unsaved changes</button>
-              <button type="button" onClick={() => importRef.current?.click()} disabled={!writable} className={outlineBtn}>Import data</button>
-              <input ref={importRef} type="file" accept="application/json,.json" onChange={importData} className="hidden" />
+              <Button type="button" variant="outline" onClick={exportData}>Export data</Button>
+              <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>Reset unsaved changes</Button>
+              <Button type="button" variant="outline" onClick={() => importRef.current?.click()} disabled={!writable}>Import data</Button>
+              <Input ref={importRef} type="file" accept="application/json,.json" onChange={importData} className="hidden" />
             </div>
           </Section>
         </aside>
       </div>
 
       {/* ---------------- sticky save bar ---------------- */}
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2.5 rounded-[14px] border border-dash-border bg-dash-card px-[18px] py-3.5 shadow-[0_-6px_20px_rgba(14,21,37,0.06)]">
-        <span className={cn("text-[13px]", err ? "text-dash-danger" : dirty ? "text-dash-warn-fg" : "text-dash-muted")}>{barText}</span>
+      <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
+        <span className={cn("text-sm", err ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>{barText}</span>
         <div className="ml-auto flex gap-2">
-          <button type="button" onClick={discard} disabled={saving || !dirty} className={outlineBtn}>Discard</button>
-          <button type="button" onClick={save} disabled={saving || !writable}
-            className="inline-flex h-11 items-center justify-center rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-60">
+          <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>Discard</Button>
+          <Button type="button" onClick={save} disabled={saving || !writable}>
             {saving ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

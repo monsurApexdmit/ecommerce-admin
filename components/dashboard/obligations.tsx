@@ -1,6 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
+import { StatTile } from "@/components/common/StatTile"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useDashboardFilters } from "./dashboard-context"
 import type { RangePreset } from "./dashboard-context"
@@ -58,33 +61,29 @@ export function Obligations() {
     return (
       <>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-[10px] bg-dash-accent-soft p-3.5 text-dash-accent-fg">
-            <div className="text-xs">Cash in · {PERIOD_LABEL[preset]}</div>
-            <div className="font-dash-display text-xl font-bold tabular-nums">{formatCurrency(data.cashIn)}</div>
-          </div>
-          <div className="rounded-[10px] bg-dash-warn-soft p-3.5 text-dash-warn-fg">
-            <div className="text-xs">Due this month</div>
-            <div className="font-dash-display text-xl font-bold tabular-nums">{formatCurrency(data.dueThisMonth)}</div>
-          </div>
+          <StatTile className="gap-1 p-3.5 shadow-none" label={`Cash in · ${PERIOD_LABEL[preset]}`} value={formatCurrency(data.cashIn)} />
+          <StatTile className="gap-1 p-3.5 shadow-none" label="Due this month" value={formatCurrency(data.dueThisMonth)} />
         </div>
-        {rows.map((o) => (
-          <div key={o.label} className="flex flex-col gap-1.5 border-b border-dash-border-soft py-2.5">
-            <div className="flex justify-between gap-2 text-[13px]">
-              <span className="font-semibold text-dash-ink">{o.label}</span>
-              <span className="font-bold text-dash-ink tabular-nums">{o.value}</span>
+        <div className="divide-y">
+          {rows.map((o) => (
+            <div key={o.label} className="flex flex-col gap-1.5 py-2.5">
+              <div className="flex justify-between gap-2 text-sm">
+                <span className="font-medium">{o.label}</span>
+                <span className="font-semibold tabular-nums">{o.value}</span>
+              </div>
+              <div className="flex justify-between gap-2 text-xs text-muted-foreground">
+                <span>{o.sub}</span>
+                <span>{o.status}</span>
+              </div>
+              <Progress value={o.pct} aria-label={o.label} className="h-1.5" />
             </div>
-            <div className="flex justify-between gap-2 text-xs text-dash-muted">
-              <span>{o.sub}</span>
-              <span>{o.status}</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-dash-neutral-soft" role="progressbar" aria-label={o.label} aria-valuenow={o.pct} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-full rounded-full bg-dash-success" style={{ width: `${o.pct}%` }} />
-            </div>
-          </div>
-        ))}
-        <Link href="/dashboard/staff/salary" className="flex h-11 items-center justify-center rounded-[10px] border border-dash-border text-sm font-semibold text-dash-ink hover:bg-dash-neutral-soft">
-          Run payroll for {s.month.split(" ")[0]}
-        </Link>
+          ))}
+        </div>
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/dashboard/staff/salary">
+            Run payroll for {s.month.split(" ")[0]}
+          </Link>
+        </Button>
       </>
     )
   }

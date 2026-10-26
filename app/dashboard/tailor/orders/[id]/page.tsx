@@ -13,5 +13,5 @@ export default function TailorOrderRedirect({ params }: { params: Promise<{ id: 
   const { id } = use(params)
   const router = useRouter()
   useEffect(() => { router.replace(`/dashboard/tailor/orders?view=${encodeURIComponent(id)}`) }, [id, router])
-  return <Skeleton className="h-40 rounded-[14px]" />
+  return <Skeleton className="h-40" />
 }

@@ -5,21 +5,34 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { saasBillingApi, type BillingUsage, type PaymentRecord, type Plan, type Subscription } from "@/lib/saasBillingApi"
 import { settingsApi } from "@/lib/settingsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatusBadge, type StatusVariant } from "@/components/common/StatusBadge"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { EmptyState } from "@/components/common/EmptyState"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const UNLIMITED = 999999
 const TAX_RATE = 0.1
-
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:cursor-not-allowed disabled:opacity-50"
-const primaryBtn = "inline-flex h-11 items-center justify-center rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
-const card = "rounded-[14px] border border-dash-border bg-dash-card"
 
 const METHODS = [
   { id: "card", label: "Credit / debit card" },
@@ -105,21 +118,21 @@ export default function PlanBillingPage() {
   ] : []
   const overAny = meters.some((m) => m.limit !== null && m.limit < UNLIMITED && m.limit > 0 && m.used > m.limit)
 
-  const STATUS_PILL = {
-    none: { label: "No plan", cls: "bg-dash-neutral-soft text-dash-neutral-fg", border: "border-dash-border" },
-    trial: { label: "Trial", cls: "bg-dash-accent-soft text-dash-accent-fg", border: "border-dash-accent" },
-    active: { label: "Active", cls: "bg-dash-success-soft text-dash-success-fg", border: "border-dash-accent" },
-    cancelled: { label: "Cancelled", cls: "bg-dash-danger-soft text-dash-danger-fg", border: "border-dash-danger-soft" },
-    expired: { label: "Expired", cls: "bg-dash-neutral-soft text-dash-neutral-fg", border: "border-dash-border" },
-  }[status]
+  const STATUS_PILL = ({
+    none: { label: "No plan", variant: "outline" },
+    trial: { label: "Trial", variant: "secondary" },
+    active: { label: "Active", variant: "default" },
+    cancelled: { label: "Cancelled", variant: "destructive" },
+    expired: { label: "Expired", variant: "outline" },
+  } as Record<typeof status, { label: string; variant: StatusVariant }>)[status]
 
-  let note: { cls: string; title: string; text: string }
-  if (!sub) note = { cls: "bg-dash-neutral-soft text-dash-neutral-fg", title: "No active plan.", text: "Pick a plan below to get started." }
-  else if (status === "cancelled") note = { cls: "bg-dash-danger-soft text-dash-danger-fg", title: "Plan cancelled.", text: `Access continues until ${fmtD(periodEnd)}. Renew to reactivate the ${sub.planName} plan.` }
-  else if (status === "expired") note = { cls: "bg-dash-danger-soft text-dash-danger-fg", title: "Plan expired.", text: `Expired on ${fmtD(periodEnd)}. Choose a plan to regain access.` }
-  else if (!sub.currentPeriodStart || !periodEnd) note = { cls: "bg-dash-danger-soft text-dash-danger-fg", title: "Billing date missing.", text: "No subscription start date is saved. Renew once to set it." }
-  else if (isTrial) note = { cls: "bg-dash-neutral-soft text-dash-neutral-fg", title: `Trial ends on ${fmtD(periodEnd)}.`, text: `Started ${fmtD(sub.currentPeriodStart)}.` }
-  else note = { cls: "bg-dash-neutral-soft text-dash-neutral-fg", title: `Renews on ${fmtD(sub.nextBillingDate ?? periodEnd)}.`, text: overAny ? "You are over a plan limit — consider upgrading." : `Started ${fmtD(sub.currentPeriodStart)}.` }
+  let note: { danger: boolean; title: string; text: string }
+  if (!sub) note = { danger: false, title: "No active plan.", text: "Pick a plan below to get started." }
+  else if (status === "cancelled") note = { danger: true, title: "Plan cancelled.", text: `Access continues until ${fmtD(periodEnd)}. Renew to reactivate the ${sub.planName} plan.` }
+  else if (status === "expired") note = { danger: true, title: "Plan expired.", text: `Expired on ${fmtD(periodEnd)}. Choose a plan to regain access.` }
+  else if (!sub.currentPeriodStart || !periodEnd) note = { danger: true, title: "Billing date missing.", text: "No subscription start date is saved. Renew once to set it." }
+  else if (isTrial) note = { danger: false, title: `Trial ends on ${fmtD(periodEnd)}.`, text: `Started ${fmtD(sub.currentPeriodStart)}.` }
+  else note = { danger: false, title: `Renews on ${fmtD(sub.nextBillingDate ?? periodEnd)}.`, text: overAny ? "You are over a plan limit — consider upgrading." : `Started ${fmtD(sub.currentPeriodStart)}.` }
 
   const basePrice = isTrial ? 0 : sub?.periodPrice ?? sub?.price ?? 0
 
@@ -214,119 +227,129 @@ export default function PlanBillingPage() {
     : "All changes saved."
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Plan &amp; billing</h1>
-          <p className="mt-1 text-sm text-dash-muted">Your subscription, usage and invoices.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/billing/plans" className={outlineBtn}>Plans</Link>
-          <Link href="/dashboard/billing/subscriptions" className={outlineBtn}>Subscriptions</Link>
-          <Link href="/dashboard/company/billing-contact" className={outlineBtn}>Billing contact</Link>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Plan & billing"
+        description="Your subscription, usage and invoices."
+        actions={<>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/plans">Plans</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/subscriptions">Subscriptions</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/company/billing-contact">Billing contact</Link></Button>
+        </>}
+      />
 
       {loading ? (
-        <div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-[300px] rounded-[14px]" /><Skeleton className="h-[300px] rounded-[14px]" /></div>
+        <div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-[300px]" /><Skeleton className="h-[300px]" /></div>
       ) : (
-        <section className={cn(card, "grid gap-6 border-2 p-6 lg:grid-cols-2", STATUS_PILL.border)}>
+        <Card className="grid gap-6 p-6 lg:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <span className={cn("self-start rounded-full px-2.5 py-[3px] text-xs font-bold", STATUS_PILL.cls)}>{STATUS_PILL.label}</span>
-            <h2 className="font-dash-display text-[28px] font-bold">{sub?.planName ?? "No plan"}</h2>
+            <StatusBadge status={status} variant={STATUS_PILL.variant} label={STATUS_PILL.label} className="self-start" />
+            <h2 className="text-[28px] font-bold">{sub?.planName ?? "No plan"}</h2>
             {sub && (
-              <span className="text-sm text-dash-muted">
-                <strong className="text-[22px] text-dash-ink tabular-nums">{isTrial ? "Free" : money(basePrice)}</strong>{" "}
+              <span className="text-sm text-muted-foreground">
+                <strong className="text-[22px] text-foreground tabular-nums">{isTrial ? "Free" : money(basePrice)}</strong>{" "}
                 {isTrial ? "· 10-day trial" : sub.billingPeriod === "yearly" ? "/ year · billed yearly" : "/ month · billed monthly"}
               </span>
             )}
-            <div className={cn("rounded-[10px] px-3 py-2.5 text-[13px]", note.cls)}><strong>{note.title}</strong> {note.text}</div>
+            <Alert variant={note.danger ? "destructive" : "default"}>
+              <AlertTitle>{note.title}</AlertTitle>
+              <AlertDescription>{note.text}</AlertDescription>
+            </Alert>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {sub && !isTrial && writable && (
-                <button type="button" disabled={busy} onClick={renew} className={primaryBtn}>{status === "cancelled" || status === "expired" ? "Reactivate" : "Renew now"}</button>
+                <Button type="button" disabled={busy} onClick={renew}>{status === "cancelled" || status === "expired" ? "Reactivate" : "Renew now"}</Button>
               )}
-              <a href="#compare-plans" className={outlineBtn}>Change plan</a>
+              <Button asChild variant="outline"><a href="#compare-plans">Change plan</a></Button>
               {canCancel && writable && (
-                <Link href="/dashboard/billing/subscriptions?cancel=1" className="inline-flex h-11 items-center px-3 text-sm font-semibold text-dash-danger hover:underline">Cancel plan</Link>
+                <Button asChild variant="link" className="text-destructive"><Link href="/dashboard/billing/subscriptions?cancel=1">Cancel plan</Link></Button>
               )}
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-bold">Usage this month</h3>
-            {!usage ? <Skeleton className="h-32 rounded-lg" /> : meters.map((m) => {
+            <h3 className="text-sm font-semibold">Usage this month</h3>
+            {!usage ? <Skeleton className="h-32" /> : meters.map((m) => {
               const finite = m.limit !== null && m.limit > 0 && m.limit < UNLIMITED
               const over = finite && m.used > (m.limit as number)
               return (
                 <div key={m.label}>
                   <div className="flex justify-between text-sm"><span>{m.label}</span>
-                    <span className="text-dash-muted"><strong className="text-dash-ink tabular-nums">{m.used.toLocaleString("en-US")}</strong>{" "}
+                    <span className="text-muted-foreground"><strong className="text-foreground tabular-nums">{m.used.toLocaleString("en-US")}</strong>{" "}
                       {m.limit === null ? "this month" : finite ? `of ${(m.limit as number).toLocaleString("en-US")}` : "of unlimited"}</span></div>
-                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-dash-neutral-soft">
-                    <div className={cn("h-full rounded-full", over ? "bg-dash-danger" : "bg-dash-accent")} style={{ width: `${finite ? Math.min(100, Math.round((m.used / (m.limit as number)) * 100)) : 0}%` }} />
-                  </div>
+                  <Progress
+                    aria-label={`${m.label} usage`}
+                    value={finite ? Math.min(100, Math.round((m.used / (m.limit as number)) * 100)) : 0}
+                    className={cn("mt-1.5", over && "*:data-[slot=progress-indicator]:bg-destructive")}
+                  />
                 </div>
               )
             })}
-            <div className="flex items-center justify-between gap-4 rounded-xl border border-dash-border p-3">
-              <span className="flex flex-col"><span className="font-semibold">Auto-renew</span>
-                <span className="text-xs text-dash-muted">{!periodSavable ? "Available on an active paid plan" : dAuto ? "Renews automatically each period" : "You will renew manually"}</span></span>
-              <button type="button" role="switch" aria-checked={dAuto} aria-label="Auto renew" disabled={!periodSavable || !writable}
-                onClick={() => setDraft({ ...draft, auto: !dAuto })}
-                className={cn("flex h-[22px] w-10 shrink-0 items-center rounded-full p-[3px] disabled:opacity-50", dAuto ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}><span className="size-4 rounded-full bg-white" /></button>
-            </div>
+            <Item variant="outline" size="sm">
+              <ItemContent>
+                <ItemTitle>Auto-renew</ItemTitle>
+                <ItemDescription>{!periodSavable ? "Available on an active paid plan" : dAuto ? "Renews automatically each period" : "You will renew manually"}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch checked={dAuto} aria-label="Auto renew" disabled={!periodSavable || !writable}
+                  onCheckedChange={() => setDraft({ ...draft, auto: !dAuto })} />
+              </ItemActions>
+            </Item>
           </div>
-        </section>
+        </Card>
       )}
 
-      <section id="compare-plans" className={card}>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dash-border-soft p-5">
-          <h2 className="font-dash-display text-lg font-bold">Compare plans</h2>
-          <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-[10px] bg-dash-neutral-soft p-[3px]">
-            {([["monthly", "Monthly"], ["yearly", "Yearly · 2 months free"]] as const).map(([id, label]) => (
-              <button key={id} type="button" role="radio" aria-checked={dPeriod === id} onClick={() => setDraft({ ...draft, period: id })}
-                className={cn("h-9 rounded-lg px-3.5 text-[13px] font-semibold", dPeriod === id ? "bg-dash-card shadow-sm" : "text-dash-muted")}>{label}</button>
-            ))}
-          </div>
-        </div>
-        {loading ? <div className="p-5"><Skeleton className="h-60 rounded-lg" /></div> : plans.length === 0 ? (
-          <div className="p-10 text-center text-sm text-dash-muted">No plans available. Please contact support.</div>
+      <SectionCard
+        id="compare-plans"
+        title="Compare plans"
+        actions={
+          <SegmentedControl
+            aria-label="Billing period"
+            size="default"
+            value={dPeriod}
+            onValueChange={(id) => setDraft({ ...draft, period: id as Period })}
+            options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly · 2 months free" }]}
+          />
+        }
+        contentClassName="px-0"
+      >
+        {loading ? <div className="px-6"><Skeleton className="h-60" /></div> : plans.length === 0 ? (
+          <EmptyState title="No plans available. Please contact support." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-sm">
-              <thead>
-                <tr className="text-left text-xs text-dash-muted">
-                  <th className="px-5 py-4 align-bottom font-semibold">Plan</th>
+            <Table className="min-w-[820px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="align-bottom">Plan</TableHead>
                   {plans.map((p) => {
                     const isCur = p.id === curId
                     const isSel = p.id === dPlan && !isCur
                     return (
-                      <th key={p.id} className={cn("px-2.5 py-4 align-top", isCur ? "bg-dash-accent-soft/50" : isSel && "bg-dash-success-soft/40")}>
-                        {(isCur || p.isFeatured) && <span className={cn("mb-1.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold", isCur ? "bg-dash-ink text-dash-card" : "bg-dash-success-soft text-dash-success-fg")}>{isCur ? "Your plan" : "Most popular"}</span>}
-                        <div className="text-base font-bold text-dash-ink">{p.name}</div>
-                        <div className="mt-1 text-xl font-bold text-dash-ink tabular-nums">{isFree(p) ? "Free" : money(priceOf(p, dPeriod))}
-                          <span className="text-xs font-medium text-dash-muted">{isFree(p) ? " · 10 days" : dPeriod === "yearly" ? " /year" : " /month"}</span></div>
-                      </th>
+                      <TableHead key={p.id} className={cn("h-auto py-2 align-top", isCur ? "bg-muted/50" : isSel && "bg-muted/30")}>
+                        {(isCur || p.isFeatured) && <Badge variant={isCur ? "default" : "secondary"} className="mb-1.5">{isCur ? "Your plan" : "Most popular"}</Badge>}
+                        <div className="text-base font-bold text-foreground">{p.name}</div>
+                        <div className="mt-1 text-xl font-bold text-foreground tabular-nums">{isFree(p) ? "Free" : money(priceOf(p, dPeriod))}
+                          <span className="text-xs font-medium text-muted-foreground">{isFree(p) ? " · 10 days" : dPeriod === "yearly" ? " /year" : " /month"}</span></div>
+                      </TableHead>
                     )
                   })}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {([
                   ["Team members", (p: Plan) => limitLabel(p.maxUsers)],
                   ["Products", (p: Plan) => limitLabel(p.maxProducts)],
                   ["Branches", (p: Plan) => limitLabel(p.maxBranches)],
                   ...featUnion.map((f) => [f, (p: Plan) => ((p.features || []).map(featName).includes(f) ? "✓" : "—")] as [string, (p: Plan) => string]),
                 ] as [string, (p: Plan) => string][]).map(([name, fn]) => (
-                  <tr key={name}>
-                    <td className="border-t border-dash-border-soft px-5 py-2.5 text-dash-muted">{name}</td>
+                  <TableRow key={name}>
+                    <TableCell>{name}</TableCell>
                     {plans.map((p) => {
                       const v = fn(p)
-                      return <td key={p.id} className={cn("border-t border-dash-border-soft px-2.5 py-2.5 font-semibold", v === "—" && "font-normal text-dash-muted/50", p.id === curId ? "bg-dash-accent-soft/50" : p.id === dPlan && "bg-dash-success-soft/40")}>{v}</td>
+                      return <TableCell key={p.id} className={cn(v === "—" && "text-muted-foreground", p.id === curId ? "bg-muted/50" : p.id === dPlan && "bg-muted/30")}>{v}</TableCell>
                     })}
-                  </tr>
+                  </TableRow>
                 ))}
-                <tr>
-                  <td className="px-5 py-3.5" />
+                <TableRow>
+                  <TableCell />
                   {plans.map((p) => {
                     const isCur = p.id === curId
                     const isSel = p.id === dPlan && !isCur
@@ -334,63 +357,58 @@ export default function PlanBillingPage() {
                     const cta = isCur ? "Current plan" : trialLocked ? "Trial used" : isSel ? "Selected"
                       : curId === null ? "Select" : rank(p.id) > rank(curId) ? "Upgrade" : "Downgrade"
                     return (
-                      <td key={p.id} className={cn("px-2.5 py-3.5", isCur ? "bg-dash-accent-soft/50" : isSel && "bg-dash-success-soft/40")}>
-                        <button type="button" disabled={isCur || trialLocked || !writable}
+                      <TableCell key={p.id} className={cn(isCur ? "bg-muted/50" : isSel && "bg-muted/30")}>
+                        <Button type="button" disabled={isCur || trialLocked || !writable}
                           onClick={() => setDraft({ ...draft, plan: isSel ? undefined : p.id })}
-                          className={cn("h-10 w-full rounded-[10px] text-[13px] font-bold disabled:cursor-not-allowed",
-                            isCur || trialLocked ? "bg-dash-border text-dash-muted" : isSel ? "border-2 border-dash-accent bg-dash-accent-soft" : "border border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>{cta}</button>
-                      </td>
+                          variant={isSel ? "default" : "outline"} className="w-full">{cta}</Button>
+                      </TableCell>
                     )
                   })}
-                </tr>
-              </tbody>
-            </table>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
-      <section className={cn(card, "flex flex-col gap-4 p-6")}>
-        <div>
-          <h2 className="font-dash-display text-lg font-bold">Payment history</h2>
-          <p className="mt-1 text-[13px] text-dash-muted">Invoices for your subscription.</p>
-        </div>
-        {loading ? <Skeleton className="h-24 rounded-lg" /> : invoices.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-dash-border p-7 text-center text-sm text-dash-muted">No invoices yet — your first invoice will appear here after renewal or a plan change.</div>
+      <SectionCard title="Payment history" description="Invoices for your subscription.">
+        {loading ? <Skeleton className="h-24" /> : invoices.length === 0 ? (
+          <EmptyState bordered title="No invoices yet — your first invoice will appear here after renewal or a plan change." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th className="px-3.5 py-2.5 font-semibold">Invoice</th><th className="px-3.5 py-2.5 font-semibold">Date</th><th className="px-3.5 py-2.5 font-semibold">Plan</th>
-                  <th className="px-3.5 py-2.5 font-semibold">Period</th><th className="px-3.5 py-2.5 text-right font-semibold">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[560px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead><TableHead>Date</TableHead><TableHead>Plan</TableHead>
+                  <TableHead>Period</TableHead><TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {invoices.map((p) => (
-                  <tr key={p.id}>
-                    <td className="border-t border-dash-border-soft px-3.5 py-2.5 font-semibold">{p.invoiceNumber}</td>
-                    <td className="border-t border-dash-border-soft px-3.5 py-2.5">{fmtD(p.paymentDate ?? p.createdAt)}</td>
-                    <td className="border-t border-dash-border-soft px-3.5 py-2.5">{p.planName || "—"}</td>
-                    <td className="border-t border-dash-border-soft px-3.5 py-2.5">{p.billingPeriod === "yearly" ? "Yearly" : "Monthly"}</td>
-                    <td className="border-t border-dash-border-soft px-3.5 py-2.5 text-right font-bold tabular-nums">{money(p.amount)}</td>
-                  </tr>
+                  <TableRow key={p.id}>
+                    <TableCell>{p.invoiceNumber}</TableCell>
+                    <TableCell>{fmtD(p.paymentDate ?? p.createdAt)}</TableCell>
+                    <TableCell>{p.planName || "—"}</TableCell>
+                    <TableCell>{p.billingPeriod === "yearly" ? "Yearly" : "Monthly"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(p.amount)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2.5 rounded-[14px] border border-dash-border bg-dash-card px-4 py-3.5 shadow-[0_-6px_20px_rgba(14,21,37,0.06)]">
-        <span className="text-[13px] text-dash-muted">{statusText}</span>
+      <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
+        <span className="text-sm text-muted-foreground">{statusText}</span>
         <div className="ml-auto flex gap-2">
-          <button type="button" onClick={discard} disabled={!dirty || busy} className={outlineBtn}>Discard</button>
-          <button type="button" onClick={save} disabled={!dirty || busy || !writable} className={primaryBtn}>{busy ? "Saving…" : "Save changes"}</button>
+          <Button type="button" variant="outline" onClick={discard} disabled={!dirty || busy}>Discard</Button>
+          <Button type="button" onClick={save} disabled={!dirty || busy || !writable}>{busy ? "Saving…" : "Save changes"}</Button>
         </div>
-      </div>
+      </Card>
 
       <Dialog open={!!co} onOpenChange={(o) => { if (!o && !co?.busy) setCo(null) }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           {co && (() => {
             const free = isFree(co.plan)
             const sub0 = free ? 0 : priceOf(co.plan, co.period)
@@ -398,36 +416,44 @@ export default function PlanBillingPage() {
             const over = overLimits(co.plan)
             return (
               <>
-                <DialogTitle className="font-dash-display text-xl font-bold">{free ? "Start your free trial" : `Confirm ${co.plan.name} plan`}</DialogTitle>
-                <DialogDescription className="text-[13px]">Review your order, choose how you want to pay and confirm.</DialogDescription>
-                <div className="flex flex-col gap-1.5 rounded-[10px] bg-dash-bg p-4 text-sm">
-                  <div className="flex justify-between"><span>{co.plan.name} ({free ? "10-day trial" : co.period === "yearly" ? "Yearly" : "Monthly"})</span><span className="tabular-nums">{money(sub0)}</span></div>
-                  <div className="flex justify-between text-dash-muted"><span>Tax ({Math.round(TAX_RATE * 100)}%)</span><span className="tabular-nums">{money(tax)}</span></div>
-                  <div className="flex justify-between border-t border-dash-border pt-1.5 font-bold"><span>Total</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
-                </div>
+                <DialogTitle>{free ? "Start your free trial" : `Confirm ${co.plan.name} plan`}</DialogTitle>
+                <DialogDescription>Review your order, choose how you want to pay and confirm.</DialogDescription>
+                <Card className="gap-1.5 bg-muted/50 p-4 shadow-none">
+                  <InfoList className="gap-1.5">
+                    <InfoRow label={`${co.plan.name} (${free ? "10-day trial" : co.period === "yearly" ? "Yearly" : "Monthly"})`} value={<span className="tabular-nums">{money(sub0)}</span>} />
+                    <InfoRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} value={<span className="tabular-nums">{money(tax)}</span>} />
+                  </InfoList>
+                  <Separator />
+                  <div className="flex justify-between text-sm font-bold"><span>Total</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
+                </Card>
                 {over.length > 0 && (
-                  <div className="rounded-[10px] bg-dash-warn-soft px-3.5 py-2.5 text-[13px] text-dash-warn-fg">
-                    You currently exceed this plan&apos;s limits for {over.join(", ")}. Existing data is kept, but you will not be able to add more until you are within the limit.
-                  </div>
+                  <Alert>
+                    <AlertDescription>
+                      You currently exceed this plan&apos;s limits for {over.join(", ")}. Existing data is kept, but you will not be able to add more until you are within the limit.
+                    </AlertDescription>
+                  </Alert>
                 )}
                 {!free && (
                   <div className="flex flex-col gap-3">
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Payment method
-                      <select className={input} value={co.method} onChange={(e) => setCo({ ...co, method: e.target.value as Method, err: "" })}>
-                        {METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                      </select></label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Billing email *
-                      <input type="email" className={input} value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder="billing@yourshop.com" /></label>
+                    <FormField label="Payment method" htmlFor="co-method">
+                      <Select value={String(co.method)} onValueChange={(val) => setCo({ ...co, method: val as Method, err: "" })}>
+                        <SelectTrigger id="co-method" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {METHODS.map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select></FormField>
+                    <FormField label="Billing email *" htmlFor="co-email">
+                      <Input id="co-email" type="email" value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder="billing@yourshop.com" /></FormField>
                   </div>
                 )}
-                <label className="flex items-start gap-2 text-[13px]">
-                  <input type="checkbox" className="mt-0.5" checked={co.terms} onChange={(e) => setCo({ ...co, terms: e.target.checked, err: "" })} />
-                  <span>I agree to the terms of service and the 30-day money-back policy.</span>
-                </label>
-                {co.err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{co.err}</p>}
+                <FormField orientation="horizontal" label="I agree to the terms of service and the 30-day money-back policy." htmlFor="co-terms"
+                  className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
+                  <Checkbox id="co-terms" checked={co.terms} onCheckedChange={(c) => setCo({ ...co, terms: c === true, err: "" })} />
+                </FormField>
+                {co.err && <Alert variant="destructive"><AlertDescription>{co.err}</AlertDescription></Alert>}
                 <div className="flex justify-end gap-2">
-                  <button type="button" disabled={co.busy} onClick={() => setCo(null)} className={outlineBtn}>Cancel</button>
-                  <button type="button" disabled={co.busy} onClick={confirmCheckout} className={primaryBtn}>{co.busy ? "Processing…" : free ? "Start free trial" : `Pay ${money(sub0 + tax)}`}</button>
+                  <Button type="button" variant="outline" disabled={co.busy} onClick={() => setCo(null)}>Cancel</Button>
+                  <Button type="button" disabled={co.busy} onClick={confirmCheckout}>{co.busy ? "Processing…" : free ? "Start free trial" : `Pay ${money(sub0 + tax)}`}</Button>
                 </div>
               </>
             )

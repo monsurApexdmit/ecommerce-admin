@@ -1,14 +1,20 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft, Loader2, MessageSquare, Star } from "lucide-react"
+import { ArrowLeft, MessageSquare, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { FormField } from "@/components/common/FormField"
+import { Progress } from "@/components/ui/progress"
+import { Spinner } from "@/components/ui/spinner"
+import { PageHeader } from "@/components/common/PageHeader"
+import { EmptyState } from "@/components/common/EmptyState"
 import { useToast } from "@/hooks/use-toast"
 import productApi, {
   type ProductResponse,
@@ -32,7 +38,7 @@ function RatingStars({ value }: { value: number }) {
       {Array.from({ length: 5 }, (_, index) => (
         <Star
           key={index}
-          className={`h-4 w-4 ${index < value ? "fill-current" : "text-gray-300"}`}
+          className={cn("h-4 w-4", index < value ? "fill-current" : "text-muted-foreground/40")}
         />
       ))}
     </div>
@@ -151,7 +157,7 @@ export default function ProductReviewsPage() {
         <Card>
           <CardContent className="flex min-h-[240px] items-center justify-center">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Spinner />
               Loading product reviews...
             </div>
           </CardContent>
@@ -162,29 +168,27 @@ export default function ProductReviewsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MessageSquare className="h-4 w-4" />
-            Product review replies
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{product?.name || "Product reviews"}</h1>
-          <p className="text-sm text-muted-foreground">
-            Review customer feedback and reply from the admin panel.
-          </p>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <MessageSquare className="size-4" />
+          Product review replies
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/products">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to products
-            </Link>
-          </Button>
-          <Button variant="outline" onClick={() => void loadPageData()} disabled={isRefreshing}>
-            {isRefreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Refresh
-          </Button>
-        </div>
+        <PageHeader
+          title={product?.name || "Product reviews"}
+          description="Review customer feedback and reply from the admin panel."
+          actions={<>
+            <Button variant="outline" asChild>
+              <Link href="/dashboard/products">
+                <ArrowLeft className="size-4" />
+                Back to products
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={() => void loadPageData()} disabled={isRefreshing}>
+              {isRefreshing ? <Spinner /> : null}
+              Refresh
+            </Button>
+          </>}
+        />
       </div>
 
       {error ? (
@@ -204,7 +208,7 @@ export default function ProductReviewsPage() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex items-end gap-3">
-              <div className="text-4xl font-semibold text-gray-900">
+              <div className="text-4xl font-semibold">
                 {summary?.average_rating?.toFixed(1) || "0.0"}
               </div>
               <div className="space-y-1 pb-1">
@@ -222,12 +226,7 @@ export default function ProductReviewsPage() {
                       {row.count} / {row.percent}%
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className="h-full rounded-full bg-amber-400 transition-all"
-                      style={{ width: `${row.percent}%` }}
-                    />
-                  </div>
+                  <Progress value={row.percent} aria-label={`${row.stars} star share`} className="h-2" />
                 </div>
               ))}
             </div>
@@ -236,11 +235,7 @@ export default function ProductReviewsPage() {
 
         <div className="space-y-4">
           {reviews.length === 0 ? (
-            <Card>
-              <CardContent className="py-16 text-center text-sm text-muted-foreground">
-                No customer reviews found for this product yet.
-              </CardContent>
-            </Card>
+            <EmptyState bordered icon={MessageSquare} title="No customer reviews found for this product yet." />
           ) : (
             reviews.map((review) => (
               <Card key={review.id}>
@@ -250,7 +245,7 @@ export default function ProductReviewsPage() {
                       <div className="flex items-center gap-2">
                         <CardTitle className="text-lg">{review.customer_name}</CardTitle>
                         {review.verified_purchase ? (
-                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                          <Badge variant="outline">
                             Verified purchase
                           </Badge>
                         ) : null}
@@ -264,33 +259,27 @@ export default function ProductReviewsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="rounded-lg border bg-gray-50 p-4 text-sm leading-6 text-gray-700">
+                  <Card className="bg-muted/50 p-4 text-sm leading-6 shadow-none">
                     {review.comment}
-                  </div>
+                  </Card>
 
                   {review.reply ? (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="font-medium text-emerald-900">
-                          Existing reply from {review.reply.author_name}
-                        </div>
-                        <div className="text-xs text-emerald-700">
+                    <Alert>
+                      <AlertTitle className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <span>Existing reply from {review.reply.author_name}</span>
+                        <span className="text-xs font-normal text-muted-foreground">
                           {formatDate(review.reply.replied_at)}
-                        </div>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-emerald-900">{review.reply.body}</p>
-                    </div>
+                        </span>
+                      </AlertTitle>
+                      <AlertDescription className="leading-6">{review.reply.body}</AlertDescription>
+                    </Alert>
                   ) : null}
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <label htmlFor={`reply-${review.id}`} className="text-sm font-medium text-gray-900">
-                        {review.reply ? "Update reply" : "Write a reply"}
-                      </label>
-                      <div className="text-xs text-muted-foreground">
-                        {(draftReplies[review.id] || "").trim().length}/2000
-                      </div>
-                    </div>
+                  <FormField
+                    label={review.reply ? "Update reply" : "Write a reply"}
+                    htmlFor={`reply-${review.id}`}
+                    description={`${(draftReplies[review.id] || "").trim().length}/2000`}
+                  >
                     <Textarea
                       id={`reply-${review.id}`}
                       value={draftReplies[review.id] || ""}
@@ -307,15 +296,12 @@ export default function ProductReviewsPage() {
                       <Button
                         onClick={() => void handleReplySave(review)}
                         disabled={savingReviewId === review.id}
-                        className="bg-emerald-600 hover:bg-emerald-700"
                       >
-                        {savingReviewId === review.id ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : null}
+                        {savingReviewId === review.id ? <Spinner /> : null}
                         {review.reply ? "Update reply" : "Send reply"}
                       </Button>
                     </div>
-                  </div>
+                  </FormField>
                 </CardContent>
               </Card>
             ))

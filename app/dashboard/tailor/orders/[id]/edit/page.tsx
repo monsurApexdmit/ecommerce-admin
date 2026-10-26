@@ -1,21 +1,29 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { Fragment, use, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { Textarea } from "@/components/ui/textarea"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
-import { PayBadge, StageBadge, apiError, fmtDate, tInput, tOutlineBtn, tPrimaryBtn } from "@/components/tailor/order-ui"
+import { PayBadge, StageBadge, apiError, fmtDate } from "@/components/tailor/order-ui"
 import { tailorApi, tailorOrdersApi, type TailorOrderDetail } from "@/lib/tailorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
 
-const label = "flex flex-col gap-1.5 text-[13px] font-semibold"
-const card = "flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5"
-const caption = "text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted"
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 
 /**
@@ -53,7 +61,7 @@ export default function EditTailorOrderPage({ params }: { params: Promise<{ id: 
   }, [id])
 
   if (blocked) return blocked
-  if (!canWrite("TailorOrders")) return <div className="p-6 text-sm text-dash-muted">You do not have permission to edit tailor orders.</div>
+  if (!canWrite("TailorOrders")) return <div className="p-6 text-sm text-muted-foreground">You do not have permission to edit tailor orders.</div>
 
   const back = `/dashboard/tailor/orders?view=${id}`
   const fabric = o?.charges.fabric ?? 0
@@ -78,74 +86,85 @@ export default function EditTailorOrderPage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Edit order{o ? ` ${o.orderNumber}` : ""}</h1>
-        <p className="mt-1 text-sm text-dash-muted">Adjust delivery, charges and notes. Garments and fabric are locked once the order is placed.</p>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title={`Edit order${o ? ` ${o.orderNumber}` : ""}`}
+        description="Adjust delivery, charges and notes. Garments and fabric are locked once the order is placed."
+      />
 
       {loading ? (
-        <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-[14px]" />)}</div>
+        <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}</div>
       ) : loadError || !o ? (
-        <div className={cn(card, "items-start")}>
-          <p className="font-semibold text-dash-danger-fg">{loadError || "Order not found."}</p>
-          <Link href="/dashboard/tailor/orders" className={tOutlineBtn}>Back to orders</Link>
-        </div>
+        <Card className="items-start gap-4 p-5">
+          <p className="font-medium text-destructive">{loadError || "Order not found."}</p>
+          <Button asChild variant="outline"><Link href="/dashboard/tailor/orders">Back to orders</Link></Button>
+        </Card>
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[1fr_340px]">
           <div className="flex min-w-0 flex-col gap-5">
-            <section className={card}>
+            <Card className="gap-4 p-5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-dash-display text-lg font-bold">{o.customer?.name ?? "—"}</span>
-                <span className="text-sm text-dash-muted">{o.customer?.phone}</span>
+                <span className="text-lg font-semibold">{o.customer?.name ?? "—"}</span>
+                <span className="text-sm text-muted-foreground">{o.customer?.phone}</span>
                 <StageBadge stage={o.stage} /><PayBadge status={o.paymentStatus} />
               </div>
-              <div className="flex flex-col rounded-xl border border-dash-border">
-                {o.items.map((it) => (
-                  <div key={it.id} className="flex items-start justify-between gap-3 border-b border-dash-border-soft px-3.5 py-2.5 last:border-0">
-                    <div><div className="text-sm font-semibold">{it.productType} ×{it.quantity}</div>
-                      <div className="text-xs text-dash-muted">{it.fabricSource === "shop" && it.fabric ? `${it.fabric.name} · ${it.fabricQuantity} ${it.fabric.unit}` : "Customer fabric"}</div></div>
-                    <span className="text-sm font-bold tabular-nums">{fc(it.lineTotal)}</span>
-                  </div>
+              <ItemGroup>
+                {o.items.map((it, idx) => (
+                  <Fragment key={it.id}>
+                    {idx > 0 && <ItemSeparator />}
+                    <Item size="sm" className="items-start px-0">
+                      <ItemContent>
+                        <ItemTitle>{it.productType} ×{it.quantity}</ItemTitle>
+                        <ItemDescription className="text-xs">{it.fabricSource === "shop" && it.fabric ? `${it.fabric.name} · ${it.fabricQuantity} ${it.fabric.unit}` : "Customer fabric"}</ItemDescription>
+                      </ItemContent>
+                      <ItemActions className="text-sm font-semibold tabular-nums">{fc(it.lineTotal)}</ItemActions>
+                    </Item>
+                  </Fragment>
                 ))}
-              </div>
-            </section>
+              </ItemGroup>
+            </Card>
 
-            <section className={card}>
-              <span className={caption}>Delivery</span>
-              <label className={cn(label, "max-w-[240px]")}>Delivery date
-                <input type="date" className={tInput} value={deliveryDate} onChange={(e) => { setDeliveryDate(e.target.value); setErr("") }} />
-              </label>
-              <span className="text-xs text-dash-muted">Ordered {fmtDate(o.orderDate)}</span>
-              <label className={label}>Order notes
-                <textarea rows={3} className={cn(tInput, "h-auto py-2.5")} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the shop should remember about this order" />
-              </label>
-            </section>
+            <Card className="gap-4 p-5">
+              <SectionTitle as="h2">Delivery</SectionTitle>
+              <FormField label="Delivery date" htmlFor="e-delivery" className="max-w-[240px]" description={`Ordered ${fmtDate(o.orderDate)}`}>
+                <Input id="e-delivery" type="date" value={deliveryDate} onChange={(e) => { setDeliveryDate(e.target.value); setErr("") }} />
+              </FormField>
+              <FormField label="Order notes" htmlFor="e-notes">
+                <Textarea id="e-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the shop should remember about this order" />
+              </FormField>
+            </Card>
           </div>
 
-          <aside className="flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5 lg:sticky lg:top-4">
-            <h2 className="font-dash-display text-lg font-bold">Charges</h2>
-            <div className="flex flex-col gap-2 text-[13px]">
-              <div className="flex items-center justify-between gap-3"><label htmlFor="e-stitch" className="text-dash-muted">Stitching</label>
-                <input id="e-stitch" type="number" min={0} className={cn(tInput, "h-9 w-28 text-right")} value={stitching} onChange={(e) => setStitching(Math.max(0, num(e.target.value)))} /></div>
-              <div className="flex justify-between"><span className="text-dash-muted">Fabric</span><span className="font-semibold tabular-nums">{fc(fabric)}</span></div>
-              {urgent > 0 && <div className="flex justify-between"><span className="text-dash-muted">Urgent charge</span><span className="font-semibold tabular-nums">{fc(urgent)}</span></div>}
-              <div className="flex items-center justify-between gap-3"><label htmlFor="e-extra" className="text-dash-muted">Extra charge</label>
-                <input id="e-extra" type="number" min={0} className={cn(tInput, "h-9 w-28 text-right")} value={extra} onChange={(e) => setExtra(Math.max(0, num(e.target.value)))} /></div>
-              <div className="flex items-center justify-between gap-3"><label htmlFor="e-disc" className="text-dash-muted">Discount</label>
-                <input id="e-disc" type="number" min={0} className={cn(tInput, "h-9 w-28 text-right")} value={discount} onChange={(e) => setDiscount(Math.max(0, num(e.target.value)))} /></div>
-              <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
-                <span className="font-bold">Total</span><span className="font-dash-display text-2xl font-bold tabular-nums">{fc(total)}</span>
+          <SectionCard title="Charges" className="lg:sticky lg:top-4" contentClassName="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 text-sm">
+              <FormField orientation="horizontal" className="justify-between gap-3" label="Stitching" htmlFor="e-stitch">
+                <Input id="e-stitch" type="number" min={0} className="w-28 text-right" value={stitching} onChange={(e) => setStitching(Math.max(0, num(e.target.value)))} />
+              </FormField>
+              <InfoList>
+                <InfoRow label="Fabric"><span className="tabular-nums">{fc(fabric)}</span></InfoRow>
+                {urgent > 0 && <InfoRow label="Urgent charge"><span className="tabular-nums">{fc(urgent)}</span></InfoRow>}
+              </InfoList>
+              <FormField orientation="horizontal" className="justify-between gap-3" label="Extra charge" htmlFor="e-extra">
+                <Input id="e-extra" type="number" min={0} className="w-28 text-right" value={extra} onChange={(e) => setExtra(Math.max(0, num(e.target.value)))} />
+              </FormField>
+              <FormField orientation="horizontal" className="justify-between gap-3" label="Discount" htmlFor="e-disc">
+                <Input id="e-disc" type="number" min={0} className="w-28 text-right" value={discount} onChange={(e) => setDiscount(Math.max(0, num(e.target.value)))} />
+              </FormField>
+              <Separator />
+              <div className="flex items-baseline justify-between">
+                <span className="font-semibold">Total</span><span className="text-2xl font-semibold tabular-nums">{fc(total)}</span>
               </div>
-              <div className="flex justify-between"><span className="text-dash-muted">Paid</span><span className="font-semibold tabular-nums">{fc(o.paidAmount)}</span></div>
-              <div className="flex justify-between"><span className="text-dash-muted">Due</span><span className="font-semibold tabular-nums">{fc(Math.max(0, total - o.paidAmount))}</span></div>
+              <InfoList>
+                <InfoRow label="Paid"><span className="tabular-nums">{fc(o.paidAmount)}</span></InfoRow>
+                <InfoRow label="Due"><span className="tabular-nums">{fc(Math.max(0, total - o.paidAmount))}</span></InfoRow>
+              </InfoList>
             </div>
-            {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+            {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
             <div className="flex gap-2">
-              <Link href={back} className={cn(tOutlineBtn, "flex-1")}>Cancel</Link>
-              <button type="button" disabled={saving} onClick={save} className={cn(tPrimaryBtn, "flex-1")}>{saving ? "Saving…" : "Save changes"}</button>
+              <Button asChild variant="outline" className="flex-1"><Link href={back}>Cancel</Link></Button>
+              <Button type="button" disabled={saving} onClick={save} className="flex-1">{saving ? "Saving…" : "Save changes"}</Button>
             </div>
-          </aside>
+          </SectionCard>
         </div>
       )}
     </div>

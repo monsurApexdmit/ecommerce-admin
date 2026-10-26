@@ -5,6 +5,25 @@ import Link from "next/link"
 import { Check, Clock, Download, Pencil, Search, Scissors, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { FilterBar } from "@/components/common/Toolbar"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatsCards } from "@/components/ui/stats-card"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { AccessDenied } from "@/components/ui/access-denied"
@@ -17,14 +36,11 @@ import { cn } from "@/lib/utils"
 
 const SPECS = ["Shirt", "Panjabi", "Pant", "Pajama", "Jama", "Kurta", "Blouse", "Salwar Kameez", "Coat", "Embroidery"]
 const STATUS_LABEL: Record<TailorDorjiStatus, string> = { active: "Active", on_leave: "On leave", inactive: "Inactive" }
-const AVATARS = ["bg-dash-accent-soft text-dash-accent-fg", "bg-dash-success-soft text-dash-success-fg", "bg-purple-100 text-purple-800", "bg-dash-warn-soft text-dash-warn-fg"]
 type Comm = "fixed" | "percentage" | "salary"
 const COMMS: { id: Comm; label: string }[] = [
   { id: "fixed", label: "Per piece" }, { id: "percentage", label: "% of stitching" }, { id: "salary", label: "Monthly salary" },
 ]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
 /** Bangladesh local digits (no +880 / leading 0) for the phone field; other numbers keep their digits. */
 const localPhone = (p: string) => {
   const raw = (p || "").trim()
@@ -32,7 +48,6 @@ const localPhone = (p: string) => {
   if (raw.startsWith("+880") || digits.startsWith("880")) return digits.replace(/^880/, "")
   return digits.replace(/^0+/, "")
 }
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 
 interface FormState { name: string; phone: string; address: string; notes: string; spec: string[]; comm: Comm; commVal: string; cap: string; status: TailorDorjiStatus }
 const blank = (): FormState => ({ name: "", phone: "", address: "", notes: "", spec: [], comm: "fixed", commVal: "", cap: "", status: "active" })
@@ -135,17 +150,15 @@ export default function DorjisPage() {
   const commHint = form.comm === "fixed" ? "e.g. 120 for each shirt finished" : form.comm === "percentage" ? "Share of the stitching charge, not fabric" : "Fixed pay; jobs are tracked for workload only"
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Dorjis</h1>
-          <p className="mt-1 text-sm text-dash-muted">Your tailors — what they are good at, how busy they are, and what you owe them.</p>
-        </div>
-        <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Dorjis"
+        description="Your tailors — what they are good at, how busy they are, and what you owe them."
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+      />
 
       {loading || !stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
           { label: "Active dorjis", value: stats.active, icon: <Users className="size-4" />, color: "blue", hint: `${stats.onLeave} on leave` },
@@ -155,129 +168,124 @@ export default function DorjisPage() {
         ]} />
       )}
 
-      <div className="flex flex-wrap gap-2.5">
-        <label className="flex h-11 min-w-[260px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-dash-muted">
-          <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search</span>
-          <input type="search" placeholder="Search name, phone or speciality…" value={q} onChange={(e) => setQ(e.target.value)}
-            className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-        </label>
-        <select aria-label="Status" value={statusF} onChange={(e) => { setStatusF(e.target.value); setPage(1) }}
-          className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-3 text-[13px] font-semibold outline-none">
-          <option value="all">Status: All</option><option value="active">Active</option><option value="on_leave">On leave</option><option value="inactive">Inactive</option>
-        </select>
-      </div>
+      <FilterBar className="gap-2.5">
+        <InputGroup className="min-w-[260px] flex-1">
+          <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+          <InputGroupInput type="search" aria-label="Search" placeholder="Search name, phone or speciality…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </InputGroup>
+        <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
+          <SelectTrigger aria-label="Status"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Status: All</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="on_leave">On leave</SelectItem><SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+      </FilterBar>
 
       <div className="flex flex-col items-start gap-4 xl:flex-row">
         <section className="grid w-full min-w-0 flex-1 grid-cols-1 gap-3.5 md:grid-cols-2 2xl:grid-cols-3">
-          {loading ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[300px] rounded-[14px]" />) :
+          {loading ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[300px]" />) :
             rows.length === 0 ? (
-              <div className="col-span-full rounded-[14px] border border-dashed border-dash-border bg-dash-card p-8 text-center text-sm text-dash-muted">
-                {qD || statusF !== "all" ? "No dorjis match these filters." : "No dorjis yet. Add your first tailor using the form."}
-              </div>
-            ) : rows.map((d, i) => {
+              <EmptyState bordered icon={Users} className="col-span-full" title="No dorjis found"
+                description={qD || statusF !== "all" ? "No dorjis match these filters." : "No dorjis yet. Add your first tailor using the form."} />
+            ) : rows.map((d) => {
               const act = d.status === "active"
-              const lc = !act ? "bg-dash-muted/50" : d.workloadPct >= 100 ? "bg-dash-danger-fg" : d.workloadPct >= 75 ? "bg-amber-500" : "bg-dash-success-fg"
-              const lt = !act ? "text-dash-muted" : d.workloadPct >= 100 ? "text-dash-danger-fg" : d.workloadPct >= 75 ? "text-amber-600" : "text-dash-success-fg"
+              const lc = !act ? "[&>[data-slot=progress-indicator]]:bg-muted-foreground/50" : d.workloadPct >= 100 ? "[&>[data-slot=progress-indicator]]:bg-destructive" : d.workloadPct >= 75 ? "[&>[data-slot=progress-indicator]]:bg-amber-500" : "[&>[data-slot=progress-indicator]]:bg-teal-700"
+              const lt = !act ? "text-muted-foreground" : d.workloadPct >= 100 ? "text-destructive" : d.workloadPct >= 75 ? "text-amber-600" : "text-dash-success-fg"
               const comm = d.commissionType === "percentage" ? `${d.commissionValue}% of stitching` : d.commissionType === "salary" ? `${formatCurrency(d.commissionValue)} / month` : `Per piece ${formatCurrency(d.commissionValue)}`
               return (
-                <article key={d.id} className={cn("flex flex-col gap-3 rounded-[14px] border bg-dash-card p-[18px]", editing?.id === d.id ? "border-dash-accent" : "border-dash-border")}>
+                <Card key={d.id} className={cn("gap-3 p-[18px]", editing?.id === d.id && "border-primary")}>
                   <div className="flex items-center gap-3">
-                    <span className={cn("flex size-[46px] shrink-0 items-center justify-center rounded-full font-bold", AVATARS[i % 4])}>{initials(d.name)}</span>
-                    <div className="min-w-0 flex-1"><div className="truncate text-base font-bold">{d.name}</div><div className="truncate text-xs text-dash-muted">{d.phone} · {comm}</div></div>
-                    <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", act ? "bg-dash-success-soft text-dash-success-fg" : d.status === "on_leave" ? "bg-dash-accent-soft text-dash-accent-fg" : "bg-dash-neutral-soft text-dash-neutral-fg")}>{STATUS_LABEL[d.status]}</span>
+                    <UserAvatar name={d.name} className="size-[46px]" />
+                    <div className="min-w-0 flex-1"><div className="truncate text-base font-semibold">{d.name}</div><div className="truncate text-xs text-muted-foreground">{d.phone} · {comm}</div></div>
+                    <StatusBadge status={d.status} label={STATUS_LABEL[d.status]} />
                   </div>
                   {d.speciality.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">{d.speciality.map((s) => <span key={s} className="rounded-full bg-dash-neutral-soft px-2.5 py-[3px] text-xs font-semibold text-dash-neutral-fg">{s}</span>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{d.speciality.map((s) => <Badge key={s} variant="secondary">{s}</Badge>)}</div>
                   )}
-                  {d.notes && <div className="text-xs text-dash-muted">{d.notes}</div>}
+                  {d.notes && <div className="text-xs text-muted-foreground">{d.notes}</div>}
                   <div>
-                    <div className="flex justify-between text-[13px]">
-                      <span className="text-dash-muted">Workload · {d.activeOrders} active order(s)</span>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Workload · {d.activeOrders} active order(s)</span>
                       <strong className={lt}>{d.piecesInHand}{d.maxPieces ? ` / ${d.maxPieces}` : ""} pieces</strong>
                     </div>
-                    <div className="mt-1.5 h-2 rounded-full bg-dash-neutral-soft"><div className={cn("h-full rounded-full", lc)} style={{ width: `${Math.min(100, d.workloadPct)}%` }} /></div>
+                    <Progress value={Math.min(100, Math.max(0, d.workloadPct))} aria-label={`${d.name} workload`} className={cn("mt-1.5", lc)} />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-[10px] bg-dash-bg p-2"><div className="text-[11px] text-dash-muted">Earned ({monthLbl})</div><div className="font-bold tabular-nums">{formatCurrency(d.earnedMonth)}</div></div>
-                    <div className={cn("rounded-[10px] p-2", d.unpaid ? "bg-dash-warn-soft text-dash-warn-fg" : "bg-dash-bg")}><div className={cn("text-[11px]", d.unpaid ? "" : "text-dash-muted")}>Unpaid</div><div className="font-bold tabular-nums">{formatCurrency(d.unpaid)}</div></div>
-                    <div className="rounded-[10px] bg-dash-bg p-2"><div className="text-[11px] text-dash-muted">On time</div><div className="font-bold">{d.onTimeRate === null ? "—" : `${d.onTimeRate}%`}</div></div>
-                  </div>
+                  <InfoList className="grid-cols-3">
+                    <InfoRow layout="stacked" label={<span className="text-xs">Earned ({monthLbl})</span>}><span className="tabular-nums">{formatCurrency(d.earnedMonth)}</span></InfoRow>
+                    <InfoRow layout="stacked" label={<span className="text-xs">Unpaid</span>}><span className={cn("tabular-nums", d.unpaid ? "text-dash-warn-fg" : "")}>{formatCurrency(d.unpaid)}</span></InfoRow>
+                    <InfoRow layout="stacked" label={<span className="text-xs">On time</span>}>{d.onTimeRate === null ? "—" : `${d.onTimeRate}%`}</InfoRow>
+                  </InfoList>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex gap-1.5">
-                      {canWrite("TailorDorji") && <button type="button" aria-label={`Edit ${d.name}`} onClick={() => startEdit(d)} className="flex size-[38px] shrink-0 items-center justify-center rounded-lg border border-dash-border bg-dash-card hover:bg-dash-neutral-soft"><Pencil className="size-4" /></button>}
-                      {canWrite("TailorDorji") && <button type="button" onClick={() => toggleActive(d)} className="h-[38px] min-w-0 flex-1 whitespace-nowrap rounded-lg border border-dash-border bg-dash-card px-2.5 text-xs font-semibold hover:bg-dash-neutral-soft">{act ? "Deactivate" : "Activate"}</button>}
-                      {canDelete("TailorDorji") && <button type="button" aria-label={`Delete ${d.name}`} onClick={() => remove(d)} className="flex size-[38px] shrink-0 items-center justify-center rounded-lg border border-dash-border bg-dash-card hover:bg-dash-neutral-soft"><Trash2 className="size-4" /></button>}
+                      {canWrite("TailorDorji") && <Button type="button" variant="outline" size="icon" aria-label={`Edit ${d.name}`} onClick={() => startEdit(d)}><Pencil className="size-4" /></Button>}
+                      {canWrite("TailorDorji") && <Button type="button" variant="outline" onClick={() => toggleActive(d)} className="min-w-0 flex-1">{act ? "Deactivate" : "Activate"}</Button>}
+                      {canDelete("TailorDorji") && <Button type="button" variant="outline" size="icon" aria-label={`Delete ${d.name}`} onClick={() => remove(d)}><Trash2 className="size-4" /></Button>}
                     </div>
                     <div className="flex gap-1.5">
-                      <Link href={`/dashboard/tailor/assignments?dorji=${d.id}`} className="flex h-[38px] min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg border border-dash-border text-[13px] font-semibold hover:bg-dash-neutral-soft">View jobs</Link>
-                      <Link href="/dashboard/tailor/payments" className="flex h-[38px] min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg bg-dash-ink text-[13px] font-semibold text-white">Pay&nbsp;{formatCurrency(d.unpaid)}</Link>
+                      <Button asChild variant="outline" className="min-w-0 flex-1"><Link href={`/dashboard/tailor/assignments?dorji=${d.id}`}>View jobs</Link></Button>
+                      <Button asChild className="min-w-0 flex-1"><Link href="/dashboard/tailor/payments">Pay&nbsp;{formatCurrency(d.unpaid)}</Link></Button>
                     </div>
                   </div>
-                </article>
+                </Card>
               )
             })}
           {!loading && total > 0 && (
-            <div className="col-span-full rounded-[14px] border border-dash-border bg-dash-card p-4">
+            <Card className="col-span-full p-4">
               <PaginationControl currentPage={page} totalPages={pagination?.last_page ?? 1} itemsPerPage={perPage} totalItems={total}
                 onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
-            </div>
+            </Card>
           )}
         </section>
 
         {canWrite("TailorDorji") && (
-          <aside className="flex w-full shrink-0 flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[380px]">
-            <div>
-              <h2 className="font-dash-display text-lg font-bold">{editing ? "Edit dorji" : "Add dorji"}</h2>
-              {err && <p role="alert" className="mt-2 rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-            </div>
+          <SectionCard title={editing ? "Edit dorji" : "Add dorji"} className="w-full shrink-0 xl:w-[380px]" contentClassName="flex flex-col gap-3.5">
+            {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Name *<input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Phone *
-                <span className="flex h-[42px] items-center overflow-hidden rounded-[10px] border border-dash-border bg-dash-card focus-within:border-dash-accent">
-                  <span className="flex h-full items-center border-r border-dash-border bg-dash-bg px-3 text-sm font-semibold text-dash-muted">+880</span>
-                  <input type="tel" inputMode="numeric" className="h-full min-w-0 flex-1 border-0 bg-transparent px-2.5 text-sm font-normal outline-none" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="17XX-XXXXXX" />
-                </span></label>
+              <FormField className="min-w-0" label="Name" required htmlFor="dorji-name"><Input id="dorji-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" /></FormField>
+              <FormField className="min-w-0" label="Phone" required htmlFor="dorji-phone">
+                <InputGroup>
+                  <InputGroupAddon><InputGroupText>+880</InputGroupText></InputGroupAddon>
+                  <InputGroupInput id="dorji-phone" type="tel" inputMode="numeric" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="17XX-XXXXXX" />
+                </InputGroup></FormField>
             </div>
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Specialities
+            <div className="flex flex-col gap-1.5">
+              <SectionTitle as="p">Specialities</SectionTitle>
               <div role="group" aria-label="Specialities" className="flex flex-wrap gap-1.5">
                 {[...SPECS, ...form.spec.filter((s) => !SPECS.includes(s))].map((s) => {
                   const on = form.spec.includes(s)
                   return (
-                    <button key={s} type="button" aria-pressed={on} onClick={() => set("spec", on ? form.spec.filter((x) => x !== s) : [...form.spec, s])}
-                      className={cn("h-[38px] rounded-full border px-3 text-[13px] font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                    <Button key={s} type="button" aria-pressed={on} onClick={() => set("spec", on ? form.spec.filter((x) => x !== s) : [...form.spec, s])}
+                      variant={on ? "default" : "outline"} size="sm">
                       {on ? "✓ " : "+ "}{s}
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5 text-[13px] font-semibold">How you pay
-              <div role="radiogroup" aria-label="Commission type" className="grid grid-cols-3 gap-1.5">
-                {COMMS.map((o) => (
-                  <button key={o.id} type="button" role="radio" aria-checked={form.comm === o.id} onClick={() => set("comm", o.id)}
-                    className={cn("min-h-11 rounded-[10px] border-2 px-2 py-1.5 text-[13px] font-bold", form.comm === o.id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{o.label}</button>
-                ))}
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <SectionTitle as="p">How you pay</SectionTitle>
+              <SegmentedControl aria-label="Commission type" size="default" className="w-full" value={form.comm}
+                onValueChange={(v) => set("comm", v as Comm)} options={COMMS.map((o) => ({ value: o.id, label: o.label }))} />
             </div>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">{commLabel}
-              <input type="number" min="0" className={input} value={form.commVal} onChange={(e) => set("commVal", e.target.value)} />
-              <span className="text-xs font-normal text-dash-muted">{commHint}</span>
-            </label>
+            <FormField label={commLabel} htmlFor="dorji-comm" description={commHint}>
+              <Input id="dorji-comm" type="number" min="0" value={form.commVal} onChange={(e) => set("commVal", e.target.value)} />
+            </FormField>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Max pieces at once<input type="number" min="0" className={input} value={form.cap} onChange={(e) => set("cap", e.target.value)} placeholder="e.g. 8" /></label>
-              <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Status
-                <select className={input} value={form.status} onChange={(e) => set("status", e.target.value as TailorDorjiStatus)}>
-                  <option value="active">Active</option><option value="on_leave">On leave</option><option value="inactive">Inactive</option>
-                </select>
-              </label>
+              <FormField className="min-w-0" label="Max pieces at once" htmlFor="dorji-cap"><Input id="dorji-cap" type="number" min="0" value={form.cap} onChange={(e) => set("cap", e.target.value)} placeholder="e.g. 8" /></FormField>
+              <FormField className="min-w-0" label="Status" htmlFor="dorji-status">
+                <Select value={form.status} onValueChange={(v) => set("status", v as TailorDorjiStatus)}>
+                  <SelectTrigger id="dorji-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="on_leave">On leave</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+                </Select>
+              </FormField>
             </div>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Address<input className={input} value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="Area, city" /></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Notes<textarea rows={2} className="w-full resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent" value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Optional — e.g. only works mornings, rush jobs OK" /></label>
+            <FormField label="Address" htmlFor="dorji-address"><Input id="dorji-address" value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="Area, city" /></FormField>
+            <FormField label="Notes" htmlFor="dorji-notes"><Textarea id="dorji-notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Optional — e.g. only works mornings, rush jobs OK" /></FormField>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => startEdit(null)} className={outlineBtn}>Clear</button>
-              <button type="button" onClick={save} disabled={saving} className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-60">{saving ? "Saving…" : editing ? "Save changes" : "Add dorji"}</button>
+              <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+              <Button type="button" onClick={save} disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add dorji"}</Button>
             </div>
-          </aside>
+          </SectionCard>
         )}
       </div>
     </div>

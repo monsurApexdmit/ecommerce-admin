@@ -1,20 +1,26 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ChevronRight, Layers, Pencil, Plus, Trash2, Check, X } from "lucide-react"
+import { Layers, Pencil, Plus, Trash2, Check, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
+import { PageHeader } from "@/components/common/PageHeader"
+import { EmptyState } from "@/components/common/EmptyState"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { useAttribute } from "@/contexts/attribute-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
-
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const fieldInput =
-  "h-11 min-w-0 flex-1 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
 
 export default function AttributeValuesPage() {
   const params = useParams()
@@ -84,95 +90,101 @@ export default function AttributeValuesPage() {
   }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <nav aria-label="Breadcrumb" className="mb-1.5 flex items-center gap-1.5 text-[13px] text-dash-muted">
-          <Link href="/dashboard/attributes" className="font-semibold text-dash-accent hover:underline">Attributes</Link>
-          <ChevronRight className="size-3.5" aria-hidden />
-          <span>{attribute?.name ?? "Attribute"}</span>
-        </nav>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">{attribute ? attribute.displayName || attribute.name : "Attribute values"}</h1>
-        <p className="mt-1 text-sm text-dash-muted">Order here is the order customers see.</p>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <div className="flex flex-col gap-1.5">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild><Link href="/dashboard/attributes">Attributes</Link></BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{attribute?.name ?? "Attribute"}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <PageHeader title={attribute ? attribute.displayName || attribute.name : "Attribute values"} description="Order here is the order customers see." />
       </div>
 
       {isLoading ? (
-        <Skeleton className="h-48 rounded-[14px]" />
+        <Skeleton className="h-48 rounded-xl" />
       ) : !attribute ? (
-        <div className="rounded-[14px] border border-dash-border bg-dash-card py-14 text-center">
-          <Layers className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-          <p className="font-semibold">Attribute not found</p>
-          <Link href="/dashboard/attributes" className="text-sm font-semibold text-dash-accent hover:underline">Back to attributes</Link>
-        </div>
+        <EmptyState icon={Layers} bordered title="Attribute not found"
+          action={<Button asChild variant="link"><Link href="/dashboard/attributes">Back to attributes</Link></Button>} />
       ) : (
-        <section className="max-w-[720px] rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="max-w-[720px] gap-0 py-0">
           <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <span className="text-sm text-dash-muted">
+            <span className="text-sm text-muted-foreground">
               Key: {attribute.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")} · {attribute.option === "radio" || attribute.option === "button" ? "Buttons" : attribute.option === "swatch" ? "Colour swatch" : "Dropdown"} · {attribute.values.length} value{attribute.values.length === 1 ? "" : "s"} · used in {attribute.usedInProducts} product{attribute.usedInProducts === 1 ? "" : "s"}
             </span>
-            <label className="flex items-center gap-2 text-[13px] font-semibold">
+            <Label className="flex items-center gap-2">
               Published
-              <Switch checked={attribute.published} onCheckedChange={(v) => updateAttribute(attribute.id, { published: v }).catch((e) => toast({ variant: "destructive", title: "Could not update", description: e?.message }))}
-                className="h-6 w-11 data-[state=checked]:bg-dash-accent data-[state=unchecked]:bg-dash-border" />
-            </label>
+              <Switch checked={attribute.published} onCheckedChange={(v) => updateAttribute(attribute.id, { published: v }).catch((e) => toast({ variant: "destructive", title: "Could not update", description: e?.message }))} />
+            </Label>
           </div>
 
-          <form className="flex gap-2 border-t border-dash-border-soft p-4" onSubmit={(e) => { e.preventDefault(); addValue() }}>
-            <label className="sr-only" htmlFor="new-value">New value</label>
-            <input id="new-value" className={fieldInput} placeholder="Add a value, e.g. Large" value={draft} onChange={(e) => setDraft(e.target.value)} />
-            <button type="submit" disabled={saving || !clean(draft)}
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-40">
+          <Separator />
+          <form className="flex gap-2 p-4" onSubmit={(e) => { e.preventDefault(); addValue() }}>
+            <Label className="sr-only" htmlFor="new-value">New value</Label>
+            <Input id="new-value" className="min-w-0 flex-1" placeholder="Add a value, e.g. Large" value={draft} onChange={(e) => setDraft(e.target.value)} />
+            <Button type="submit" disabled={saving || !clean(draft)}>
               <Plus className="size-4" aria-hidden /> Add value
-            </button>
+            </Button>
           </form>
 
           {attribute.values.length === 0 ? (
-            <p className="border-t border-dash-border-soft py-10 text-center text-sm text-dash-muted">No values yet. Add the first one above.</p>
+            <>
+              <Separator />
+              <EmptyState title="No values yet" description="Add the first one above." className="p-6 md:p-8" />
+            </>
           ) : (
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th scope="col" className="w-12 py-3 pl-4 pr-2 font-semibold">#</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Value</th>
-                  <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col" className="w-12 pl-4">#</TableHead>
+                  <TableHead scope="col">Value</TableHead>
+                  <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {attribute.values.map((v, i) => (
-                  <tr key={`${v}-${i}`}>
-                    <td className="border-b border-dash-border-soft py-3 pl-4 pr-2 tabular-nums text-dash-muted">{i + 1}</td>
-                    <td className="border-b border-dash-border-soft px-2 py-3 font-semibold">
+                  <TableRow key={`${v}-${i}`}>
+                    <TableCell className="pl-4 tabular-nums text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-semibold">
                       {editIdx === i ? (
-                        <input autoFocus aria-label={`Rename ${v}`} className={fieldInput + " w-full"} value={editText}
+                        <Input autoFocus aria-label={`Rename ${v}`} className="w-full" value={editText}
                           onChange={(e) => setEditText(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") renameValue(i); if (e.key === "Escape") setEditIdx(null) }} />
                       ) : (
                         <span className="inline-flex items-center gap-2">
-                          {attribute.option === "swatch" && <span className="size-3.5 rounded-full border border-dash-border" style={{ background: attribute.valueColors?.[v] || "transparent" }} />}
+                          {attribute.option === "swatch" && <span aria-hidden className="size-3.5 rounded-full border" style={{ background: attribute.valueColors?.[v] || "transparent" }} />}
                           {v}
                         </span>
                       )}
-                    </td>
-                    <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                    </TableCell>
+                    <TableCell className="pr-4">
                       <div className="flex justify-end gap-1">
                         {editIdx === i ? (
                           <>
-                            <button type="button" aria-label="Save value" onClick={() => renameValue(i)} disabled={saving} className={iconBtn}><Check className="size-4" /></button>
-                            <button type="button" aria-label="Cancel" onClick={() => setEditIdx(null)} className={iconBtn}><X className="size-4" /></button>
+                            <Button type="button" variant="outline" size="icon" aria-label="Save value" onClick={() => renameValue(i)} disabled={saving}><Check className="size-4" /></Button>
+                            <Button type="button" variant="outline" size="icon" aria-label="Cancel" onClick={() => setEditIdx(null)}><X className="size-4" /></Button>
                           </>
                         ) : (
                           <>
-                            <button type="button" aria-label={`Rename value ${v}`} title="Rename value" onClick={() => { setEditIdx(i); setEditText(v) }} className={iconBtn}><Pencil className="size-4" /></button>
-                            <button type="button" aria-label={`Remove ${v}`} onClick={() => removeValue(i)} disabled={saving} className={iconBtn}><Trash2 className="size-4" /></button>
+                            <WithTooltip content="Rename value">
+                              <Button type="button" variant="outline" size="icon" aria-label={`Rename value ${v}`} onClick={() => { setEditIdx(i); setEditText(v) }}><Pencil className="size-4" /></Button>
+                            </WithTooltip>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Remove ${v}`} onClick={() => removeValue(i)} disabled={saving}><Trash2 className="size-4" /></Button>
                           </>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
-        </section>
+        </Card>
       )}
     </div>
   )

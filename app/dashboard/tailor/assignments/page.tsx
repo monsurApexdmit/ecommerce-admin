@@ -5,6 +5,19 @@ import Link from "next/link"
 import { Printer, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FilterBar } from "@/components/common/Toolbar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { AccessDenied } from "@/components/ui/access-denied"
@@ -22,18 +35,11 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "all", label: "All" }, { value: "assigned", label: "Assigned" }, { value: "in_progress", label: "In progress" },
   { value: "completed", label: "Done" }, { value: "returned", label: "Returned" }, { value: "paid", label: "Paid" },
 ]
-const WS_STYLE: Record<TailorWorkStatus, string> = {
-  assigned: "bg-dash-neutral-soft text-dash-neutral-fg", in_progress: "bg-dash-accent-soft text-dash-accent-fg",
-  completed: "bg-dash-success-soft text-dash-success-fg", returned: "bg-dash-danger-soft text-dash-danger-fg", paid: "bg-dash-neutral-soft text-dash-muted",
-}
 const DUE_FILTERS = [
   { v: "any", label: "Expected back: Any" }, { v: "overdue", label: "Overdue" }, { v: "today", label: "Due today" },
   { v: "week", label: "Next 7 days" },
 ]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const sel = "h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none"
 
 const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 const todayIso = () => iso(new Date())
@@ -225,92 +231,98 @@ export default function AssignmentsPage() {
   const rowChoices = (r: AssignmentRow) => dorjis.filter((d) => d.status === "active" || d.id === r.dorjiId)
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Assignments</h1>
-          <p className="mt-1 text-sm text-dash-muted">Which dorji has which piece, when it is due back, and what you owe for it.</p>
-        </div>
-        <button type="button" onClick={printAll} disabled={printing} className={outlineBtn}><Printer className="size-4" aria-hidden /> {printing ? "Preparing…" : "Print all job cards"}</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Assignments"
+        description="Which dorji has which piece, when it is due back, and what you owe for it."
+        actions={<Button type="button" variant="outline" onClick={printAll} disabled={printing}><Printer className="size-4" aria-hidden /> {printing ? "Preparing…" : "Print all job cards"}</Button>}
+      />
 
       {stats && stats.unassignedOrders > 0 && un && canWrite("TailorOrders") && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-amber-200 bg-dash-warn-soft px-4 py-3 text-sm text-dash-warn-fg">
+        <Alert>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3 text-foreground">
           <span><strong>{stats.unassignedOrders} {stats.unassignedOrders === 1 ? "order is" : "orders are"} not assigned yet:</strong>{" "}
             {un.orderNumber} · {un.garments} for {un.customerName || "customer"}{un.deliveryDate ? `, due ${fmtD(un.deliveryDate)}` : ""}{stats.unassignedOrders > 1 ? ` and ${stats.unassignedOrders - 1} more.` : "."}</span>
-          <button type="button" onClick={pickUnassigned} className="h-9 rounded-lg border border-current px-3 text-[13px] font-semibold">Assign now</button>
-        </div>
+          <Button type="button" variant="outline" size="sm" onClick={pickUnassigned}>Assign now</Button>
+          </AlertDescription>
+        </Alert>
       )}
       {stats && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-dash-border bg-dash-card px-4 py-3 text-sm">
-          <span><strong>Dorji pay pending:</strong> {formatCurrency(stats.payPending)} <span className="text-dash-muted">across {stats.payPendingJobs} finished job(s)</span></span>
-          <Link href="/dashboard/tailor/payments" className="text-[13px] font-semibold text-dash-accent hover:underline">Go to payments</Link>
-        </div>
+        <Card className="flex-row flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+          <span><strong>Dorji pay pending:</strong> {formatCurrency(stats.payPending)} <span className="text-muted-foreground">across {stats.payPendingJobs} finished job(s)</span></span>
+          <Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/payments">Go to payments</Link></Button>
+        </Card>
       )}
 
       {canWrite("TailorOrders") && (
-        <section aria-label="Assign order" className="rounded-[14px] border border-dash-border bg-dash-card p-5">
-          <h2 className="font-dash-display text-lg font-bold">Assign work</h2>
-          {err && <p role="alert" className="mt-2 rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Order *
-              <select className={input} value={form.orderId} onChange={(e) => pickOrder(e.target.value)}>
-                <option value="">Select order…</option>
-                {orders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} · {o.customerName || "Customer"} · {o.garments}</option>)}
-              </select></label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Dorji *
-              <select className={input} value={form.dorjiId} onChange={(e) => pickDorji(e.target.value)}>
-                <option value="">Select dorji…</option>
-                {activeDorjis.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select></label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Task *<input className={input} value={form.task} onChange={(e) => set("task", e.target.value)} placeholder="e.g. Blouse stitching" /></label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Pieces *<input type="number" min="1" className={input} value={form.qty} onChange={(e) => set("qty", e.target.value)} /></label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Rate per piece *<input type="number" min="0" className={input} value={form.rate} onChange={(e) => set("rate", e.target.value)} /></label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Assigned on<input type="date" className={input} value={form.given} onChange={(e) => set("given", e.target.value)} /></label>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Expected back<input type="date" className={input} value={form.back} min={form.given || undefined} onChange={(e) => set("back", e.target.value)} /></label>
-            <div className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Dorji charge
-              <span className="flex h-[42px] items-center rounded-[10px] bg-dash-bg px-3 text-sm font-bold tabular-nums">{formatCurrency(charge)}</span></div>
-            <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Notes for dorji<input className={input} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="e.g. Fix collar, use hidden stitch" /></label>
+        <SectionCard aria-label="Assign order" title="Assign work" contentClassName="flex flex-col gap-3">
+          {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <FormField className="min-w-0" label="Order" required htmlFor="assign-f1">
+              <Select value={form.orderId || "__none"} onValueChange={(v) => pickOrder(v === "__none" ? "" : v)}>
+                <SelectTrigger id="assign-f1" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Select order…</SelectItem>
+                  {orders.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.orderNumber} · {o.customerName || "Customer"} · {o.garments}</SelectItem>)}
+                </SelectContent>
+              </Select></FormField>
+            <FormField className="min-w-0" label="Dorji" required htmlFor="assign-f2">
+              <Select value={form.dorjiId || "__none"} onValueChange={(v) => pickDorji(v === "__none" ? "" : v)}>
+                <SelectTrigger id="assign-f2" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Select dorji…</SelectItem>
+                  {activeDorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select></FormField>
+            <FormField className="min-w-0" label="Task" required htmlFor="assign-f3"><Input id="assign-f3" value={form.task} onChange={(e) => set("task", e.target.value)} placeholder="e.g. Blouse stitching" /></FormField>
+            <FormField className="min-w-0" label="Pieces" required htmlFor="assign-f4"><Input id="assign-f4" type="number" min="1" value={form.qty} onChange={(e) => set("qty", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label="Rate per piece" required htmlFor="assign-f5"><Input id="assign-f5" type="number" min="0" value={form.rate} onChange={(e) => set("rate", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label="Assigned on" htmlFor="assign-f6"><Input id="assign-f6" type="date" value={form.given} onChange={(e) => set("given", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label="Expected back" htmlFor="assign-f7"><Input id="assign-f7" type="date" value={form.back} min={form.given || undefined} onChange={(e) => set("back", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label="Dorji charge" htmlFor="assign-charge">
+              <Input id="assign-charge" readOnly tabIndex={-1} value={formatCurrency(charge)} className="font-semibold tabular-nums" /></FormField>
+            <FormField className="min-w-0" label="Notes for dorji" htmlFor="assign-f8"><Input id="assign-f8" value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="e.g. Fix collar, use hidden stitch" /></FormField>
           </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button type="button" onClick={() => { setForm(blank()); setErr("") }} className={outlineBtn}>Clear</button>
-            <button type="button" onClick={save} disabled={saving} className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-60">{saving ? "Assigning…" : "Assign"}</button>
+          <div className="mt-1 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => { setForm(blank()); setErr("") }}>Clear</Button>
+            <Button type="button" onClick={save} disabled={saving}>{saving ? "Assigning…" : "Assign"}</Button>
           </div>
-        </section>
+        </SectionCard>
       )}
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
             tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: stats?.counts[t.value] }))} />
         </div>
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search</span>
-            <input type="search" placeholder="Search order or customer…" value={q} onChange={(e) => setQ(e.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
-          <select aria-label="Dorji" value={dorjiF} onChange={(e) => { setDorjiF(e.target.value); setPage(1) }} className={sel}>
-            <option value="">Dorji: All</option>{dorjis.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-          <select aria-label="Expected back" value={dueF} onChange={(e) => { setDueF(e.target.value); setPage(1) }} className={sel}>
-            {DUE_FILTERS.map((f) => <option key={f.v} value={f.v}>{f.label}</option>)}
-          </select>
-        </div>
+        <FilterBar className="gap-2.5 p-4">
+          <InputGroup className="min-w-[220px] flex-1">
+            <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+            <InputGroupInput type="search" aria-label="Search" placeholder="Search order or customer…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </InputGroup>
+          <Select value={dorjiF || "__all"} onValueChange={(v) => { setDorjiF(v === "__all" ? "" : v); setPage(1) }}>
+            <SelectTrigger aria-label="Dorji"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="__all">Dorji: All</SelectItem>{dorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={dueF} onValueChange={(v) => { setDueF(v); setPage(1) }}>
+            <SelectTrigger aria-label="Expected back"><SelectValue /></SelectTrigger>
+            <SelectContent>{DUE_FILTERS.map((f) => <SelectItem key={f.v} value={f.v}>{f.label}</SelectItem>)}</SelectContent>
+          </Select>
+        </FilterBar>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th className="py-3 pl-4 pr-2 font-semibold">Job</th><th className="px-2 py-3 font-semibold">Dorji</th><th className="px-2 py-3 font-semibold">Given</th>
-                <th className="px-2 py-3 font-semibold">Due back</th><th className="px-2 py-3 font-semibold">Work status</th><th className="px-2 py-3 font-semibold">Dorji charge</th>
-                <th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-12 rounded" /></td></tr>) :
+          <Table className="min-w-[980px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Job</TableHead><TableHead>Dorji</TableHead><TableHead>Given</TableHead>
+                <TableHead>Due back</TableHead><TableHead>Work status</TableHead><TableHead>Dorji charge</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-12" /></TableCell></TableRow>) :
                 rows.length === 0 ? (
-                  <tr><td colSpan={7} className="py-12 text-center text-dash-muted">{qD || dorjiF || tab !== "all" || dueF !== "any" ? "No assignments match these filters." : "No assignments yet. Assign an order to a dorji above."}</td></tr>
+                  <TableRow><TableCell colSpan={7} className="whitespace-normal"><EmptyState className="p-4 md:p-6" title="No assignments found" description={qD || dorjiF || tab !== "all" || dueF !== "any" ? "No assignments match these filters." : "No assignments yet. Assign an order to a dorji above."} /></TableCell></TableRow>
                 ) : rows.map((r) => {
                   const finished = r.workStatus === "completed" || r.workStatus === "paid"
                   const days = r.dueDate ? diffDays(r.dueDate) : null
@@ -318,54 +330,64 @@ export default function AssignmentsPage() {
                   const payState = r.workStatus === "paid" ? "Paid" : r.workStatus === "completed" ? (r.paidAmount > 0 ? `Payable ${formatCurrency(r.payable)}` : "Payable") : r.workStatus === "returned" ? "Held until fixed" : "When done"
                   const locked = r.workStatus === "paid" || !canWrite("TailorOrders")
                   return (
-                    <tr key={r.id}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2 align-top">
+                    <TableRow key={r.id}>
+                      <TableCell className="align-top">
                         <div className="font-semibold">{r.orderNumber ?? "—"} · {r.task}{r.pieces ? ` · ${r.pieces} pcs` : ""}</div>
-                        <div className="text-xs text-dash-muted">{r.customerName ?? "—"}</div>
-                        {r.adminNotes && <div className="mt-0.5 text-xs text-dash-muted">{r.adminNotes}</div>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 align-top">
-                        <select aria-label="Dorji" disabled={locked} value={r.dorjiId} onChange={(e) => patch(r, { dorjiId: Number(e.target.value) }, "Reassigned")}
-                          className="h-9 max-w-[170px] rounded-lg border border-dash-border bg-dash-card px-2 text-[13px] outline-none disabled:opacity-60">
-                          {rowChoices(r).length === 0 || !rowChoices(r).some((d) => d.id === r.dorjiId) ? <option value={r.dorjiId}>{r.dorjiName ?? "—"}</option> : null}
-                          {rowChoices(r).map((d) => <option key={d.id} value={d.id}>{d.name}{d.status === "active" ? "" : ` (${d.status.replace("_", " ")})`}</option>)}
-                        </select>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 align-top text-dash-muted">{fmtD(r.assignedDate)}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 align-top">
-                        <input type="date" aria-label="Expected back" disabled={locked} defaultValue={r.dueDate ?? ""} key={`${r.id}-${r.dueDate}`}
+                        <div className="text-xs text-muted-foreground">{r.customerName ?? "—"}</div>
+                        {r.adminNotes && <div className="mt-0.5 text-xs text-muted-foreground">{r.adminNotes}</div>}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Select disabled={locked} value={String(r.dorjiId)} onValueChange={(v) => patch(r, { dorjiId: Number(v) }, "Reassigned")}>
+                          <SelectTrigger aria-label="Dorji" size="sm" className="max-w-[170px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {rowChoices(r).length === 0 || !rowChoices(r).some((d) => d.id === r.dorjiId) ? <SelectItem value={String(r.dorjiId)}>{r.dorjiName ?? "—"}</SelectItem> : null}
+                            {rowChoices(r).map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}{d.status === "active" ? "" : ` (${d.status.replace("_", " ")})`}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="align-top">{fmtD(r.assignedDate)}</TableCell>
+                      <TableCell className="align-top">
+                        <Input type="date" aria-label="Expected back" disabled={locked} defaultValue={r.dueDate ?? ""} key={`${r.id}-${r.dueDate}`}
                           onBlur={(e) => { if ((e.target.value || null) !== (r.expectedCompletion ?? r.dueDate)) patch(r, { expectedCompletion: e.target.value || null }) }}
-                          className="h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-[13px] outline-none disabled:opacity-60" />
-                        <div className={cn("mt-0.5 text-xs font-semibold", finished ? "text-dash-success-fg" : days !== null && days < 0 ? "text-dash-danger-fg" : "text-dash-muted")}>{when}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 align-top">
-                        <select aria-label="Work status" disabled={locked} value={r.workStatus} onChange={(e) => setStatus(r, e.target.value as TailorWorkStatus)}
-                          className={cn("h-9 rounded-full border-0 px-3 text-xs font-bold outline-none disabled:opacity-80", WS_STYLE[r.workStatus])}>
-                          <option value="assigned">Assigned</option><option value="in_progress">In progress</option><option value="completed">Done</option>
-                          <option value="returned">Returned for fixing</option><option value="paid" disabled={r.workStatus !== "paid"}>Paid</option>
-                        </select>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 align-top">
+                          className="w-auto" />
+                        <div className={cn("mt-0.5 text-xs font-semibold", finished ? "text-dash-success-fg" : days !== null && days < 0 ? "text-destructive" : "text-muted-foreground")}>{when}</div>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Select disabled={locked} value={r.workStatus} onValueChange={(v) => setStatus(r, v as TailorWorkStatus)}>
+                          <SelectTrigger aria-label="Work status" size="sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="assigned">Assigned</SelectItem><SelectItem value="in_progress">In progress</SelectItem><SelectItem value="completed">Done</SelectItem>
+                            <SelectItem value="returned">Returned for fixing</SelectItem><SelectItem value="paid" disabled={r.workStatus !== "paid"}>Paid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="align-top">
                         <div className="font-bold tabular-nums">{formatCurrency(r.dorjiCharge)}</div>
-                        <div className={cn("text-xs", r.workStatus === "completed" ? "font-semibold text-amber-600" : r.workStatus === "paid" ? "text-dash-success-fg" : "text-dash-muted")}>{payState}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4 align-top">
+                        <div className={cn("text-xs", r.workStatus === "completed" ? "font-semibold text-amber-600" : r.workStatus === "paid" ? "text-dash-success-fg" : "text-muted-foreground")}>{payState}</div>
+                      </TableCell>
+                      <TableCell className="align-top">
                         <div className="flex justify-end gap-1">
-                          <button type="button" aria-label="Print job card" onClick={() => printCards([r])} className="flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card hover:bg-dash-neutral-soft"><Printer className="size-4" /></button>
-                          {canWrite("TailorOrders") && <button type="button" aria-label="Delete assignment" title={r.workStatus === "paid" ? "Paid jobs cannot be deleted." : "Delete"} disabled={r.workStatus === "paid"} onClick={() => remove(r)} className="flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-danger-fg hover:bg-dash-danger-soft disabled:opacity-40"><Trash2 className="size-4" /></button>}
+                          <Button type="button" variant="outline" size="icon" aria-label="Print job card" onClick={() => printCards([r])}><Printer className="size-4" /></Button>
+                          {canWrite("TailorOrders") && (
+                            <WithTooltip content={r.workStatus === "paid" ? "Paid jobs cannot be deleted." : "Delete"}>
+                              {r.workStatus === "paid"
+                                ? <span tabIndex={0}><Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" disabled><Trash2 className="size-4" /></Button></span>
+                                : <Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" onClick={() => remove(r)}><Trash2 className="size-4" /></Button>}
+                            </WithTooltip>
+                          )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         {!loading && total > 0 && (
           <div className="p-4 pt-3"><PaginationControl currentPage={page} totalPages={pagination?.last_page ?? 1} itemsPerPage={perPage} totalItems={total}
             onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} /></div>
         )}
-      </section>
+      </Card>
     </div>
   )
 }

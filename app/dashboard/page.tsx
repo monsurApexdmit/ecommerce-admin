@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { Greeting } from "@/components/dashboard/greeting"
@@ -21,7 +22,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className={`${bricolage.variable} ${instrument.variable} font-dash-body text-dash-ink`}>
+      <div className={cn(bricolage.variable, instrument.variable, "font-dash-body text-dash-ink")}>
         <div className="flex w-full flex-col gap-6">
           <Greeting />
           <Alerts />

@@ -1,10 +1,26 @@
 "use client"
 
 import type React from "react"
-import { useMemo, useRef, useState } from "react"
+import { Fragment, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Download, Layers, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { Toolbar } from "@/components/common/Toolbar"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { ColorPicker } from "@/components/common/ColorPicker"
+import { SectionCard } from "@/components/common/SectionCard"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -38,12 +54,6 @@ const OPTIONS: { value: Option; label: string; sub: string }[] = [
   { value: "swatch", label: "Colour swatch", sub: "● ● ●" },
 ]
 
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const fieldLabel = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const fieldInput =
-  "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
-const switchCls = "h-6 w-11 data-[state=checked]:bg-dash-accent data-[state=unchecked]:bg-dash-border"
 
 export default function AttributesPage() {
   const { attributes, isLoading, addAttribute, updateAttribute, deleteAttribute } = useAttribute()
@@ -229,32 +239,27 @@ export default function AttributesPage() {
   }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Attributes</h1>
-          <p className="mt-1 text-sm text-dash-muted">Options like colour and size that turn one product into variants.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setImportOpen(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+      <PageHeader
+        title="Attributes"
+        description="Options like colour and size that turn one product into variants."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="size-4" aria-hidden /> Import
-          </button>
-          <button type="button" onClick={handleExport}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+          </Button>
+          <Button type="button" variant="outline" onClick={handleExport}>
             <Download className="size-4" aria-hidden /> Export
-          </button>
-          <button type="button" onClick={() => { resetForm(); document.getElementById("attr-name")?.focus() }}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+          </Button>
+          <Button type="button" onClick={() => { resetForm(); document.getElementById("attr-name")?.focus() }}>
             <Plus className="size-4" aria-hidden /> Add attribute
-          </button>
-        </div>
-      </div>
+          </Button>
+        </>}
+      />
 
       <div className="flex flex-wrap items-start gap-4">
         {/* List */}
-        <section className="min-w-0 flex-[999_1_560px] rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="min-w-0 flex-[999_1_560px] gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(v) => { setTab(v); setChecked(new Set()); setCurrentPage(1) }} tabs={[
               { value: "all", label: "All", count: attributes.length },
@@ -262,76 +267,77 @@ export default function AttributesPage() {
               { value: "unpublished", label: "Unpublished", count: attributes.length - publishedCount },
             ]} />
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 p-4">
+          <Toolbar className="p-4">
             <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all attributes in this list" />
-            <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden />
-              <span className="sr-only">Search attributes</span>
-              <input type="search" placeholder="Search attributes…" value={search}
+            <div className="relative min-w-[240px] flex-1">
+              <Label htmlFor="attr-search" className="sr-only">Search attributes</Label>
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input id="attr-search" type="search" placeholder="Search attributes…" value={search}
                 onChange={(e) => { setSearch(e.target.value); setCurrentPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            {search && (
-              <button type="button" onClick={() => setSearch("")} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
-                <X className="size-4" aria-hidden /> Clear
-              </button>
-            )}
-          </div>
-
-          {checked.size > 0 && (
-            <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
-              <span className="text-sm font-semibold">{checked.size} selected</span>
-              <button type="button" onClick={() => setPublished(selected, true)} className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Publish</button>
-              <button type="button" onClick={() => setPublished(selected, false)} className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Unpublish</button>
-              <button type="button" onClick={handleExport} className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">Export selected</button>
-              <button type="button" onClick={() => setDeleteTargets(selected)} className="h-9 rounded-lg border border-red-400/50 px-3 text-[13px] font-semibold text-red-300 hover:bg-white/10">Delete</button>
-              <button type="button" onClick={() => setChecked(new Set())} className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">Clear</button>
+                className="pl-9" />
             </div>
-          )}
+            {search && (
+              <Button type="button" variant="ghost" onClick={() => setSearch("")}>
+                <X className="size-4" aria-hidden /> Clear
+              </Button>
+            )}
+          </Toolbar>
 
-          <div className="flex flex-col border-t border-dash-border-soft">
+          <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Publish</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Unpublish</Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>
+            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+          </BulkBar>
+
+          <Separator />
+          <div>
             {isLoading ? (
-              [1, 2, 3].map((i) => <div key={i} className="border-b border-dash-border-soft p-4"><Skeleton className="h-16 rounded-lg" /></div>)
+              [1, 2, 3].map((i) => <div key={i} className="p-4"><Skeleton className="h-16" /></div>)
             ) : currentItems.length === 0 ? (
-              <div className="py-14 text-center">
-                <Layers className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                <p className="font-semibold">No attributes found</p>
-                <p className="text-sm text-dash-muted">{search || tab !== "all" ? "Try a different search or tab." : "Add your first attribute using the form."}</p>
-              </div>
+              <EmptyState icon={Layers} title="No attributes found"
+                description={search || tab !== "all" ? "Try a different search or tab." : "Add your first attribute using the form."} />
             ) : (
-              currentItems.map((a) => (
-                <article key={a.id} className={cn("flex flex-wrap items-center gap-3.5 border-b border-dash-border-soft p-4 last:border-b-0", editing?.id === a.id && "bg-dash-accent-soft/40")}>
+              <ItemGroup>
+              {currentItems.map((a, idx) => (
+                <Fragment key={a.id}>
+                {idx > 0 && <ItemSeparator />}
+                <Item role="listitem" className={cn("rounded-none", editing?.id === a.id && "bg-muted/50")}>
                   <Checkbox checked={checked.has(a.id)} onCheckedChange={() => toggleOne(a.id)} aria-label={`Select ${a.name}`} />
-                  <div className="flex min-w-[140px] flex-col">
-                    <Link href={`/dashboard/attributes/${a.id}`} className="font-dash-display text-base font-bold hover:underline">{a.displayName || a.name}</Link>
-                    <span className="text-xs text-dash-muted">
+                  <ItemContent className="min-w-[140px] flex-none">
+                    <ItemTitle><Link href={`/dashboard/attributes/${a.id}`} className="hover:underline">{a.displayName || a.name}</Link></ItemTitle>
+                    <ItemDescription className="text-xs">
                       Key: {slugify(a.name)} · {OPTION_LABEL[a.option] ?? "Dropdown"} · {a.values.length} value{a.values.length === 1 ? "" : "s"} · used in {prod(a.usedInProducts)}
-                    </span>
-                  </div>
+                    </ItemDescription>
+                  </ItemContent>
                   <div className="flex min-w-[160px] flex-1 flex-wrap items-center gap-1.5">
                     {a.values.slice(0, 8).map((v) => (
-                      <span key={v} className="inline-flex items-center gap-1.5 rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-semibold text-dash-neutral-fg">
-                        {a.option === "swatch" && <span className="size-3 rounded-full border border-dash-border" style={{ background: a.valueColors?.[v] || "transparent" }} />}
+                      <Badge key={v} variant="secondary">
+                        {a.option === "swatch" && <span aria-hidden className="size-3 rounded-full border" style={{ background: a.valueColors?.[v] || "transparent" }} />}
                         {v}
-                      </span>
+                      </Badge>
                     ))}
-                    {a.values.length > 8 && <span className="text-xs text-dash-muted">+{a.values.length - 8} more</span>}
-                    <button type="button" onClick={() => startEdit(a, true)} className="rounded-md border border-dashed border-dash-border px-2 py-[3px] text-xs font-semibold text-dash-muted hover:text-dash-ink">
+                    {a.values.length > 8 && <span className="text-xs text-muted-foreground">+{a.values.length - 8} more</span>}
+                    <Button type="button" variant="outline" size="sm" onClick={() => startEdit(a, true)} className="border-dashed">
                       + Value
-                    </button>
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Switch checked={a.published} onCheckedChange={(v) => setPublished([a], v)} aria-label={`Published: ${a.name}`} className={switchCls} />
-                    <button type="button" onClick={() => startEdit(a)} aria-label={`Edit ${a.name}`} className={iconBtn}><Pencil className="size-4" /></button>
-                    <button type="button" onClick={() => setDeleteTargets([a])} aria-label={`Delete ${a.name}`} className={iconBtn}><Trash2 className="size-4" /></button>
-                  </div>
-                </article>
-              ))
+                  <ItemActions className="gap-1.5">
+                    <Switch checked={a.published} onCheckedChange={(v) => setPublished([a], v)} aria-label={`Published: ${a.name}`} />
+                    <Button type="button" variant="outline" size="icon" onClick={() => startEdit(a)} aria-label={`Edit ${a.name}`}><Pencil className="size-4" /></Button>
+                    <Button type="button" variant="outline" size="icon" onClick={() => setDeleteTargets([a])} aria-label={`Delete ${a.name}`}><Trash2 className="size-4" /></Button>
+                  </ItemActions>
+                </Item>
+                </Fragment>
+              ))}
+              </ItemGroup>
             )}
           </div>
 
           {!isLoading && filtered.length > 0 && (
-            <div className="border-t border-dash-border-soft p-4 pt-3">
+            <>
+            <Separator />
+            <div className="p-4 pt-3">
               <PaginationControl
                 currentPage={currentPage}
                 totalPages={Math.max(1, totalPages)}
@@ -341,82 +347,72 @@ export default function AttributesPage() {
                 onItemsPerPageChange={handleItemsPerPageChange}
               />
             </div>
+            </>
           )}
-        </section>
+        </Card>
 
         {/* Form panel */}
-        <aside aria-label="Attribute form" className="flex min-w-0 flex-[1_1_320px] flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-[18px] lg:sticky lg:top-0 lg:max-w-[400px]">
-          <div>
-            <h2 className="font-dash-display text-lg font-bold">{editing ? `Edit ${editing.name}` : "New attribute"}</h2>
-            <p className="text-[13px] text-dash-muted">Options like colour or size that create product variants.</p>
-          </div>
+        <aside aria-label="Attribute form" className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
+        <SectionCard title={editing ? `Edit ${editing.name}` : "New attribute"} description="Options like colour or size that create product variants."
+          contentClassName="flex flex-col gap-4">
 
-          <label className={fieldLabel}>Name *
-            <input id="attr-name" className={fieldInput} placeholder="e.g. Material" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </label>
-          <label className={fieldLabel}>Shown to customers as
-            <input className={fieldInput} placeholder="e.g. Fabric" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
-          </label>
+          <FormField label="Name" required htmlFor="attr-name" className="min-w-0">
+            <Input id="attr-name" placeholder="e.g. Material" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </FormField>
+          <FormField label="Shown to customers as" htmlFor="attr-display-name" className="min-w-0">
+            <Input id="attr-display-name" placeholder="e.g. Fabric" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
+          </FormField>
 
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-            How customers pick
-            <div role="radiogroup" aria-label="Display type" className="grid grid-cols-3 gap-2">
-              {OPTIONS.map((o) => {
-                const on = form.option === o.value || (o.value === "radio" && form.option === "button")
-                return (
-                  <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => setForm({ ...form, option: o.value })}
-                    className={cn("flex flex-col items-start rounded-xl border-2 px-3 py-2.5 text-left",
-                      on ? "border-dash-accent bg-dash-accent-soft/50" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
-                    <span className="text-sm font-semibold">{o.label}</span>
-                    <span className="text-xs font-normal text-dash-muted">{o.sub}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          <FormField label={<span id="attr-option-label">How customers pick</span>}>
+            <ChoiceCardGroup aria-labelledby="attr-option-label" className="grid-cols-3"
+              value={form.option === "button" ? "radio" : form.option}
+              onValueChange={(v) => setForm({ ...form, option: v as Option })}>
+              {OPTIONS.map((o) => (
+                <ChoiceCard key={o.value} value={o.value} title={o.label} description={o.sub} className="p-3" />
+              ))}
+            </ChoiceCardGroup>
+          </FormField>
 
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-            <label htmlFor="attr-values">Values</label>
-            <div className="flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-[10px] border border-dash-border bg-dash-card p-1.5 focus-within:border-dash-accent">
+          <FormField label="Values" htmlFor="attr-values" description="Press Enter after each value. Order here is the order customers see.">
+            <InputGroup className="h-auto min-h-9 flex-wrap gap-1.5 p-1.5">
               {form.values.map((v) => (
-                <span key={v} className="inline-flex items-center gap-1 rounded-md bg-dash-neutral-soft py-[3px] pl-2 pr-1 text-xs font-semibold text-dash-neutral-fg">
+                <Badge key={v} variant="secondary" className="gap-1 pr-1">
                   {form.option === "swatch" && (
-                    <input type="color" aria-label={`Colour for ${v}`} value={form.colors[v] || "#2449E8"}
-                      onChange={(e) => setForm({ ...form, colors: { ...form.colors, [v]: e.target.value } })}
-                      className="size-4 cursor-pointer rounded border-0 bg-transparent p-0" />
+                    <ColorPicker size="sm" aria-label={`Colour for ${v}`} value={form.colors[v] || "#2449E8"}
+                      onChange={(hex) => setForm({ ...form, colors: { ...form.colors, [v]: hex } })} />
                   )}
                   {v}
-                  <button type="button" aria-label={`Remove ${v}`} onClick={() => setForm({ ...form, values: form.values.filter((x) => x !== v) })}
-                    className="flex size-4 items-center justify-center rounded hover:bg-dash-border"><X className="size-3" /></button>
-                </span>
+                  <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${v}`} onClick={() => setForm({ ...form, values: form.values.filter((x) => x !== v) })}
+                    className="size-4"><X className="size-3" /></Button>
+                </Badge>
               ))}
-              <input id="attr-values" ref={chipRef} value={chipDraft} placeholder="Type and press Enter"
+              <InputGroupInput id="attr-values" ref={chipRef} value={chipDraft} placeholder="Type and press Enter"
                 onChange={(e) => setChipDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addChip(chipDraft) }
                   else if (e.key === "Backspace" && !chipDraft && form.values.length) setForm({ ...form, values: form.values.slice(0, -1) })
                 }}
-                className="min-w-[120px] flex-1 border-0 bg-transparent px-1.5 text-sm font-normal outline-none placeholder:text-dash-muted" />
-            </div>
-            <span className="text-xs font-normal text-dash-muted">Press Enter after each value. Order here is the order customers see.</span>
-          </div>
+                className="h-auto min-w-[120px] flex-1" />
+            </InputGroup>
+          </FormField>
 
-          <div className="flex items-center justify-between gap-3 rounded-[10px] bg-dash-bg px-3.5 py-3">
-            <span className="flex flex-col text-[13px] font-semibold">
-              <span id="attr-pub">Published</span>
-              <span className="text-xs font-normal text-dash-muted">Use this attribute on products</span>
-            </span>
-            <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="attr-pub" className={switchCls} />
-          </div>
+          <Item variant="muted" size="sm">
+            <ItemContent>
+              <ItemTitle id="attr-pub">Published</ItemTitle>
+              <ItemDescription>Use this attribute on products</ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="attr-pub" />
+            </ItemActions>
+          </Item>
 
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={resetForm}
-              className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">{editing ? "Cancel" : "Clear"}</button>
-            <button type="button" onClick={handleSave} disabled={saving}
-              className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={resetForm}>{editing ? "Cancel" : "Clear"}</Button>
+            <Button type="button" onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : editing ? "Save changes" : "Add attribute"}
-            </button>
+            </Button>
           </div>
+        </SectionCard>
         </aside>
       </div>
 
@@ -427,11 +423,9 @@ export default function AttributesPage() {
             <DialogTitle className="font-dash-display text-xl font-bold">Import attributes</DialogTitle>
             <DialogDescription>Upload a CSV with columns: name (required), display_name, option (dropdown, radio, button or swatch), published (Yes/No; blank means published), values (separated by ;, add a colour like "Red #DC2626" for swatches).</DialogDescription>
           </DialogHeader>
-          <input type="file" accept=".csv" onChange={handleImport}
-            className="block w-full rounded-[10px] border border-dashed border-dash-border bg-dash-bg p-4 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-dash-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white" />
+          <Input type="file" accept=".csv" onChange={handleImport} aria-label="CSV file" className="w-full" />
           <DialogFooter>
-            <button type="button" onClick={() => setImportOpen(false)}
-              className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Close</button>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -448,7 +442,7 @@ export default function AttributesPage() {
                 return (
                   <>
                     {inUse.length > 0 && (
-                      <span className="mb-1 block font-semibold text-dash-danger">
+                      <span className="mb-1 block font-semibold text-destructive">
                         {inUse.length === 1 ? `"${inUse[0].name}" is` : `${inUse.length} of these attributes are`} used in {prod(total)}. Those products will lose {inUse.length === 1 ? "it" : "them"}.
                       </span>
                     )}
@@ -460,7 +454,7 @@ export default function AttributesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

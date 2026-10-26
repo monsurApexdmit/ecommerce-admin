@@ -1,19 +1,33 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Bell, ShoppingCart, Package, Wallet, MessageSquare, Star, Settings, X, Smartphone, Loader2, SlidersHorizontal, AlertTriangle } from "lucide-react"
+import { Bell, ShoppingCart, Package, Wallet, MessageSquare, Star, Settings, X, Smartphone, Circle, SlidersHorizontal, AlertTriangle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { useNotifications } from "@/contexts/notification-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { notificationApi, type NotificationResponse, type NotificationType, type LiveAlertsResult } from "@/lib/notificationApi"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { EmptyState } from "@/components/common/EmptyState"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { Toolbar } from "@/components/common/Toolbar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type TabKey = "all" | NotificationType
 
@@ -27,18 +41,18 @@ const TABS: { value: TabKey; label: string }[] = [
   { value: "system", label: "System" },
 ]
 
-const TYPE_META: Record<NotificationType, { icon: typeof Bell; tint: string; label: string }> = {
-  order: { icon: ShoppingCart, tint: "bg-dash-accent-soft text-dash-accent-fg", label: "New order" },
-  stock_alert: { icon: Package, tint: "bg-dash-danger-soft text-dash-danger-fg", label: "Stock alert" },
-  payment: { icon: Wallet, tint: "bg-dash-warn-soft text-dash-warn-fg", label: "Payment" },
-  support: { icon: MessageSquare, tint: "bg-dash-accent-soft text-dash-accent-fg", label: "Support" },
-  review: { icon: Star, tint: "bg-dash-warn-soft text-dash-warn-fg", label: "Product review" },
-  system: { icon: Settings, tint: "bg-dash-neutral-soft text-dash-neutral-fg", label: "System" },
+const TYPE_META: Record<NotificationType, { icon: typeof Bell; label: string }> = {
+  order: { icon: ShoppingCart, label: "New order" },
+  stock_alert: { icon: Package, label: "Stock alert" },
+  payment: { icon: Wallet, label: "Payment" },
+  support: { icon: MessageSquare, label: "Support" },
+  review: { icon: Star, label: "Product review" },
+  system: { icon: Settings, label: "System" },
 }
 
-const PRIORITY: Record<string, { label: string; cls: string } | undefined> = {
-  high: { label: "High priority", cls: "bg-dash-danger-soft text-dash-danger-fg" },
-  medium: { label: "Medium", cls: "bg-dash-warn-soft text-dash-warn-fg" },
+const PRIORITY: Record<string, { label: string; variant: "destructive" | "secondary" } | undefined> = {
+  high: { label: "High priority", variant: "destructive" },
+  medium: { label: "Medium", variant: "secondary" },
 }
 
 const CTA: [string, string][] = [
@@ -75,12 +89,7 @@ const dayLabel = (iso: string) => {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
 }
 
-
-const card = "rounded-[14px] border border-dash-border bg-dash-card"
-const select = "h-[38px] rounded-lg border border-dash-border bg-dash-card px-2.5 text-[13px] outline-none focus-visible:border-dash-accent"
-const tbtn = "h-[38px] rounded-lg border border-dash-border bg-dash-card px-3 text-[13px] font-semibold disabled:opacity-50"
-
-interface TodoItem { n: string; label: string; href: string; cls: string }
+interface TodoItem { n: string; label: string; href: string }
 
 export default function NotificationsPage() {
   const blocked = useModuleGuard("Notifications")
@@ -132,10 +141,10 @@ export default function NotificationsPage() {
     if (!live) return null
     const a = live.attention
     const out: TodoItem[] = []
-    if (a.pendingOrders > 0) out.push({ n: String(a.pendingOrders), label: "Orders pending confirmation", href: "/dashboard/orders", cls: "bg-dash-warn-soft text-dash-warn-fg" })
-    if (a.customerDue > 0) out.push({ n: formatCurrency(a.customerDue), label: `Customer dues to collect (${a.customerDueInvoices} invoice${a.customerDueInvoices === 1 ? "" : "s"})`, href: "/dashboard/dues/customers", cls: "bg-dash-warn-soft text-dash-warn-fg" })
-    if (a.vendorDue > 0) out.push({ n: formatCurrency(a.vendorDue), label: `Owed to vendors (${a.vendorDueOrders} order${a.vendorDueOrders === 1 ? "" : "s"})`, href: "/dashboard/dues/vendors", cls: "bg-dash-danger-soft text-dash-danger-fg" })
-    if (a.salariesUnpaid > 0) out.push({ n: formatCurrency(a.salariesUnpaid), label: `Salaries due (${a.salaryMonth})`, href: "/dashboard/staff/salary", cls: "bg-dash-accent-soft text-dash-accent-fg" })
+    if (a.pendingOrders > 0) out.push({ n: String(a.pendingOrders), label: "Orders pending confirmation", href: "/dashboard/orders" })
+    if (a.customerDue > 0) out.push({ n: formatCurrency(a.customerDue), label: `Customer dues to collect (${a.customerDueInvoices} invoice${a.customerDueInvoices === 1 ? "" : "s"})`, href: "/dashboard/dues/customers" })
+    if (a.vendorDue > 0) out.push({ n: formatCurrency(a.vendorDue), label: `Owed to vendors (${a.vendorDueOrders} order${a.vendorDueOrders === 1 ? "" : "s"})`, href: "/dashboard/dues/vendors" })
+    if (a.salariesUnpaid > 0) out.push({ n: formatCurrency(a.salariesUnpaid), label: `Salaries due (${a.salaryMonth})`, href: "/dashboard/staff/salary" })
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
@@ -206,51 +215,61 @@ export default function NotificationsPage() {
   const selTxt = selected.length ? ` (${selected.length})` : ""
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Notifications</h1>
-        <p className="mt-1 text-sm text-dash-muted">Everything that happened in your business, with a next step for each. Filter by type or status, then bulk read or delete.</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Notifications"
+        description="Everything that happened in your business, with a next step for each. Filter by type or status, then bulk read or delete."
+      />
 
       <div className="flex flex-col items-start gap-4 xl:flex-row">
         <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
         {live && (live.alerts.length > 0 || live.dismissedCount > 0) && (
-          <section className={cn(card, "overflow-hidden")} aria-label="Live alerts">
-            <div className="flex flex-wrap items-center gap-2 border-b border-dash-border-soft px-5 py-3">
-              <AlertTriangle className="size-[18px] text-dash-warn-fg" aria-hidden />
-              <h2 className="font-dash-display text-lg font-bold">Live alerts</h2>
-              <span className="text-[13px] text-dash-muted">{live.total} active · computed from your current data</span>
+          <Card className="gap-0 overflow-hidden py-0" role="region" aria-label="Live alerts">
+            <div className="flex flex-wrap items-center gap-2 px-5 py-3">
+              <AlertTriangle className="size-[18px] text-muted-foreground" aria-hidden />
+              <h2 className="text-lg font-semibold">Live alerts</h2>
+              <span className="text-sm text-muted-foreground">{live.total} active · computed from your current data</span>
               {live.dismissedCount > 0 && (
-                <button type="button" disabled={liveBusy} onClick={() => void restoreLive()} className="ml-auto text-[13px] font-semibold text-dash-accent hover:underline">
+                <Button type="button" variant="link" size="sm" disabled={liveBusy} onClick={() => void restoreLive()} className="ml-auto">
                   Restore {live.dismissedCount} dismissed
-                </button>
+                </Button>
               )}
             </div>
-            {live.alerts.length === 0 && <p className="px-5 py-4 text-[13px] text-dash-muted">No active alerts. Dismissed alerts come back on their own if the problem returns.</p>}
-            {live.alerts.map((a) => {
-              const pri = PRIORITY[a.priority]
-              return (
-                <div key={a.key} className="flex items-start gap-3 border-b border-dash-border-soft px-5 py-3 last:border-b-0">
-                  <span className={cn("flex size-9 flex-none items-center justify-center rounded-[10px]", a.priority === "high" ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-warn-soft text-dash-warn-fg")}><Package className="size-[18px]" aria-hidden /></span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="text-sm font-bold">{a.title}</span>
-                    <span className="text-[13px] text-dash-muted">{a.message}</span>
-                    <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-dash-muted">
-                      {pri && <span className={cn("rounded-full px-2 py-px font-bold", pri.cls)}>{pri.label}</span>}
-                      {a.since && rel(a.since)}
-                      <Link href={a.actionUrl} className="font-semibold text-dash-accent hover:underline">{a.ctaLabel} →</Link>
-                    </span>
-                  </div>
-                  <button type="button" title="Dismiss" aria-label={`Dismiss ${a.title}`} disabled={liveBusy} onClick={() => void dismissLive(a.key)} className="flex size-7 items-center justify-center rounded-lg text-dash-muted hover:text-dash-danger-fg">
-                    <X className="size-4" />
-                  </button>
-                </div>
-              )
-            })}
-            {live.total > live.alerts.length && <p className="border-t border-dash-border-soft px-5 py-2.5 text-xs text-dash-muted">Showing the top {live.alerts.length} of {live.total}.</p>}
-          </section>
+            <Separator />
+            {live.alerts.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">No active alerts. Dismissed alerts come back on their own if the problem returns.</p>}
+            <ItemGroup>
+              {live.alerts.map((a, i) => {
+                const pri = PRIORITY[a.priority]
+                return (
+                  <Fragment key={a.key}>
+                    {i > 0 && <ItemSeparator />}
+                    <Item size="sm" className="items-start rounded-none px-5">
+                      <ItemMedia variant="icon"><Package aria-hidden /></ItemMedia>
+                      <ItemContent className="min-w-0 gap-0.5">
+                        <ItemTitle className="font-semibold">{a.title}</ItemTitle>
+                        <ItemDescription className="line-clamp-none">{a.message}</ItemDescription>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {pri && <Badge variant={pri.variant}>{pri.label}</Badge>}
+                          {a.since && rel(a.since)}
+                          <Button variant="link" size="sm" asChild className="h-auto p-0 text-xs"><Link href={a.actionUrl}>{a.ctaLabel} →</Link></Button>
+                        </span>
+                      </ItemContent>
+                      <ItemActions>
+                        <WithTooltip content="Dismiss">
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Dismiss ${a.title}`} disabled={liveBusy} onClick={() => void dismissLive(a.key)}>
+                            <X className="size-4" />
+                          </Button>
+                        </WithTooltip>
+                      </ItemActions>
+                    </Item>
+                  </Fragment>
+                )
+              })}
+            </ItemGroup>
+            {live.total > live.alerts.length && <><Separator /><p className="px-5 py-2.5 text-xs text-muted-foreground">Showing the top {live.alerts.length} of {live.total}.</p></>}
+          </Card>
         )}
-        <section className={cn(card, "w-full min-w-0")}>
+        <Card className="w-full min-w-0 gap-0 py-0">
           <div className="px-4">
             <StatusTabs
               value={tab}
@@ -259,98 +278,119 @@ export default function NotificationsPage() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 border-b border-dash-border-soft px-4 py-3">
-            <span className="text-[13px] text-dash-muted">
+          <Toolbar
+            className="px-4 py-3"
+            actions={<>
+              <Button type="button" variant="destructive" size="sm" onClick={clearAll} disabled={busy || totalAll === 0}>Clear all</Button>
+              <Button type="button" variant="outline" size="sm" onClick={markAll} disabled={busy}>Mark all as read</Button>
+              <Button asChild variant="outline" size="sm"><Link href="/dashboard/settings/notifications">Settings</Link></Button>
+            </>}
+          >
+            <span className="text-sm text-muted-foreground">
               {meta.unreadCount} unread · {totalAll} total{meta.total !== totalAll ? ` · ${meta.total} shown` : ""}
             </span>
-            <div className="ml-auto flex flex-wrap gap-2">
-              <button type="button" onClick={clearAll} disabled={busy || totalAll === 0} className={cn(tbtn, "text-dash-danger-fg")}>Clear all</button>
-              <button type="button" onClick={markAll} disabled={busy} className={tbtn}>Mark all as read</button>
-              <Link href="/dashboard/settings/notifications" className={cn(tbtn, "flex items-center")}>Settings</Link>
-            </div>
-          </div>
+          </Toolbar>
+          <Separator />
 
-          <div className="flex flex-wrap items-center gap-2.5 border-b border-dash-border-soft px-4 py-3">
-            <label className="flex min-h-[38px] items-center gap-2 text-[13px] font-semibold">
-              <input
-                type="checkbox" className="size-[18px]" checked={allChecked}
+          <Toolbar className="px-4 py-3">
+            <Label className="min-h-9">
+              <Checkbox
+                checked={allChecked}
                 aria-label="Select all notifications on this page"
-                onChange={() => setSelected(allChecked ? selected.filter((id) => !pageIds.includes(id)) : [...new Set([...selected, ...pageIds])])}
+                onCheckedChange={() => setSelected(allChecked ? selected.filter((id) => !pageIds.includes(id)) : [...new Set([...selected, ...pageIds])])}
               />
               Select page
-            </label>
-            <button type="button" onClick={markSelected} disabled={busy} className={cn(tbtn, !selected.length && "opacity-50")}>Mark selected as read{selTxt}</button>
+            </Label>
+            <Button type="button" variant="outline" size="sm" onClick={markSelected} disabled={busy} className={cn(!selected.length && "opacity-50")}>Mark selected as read{selTxt}</Button>
             {selected.length > 0 && (
-              <button type="button" onClick={deleteSelected} disabled={busy} className={cn(tbtn, "text-dash-danger-fg")}>Delete selected{selTxt}</button>
+              <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={busy}>Delete selected{selTxt}</Button>
             )}
-            <label className="ml-auto flex items-center gap-1.5 text-[13px] font-semibold">
-              Status
-              <select value={status} onChange={(e) => { setStatus(e.target.value as typeof status); setPage(1); setSelected([]) }} className={select}>
-                <option value="all">All status</option>
-                <option value="unread">Unread only</option>
-                <option value="read">Read only</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-1.5 text-[13px] font-semibold">
-              Sort
-              <select value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); setPage(1) }} className={select}>
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-              </select>
-            </label>
-          </div>
+            <div className="ml-auto flex items-center gap-1.5">
+              <Label htmlFor="notif-status">Status</Label>
+              <Select value={status} onValueChange={(v) => { setStatus(v as typeof status); setPage(1); setSelected([]) }}>
+                <SelectTrigger id="notif-status" size="sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All status</SelectItem>
+                  <SelectItem value="unread">Unread only</SelectItem>
+                  <SelectItem value="read">Read only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="notif-sort">Sort</Label>
+              <Select value={sort} onValueChange={(v) => { setSort(v as typeof sort); setPage(1) }}>
+                <SelectTrigger id="notif-sort" size="sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest first</SelectItem>
+                  <SelectItem value="oldest">Oldest first</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </Toolbar>
+          <Separator />
 
           {loading ? (
             <div className="flex flex-col gap-3 p-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
           ) : items.length === 0 ? (
-            <div className="p-12 text-center text-dash-muted">
-              <strong className="mb-1 block text-dash-ink">{totalAll === 0 && status === "all" ? "You’re all caught up." : "No notifications found."}</strong>
-              {totalAll === 0 && status === "all" ? "New orders, stock alerts and payment reminders will show up here." : "Try adjusting your filters."}
-            </div>
+            <EmptyState
+              icon={Bell}
+              title={totalAll === 0 && status === "all" ? "You’re all caught up." : "No notifications found."}
+              description={totalAll === 0 && status === "all" ? "New orders, stock alerts and payment reminders will show up here." : "Try adjusting your filters."}
+            />
           ) : (
             groups.map((g) => (
               <div key={g.day}>
-                <div className="border-b border-dash-border-soft bg-dash-bg px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-dash-muted">{g.day}</div>
+                <SectionTitle className="bg-muted/50 px-5 py-2.5">{g.day}</SectionTitle>
+                <Separator />
                 {g.rows.map((n) => {
                   const unread = !n.readAt
                   const t = TYPE_META[n.type] ?? TYPE_META.system
                   const Icon = n.data && "adjustmentNo" in n.data ? SlidersHorizontal : t.icon
                   const pri = PRIORITY[n.priority]
                   return (
-                    <div key={n.id} className={cn("flex items-start gap-3 border-b border-dash-border-soft px-5 py-3", unread ? "bg-dash-accent-soft/40" : "bg-dash-card")}>
-                      <input
-                        type="checkbox" className="mt-2.5 size-[18px] flex-none" checked={selected.includes(n.id)}
-                        aria-label={`Select notification ${n.title}`}
-                        onChange={() => setSelected((s) => (s.includes(n.id) ? s.filter((x) => x !== n.id) : [...s, n.id]))}
-                      />
-                      <span className={cn("flex size-9 flex-none items-center justify-center rounded-[10px]", t.tint)}><Icon className="size-[18px]" aria-hidden /></span>
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className={cn("text-sm", unread ? "font-bold" : "font-medium")}>{n.title}</span>
-                        <span className="text-[13px] text-dash-muted">{n.message}</span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-dash-muted">
-                          <span className={cn("rounded-full px-2 py-px font-bold", t.tint)}>{t.label}</span>
-                          {pri && <span className={cn("rounded-full px-2 py-px font-bold", pri.cls)}>{pri.label}</span>}
-                          {rel(n.createdAt)}
-                          {n.actionUrl && (
-                            <Link href={n.actionUrl} onClick={() => open(n)} className="font-semibold text-dash-accent hover:underline">{ctaFor(n.actionUrl)} →</Link>
+                    <Fragment key={n.id}>
+                      <Item size="sm" variant={unread ? "muted" : "default"} className="items-start rounded-none px-5">
+                        <Checkbox
+                          className="mt-2.5 flex-none" checked={selected.includes(n.id)}
+                          aria-label={`Select notification ${n.title}`}
+                          onCheckedChange={() => setSelected((s) => (s.includes(n.id) ? s.filter((x) => x !== n.id) : [...s, n.id]))}
+                        />
+                        <ItemMedia variant="icon"><Icon aria-hidden /></ItemMedia>
+                        <ItemContent className="min-w-0 gap-0.5">
+                          <ItemTitle className={unread ? "font-bold" : "font-medium"}>{n.title}</ItemTitle>
+                          <ItemDescription className="line-clamp-none">{n.message}</ItemDescription>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <Badge variant="secondary">{t.label}</Badge>
+                            {pri && <Badge variant={pri.variant}>{pri.label}</Badge>}
+                            {rel(n.createdAt)}
+                            {n.actionUrl && (
+                              <Button variant="link" size="sm" asChild className="h-auto p-0 text-xs"><Link href={n.actionUrl} onClick={() => open(n)}>{ctaFor(n.actionUrl)} →</Link></Button>
+                            )}
+                          </span>
+                        </ItemContent>
+                        <ItemActions className="flex-col items-end gap-1.5">
+                          {unread ? (
+                            <WithTooltip content="Mark as read">
+                              <Button type="button" variant="ghost" size="icon-sm" aria-label="Mark as read" disabled={busy} onClick={() => void act(() => notificationApi.markAsRead(n.id))}>
+                                <Circle className="size-2.5 fill-primary text-primary" aria-hidden />
+                              </Button>
+                            </WithTooltip>
+                          ) : (
+                            <WithTooltip content="Mark as unread">
+                              <Button type="button" variant="ghost" size="icon-sm" aria-label="Mark as unread" disabled={busy} onClick={() => void act(() => notificationApi.markAsUnread(n.id))}>
+                                <Circle className="size-2.5 text-muted-foreground" aria-hidden />
+                              </Button>
+                            </WithTooltip>
                           )}
-                        </span>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        {unread ? (
-                          <button type="button" title="Mark as read" aria-label="Mark as read" disabled={busy} onClick={() => void act(() => notificationApi.markAsRead(n.id))} className="flex size-7 items-center justify-center rounded-full">
-                            <span className="size-2.5 rounded-full bg-dash-accent" />
-                          </button>
-                        ) : (
-                          <button type="button" title="Mark as unread" aria-label="Mark as unread" disabled={busy} onClick={() => void act(() => notificationApi.markAsUnread(n.id))} className="flex size-7 items-center justify-center rounded-full">
-                            <span className="size-2.5 rounded-full border-2 border-dash-border" />
-                          </button>
-                        )}
-                        <button type="button" title="Delete" aria-label="Delete notification" disabled={busy} onClick={() => void act(() => notificationApi.delete(n.id))} className="flex size-7 items-center justify-center rounded-lg text-dash-muted hover:text-dash-danger-fg">
-                          <X className="size-4" />
-                        </button>
-                      </div>
-                    </div>
+                          <WithTooltip content="Delete">
+                            <Button type="button" variant="ghost" size="icon-sm" aria-label="Delete notification" disabled={busy} onClick={() => void act(() => notificationApi.delete(n.id))}>
+                              <X className="size-4" />
+                            </Button>
+                          </WithTooltip>
+                        </ItemActions>
+                      </Item>
+                      <Separator />
+                    </Fragment>
                   )
                 })}
               </div>
@@ -358,42 +398,44 @@ export default function NotificationsPage() {
           )}
 
           {meta.total > 0 && (
-            <div className="border-t border-dash-border-soft p-4">
+            <div className="p-4">
               <PaginationControl
                 currentPage={page} totalPages={Math.max(1, meta.lastPage)} totalItems={meta.total} itemsPerPage={perPage}
                 onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
               />
             </div>
           )}
-        </section>
+        </Card>
         </div>
 
         <aside className="flex w-full flex-col gap-4 xl:w-[340px] xl:flex-none">
-          <section className={cn(card, "flex flex-col gap-3 p-5")}>
-            <h2 className="font-dash-display text-lg font-bold">Needs your attention</h2>
+          <SectionCard title="Needs your attention" contentClassName="flex flex-col gap-3">
             {todo === null ? (
               <div className="flex flex-col gap-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
             ) : todo.length === 0 ? (
-              <p className="text-[13px] text-dash-muted">Nothing needs your attention right now.</p>
+              <p className="text-sm text-muted-foreground">Nothing needs your attention right now.</p>
             ) : (
               todo.map((t) => (
-                <Link key={t.label} href={t.href} className={cn("flex items-center gap-3 rounded-[10px] px-3 py-2.5", t.cls)}>
-                  <strong className="min-w-8 text-lg">{t.n}</strong>
-                  <span className="flex-1 text-[13px] font-semibold">{t.label}</span>
-                  <span aria-hidden>→</span>
-                </Link>
+                <Item key={t.label} asChild variant="outline" size="sm">
+                  <Link href={t.href}>
+                    <strong className="min-w-8 text-lg">{t.n}</strong>
+                    <ItemContent><ItemTitle>{t.label}</ItemTitle></ItemContent>
+                    <span aria-hidden>→</span>
+                  </Link>
+                </Item>
               ))
             )}
-          </section>
+          </SectionCard>
 
-          <section className={cn(card, "flex flex-col gap-2.5 p-5")}>
-            <h2 className="flex items-center gap-2 font-dash-display text-lg font-bold"><Smartphone className="size-[18px]" aria-hidden />Get these on your phone</h2>
-            <p className="text-[13px] leading-relaxed text-dash-muted">Turn on SMS or app alerts for new orders and low stock so you don’t have to keep this page open.</p>
-            <Link href="/dashboard/settings/notifications" className="flex h-11 items-center justify-center rounded-[10px] bg-dash-accent text-sm font-semibold text-white">Choose alerts</Link>
-          </section>
+          <SectionCard
+            title={<span className="flex items-center gap-2"><Smartphone className="size-[18px]" aria-hidden />Get these on your phone</span>}
+            description="Turn on SMS or app alerts for new orders and low stock so you don’t have to keep this page open."
+          >
+            <Button asChild className="w-full"><Link href="/dashboard/settings/notifications">Choose alerts</Link></Button>
+          </SectionCard>
         </aside>
       </div>
-      {busy && <Loader2 className="sr-only" aria-hidden />}
+      {busy && <Spinner className="sr-only" aria-hidden />}
     </div>
   )
 }

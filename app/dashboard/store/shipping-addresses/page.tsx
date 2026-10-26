@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download, MapPin, Pencil, Plus, Search, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -15,13 +21,16 @@ import { customerApi, type CustomerResponse } from "@/lib/customerApi"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/common/PageHeader"
+import { FormField } from "@/components/common/FormField"
+import { Toolbar } from "@/components/common/Toolbar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
 
 const TYPE_LABEL: Record<string, string> = { home: "Home", office: "Office", other: "Other" }
-
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft disabled:opacity-50"
-const label = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
 
 interface Form {
   customerId: string
@@ -205,141 +214,146 @@ export default function ShippingAddressesPage() {
     toast({ title: `Exported ${filtered.length} address(es)` })
   }
 
-  const err = (k: keyof Form) => (errs[k] ? <span role="alert" className="text-xs font-normal text-dash-danger-fg">{errs[k]}</span> : null)
   const field = (lbl: string, key: keyof Omit<Form, "isDefault" | "addressType" | "customerId">, placeholder = "") => (
-    <label className={label}>
-      {lbl}
-      <input type="text" className={cn(input, errs[key] && "border-dash-danger-fg")} value={form[key]} placeholder={placeholder} onChange={(e) => setF({ [key]: e.target.value })} />
-      {err(key)}
-    </label>
+    <FormField label={lbl} htmlFor={`addr-${key}`} error={errs[key]} className="min-w-0">
+      <Input id={`addr-${key}`} type="text" className="w-full" aria-invalid={!!errs[key] || undefined} value={form[key]} placeholder={placeholder} onChange={(e) => setF({ [key]: e.target.value })} />
+    </FormField>
   )
 
-  const th = "px-2 py-3 font-semibold"
-  const td = "border-b border-dash-border-soft px-2 py-3 align-top"
+  const td = "align-top"
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Shipping Addresses</h1>
-          <p className="mt-1 text-sm text-dash-muted">Manage customer shipping addresses for order fulfillment</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" className={outlineBtn} onClick={exportCsv}><Download className="size-4" />Export CSV</button>
-          <button type="button" className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white" onClick={openNew}><Plus className="size-4" />Add Address</button>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Shipping Addresses"
+        description="Manage customer shipping addresses for order fulfillment"
+        actions={<>
+          <Button type="button" variant="outline" onClick={exportCsv}><Download className="size-4" />Export CSV</Button>
+          <Button type="button" onClick={openNew}><Plus className="size-4" />Add Address</Button>
+        </>}
+      />
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search</span>
-            <input type="search" placeholder="Search by name, address, city, or phone..." value={q}
+      <Card className="gap-0 py-0">
+        <Toolbar className="p-4">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Label htmlFor="addr-search" className="sr-only">Search</Label>
+            <Input id="addr-search" type="search" placeholder="Search by name, address, city, or phone..." value={q}
               onChange={(e) => { setQ(e.target.value); setPage(1) }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
-          <select aria-label="Address type" className={cn(input, "h-11 w-[160px]")} value={typeF} onChange={(e) => { setTypeF(e.target.value); setPage(1) }}>
-            <option value="all">All Types</option>
-            <option value="home">Home</option>
-            <option value="office">Office</option>
-            <option value="other">Other</option>
-          </select>
+              className="pl-9" />
+          </div>
+          <Select value={typeF} onValueChange={(v) => { setTypeF(v); setPage(1) }}>
+            <SelectTrigger aria-label="Address type" className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="home">Home</SelectItem>
+              <SelectItem value="office">Office</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
           {selIds.length > 0 && (
-            <button type="button" className={cn(outlineBtn, "text-dash-danger-fg")} onClick={() => setDeleteIds(selIds)}><Trash2 className="size-4" />Delete ({selIds.length})</button>
+            <Button type="button" variant="destructive" onClick={() => setDeleteIds(selIds)}><Trash2 className="size-4" />Delete ({selIds.length})</Button>
           )}
-        </div>
+        </Toolbar>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th scope="col" className="w-10 py-3 pl-4 pr-2">
-                  <input type="checkbox" aria-label="Select all" checked={allSel}
-                    onChange={() => setSel((s) => { const n = { ...s }; pageRows.forEach((a) => { if (allSel) delete n[a.id]; else n[a.id] = true }); return n })} />
-                </th>
-                <th scope="col" className={th}>Customer / Full Name</th>
-                <th scope="col" className={th}>Address</th>
-                <th scope="col" className={th}>Phone</th>
-                <th scope="col" className={th}>Type</th>
-                <th scope="col" className={th}>Status</th>
-                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div>
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="w-10 pl-4">
+                  <Checkbox aria-label="Select all" checked={allSel}
+                    onCheckedChange={() => setSel((s) => { const n = { ...s }; pageRows.forEach((a) => { if (allSel) delete n[a.id]; else n[a.id] = true }); return n })} />
+                </TableHead>
+                <TableHead scope="col">Customer / Full Name</TableHead>
+                <TableHead scope="col">Address</TableHead>
+                <TableHead scope="col">Phone</TableHead>
+                <TableHead scope="col">Type</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>)
+                [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={7} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>)
               ) : pageRows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-14 text-center">
-                    <MapPin className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">No addresses found</p>
-                    <p className="text-sm text-dash-muted">{q || typeF !== "all" ? "Try adjusting your search or filter" : "Get started by adding a new shipping address"}</p>
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <EmptyState
+                      icon={MapPin}
+                      title="No addresses found"
+                      description={q || typeF !== "all" ? "Try adjusting your search or filter" : "Get started by adding a new shipping address"}
+                      className="p-4 md:p-6"
+                    />
+                  </TableCell>
+                </TableRow>
               ) : (
                 pageRows.map((a) => (
-                  <tr key={a.id}>
-                    <td className="border-b border-dash-border-soft py-3 pl-4 pr-2 align-top">
-                      <input type="checkbox" aria-label={`Select ${a.fullName}`} checked={!!sel[a.id]} onChange={() => setSel((s) => ({ ...s, [a.id]: !s[a.id] }))} />
-                    </td>
-                    <td className={td}>
+                  <TableRow key={a.id} data-state={sel[a.id] ? "selected" : undefined}>
+                    <TableCell className="pl-4 align-top">
+                      <Checkbox aria-label={`Select ${a.fullName}`} checked={!!sel[a.id]} onCheckedChange={() => setSel((s) => ({ ...s, [a.id]: !s[a.id] }))} />
+                    </TableCell>
+                    <TableCell className={td}>
                       <div className="font-semibold">{a.fullName}</div>
-                      <div className="text-xs text-dash-muted">{a.customerName || ""}</div>
-                    </td>
-                    <td className={td}>
+                      <div className="text-xs text-muted-foreground">{a.customerName || ""}</div>
+                    </TableCell>
+                    <TableCell className={td}>
                       <div>{a.addressLine1}</div>
-                      {a.addressLine2 && <div className="text-xs text-dash-muted">{a.addressLine2}</div>}
-                      <div className="text-xs text-dash-muted">{[a.city, a.state].filter(Boolean).join(", ")} {a.postalCode || ""}</div>
-                    </td>
-                    <td className={td}>
+                      {a.addressLine2 && <div className="text-xs text-muted-foreground">{a.addressLine2}</div>}
+                      <div className="text-xs text-muted-foreground">{[a.city, a.state].filter(Boolean).join(", ")} {a.postalCode || ""}</div>
+                    </TableCell>
+                    <TableCell className={td}>
                       <div>{a.phone}</div>
-                      <div className="text-xs text-dash-muted">{a.email || ""}</div>
-                    </td>
-                    <td className={td}>
-                      <span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-semibold text-dash-neutral-fg">{TYPE_LABEL[a.addressType || "other"] || "Other"}</span>
-                    </td>
-                    <td className={td}>
-                      <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", a.isDefault ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-neutral-soft text-dash-neutral-fg")}>{a.isDefault ? "Default" : "Standard"}</span>
-                    </td>
-                    <td className="border-b border-dash-border-soft py-3 pl-2 pr-4 align-top">
+                      <div className="text-xs text-muted-foreground">{a.email || ""}</div>
+                    </TableCell>
+                    <TableCell className={td}>
+                      <Badge variant="secondary">{TYPE_LABEL[a.addressType || "other"] || "Other"}</Badge>
+                    </TableCell>
+                    <TableCell className={td}>
+                      <StatusBadge status={a.isDefault ? "default" : "standard"} variant={a.isDefault ? "default" : "secondary"} label={a.isDefault ? "Default" : "Standard"} />
+                    </TableCell>
+                    <TableCell className="pr-4 align-top">
                       <div className="flex items-center justify-end gap-1">
                         {!a.isDefault && (
-                          <button type="button" className="mr-1 text-[13px] font-semibold text-dash-accent hover:underline" onClick={() => makeDefault(a)}>Set as Default</button>
+                          <Button type="button" variant="link" size="sm" className="mr-1" onClick={() => makeDefault(a)}>Set as Default</Button>
                         )}
-                        <button type="button" aria-label={`Edit ${a.fullName}`} className={iconBtn} onClick={() => openEdit(a)}><Pencil className="size-4" /></button>
-                        <button type="button" aria-label={`Delete ${a.fullName}`} className={iconBtn} onClick={() => setDeleteIds([a.id])}><Trash2 className="size-4" /></button>
+                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${a.fullName}`} onClick={() => openEdit(a)}><Pencil className="size-4" /></Button>
+                        <Button type="button" variant="outline" size="icon" aria-label={`Delete ${a.fullName}`} onClick={() => setDeleteIds([a.id])}><Trash2 className="size-4" /></Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {!loading && filtered.length > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
+          <>
+          <Separator />
+          <div className="p-4 pt-3">
             <PaginationControl currentPage={cur} totalPages={totalPages} itemsPerPage={perPage} totalItems={filtered.length}
               onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
           </div>
+          </>
         )}
-      </section>
+      </Card>
 
       <Dialog open={!!dlg} onOpenChange={(o) => !o && closeDlg()}>
-        <DialogContent className={`${bricolage.variable} ${instrument.variable} font-dash-body max-h-[92vh] overflow-y-auto text-dash-ink sm:max-w-[680px]`}>
+        <DialogContent className={cn(bricolage.variable, instrument.variable, "font-dash-body max-h-[92vh] overflow-y-auto text-dash-ink sm:max-w-[680px]")}>
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">{dlg?.id ? "Edit Shipping Address" : "Add Shipping Address"}</DialogTitle>
+            <DialogTitle>{dlg?.id ? "Edit Shipping Address" : "Add Shipping Address"}</DialogTitle>
             <DialogDescription>{dlg?.id ? "Update the address details below" : "Enter the address details below"}</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className={cn(label, "sm:col-span-2")}>
-              Customer
-              <select className={cn(input, "px-2.5")} value={form.customerId} onChange={(e) => pickCustomer(e.target.value)}>
-                <option value="">No linked customer (guest)</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
-              </select>
-            </label>
+            <FormField label="Customer" htmlFor="addr-customer" className="min-w-0 sm:col-span-2">
+              <Select value={form.customerId || "__none"} onValueChange={(v) => pickCustomer(v === "__none" ? "" : v)}>
+                <SelectTrigger id="addr-customer" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">No linked customer (guest)</SelectItem>
+                  {customers.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
             {field("Full Name *", "fullName", "John Doe")}
             {field("Phone *", "phone", "+8801712345678")}
             <div className="sm:col-span-2">{field("Email", "email", "john@example.com")}</div>
@@ -349,24 +363,26 @@ export default function ShippingAddressesPage() {
             {field("State/Division *", "state", "Dhaka Division")}
             {field("Postal Code *", "postalCode", "1205")}
             {field("Country", "country")}
-            <label className={label}>
-              Address Type
-              <select className={cn(input, "px-2.5")} value={form.addressType} onChange={(e) => setF({ addressType: e.target.value as AddressType })}>
-                <option value="home">Home</option>
-                <option value="office">Office</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2 self-end pb-2.5 text-[13px] font-semibold">
-              <input type="checkbox" checked={form.isDefault} onChange={(e) => setF({ isDefault: e.target.checked })} />
+            <FormField label="Address Type" htmlFor="addr-type" className="min-w-0">
+              <Select value={form.addressType} onValueChange={(v) => setF({ addressType: v as AddressType })}>
+                <SelectTrigger id="addr-type" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="home">Home</SelectItem>
+                  <SelectItem value="office">Office</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+            <Label className="flex items-center gap-2 self-end pb-2.5">
+              <Checkbox checked={form.isDefault} onCheckedChange={(v) => setF({ isDefault: v === true })} />
               Set as default address
-            </label>
+            </Label>
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" className={outlineBtn} onClick={closeDlg}>Cancel</button>
-            <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-50">
+            <Button type="button" variant="outline" onClick={closeDlg}>Cancel</Button>
+            <Button type="button" disabled={saving} onClick={save}>
               {saving ? "Saving…" : dlg?.id ? "Update Address" : "Add Address"}
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -379,7 +395,7 @@ export default function ShippingAddressesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} className={buttonVariants({ variant: "destructive" })}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

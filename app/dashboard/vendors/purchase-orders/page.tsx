@@ -1,11 +1,30 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Banknote, Download, Eye, Package, Plus, Printer, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatTile } from "@/components/common/StatTile"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Toolbar } from "@/components/common/Toolbar"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { StatusBadge, type StatusVariant } from "@/components/common/StatusBadge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
@@ -22,20 +41,20 @@ import { cn } from "@/lib/utils"
 type Tab = "all" | "draft" | "ordered" | "partial" | "received" | "cancelled"
 
 const STATUS_LABEL: Record<string, string> = { draft: "Draft", sent: "Ordered", partial: "Partly received", received: "Received", cancelled: "Cancelled" }
-const STATUS_STYLE: Record<string, string> = {
-  draft: "bg-dash-neutral-soft text-dash-neutral-fg",
-  sent: "bg-dash-accent-soft text-dash-accent-fg",
-  partial: "bg-dash-warn-soft text-dash-warn-fg",
-  received: "bg-dash-success-soft text-dash-success-fg",
-  cancelled: "bg-dash-danger-soft text-dash-danger-fg",
+const STATUS_VARIANT: Record<string, StatusVariant> = {
+  draft: "outline",
+  sent: "secondary",
+  partial: "secondary",
+  received: "default",
+  cancelled: "destructive",
 }
 const DOT: Record<string, string> = {
-  draft: "bg-dash-muted", ordered: "bg-dash-accent", partial: "bg-dash-warn", received: "bg-dash-success", cancelled: "bg-dash-danger",
+  draft: "bg-muted-foreground", ordered: "bg-blue-500", partial: "bg-amber-500", received: "bg-emerald-600", cancelled: "bg-destructive",
 }
-const PAY_STYLE: Record<string, string> = {
-  paid: "bg-dash-success-soft text-dash-success-fg",
-  partially_paid: "bg-dash-warn-soft text-dash-warn-fg",
-  pending: "bg-dash-danger-soft text-dash-danger-fg",
+const PAY_VARIANT: Record<string, StatusVariant> = {
+  paid: "default",
+  partially_paid: "secondary",
+  pending: "destructive",
 }
 const PAY_LABEL: Record<string, string> = { paid: "Paid", partially_paid: "Partial", pending: "Unpaid" }
 const PAY_METHODS = [
@@ -49,20 +68,7 @@ const addDays = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 const r2 = (v: number) => Math.round(v * 100) / 100
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-      {label}{children}
-      {hint && <span className="text-xs font-normal text-dash-muted">{hint}</span>}
-    </label>
-  )
-}
 
 interface Line {
   key: string
@@ -441,48 +447,50 @@ export default function PurchaseOrdersPage() {
   const canReceive = (p: PurchaseOrder) => p.status === "sent" || p.status === "partial"
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Purchase orders</h1>
-          <p className="mt-1 text-sm text-dash-muted">Order stock from suppliers, receive it into inventory, and track what you owe.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleExport} disabled={exporting} className={outlineBtn}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}</button>
-          <button type="button" onClick={openForm} className={primaryBtn}><Plus className="size-4" aria-hidden /> New purchase order</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Purchase orders"
+        description="Order stock from suppliers, receive it into inventory, and track what you owe."
+        actions={<>
+          <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}</Button>
+          <Button type="button" onClick={openForm}><Plus className="size-4" aria-hidden /> New purchase order</Button>
+        </>}
+      />
 
       {/* Reorder banner */}
       {stats && stats.reorderCount > 0 && (
-        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-dash-accent-soft px-[18px] py-3.5 text-dash-accent-fg">
-          <Package className="size-[22px] shrink-0" aria-hidden />
-          <span className="min-w-[260px] flex-1 text-sm">
-            <strong>{stats.reorderCount} product{stats.reorderCount === 1 ? " is" : "s are"} at or below their reorder point.</strong>{" "}
-            Review suggested quantities and create the order in one go.
-          </span>
-          <button type="button" onClick={() => { openForm(); setLines(lowProducts.map((p) => mkLine(p, suggestQty(p)))) }}
-            className="h-10 rounded-[10px] bg-dash-accent-fg px-3.5 text-[13px] font-semibold text-dash-accent-soft">
-            Create from suggestions
-          </button>
-        </div>
+        <Alert>
+          <Package aria-hidden />
+          <AlertDescription className="flex flex-wrap items-center gap-3.5 text-foreground">
+            <span className="min-w-[260px] flex-1">
+              <strong>{stats.reorderCount} product{stats.reorderCount === 1 ? " is" : "s are"} at or below their reorder point.</strong>{" "}
+              Review suggested quantities and create the order in one go.
+            </span>
+            <Button type="button" onClick={() => { openForm(); setLines(lowProducts.map((p) => mkLine(p, suggestQty(p)))) }}>
+              Create from suggestions
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Pipeline */}
       <section aria-label="Pipeline" className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {pipe.map((p) => (
-          <button key={p.key} type="button" onClick={() => changeTab(p.key)} aria-pressed={tab === p.key}
-            className={cn("flex flex-col gap-1 rounded-[14px] border bg-dash-card px-4 py-3.5 text-left transition-colors hover:bg-dash-neutral-soft", tab === p.key ? "border-dash-accent" : "border-dash-border")}>
-            <span className="flex items-center gap-2 text-[13px] text-dash-muted"><span className={cn("size-2 rounded-full", DOT[p.key])} />{p.label}</span>
-            <span className="font-dash-display text-2xl font-bold tabular-nums">{by ? by[p.key as keyof typeof by].count : "–"}</span>
-            <span className="text-xs text-dash-muted tabular-nums">{formatCurrency(by ? by[p.key as keyof typeof by].amount : 0)}</span>
-          </button>
+          <StatTile
+            key={p.key}
+            className="p-4"
+            onClick={() => changeTab(p.key)}
+            active={tab === p.key}
+            label={<span className="flex items-center gap-2"><span className={cn("size-2 rounded-full", DOT[p.key])} />{p.label}</span>}
+            value={by ? by[p.key as keyof typeof by].count : "–"}
+            hint={<span className="tabular-nums">{formatCurrency(by ? by[p.key as keyof typeof by].amount : 0)}</span>}
+          />
         ))}
       </section>
 
       {/* Table card */}
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs
             value={tab}
@@ -494,23 +502,23 @@ export default function PurchaseOrdersPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[260px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
+        <Toolbar className="gap-2.5 p-4">
+          <Label className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <span className="sr-only">Search purchase orders</span>
-            <input type="search" placeholder="Search PO number, supplier or product…" value={search}
+            <Input type="search" placeholder="Search PO number, supplier or product…" value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
+              className="pl-9" />
+          </Label>
           <Select value={fSup} onValueChange={(v) => { setFSup(v); setPage(1) }}>
-            <SelectTrigger aria-label="Supplier" className={cn(filterSelect, "w-[170px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Supplier" className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Supplier: All</SelectItem>
               {vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={fPay} onValueChange={(v) => { setFPay(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Payment" className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Payment: All</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
@@ -519,47 +527,44 @@ export default function PurchaseOrdersPage() {
             </SelectContent>
           </Select>
           <Select value={fLoc} onValueChange={(v) => { setFLoc(v); setPage(1) }}>
-            <SelectTrigger aria-label="Location" className={cn(filterSelect, "w-[160px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Location" className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Location: All</SelectItem>
               {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
             </SelectContent>
           </Select>
           {hasFilters && (
-            <button type="button" onClick={() => { setSearch(""); setFSup("all"); setFPay("all"); setFLoc("all"); setTab("all"); setPage(1) }}
-              className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+            <Button type="button" variant="ghost" onClick={() => { setSearch(""); setFSup("all"); setFPay("all"); setFLoc("all"); setTab("all"); setPage(1) }}>
               <X className="size-4" aria-hidden /> Clear
-            </button>
+            </Button>
           )}
-        </div>
+        </Toolbar>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th scope="col" className="py-3 pl-4 pr-2 font-semibold">Purchase order</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Supplier</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Items</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Status</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Received</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Expected</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Total</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Paid</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Payment</th>
-                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Next step</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="min-w-[1080px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Purchase order</TableHead>
+                <TableHead scope="col">Supplier</TableHead>
+                <TableHead scope="col">Items</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col">Received</TableHead>
+                <TableHead scope="col">Expected</TableHead>
+                <TableHead scope="col" className="text-right">Total</TableHead>
+                <TableHead scope="col" className="text-right">Paid</TableHead>
+                <TableHead scope="col">Payment</TableHead>
+                <TableHead scope="col" className="text-right">Next step</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={10} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>)
+                [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={10}><Skeleton className="h-10" /></TableCell></TableRow>)
               ) : pos.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="py-14 text-center">
-                    <Package className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">No purchase orders found</p>
-                    <p className="text-sm text-dash-muted">{hasFilters ? "Try clearing the filters." : "Create your first purchase order with New purchase order."}</p>
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={10}>
+                    <EmptyState icon={Package} title="No purchase orders found" description={hasFilters ? "Try clearing the filters." : "Create your first purchase order with New purchase order."} className="p-4 md:p-6" />
+                  </TableCell>
+                </TableRow>
               ) : (
                 pos.map((p) => {
                   const ordered = p.unitsOrdered ?? p.items.reduce((a, i) => a + i.quantityOrdered, 0)
@@ -567,394 +572,442 @@ export default function PurchaseOrdersPage() {
                   const pct = ordered > 0 ? Math.round((received / ordered) * 100) : 0
                   const note = expNote(p)
                   return (
-                    <tr key={p.id}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
-                        <button type="button" onClick={() => openView(p)} className="text-left font-bold hover:underline">{p.poNumber}</button>
-                        <div className="text-xs text-dash-muted">Created {fmtDate(p.createdAt)} · {p.locationName ?? "—"}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 font-semibold">{p.vendorName}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                    <TableRow key={p.id}>
+                      <TableCell>
+                        <Button type="button" variant="link" onClick={() => openView(p)} className="h-auto p-0">{p.poNumber}</Button>
+                        <div className="text-xs text-muted-foreground">Created {fmtDate(p.createdAt)} · {p.locationName ?? "—"}</div>
+                      </TableCell>
+                      <TableCell className="font-medium">{p.vendorName}</TableCell>
+                      <TableCell>
                         <div className="max-w-[200px] truncate">{p.itemsSummary || `${p.items.length} item${p.items.length === 1 ? "" : "s"}`}</div>
-                        <div className="text-xs text-dash-muted">{ordered} units</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", STATUS_STYLE[p.status])}>{STATUS_LABEL[p.status] ?? p.status}</span>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <div className="text-[13px] tabular-nums">{received} / {ordered}</div>
-                        <div className="mt-1 h-1.5 w-[110px] overflow-hidden rounded-full bg-dash-neutral-soft">
-                          <div className="h-full rounded-full bg-dash-success" style={{ width: `${pct}%` }} />
-                        </div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="text-xs text-muted-foreground">{ordered} units</div>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={p.status} variant={STATUS_VARIANT[p.status]} label={STATUS_LABEL[p.status] ?? p.status} />
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm tabular-nums">{received} / {ordered}</div>
+                        <Progress value={pct} aria-label={`${pct}% received`} className="mt-1 h-1.5 w-[110px]" />
+                      </TableCell>
+                      <TableCell>
                         <div>{fmtDate(p.expectedDate)}</div>
-                        {note && <div className={cn("text-xs", p.isOverdue ? "font-semibold text-dash-danger-fg" : "text-dash-muted")}>{note}</div>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">
+                        {note && <div className={cn("text-xs", p.isOverdue ? "font-medium text-destructive" : "text-muted-foreground")}>{note}</div>}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
                         {formatCurrency(p.totalAmount)}
-                        {p.dueAmount > 0 && p.status !== "cancelled" && <div className="text-xs font-medium text-dash-danger-fg">Due {formatCurrency(p.dueAmount)}</div>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">{formatCurrency(p.paidAmount)}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <span className={cn("rounded-md px-2.5 py-[3px] text-xs font-bold", PAY_STYLE[p.paymentStatus] ?? PAY_STYLE.pending)}>{PAY_LABEL[p.paymentStatus] ?? p.paymentStatus}</span>
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        {p.dueAmount > 0 && p.status !== "cancelled" && <div className="text-xs font-medium text-destructive">Due {formatCurrency(p.dueAmount)}</div>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrency(p.paidAmount)}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={p.paymentStatus} variant={PAY_VARIANT[p.paymentStatus] ?? PAY_VARIANT.pending} label={PAY_LABEL[p.paymentStatus] ?? p.paymentStatus} />
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center justify-end gap-1">
                           {p.status === "draft" && (
-                            <button type="button" className="mr-1 text-[13px] font-semibold text-dash-accent hover:underline"
-                              onClick={() => act2(p, () => purchaseOrderApi.updateStatus(p.id, "sent"), "Marked as ordered")}>Mark ordered</button>
+                            <Button type="button" variant="link" size="sm" className="mr-1"
+                              onClick={() => act2(p, () => purchaseOrderApi.updateStatus(p.id, "sent"), "Marked as ordered")}>Mark ordered</Button>
                           )}
                           {canReceive(p) && (
-                            <button type="button" className="mr-1 text-[13px] font-semibold text-dash-accent hover:underline" onClick={() => (p.status === "partial" ? receiveRest(p) : openView(p))}>{p.status === "partial" ? "Receive rest" : "Receive stock"}</button>
+                            <Button type="button" variant="link" size="sm" className="mr-1" onClick={() => (p.status === "partial" ? receiveRest(p) : openView(p))}>{p.status === "partial" ? "Receive rest" : "Receive stock"}</Button>
                           )}
-                          <button type="button" aria-label={`View ${p.poNumber}`} className={iconBtn} onClick={() => openView(p)}><Eye className="size-4" /></button>
-                          <button type="button" aria-label={`Print ${p.poNumber}`} className={iconBtn} onClick={() => printPo(p)}><Printer className="size-4" /></button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`View ${p.poNumber}`} onClick={() => openView(p)}><Eye className="size-4" /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`Print ${p.poNumber}`} onClick={() => printPo(p)}><Printer className="size-4" /></Button>
                           {p.dueAmount > 0 && p.status !== "cancelled" && (
-                            <button type="button" aria-label={`Record payment for ${p.poNumber}`} className={iconBtn} onClick={() => openView(p)}><Banknote className="size-4" /></button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Record payment for ${p.poNumber}`} onClick={() => openView(p)}><Banknote className="size-4" /></Button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {!loading && pos.length > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
-            <PaginationControl
-              currentPage={page}
-              totalPages={Math.max(1, Math.ceil(total / perPage))}
-              itemsPerPage={perPage}
-              totalItems={total}
-              onPageChange={setPage}
-              onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
-            />
-          </div>
+          <>
+            <Separator />
+            <div className="p-4 pt-3">
+              <PaginationControl
+                currentPage={page}
+                totalPages={Math.max(1, Math.ceil(total / perPage))}
+                itemsPerPage={perPage}
+                totalItems={total}
+                onPageChange={setPage}
+                onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+              />
+            </div>
+          </>
         )}
-        <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted tabular-nums">
+        <Separator />
+        <div className="px-4 py-3 text-xs text-muted-foreground tabular-nums">
           Showing {total} purchase order{total === 1 ? "" : "s"}
           {` · ${formatCurrency(filteredDue)} still to pay`}
         </div>
-      </section>
+      </Card>
 
       {/* ---------------- New purchase order ---------------- */}
       <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false) }}>
-        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[1040px]">
-          <div className="border-b border-dash-border-soft px-6 py-4">
-            <DialogTitle className="font-dash-display text-xl font-bold">New purchase order</DialogTitle>
-            <DialogDescription className="text-[13px]">Number assigned when saved · {fmtDate(today())}</DialogDescription>
-          </div>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[1040px]">
+          <DialogHeader>
+            <DialogTitle>New purchase order</DialogTitle>
+            <DialogDescription>Number assigned when saved · {fmtDate(today())}</DialogDescription>
+          </DialogHeader>
 
-          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_320px]">
+          <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="flex min-w-0 flex-col gap-5">
               <fieldset className="flex flex-col gap-3">
-                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">1 · Supplier &amp; delivery</legend>
+                <SectionTitle as="legend" className="mb-2">1 · Supplier &amp; delivery</SectionTitle>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <Field label="Supplier *">
-                    <select className={input} value={supId} onChange={(e) => { setSupId(e.target.value); setExpTouched(false) }}>
-                      <option value="">Select supplier</option>
-                      {vendors.filter((v) => v.status === "Active" || String(v.id) === supId).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Receive at">
-                    <select className={input} value={locId} onChange={(e) => setLocId(e.target.value)}>
-                      <option value="">Select location</option>
-                      {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Expected delivery" hint={expTouched ? undefined : `Based on ${supplier?.leadTimeDays && supplier.leadTimeDays > 0 ? `${supplier.leadTimeDays}-day lead time` : "a 7-day default"}`}>
-                    <input type="date" className={input} min={today()} value={expDate} onChange={(e) => { setExpDate(e.target.value); setExpTouched(true) }} />
-                  </Field>
+                  <FormField label="Supplier *" htmlFor="po-supplier">
+                    <Select value={supId || "__none"} onValueChange={(v) => { setSupId(v === "__none" ? "" : v); setExpTouched(false) }}>
+                      <SelectTrigger id="po-supplier" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Select supplier</SelectItem>
+                        {vendors.filter((v) => v.status === "Active" || String(v.id) === supId).map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label="Receive at" htmlFor="po-location">
+                    <Select value={locId || "__none"} onValueChange={(v) => setLocId(v === "__none" ? "" : v)}>
+                      <SelectTrigger id="po-location" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Select location</SelectItem>
+                        {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label="Expected delivery" htmlFor="po-expected" description={expTouched ? undefined : `Based on ${supplier?.leadTimeDays && supplier.leadTimeDays > 0 ? `${supplier.leadTimeDays}-day lead time` : "a 7-day default"}`}>
+                    <Input id="po-expected" type="date" min={today()} value={expDate} onChange={(e) => { setExpDate(e.target.value); setExpTouched(true) }} />
+                  </FormField>
                 </div>
                 {supplier && (
-                  <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-[10px] bg-dash-neutral-soft px-3.5 py-2.5 text-[13px]">
-                    <span><span className="text-dash-muted">Terms</span> <strong>{supplier.paymentTerms || "Not set"}</strong></span>
-                    <span><span className="text-dash-muted">Lead time</span> <strong>{supplier.leadTimeDays ? `${supplier.leadTimeDays} days` : "—"}</strong></span>
-                    <span><span className="text-dash-muted">You already owe</span> <strong>{formatCurrency(supplier.owed)}</strong></span>
-                    <span><span className="text-dash-muted">Phone</span> <strong>{supplier.phone || "—"}</strong></span>
-                  </div>
+                  <Item variant="muted" size="sm" className="gap-x-6 gap-y-1">
+                    <span><span className="text-muted-foreground">Terms</span> <strong>{supplier.paymentTerms || "Not set"}</strong></span>
+                    <span><span className="text-muted-foreground">Lead time</span> <strong>{supplier.leadTimeDays ? `${supplier.leadTimeDays} days` : "—"}</strong></span>
+                    <span><span className="text-muted-foreground">You already owe</span> <strong>{formatCurrency(supplier.owed)}</strong></span>
+                    <span><span className="text-muted-foreground">Phone</span> <strong>{supplier.phone || "—"}</strong></span>
+                  </Item>
                 )}
               </fieldset>
 
               <fieldset className="flex flex-col gap-3">
-                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">2 · Items</legend>
+                <SectionTitle as="legend" className="mb-2">2 · Items</SectionTitle>
                 {missingLow > 0 && (
-                  <div><button type="button" onClick={addLow} className="h-9 rounded-lg border border-dash-border bg-dash-card px-3 text-[13px] font-semibold hover:bg-dash-neutral-soft">+ Add {missingLow} low-stock item{missingLow === 1 ? "" : "s"}</button></div>
+                  <div><Button type="button" variant="outline" size="sm" onClick={addLow}>+ Add {missingLow} low-stock item{missingLow === 1 ? "" : "s"}</Button></div>
                 )}
-                <div className="overflow-hidden rounded-xl border border-dash-border">
-                  <div className="hidden grid-cols-[1fr_70px_130px_110px_100px_32px] gap-2 bg-dash-bg px-3 py-2 text-xs font-semibold text-dash-muted sm:grid">
+                <Card className="gap-0 overflow-hidden py-0">
+                  <div className="hidden grid-cols-[1fr_70px_130px_110px_100px_32px] gap-2 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
                     <span>Product</span><span>In stock</span><span>Qty</span><span>Unit cost</span><span className="text-right">Line total</span><span />
                   </div>
                   {lines.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-[13px] text-dash-muted">No items yet — search a product below to add it.</div>
+                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">No items yet — search a product below to add it.</div>
                   ) : lines.map((l) => (
-                    <div key={l.key} className="grid grid-cols-2 items-center gap-2 border-t border-dash-border-soft px-3 py-2.5 sm:grid-cols-[1fr_70px_130px_110px_100px_32px]">
-                      <div className="col-span-2 min-w-0 sm:col-span-1">
-                        <div className="truncate text-sm font-semibold">{l.name}</div>
-                        <div className="text-xs text-dash-muted">{l.sku || "—"} · last cost {formatCurrency(l.lastCost)}</div>
-                        {l.variants.length > 0 && (
-                          <select aria-label="Variant" className="mt-1 h-8 rounded-lg border border-dash-border bg-dash-card px-2 text-xs" value={l.variantId} onChange={(e) => patchLine(l.key, { variantId: e.target.value })}>
-                            <option value="">Any variant</option>
-                            {l.variants.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                          </select>
-                        )}
+                    <Fragment key={l.key}>
+                      <Separator />
+                      <div className="grid grid-cols-2 items-center gap-2 px-3 py-2.5 sm:grid-cols-[1fr_70px_130px_110px_100px_32px]">
+                        <div className="col-span-2 min-w-0 sm:col-span-1">
+                          <div className="truncate text-sm font-medium">{l.name}</div>
+                          <div className="text-xs text-muted-foreground">{l.sku || "—"} · last cost {formatCurrency(l.lastCost)}</div>
+                          {l.variants.length > 0 && (
+                            <Select value={l.variantId || "__any"} onValueChange={(v) => patchLine(l.key, { variantId: v === "__any" ? "" : v })}>
+                              <SelectTrigger aria-label="Variant" size="sm" className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__any">Any variant</SelectItem>
+                                {l.variants.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                        <span className="text-sm tabular-nums">{l.stock}</span>
+                        <ButtonGroup>
+                          <Button type="button" variant="outline" size="icon" aria-label="Decrease" onClick={() => patchLine(l.key, { qty: Math.max(1, l.qty - 1) })}>−</Button>
+                          <Input type="number" min={1} aria-label="Quantity" value={l.qty} onChange={(e) => patchLine(l.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                            className="w-[52px] text-center tabular-nums" />
+                          <Button type="button" variant="outline" size="icon" aria-label="Increase" onClick={() => patchLine(l.key, { qty: l.qty + 1 })}>+</Button>
+                        </ButtonGroup>
+                        <Input type="number" min={0} step="0.01" aria-label="Unit cost" value={l.cost} onChange={(e) => patchLine(l.key, { cost: Number(e.target.value) || 0 })}
+                          className="w-full tabular-nums" />
+                        <span className="text-right text-sm font-semibold tabular-nums">{formatCurrency(l.qty * l.cost)}</span>
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button>
                       </div>
-                      <span className="text-sm tabular-nums">{l.stock}</span>
-                      <div className="flex items-center">
-                        <button type="button" aria-label="Decrease" onClick={() => patchLine(l.key, { qty: Math.max(1, l.qty - 1) })} className="h-9 w-8 rounded-l-lg border border-dash-border">−</button>
-                        <input type="number" min={1} aria-label="Quantity" value={l.qty} onChange={(e) => patchLine(l.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-                          className="h-9 w-[52px] border-y border-dash-border bg-dash-card text-center text-sm outline-none" />
-                        <button type="button" aria-label="Increase" onClick={() => patchLine(l.key, { qty: l.qty + 1 })} className="h-9 w-8 rounded-r-lg border border-dash-border">+</button>
-                      </div>
-                      <input type="number" min={0} step="0.01" aria-label="Unit cost" value={l.cost} onChange={(e) => patchLine(l.key, { cost: Number(e.target.value) || 0 })}
-                        className="h-9 w-full rounded-lg border border-dash-border bg-dash-card px-2 text-sm outline-none focus-visible:border-dash-accent" />
-                      <span className="text-right text-sm font-bold tabular-nums">{formatCurrency(l.qty * l.cost)}</span>
-                      <button type="button" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} className="text-lg text-dash-muted hover:text-dash-danger-fg">×</button>
-                    </div>
+                    </Fragment>
                   ))}
-                </div>
-                <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-                  <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search product</span>
-                  <input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Search product to add…"
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-                </label>
+                </Card>
+                <Label className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden /><span className="sr-only">Search product</span>
+                  <Input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Search product to add…"
+                    className="pl-9" />
+                </Label>
                 {results.length > 0 && (
-                  <div className="flex flex-col overflow-hidden rounded-xl border border-dash-border">
-                    {results.map((p) => (
-                      <button key={p.id} type="button" onClick={() => addProduct(p)} className="flex items-center justify-between gap-3 border-b border-dash-border-soft px-3 py-2 text-left last:border-0 hover:bg-dash-neutral-soft">
-                        <span className="text-sm font-semibold">{p.name} <span className="text-xs font-normal text-dash-muted">{p.sku}</span></span>
-                        <span className="text-xs text-dash-muted">{p.stock} in stock · cost {formatCurrency(Number(p.costPrice ?? p.cost_price ?? 0))}</span>
-                      </button>
+                  <Card className="gap-0 overflow-hidden py-0">
+                    {results.map((p, i) => (
+                      <Fragment key={p.id}>
+                        {i > 0 && <Separator />}
+                        <Button type="button" variant="ghost" onClick={() => addProduct(p)} className="h-auto w-full justify-between gap-3 whitespace-normal rounded-none text-left">
+                          <span className="text-sm font-medium">{p.name} <span className="text-xs font-normal text-muted-foreground">{p.sku}</span></span>
+                          <span className="text-xs font-normal text-muted-foreground">{p.stock} in stock · cost {formatCurrency(Number(p.costPrice ?? p.cost_price ?? 0))}</span>
+                        </Button>
+                      </Fragment>
                     ))}
-                  </div>
+                  </Card>
                 )}
               </fieldset>
 
-              <Field label="Note to supplier">
-                <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Deliver before 12 pm, pack in cartons of 12" className={cn(input, "h-auto py-2.5")} />
-              </Field>
+              <FormField label="Note to supplier" htmlFor="po-note">
+                <Textarea id="po-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Deliver before 12 pm, pack in cartons of 12" />
+              </FormField>
             </div>
 
-            <aside aria-label="Totals and payment" className="flex flex-col gap-3 rounded-xl border border-dash-border-soft bg-dash-bg p-4 lg:self-start">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">3 · Totals</span>
-              <div className="flex flex-col gap-2 text-[13px]">
-                <div className="flex justify-between"><span className="text-dash-muted">Subtotal · {units} unit{units === 1 ? "" : "s"}</span><span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span></div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-dash-muted">Discount</span>
-                  <span className="flex gap-1">
-                    <select aria-label="Discount type" value={discType} onChange={(e) => setDiscType(e.target.value as "flat" | "percent")} className="h-8 rounded-lg border border-dash-border bg-dash-card px-1.5 text-xs">
-                      <option value="flat">Flat</option><option value="percent">%</option>
-                    </select>
-                    <input type="number" min={0} step="any" aria-label="Discount" value={discVal} onChange={(e) => setDiscVal(e.target.value)} placeholder="0" className="h-8 w-20 rounded-lg border border-dash-border bg-dash-card px-2 text-right text-sm outline-none" />
-                  </span>
+            <aside aria-label="Totals and payment" className="lg:self-start">
+              <Card className="gap-3 p-4">
+                <SectionTitle>3 · Totals</SectionTitle>
+                <div className="flex flex-col gap-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal · {units} unit{units === 1 ? "" : "s"}</span><span className="font-medium tabular-nums">{formatCurrency(subtotal)}</span></div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Discount</span>
+                    <ButtonGroup>
+                      <Select value={discType} onValueChange={(v) => setDiscType(v as "flat" | "percent")}>
+                        <SelectTrigger aria-label="Discount type" size="sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flat">Flat</SelectItem><SelectItem value="percent">%</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input type="number" min={0} step="any" aria-label="Discount" value={discVal} onChange={(e) => setDiscVal(e.target.value)} placeholder="0" className="h-8 w-20 text-right tabular-nums" />
+                    </ButtonGroup>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Tax / VAT (%)</span>
+                    <Input type="number" min={0} max={100} step="any" aria-label="Tax rate" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} placeholder="0" className="w-24 text-right tabular-nums" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Shipping / freight</span>
+                    <Input type="number" min={0} step="any" aria-label="Shipping cost" value={shipCost} onChange={(e) => setShipCost(e.target.value)} placeholder="0" className="w-24 text-right tabular-nums" />
+                  </div>
+                  {(discount > 0 || tax > 0 || shipping > 0) && (
+                    <div className="text-xs text-muted-foreground">{[discount > 0 && `−${formatCurrency(discount)} discount`, tax > 0 && `+${formatCurrency(tax)} tax`, shipping > 0 && `+${formatCurrency(shipping)} shipping`].filter(Boolean).join(" · ")}</div>
+                  )}
+                  <Separator />
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-semibold">Total</span>
+                    <span className="text-2xl font-semibold tabular-nums">{formatCurrency(grand)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-dash-muted">Tax / VAT (%)</span>
-                  <input type="number" min={0} max={100} step="any" aria-label="Tax rate" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} placeholder="0" className="h-8 w-24 rounded-lg border border-dash-border bg-dash-card px-2 text-right text-sm outline-none" />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-dash-muted">Shipping / freight</span>
-                  <input type="number" min={0} step="any" aria-label="Shipping cost" value={shipCost} onChange={(e) => setShipCost(e.target.value)} placeholder="0" className="h-8 w-24 rounded-lg border border-dash-border bg-dash-card px-2 text-right text-sm outline-none" />
-                </div>
-                {(discount > 0 || tax > 0 || shipping > 0) && (
-                  <div className="text-xs text-dash-muted">{[discount > 0 && `−${formatCurrency(discount)} discount`, tax > 0 && `+${formatCurrency(tax)} tax`, shipping > 0 && `+${formatCurrency(shipping)} shipping`].filter(Boolean).join(" · ")}</div>
-                )}
-                <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
-                  <span className="font-bold">Total</span>
-                  <span className="font-dash-display text-2xl font-bold tabular-nums">{formatCurrency(grand)}</span>
-                </div>
-              </div>
 
-              <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">4 · Payment to supplier</span>
-              <div role="radiogroup" aria-label="Amount paid" className="grid grid-cols-3 gap-1.5">
-                {([["none", "Pay later"], ["full", "Pay in full"], ["partial", "Advance"]] as const).map(([id, label]) => (
-                  <button key={id} type="button" role="radio" aria-checked={paidMode === id} onClick={() => setPaidMode(id)}
-                    className={cn("h-10 rounded-lg border-2 text-xs font-semibold", paidMode === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {paidMode === "partial" && (
-                <Field label="Advance paid now"><input type="number" min={0} max={grand || undefined} className={input} value={partial} onChange={(e) => setPartial(e.target.value)} /></Field>
-              )}
-              {paidNow > 0 && (
-                <div className="flex flex-col gap-2.5">
-                  <Field label="Method"><select className={input} value={method} onChange={(e) => setMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select></Field>
-                  <Field label="Payment date"><input type="date" className={input} max={today()} value={payDate} onChange={(e) => setPayDate(e.target.value)} /></Field>
-                  <Field label="Reference"><input className={input} value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Cheque / transaction no. (optional)" /></Field>
+                <SectionTitle className="mt-1">4 · Payment to supplier</SectionTitle>
+                <div role="radiogroup" aria-label="Amount paid" className="grid grid-cols-3 gap-1.5">
+                  {([["none", "Pay later"], ["full", "Pay in full"], ["partial", "Advance"]] as const).map(([id, label]) => (
+                    <Button key={id} type="button" role="radio" aria-checked={paidMode === id} onClick={() => setPaidMode(id)}
+                      variant={paidMode === id ? "default" : "outline"} size="sm">
+                      {label}
+                    </Button>
+                  ))}
                 </div>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-[10px] bg-dash-card px-3 py-2"><div className="text-[11px] text-dash-muted">Paid now</div><div className="font-bold tabular-nums">{formatCurrency(paidNow)}</div></div>
-                <div className="rounded-[10px] bg-dash-card px-3 py-2"><div className="text-[11px] text-dash-muted">Due {supplier?.paymentTerms ? `(${supplier.paymentTerms})` : "later"}</div><div className="font-bold tabular-nums">{formatCurrency(dueNow)}</div></div>
-              </div>
+                {paidMode === "partial" && (
+                  <FormField label="Advance paid now" htmlFor="po-advance"><Input id="po-advance" type="number" min={0} max={grand || undefined} value={partial} onChange={(e) => setPartial(e.target.value)} /></FormField>
+                )}
+                {paidNow > 0 && (
+                  <div className="flex flex-col gap-2.5">
+                    <FormField label="Method" htmlFor="po-pay-method"><Select value={method} onValueChange={(v) => setMethod(v)}><SelectTrigger id="po-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></FormField>
+                    <FormField label="Payment date" htmlFor="po-pay-date"><Input id="po-pay-date" type="date" max={today()} value={payDate} onChange={(e) => setPayDate(e.target.value)} /></FormField>
+                    <FormField label="Reference" htmlFor="po-pay-ref"><Input id="po-pay-ref" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Cheque / transaction no. (optional)" /></FormField>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Item variant="outline" size="sm" className="px-3 py-2">
+                    <ItemContent className="gap-0"><ItemDescription className="text-xs">Paid now</ItemDescription><ItemTitle className="tabular-nums">{formatCurrency(paidNow)}</ItemTitle></ItemContent>
+                  </Item>
+                  <Item variant="outline" size="sm" className="px-3 py-2">
+                    <ItemContent className="gap-0"><ItemDescription className="text-xs">Due {supplier?.paymentTerms ? `(${supplier.paymentTerms})` : "later"}</ItemDescription><ItemTitle className="tabular-nums">{formatCurrency(dueNow)}</ItemTitle></ItemContent>
+                  </Item>
+                </div>
+              </Card>
             </aside>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-dash-border-soft px-6 py-4">
-            <span className="text-xs text-dash-muted">Stock is added only when you receive the goods.</span>
-            {formError && <span role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{formError}</span>}
-            <div className="ml-auto flex flex-wrap gap-2">
-              <button type="button" onClick={() => setFormOpen(false)} className={outlineBtn}>Cancel</button>
-              <button type="button" disabled={saving} onClick={() => submit("draft")} className={outlineBtn}>Save draft</button>
-              <button type="button" disabled={saving} onClick={() => submit("received")} className={outlineBtn}>Create &amp; receive now</button>
-              <button type="button" disabled={saving} onClick={() => submit("sent")} className={primaryBtn}>{saving ? "Saving…" : "Create & send to supplier"}</button>
+          <DialogFooter className="flex-wrap items-center sm:justify-start">
+            <span className="text-xs text-muted-foreground">Stock is added only when you receive the goods.</span>
+            {formError && <span role="alert" className="text-sm font-medium text-destructive">{formError}</span>}
+            <div className="flex flex-wrap gap-2 sm:ml-auto">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => submit("draft")}>Save draft</Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => submit("received")}>Create &amp; receive now</Button>
+              <Button type="button" disabled={saving} onClick={() => submit("sent")}>{saving ? "Saving…" : "Create & send to supplier"}</Button>
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ---------------- Detail ---------------- */}
       <Dialog open={!!view} onOpenChange={(o) => !o && setView(null)}>
-        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-3xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           {view && (() => {
             const canPay = view.dueAmount > 0 && view.status !== "cancelled"
             const receivedUnits = view.items.reduce((a, i) => a + i.quantityReceived, 0)
             const hasAdj = (view.discountAmount ?? 0) > 0 || (view.taxAmount ?? 0) > 0 || (view.shippingCost ?? 0) > 0
             return (
               <>
-                <div className="flex flex-wrap items-center gap-3 border-b border-dash-border-soft px-6 py-4">
-                  <div className="min-w-0 flex-1">
-                    <DialogTitle className="font-dash-display text-xl font-bold">{view.poNumber}</DialogTitle>
-                    <DialogDescription className="text-[13px]">{view.vendorName} · {view.locationName ?? "—"} · Created {fmtDate(view.createdAt)}</DialogDescription>
+                <DialogHeader className="flex-row flex-wrap items-center gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <DialogTitle>{view.poNumber}</DialogTitle>
+                    <DialogDescription>{view.vendorName} · {view.locationName ?? "—"} · Created {fmtDate(view.createdAt)}</DialogDescription>
                   </div>
-                  <span className={cn("rounded-full px-3 py-1 text-xs font-bold", STATUS_STYLE[view.status])}>{STATUS_LABEL[view.status] ?? view.status}</span>
-                </div>
+                  <StatusBadge status={view.status} variant={STATUS_VARIANT[view.status]} label={STATUS_LABEL[view.status] ?? view.status} />
+                </DialogHeader>
 
-                <div className="flex flex-col gap-4 p-6">
-                  <div className="overflow-x-auto rounded-xl border border-dash-border">
-                    <table className="w-full min-w-[520px] text-sm">
-                      <thead className="bg-dash-bg text-left text-xs text-dash-muted">
-                        <tr>
-                          <th className="px-3 py-2 font-semibold">Product</th>
-                          <th className="px-3 py-2 text-center font-semibold">Ordered</th>
-                          <th className="px-3 py-2 text-center font-semibold">Received</th>
-                          <th className="px-3 py-2 text-center font-semibold">{canReceive(view) ? "Receive now" : ""}</th>
-                          <th className="px-3 py-2 text-right font-semibold">Unit cost</th>
-                          <th className="px-3 py-2 text-right font-semibold">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                <div className="flex flex-col gap-4">
+                  <Card className="gap-0 overflow-x-auto py-0">
+                    <Table className="min-w-[520px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-center">Ordered</TableHead>
+                          <TableHead className="text-center">Received</TableHead>
+                          <TableHead className="text-center">{canReceive(view) ? "Receive now" : ""}</TableHead>
+                          <TableHead className="text-right">Unit cost</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {view.items.map((i) => {
                           const remain = i.quantityOrdered - i.quantityReceived
                           return (
-                            <tr key={i.id} className="border-t border-dash-border-soft">
-                              <td className="px-3 py-2">{i.productName}{i.variantName && <span className="ml-1 text-xs text-dash-muted">· {i.variantName}</span>}</td>
-                              <td className="px-3 py-2 text-center tabular-nums">{i.quantityOrdered}</td>
-                              <td className="px-3 py-2 text-center tabular-nums">{i.quantityReceived}</td>
-                              <td className="px-3 py-2 text-center">
+                            <TableRow key={i.id}>
+                              <TableCell>{i.productName}{i.variantName && <span className="ml-1 text-xs text-muted-foreground">· {i.variantName}</span>}</TableCell>
+                              <TableCell className="text-center tabular-nums">{i.quantityOrdered}</TableCell>
+                              <TableCell className="text-center tabular-nums">{i.quantityReceived}</TableCell>
+                              <TableCell className="text-center">
                                 {canReceive(view) && remain > 0 ? (
-                                  <input type="number" min={0} max={remain} aria-label={`Receive ${i.productName}`} value={rcvQty[i.id] ?? ""}
+                                  <Input type="number" min={0} max={remain} aria-label={`Receive ${i.productName}`} value={rcvQty[i.id] ?? ""}
                                     onChange={(e) => setRcvQty((q) => ({ ...q, [i.id]: e.target.value }))}
-                                    className="h-8 w-16 rounded-lg border border-dash-border bg-dash-card text-center text-sm outline-none focus-visible:border-dash-accent" />
-                                ) : <span className="text-dash-muted">—</span>}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(i.unitCost)}</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatCurrency(i.subtotal)}</td>
-                            </tr>
+                                    className="mx-auto w-16 text-center tabular-nums" />
+                                ) : <span className="text-muted-foreground">—</span>}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">{formatCurrency(i.unitCost)}</TableCell>
+                              <TableCell className="text-right font-medium tabular-nums">{formatCurrency(i.subtotal)}</TableCell>
+                            </TableRow>
                           )
                         })}
-                      </tbody>
-                    </table>
-                  </div>
+                      </TableBody>
+                    </Table>
+                  </Card>
 
                   {hasAdj && (
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-[10px] bg-dash-neutral-soft px-3.5 py-2.5 text-[13px]">
-                      <span><span className="text-dash-muted">Subtotal</span> <strong>{formatCurrency(view.subtotal ?? 0)}</strong></span>
-                      {(view.discountAmount ?? 0) > 0 && <span><span className="text-dash-muted">Discount</span> <strong>−{formatCurrency(view.discountAmount ?? 0)}</strong></span>}
-                      {(view.taxAmount ?? 0) > 0 && <span><span className="text-dash-muted">Tax {view.taxRate}%</span> <strong>+{formatCurrency(view.taxAmount ?? 0)}</strong></span>}
-                      {(view.shippingCost ?? 0) > 0 && <span><span className="text-dash-muted">Shipping</span> <strong>+{formatCurrency(view.shippingCost ?? 0)}</strong></span>}
-                    </div>
+                    <Item variant="muted" size="sm" className="gap-x-6 gap-y-1">
+                      <span><span className="text-muted-foreground">Subtotal</span> <strong>{formatCurrency(view.subtotal ?? 0)}</strong></span>
+                      {(view.discountAmount ?? 0) > 0 && <span><span className="text-muted-foreground">Discount</span> <strong>−{formatCurrency(view.discountAmount ?? 0)}</strong></span>}
+                      {(view.taxAmount ?? 0) > 0 && <span><span className="text-muted-foreground">Tax {view.taxRate}%</span> <strong>+{formatCurrency(view.taxAmount ?? 0)}</strong></span>}
+                      {(view.shippingCost ?? 0) > 0 && <span><span className="text-muted-foreground">Shipping</span> <strong>+{formatCurrency(view.shippingCost ?? 0)}</strong></span>}
+                    </Item>
                   )}
 
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-[10px] bg-dash-neutral-soft px-3 py-2"><div className="text-[11px] text-dash-muted">Total</div><div className="font-dash-display text-lg font-bold tabular-nums">{formatCurrency(view.totalAmount)}</div></div>
-                    <div className="rounded-[10px] bg-dash-success-soft px-3 py-2 text-dash-success-fg"><div className="text-[11px]">Paid</div><div className="font-dash-display text-lg font-bold tabular-nums">{formatCurrency(view.paidAmount)}</div></div>
-                    <div className={cn("rounded-[10px] px-3 py-2", view.dueAmount > 0 ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-neutral-soft")}><div className="text-[11px]">Due</div><div className="font-dash-display text-lg font-bold tabular-nums">{formatCurrency(view.dueAmount)}</div></div>
+                    {([
+                      ["Total", view.totalAmount, ""],
+                      ["Paid", view.paidAmount, "text-emerald-600"],
+                      ["Due", view.dueAmount, view.dueAmount > 0 ? "text-destructive" : ""],
+                    ] as [string, number, string][]).map(([l, v, tone]) => (
+                      <Item key={l} variant="muted" size="sm" className="px-3 py-2">
+                        <ItemContent className="gap-0">
+                          <ItemDescription className="text-xs">{l}</ItemDescription>
+                          <ItemTitle className={cn("text-lg tabular-nums", tone)}>{formatCurrency(v)}</ItemTitle>
+                        </ItemContent>
+                      </Item>
+                    ))}
                   </div>
 
-                  <div className="text-[13px] text-dash-muted">
-                    Expected: <strong className="text-dash-ink">{fmtDate(view.expectedDate)}</strong>{expNote(view) ? ` (${expNote(view)})` : ""} · Payment:{" "}
-                    <strong className="text-dash-ink">{PAY_LABEL[view.paymentStatus] ?? view.paymentStatus}</strong>
-                  </div>
-                  {view.notes && <div className="rounded-[10px] bg-dash-neutral-soft px-3.5 py-2.5 text-[13px]">Note: {view.notes}</div>}
+                  <InfoList>
+                    <InfoRow label="Expected" value={<>{fmtDate(view.expectedDate)}{expNote(view) ? ` (${expNote(view)})` : ""}</>} />
+                    <InfoRow label="Payment" value={PAY_LABEL[view.paymentStatus] ?? view.paymentStatus} />
+                  </InfoList>
+                  {view.notes && <Item variant="muted" size="sm">Note: {view.notes}</Item>}
 
                   {(view.receipts?.length ?? 0) > 0 && (
                     <div>
-                      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Receiving history</div>
-                      {view.receipts!.map((g) => (
-                        <div key={g.id} className="flex justify-between gap-3 border-b border-dash-border-soft py-2 text-[13px] last:border-0">
-                          <span>{fmtDate(g.date)} · {g.locationName ?? "—"}</span>
-                          <span className="text-dash-muted">{g.itemsSummary}</span>
-                        </div>
-                      ))}
+                      <SectionTitle className="mb-1.5">Receiving history</SectionTitle>
+                      <ItemGroup>
+                        {view.receipts!.map((g, i) => (
+                          <Fragment key={g.id}>
+                            {i > 0 && <ItemSeparator />}
+                            <Item size="sm" className="justify-between px-0">
+                              <span>{fmtDate(g.date)} · {g.locationName ?? "—"}</span>
+                              <span className="text-muted-foreground">{g.itemsSummary}</span>
+                            </Item>
+                          </Fragment>
+                        ))}
+                      </ItemGroup>
                     </div>
                   )}
 
                   {view.payments.length > 0 && (
                     <div>
-                      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Payments</div>
-                      {view.payments.map((y) => (
-                        <div key={y.id} className="flex justify-between gap-3 border-b border-dash-border-soft py-2 text-[13px] last:border-0">
-                          <span>{fmtDate(y.date ?? y.paymentDate)} · {y.method ?? y.paymentMethod}{y.reference && <span className="ml-1 text-dash-muted">{y.reference}</span>}</span>
-                          <span className="font-bold tabular-nums">{formatCurrency(y.amount)}</span>
-                        </div>
-                      ))}
+                      <SectionTitle className="mb-1.5">Payments</SectionTitle>
+                      <ItemGroup>
+                        {view.payments.map((y, i) => (
+                          <Fragment key={y.id}>
+                            {i > 0 && <ItemSeparator />}
+                            <Item size="sm" className="justify-between px-0">
+                              <span>{fmtDate(y.date ?? y.paymentDate)} · {y.method ?? y.paymentMethod}{y.reference && <span className="ml-1 text-muted-foreground">{y.reference}</span>}</span>
+                              <span className="font-semibold tabular-nums">{formatCurrency(y.amount)}</span>
+                            </Item>
+                          </Fragment>
+                        ))}
+                      </ItemGroup>
                     </div>
                   )}
 
                   {canPay && (
-                    <div className="grid gap-2.5 rounded-xl border border-dash-border bg-dash-bg p-3.5 sm:grid-cols-2">
-                      <Field label="Payment amount"><input type="number" min={0} className={input} value={dPayAmt} onChange={(e) => setDPayAmt(e.target.value)} placeholder="0.00" /></Field>
-                      <Field label="Method"><select className={input} value={dPayMethod} onChange={(e) => setDPayMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select></Field>
-                      <Field label="Date"><input type="date" className={input} max={today()} value={dPayDate} onChange={(e) => setDPayDate(e.target.value)} /></Field>
-                      <Field label="Reference"><input className={input} value={dPayRef} onChange={(e) => setDPayRef(e.target.value)} placeholder="Cheque / txn no." /></Field>
-                      <div className="sm:col-span-2"><button type="button" disabled={busy} onClick={recordPay} className={primaryBtn}>Record payment</button></div>
-                    </div>
+                    <Card className="grid gap-2.5 p-3.5 sm:grid-cols-2">
+                      <FormField label="Payment amount" htmlFor="po-d-amount"><Input id="po-d-amount" type="number" min={0} value={dPayAmt} onChange={(e) => setDPayAmt(e.target.value)} placeholder="0.00" /></FormField>
+                      <FormField label="Method" htmlFor="po-d-method"><Select value={dPayMethod} onValueChange={(v) => setDPayMethod(v)}><SelectTrigger id="po-d-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></FormField>
+                      <FormField label="Date" htmlFor="po-d-date"><Input id="po-d-date" type="date" max={today()} value={dPayDate} onChange={(e) => setDPayDate(e.target.value)} /></FormField>
+                      <FormField label="Reference" htmlFor="po-d-ref"><Input id="po-d-ref" value={dPayRef} onChange={(e) => setDPayRef(e.target.value)} placeholder="Cheque / txn no." /></FormField>
+                      <div className="sm:col-span-2"><Button type="button" disabled={busy} onClick={recordPay}>Record payment</Button></div>
+                    </Card>
                   )}
 
                   {canReceive(view) && (
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold sm:max-w-xs">
-                      Receive at
-                      <select className={input} value={rcvLoc} onChange={(e) => setRcvLoc(e.target.value)}>
-                        <option value="">Select location</option>
-                        {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                      </select>
-                    </label>
+                    <FormField label="Receive at" htmlFor="po-receive-at" className="sm:max-w-xs">
+                      <Select value={rcvLoc || "__none"} onValueChange={(v) => setRcvLoc(v === "__none" ? "" : v)}>
+                        <SelectTrigger id="po-receive-at" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Select location</SelectItem>
+                          {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
                   )}
 
-                  {dErr && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{dErr}</p>}
-
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-dash-border-soft pt-4">
-                    {view.status === "draft" && (
-                      <button type="button" disabled={busy} className={primaryBtn} onClick={() => act(() => purchaseOrderApi.updateStatus(view.id, "sent"), "Marked as ordered")}>Mark ordered</button>
-                    )}
-                    {canReceive(view) && (
-                      <button type="button" disabled={busy} className={primaryBtn} onClick={receiveNow}>
-                        {view.status === "partial" ? "Receive remaining" : "Receive stock"}
-                      </button>
-                    )}
-                    <button type="button" className={outlineBtn} onClick={() => printPo(view)}><Printer className="size-4" aria-hidden /> Print</button>
-                    {(view.status === "draft" || view.status === "sent" || view.status === "partial") && (
-                      <button type="button" disabled={busy} className={cn(outlineBtn, "text-dash-danger-fg")}
-                        onClick={() => {
-                          if (receivedUnits > 0) { setDErr(`Stock has already been received against ${view.poNumber}. Use a supplier return instead of cancelling.`); return }
-                          if (window.confirm(`Cancel ${view.poNumber}? This cannot be undone.`)) act(() => purchaseOrderApi.updateStatus(view.id, "cancelled"), "Purchase order cancelled")
-                        }}>Cancel PO</button>
-                    )}
-                    {(view.status === "draft" || view.status === "cancelled") && (
-                      <button type="button" disabled={busy} className={cn(outlineBtn, "text-dash-danger-fg")}
-                        onClick={() => {
-                          if (receivedUnits > 0) { setDErr(`Stock has been received against ${view.poNumber}, so it cannot be deleted.`); return }
-                          if (view.payments.length > 0) { setDErr(`${view.poNumber} has payments recorded and cannot be deleted.`); return }
-                          if (window.confirm(`Delete ${view.poNumber} permanently?`)) act(() => purchaseOrderApi.delete(view.id), "Purchase order deleted", true)
-                        }}>Delete</button>
-                    )}
-                  </div>
+                  {dErr && <Alert variant="destructive"><AlertDescription>{dErr}</AlertDescription></Alert>}
                 </div>
+
+                <DialogFooter className="flex-wrap">
+                  {view.status === "draft" && (
+                    <Button type="button" disabled={busy} onClick={() => act(() => purchaseOrderApi.updateStatus(view.id, "sent"), "Marked as ordered")}>Mark ordered</Button>
+                  )}
+                  {canReceive(view) && (
+                    <Button type="button" disabled={busy} onClick={receiveNow}>
+                      {view.status === "partial" ? "Receive remaining" : "Receive stock"}
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" onClick={() => printPo(view)}><Printer className="size-4" aria-hidden /> Print</Button>
+                  {(view.status === "draft" || view.status === "sent" || view.status === "partial") && (
+                    <Button type="button" variant="destructive" disabled={busy}
+                      onClick={() => {
+                        if (receivedUnits > 0) { setDErr(`Stock has already been received against ${view.poNumber}. Use a supplier return instead of cancelling.`); return }
+                        if (window.confirm(`Cancel ${view.poNumber}? This cannot be undone.`)) act(() => purchaseOrderApi.updateStatus(view.id, "cancelled"), "Purchase order cancelled")
+                      }}>Cancel PO</Button>
+                  )}
+                  {(view.status === "draft" || view.status === "cancelled") && (
+                    <Button type="button" variant="destructive" disabled={busy}
+                      onClick={() => {
+                        if (receivedUnits > 0) { setDErr(`Stock has been received against ${view.poNumber}, so it cannot be deleted.`); return }
+                        if (view.payments.length > 0) { setDErr(`${view.poNumber} has payments recorded and cannot be deleted.`); return }
+                        if (window.confirm(`Delete ${view.poNumber} permanently?`)) act(() => purchaseOrderApi.delete(view.id), "Purchase order deleted", true)
+                      }}>Delete</Button>
+                  )}
+                </DialogFooter>
               </>
             )
           })()}

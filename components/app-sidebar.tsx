@@ -43,6 +43,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { useAuth } from "@/contexts/auth-context"
 import { useNotifications } from "@/contexts/notification-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -186,6 +192,13 @@ const NAV_CONFIG = [
 type NavEntry = typeof NAV_CONFIG[number]
 type NavGroup = Extract<NavEntry, { items: readonly unknown[] }>
 
+/**
+ * shadcn ghost Button re-shaped as a dark-sidebar row. `.nav-btn` (globals.css, components layer) supplies the
+ * colours/active gradient; these utilities undo the Button size/hover defaults that would otherwise win over it.
+ */
+const NAV_BUTTON =
+    "nav-btn h-auto min-h-11 justify-start gap-3 rounded-[11px] px-3 has-[>svg]:px-3 text-left hover:bg-white/[.07] hover:text-white dark:hover:bg-white/[.07] focus-visible:ring-[var(--brand-ring)]"
+
 /** True when `href` is the current page or a parent of it (detail pages keep their menu lit). */
 const matches = (pathname: string, href: string) =>
     pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`))
@@ -199,7 +212,8 @@ function activeChildHref(group: NavGroup, pathname: string): string | null {
     return best
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
+/** Amber count chip styled for the dark sidebar (`.nav-badge` in globals.css). */
+function NavBadge({ children }: { children: React.ReactNode }) {
     return <span className="nav-badge">{children}</span>
 }
 
@@ -251,14 +265,14 @@ function RailFlyout({ trigger, children }: { trigger: (p: { onClick: () => void;
                 },
             })}
             {open && (
-                <div
+                <Card
                     role="menu"
                     style={{ position: "fixed", top: Math.max(8, Math.min(pos.top - 8, (typeof window !== "undefined" ? window.innerHeight : 800) - 320)), left: pos.left }}
-                    className="z-50 w-56 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-xl"
+                    className="z-50 w-56 gap-0 p-2 shadow-xl"
                     onClick={() => { setPinned(false); setHover(false) }}
                 >
                     {children}
-                </div>
+                </Card>
             )}
         </div>
     )
@@ -351,17 +365,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const badge = badgeFor(item.name)
         return (
             <li key={item.name}>
-                <Link
-                    href={item.href}
-                    aria-label={item.name}
-                    title={collapsed ? item.name : undefined}
-                    data-active={active}
-                    className={cn("nav-btn", collapsed && "justify-center px-0")}
-                >
-                    {iconWrap(item.icon, badge)}
-                    {!collapsed && <span className="flex-1 whitespace-nowrap">{item.name}</span>}
-                    {!collapsed && badge > 0 && <Badge>{badge}</Badge>}
-                </Link>
+                <WithTooltip content={collapsed ? item.name : undefined} side="right">
+                    <Link
+                        href={item.href}
+                        aria-label={item.name}
+                        data-active={active}
+                        className={cn("nav-btn", collapsed && "justify-center px-0")}
+                    >
+                        {iconWrap(item.icon, badge)}
+                        {!collapsed && <span className="flex-1 whitespace-nowrap">{item.name}</span>}
+                        {!collapsed && badge > 0 && <NavBadge>{badge}</NavBadge>}
+                    </Link>
+                </WithTooltip>
             </li>
         )
     }
@@ -378,21 +393,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <li key={group.name}>
                     <RailFlyout
                         trigger={({ ref, onClick, expanded }) => (
-                            <button
+                            <Button
                                 ref={ref}
                                 type="button"
+                                variant="ghost"
                                 aria-label={group.name}
                                 aria-haspopup="menu"
                                 aria-expanded={expanded}
                                 data-active={parentActive}
                                 onClick={onClick}
-                                className="nav-btn justify-center px-0"
+                                className={cn(NAV_BUTTON, "justify-center px-0")}
                             >
                                 {iconWrap(group.icon, badge)}
-                            </button>
+                            </Button>
                         )}
                     >
-                        <div className="px-2.5 pb-2 pt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{group.name}</div>
+                        <SectionTitle as="p" className="px-2.5 pb-2 pt-1.5">{group.name}</SectionTitle>
                         {group.items.map((kid) => {
                             const count = kidCount(group.name, kid.name)
                             return (
@@ -406,9 +422,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                     )}
                                 >
                                     <span>{kid.name}</span>
-                                    {count && (
-                                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900">{count}</span>
-                                    )}
+                                    {count && <Badge variant="secondary">{count}</Badge>}
                                 </Link>
                             )
                         })}
@@ -419,22 +433,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         return (
             <li key={group.name}>
-                <button
+                <Button
                     type="button"
+                    variant="ghost"
                     aria-expanded={expanded}
                     aria-label={group.name}
                     data-parent-active={parentActive}
                     onClick={() => setOpen((o) => ({ ...o, [group.name]: !expanded }))}
-                    className="nav-btn"
+                    className={NAV_BUTTON}
                 >
                     {iconWrap(group.icon, badge)}
                     <span className="flex-1 whitespace-nowrap">{group.name}</span>
-                    {badge > 0 && <Badge>{badge}</Badge>}
+                    {badge > 0 && <NavBadge>{badge}</NavBadge>}
                     <ChevronRight
                         className={cn("size-4 flex-none transition-transform duration-200", expanded && "rotate-90")}
                         aria-hidden
                     />
-                </button>
+                </Button>
                 {expanded && (
                     <ul className="ml-[22px] mt-0.5 mb-1.5 flex flex-col gap-0.5 border-l border-white/10 pl-3">
                         {group.items.map((kid) => {
@@ -479,7 +494,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     return (
                         <div key={section} className="flex flex-col gap-0.5">
                             {collapsed ? (
-                                <div className="mx-2.5 mb-2 mt-0.5 h-px bg-white/10" aria-hidden />
+                                <Separator className="mx-2.5 mb-2 mt-0.5 bg-white/10 data-[orientation=horizontal]:w-auto" />
                             ) : (
                                 <span className="nav-section px-3 pb-1.5">{section}</span>
                             )}
@@ -489,17 +504,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 {/* Notifications pinned at the end of Workspace */}
                                 {showNotif && (
                                     <li>
-                                        <Link
-                                            href="/dashboard/notifications"
-                                            aria-label="Notifications"
-                                            title={collapsed ? "Notifications" : undefined}
-                                            data-active={matches(pathname, "/dashboard/notifications")}
-                                            className={cn("nav-btn", collapsed && "justify-center px-0")}
-                                        >
-                                            {iconWrap(Bell, unreadCount)}
-                                            {!collapsed && <span className="flex-1 whitespace-nowrap">Notifications</span>}
-                                            {!collapsed && unreadCount > 0 && <Badge>{unreadCount > 99 ? "99+" : unreadCount}</Badge>}
-                                        </Link>
+                                        <WithTooltip content={collapsed ? "Notifications" : undefined} side="right">
+                                            <Link
+                                                href="/dashboard/notifications"
+                                                aria-label="Notifications"
+                                                data-active={matches(pathname, "/dashboard/notifications")}
+                                                className={cn("nav-btn", collapsed && "justify-center px-0")}
+                                            >
+                                                {iconWrap(Bell, unreadCount)}
+                                                {!collapsed && <span className="flex-1 whitespace-nowrap">Notifications</span>}
+                                                {!collapsed && unreadCount > 0 && <NavBadge>{unreadCount > 99 ? "99+" : unreadCount}</NavBadge>}
+                                            </Link>
+                                        </WithTooltip>
                                     </li>
                                 )}
                             </ul>
@@ -513,13 +529,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <TrialCard />
 
                 <DropdownMenu>
+                    <WithTooltip content={collapsed ? `${userName} · ${userEmail}` : undefined} side="right">
                     <DropdownMenuTrigger asChild>
-                        <button
+                        <Button
                             type="button"
+                            variant="ghost"
                             aria-label="Account menu"
-                            title={collapsed ? `${userName} · ${userEmail}` : undefined}
                             className={cn(
-                                "nav-user flex w-full items-center gap-2.5 p-3 text-left outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)]",
+                                "nav-user h-auto w-full justify-start gap-2.5 rounded-[14px] p-3 text-left hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:hover:bg-white/10",
                                 collapsed && "justify-center p-1.5",
                             )}
                         >
@@ -535,8 +552,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                     <ChevronRight className="size-4 flex-none text-[var(--nav-muted)]" aria-hidden />
                                 </>
                             )}
-                        </button>
+                        </Button>
                     </DropdownMenuTrigger>
+                    </WithTooltip>
                     <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" className="w-56">
                         <DropdownMenuLabel>My account</DropdownMenuLabel>
                         <DropdownMenuSeparator />

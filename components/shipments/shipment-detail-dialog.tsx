@@ -4,10 +4,19 @@ import { useEffect, useState } from "react"
 import { Check } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatusBadge } from "@/components/common/StatusBadge"
 import type { ShipmentResponse, ShipmentStatus } from "@/lib/shipmentsApi"
 import { cn } from "@/lib/utils"
 import {
-  STATUS_LABEL, STATUS_STYLE, TIMELINE_STEPS, codView, shortDate, validNextStatuses,
+  STATUS_LABEL, TIMELINE_STEPS, codView, shortDate, validNextStatuses,
 } from "./shipment-utils"
 
 export interface StatusPayload { status: ShipmentStatus; location?: string; description?: string }
@@ -23,18 +32,9 @@ interface Props {
   onRecordCod: (s: ShipmentResponse) => void
 }
 
-const btn = "h-10 rounded-[10px] px-3.5 text-[13px] font-semibold disabled:opacity-40"
-const input =
-  "h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-
-function Info({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs text-dash-muted">{label}</p>
-      <div className="font-semibold">{children}</div>
-    </div>
-  )
-}
+const Info = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <InfoRow layout="stacked" label={label} className="min-w-0">{children}</InfoRow>
+)
 
 export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, onPrint, onUpdateStatus, onRecordCod }: Props) {
   const [status, setStatus] = useState<ShipmentStatus | "">("")
@@ -73,12 +73,12 @@ export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-dash-display text-xl font-bold">{s.trackingNumber || `Shipment #${s.id}`}</DialogTitle>
+          <DialogTitle>{s.trackingNumber || `Shipment #${s.id}`}</DialogTitle>
           <DialogDescription>
             Order #{s.sell?.invoiceNo ?? s.sellId} ·{" "}
-            <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-bold", STATUS_STYLE[s.status])}>{STATUS_LABEL[s.status]}</span>
+            <StatusBadge status={s.status} label={STATUS_LABEL[s.status]} />
           </DialogDescription>
         </DialogHeader>
 
@@ -89,18 +89,16 @@ export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, 
             const bad = fail && i === reached
             return (
               <li key={st} className="flex flex-col items-center gap-1.5 text-center">
-                <span className={cn("flex size-7 items-center justify-center rounded-full border-2 text-xs font-bold",
-                  bad ? "border-dash-danger bg-dash-danger-soft text-dash-danger-fg"
-                    : done ? "border-dash-accent bg-dash-accent text-white" : "border-dash-border text-dash-muted")}>
+                <Badge variant={bad ? "destructive" : done ? "default" : "outline"} className="size-7 justify-center rounded-full p-0">
                   {done && !bad ? <Check className="size-3.5" aria-hidden /> : bad ? "!" : i + 1}
-                </span>
-                <span className={cn("text-[11px] font-semibold leading-tight", done ? "text-dash-ink" : "text-dash-muted")}>{STATUS_LABEL[st].replace(" pickup", "")}</span>
+                </Badge>
+                <span className={cn("text-xs font-medium leading-tight", done ? "text-foreground" : "text-muted-foreground")}>{STATUS_LABEL[st].replace(" pickup", "")}</span>
               </li>
             )
           })}
         </ol>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+        <InfoList className="grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
           <Info label="Customer">{s.sell?.customerName ?? "—"}</Info>
           <Info label="Phone">{s.sell?.customerPhone || "—"}</Info>
           <Info label="Address">{address || "—"}</Info>
@@ -112,78 +110,74 @@ export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, 
           </Info>
           <Info label="Delivery charge">
             <span className="tabular-nums">{formatCurrency(Number(s.shippingCost) || 0)}</span>
-            <span className="text-xs font-normal text-dash-muted"> · paid by {s.deliveryPayer === "us" ? "us" : "customer"}</span>
+            <span className="text-xs font-normal text-muted-foreground"> · paid by {s.deliveryPayer === "us" ? "us" : "customer"}</span>
           </Info>
           <Info label="Package">{[s.package, s.weight ? `${s.weight} kg` : null, s.dimensions].filter(Boolean).join(" · ") || "—"}</Info>
           <Info label="Pickup → ETA">{shortDate(s.pickupDate)} → {s.status === "delivered" ? `delivered ${shortDate(s.deliveredAt)}` : shortDate(s.estimatedDelivery)}</Info>
-        </div>
-        {s.notes && <p className="rounded-[10px] bg-dash-bg p-3 text-sm text-dash-muted">{s.notes}</p>}
+        </InfoList>
+        {s.notes && <Card className="p-3 text-sm text-muted-foreground shadow-none">{s.notes}</Card>}
 
         {/* Actions */}
-        <div className="space-y-3 rounded-xl border border-dash-border bg-dash-bg p-3.5">
+        <Card className="gap-3 p-3.5 shadow-none">
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => onPrint(s)} className={cn(btn, "border border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>Print label</button>
+            <Button type="button" variant="outline" onClick={() => onPrint(s)}>Print label</Button>
             {canCod && (
-              <button type="button" disabled={busy} onClick={() => onRecordCod(s)} className={cn(btn, "bg-dash-success text-white")}>Record COD payment</button>
+              <Button type="button" disabled={busy} onClick={() => onRecordCod(s)}>Record COD payment</Button>
             )}
             {canMarkFailed && !failing && (
-              <button type="button" onClick={() => setFailing(true)} className={cn(btn, "border border-dash-danger-fg/40 text-dash-danger-fg hover:bg-dash-danger-soft")}>Mark failed</button>
+              <Button type="button" variant="destructive" onClick={() => setFailing(true)}>Mark failed</Button>
             )}
           </div>
 
           {failing && (
             <div className="space-y-2">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Reason for failure *
-                <textarea rows={2} value={failNote} onChange={(e) => setFailNote(e.target.value)} placeholder="e.g. Customer unreachable"
-                  className="resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent" />
-              </label>
+              <FormField label="Reason for failure *" htmlFor="shipment-fail-note">
+                <Textarea id="shipment-fail-note" rows={2} value={failNote} onChange={(e) => setFailNote(e.target.value)} placeholder="e.g. Customer unreachable" />
+              </FormField>
               <div className="flex gap-2">
-                <button type="button" disabled={busy || !failNote.trim()}
-                  onClick={() => onUpdateStatus(s, { status: "failed", description: failNote.trim() })}
-                  className={cn(btn, "bg-dash-danger text-white")}>Confirm failed</button>
-                <button type="button" onClick={() => setFailing(false)} className={cn(btn, "border border-dash-border bg-dash-card")}>Cancel</button>
+                <Button type="button" variant="destructive" disabled={busy || !failNote.trim()}
+                  onClick={() => onUpdateStatus(s, { status: "failed", description: failNote.trim() })}>Confirm failed</Button>
+                <Button type="button" variant="outline" onClick={() => setFailing(false)}>Cancel</Button>
               </div>
             </div>
           )}
 
           {nextOptions.length > 0 && (
             <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Update status
+              <FormField label="Update status" htmlFor="shipment-next-status">
                 <Select value={status} onValueChange={(v) => setStatus(v as ShipmentStatus)}>
-                  <SelectTrigger className="h-[42px] w-full rounded-[10px] border-dash-border bg-dash-card font-normal"><SelectValue placeholder="Select next status" /></SelectTrigger>
+                  <SelectTrigger id="shipment-next-status" className="w-full"><SelectValue placeholder="Select next status" /></SelectTrigger>
                   <SelectContent>
                     {nextOptions.map((st) => <SelectItem key={st} value={st}>{STATUS_LABEL[st]}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Location
-                <input className={input} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dhanmondi hub" />
-              </label>
-              <button type="button" disabled={busy || !status || (status === "failed" && !note.trim())} onClick={apply}
-                className={cn(btn, "h-[42px] bg-dash-accent text-white")}>{busy ? "Saving…" : "Save"}</button>
+              </FormField>
+              <FormField label="Location" htmlFor="shipment-location">
+                <Input id="shipment-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dhanmondi hub" />
+              </FormField>
+              <Button type="button" disabled={busy || !status || (status === "failed" && !note.trim())} onClick={apply}>{busy ? "Saving…" : "Save"}</Button>
               {(status === "failed" || status) && (
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold sm:col-span-3">
-                  Note{status === "failed" ? " *" : ""}
-                  <input className={input} value={note} onChange={(e) => setNote(e.target.value)}
+                <FormField label={`Note${status === "failed" ? " *" : ""}`} htmlFor="shipment-note" className="sm:col-span-3">
+                  <Input id="shipment-note" value={note} onChange={(e) => setNote(e.target.value)}
                     placeholder={status === "failed" ? "Required: why did delivery fail?" : "Optional"} />
-                </label>
+                </FormField>
               )}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* History */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-dash-muted">Tracking history</p>
+          <SectionTitle as="p" className="mb-2">Tracking history</SectionTitle>
           {history.length === 0 ? (
-            <p className="text-sm text-dash-muted">No tracking events yet.</p>
+            <p className="text-sm text-muted-foreground">No tracking events yet.</p>
           ) : (
-            <ol className="space-y-3 border-l border-dash-border pl-4">
+            <ol className="space-y-3 border-l pl-4">
               {history.map((e) => (
                 <li key={e.id} className="relative">
-                  <span className="absolute -left-[21px] top-1.5 size-2.5 rounded-full bg-dash-accent" aria-hidden />
+                  <span className="absolute -left-[21px] top-1.5 size-2.5 rounded-full bg-primary" aria-hidden />
                   <p className="text-sm font-semibold">{e.description}</p>
-                  <p className="text-xs text-dash-muted">
+                  <p className="text-xs text-muted-foreground">
                     {STATUS_LABEL[e.status] ?? e.status}{e.location ? ` · ${e.location}` : ""} · {new Date(e.eventTime).toLocaleString()}
                   </p>
                 </li>

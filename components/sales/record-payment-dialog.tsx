@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FormField } from "@/components/common/FormField"
+import { StatTile } from "@/components/common/StatTile"
 import { paymentApi } from "@/lib/paymentApi"
 import { type SellResponse } from "@/lib/sellsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
@@ -90,9 +94,9 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-dash-display text-xl font-bold">Record payment</DialogTitle>
+          <DialogTitle>Record payment</DialogTitle>
           <DialogDescription>
             {single
               ? `Invoice #${sales[0]?.invoiceNo}. Enter less than the due to record a partial payment.`
@@ -100,47 +104,42 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="rounded-[10px] bg-dash-danger-soft p-3 text-dash-danger-fg">
-            <div className="text-xs">Total due</div>
-            <div className="font-dash-display text-2xl font-bold tabular-nums">{formatCurrency(totalDue)}</div>
-          </div>
+          <StatTile label="Total due" value={formatCurrency(totalDue)} className="p-3" />
           {single ? (
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Amount
-              <input
+            <FormField label="Amount" htmlFor="record-payment-amount" error={error || undefined}>
+              <Input
+                id="record-payment-amount"
                 type="number" inputMode="decimal" min="0" step="0.01" value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 aria-invalid={!!error}
-                className="h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal tabular-nums outline-none focus:border-dash-accent"
+                className="tabular-nums"
               />
-              {error && <span className="text-xs font-medium text-dash-danger-fg">{error}</span>}
-            </label>
+            </FormField>
           ) : error ? (
-            <p className="text-xs font-medium text-dash-danger-fg">{error}</p>
+            <p className="text-xs font-medium text-destructive">{error}</p>
           ) : null}
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Payment method
+          <FormField label="Payment method" htmlFor="record-payment-method">
             <Select value={method} onValueChange={setMethod}>
-              <SelectTrigger className="h-[42px] w-full rounded-[10px] border-dash-border bg-dash-card font-normal"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="record-payment-method" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
-          </label>
+          </FormField>
           {NEEDS_REFERENCE.has(method) && (
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Transaction ID (optional)
-              <input
+            <FormField label="Transaction ID (optional)" htmlFor="record-payment-reference">
+              <Input
+                id="record-payment-reference"
                 value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100}
-                className="h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus:border-dash-accent"
               />
-            </label>
+            </FormField>
           )}
         </div>
         <DialogFooter>
-          <button type="button" onClick={onClose}
-            className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-          <button type="button" onClick={submit} disabled={saving || !!error}
-            className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" onClick={submit} disabled={saving || !!error}>
             {saving ? "Saving…" : "Record payment"}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

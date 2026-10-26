@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Check, ChevronsUpDown, UserPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
     Command,
     CommandEmpty,
@@ -18,6 +19,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { useCustomer } from "@/contexts/customer-context"
+import { UserAvatar } from "@/components/common/UserAvatar"
 
 // value is customer id string, or "" for walk-in
 interface CustomerComboboxProps {
@@ -36,22 +38,21 @@ export function CustomerCombobox({ value, onValueChange }: CustomerComboboxProps
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <button
+                <Button
                     type="button"
+                    variant="outline"
                     role="combobox"
                     aria-expanded={open}
                     aria-label="Select customer"
-                    className="flex min-h-[52px] w-full min-w-0 items-center gap-2.5 rounded-xl border border-dash-border bg-dash-card px-3 py-1.5 text-left font-dash-body text-dash-ink hover:bg-dash-neutral-soft"
+                    className="h-auto w-full min-w-0 justify-start gap-2.5 py-1.5 text-left"
                 >
-                    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-dash-accent-soft text-xs font-bold text-dash-accent-fg">
-                        {selectedLabel.split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
-                    </span>
+                    <UserAvatar name={selectedLabel} className="size-[34px]" />
                     <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate text-sm font-semibold">{selectedLabel}</span>
-                        <span className="text-xs text-dash-muted">Search by name or phone</span>
+                        <span className="text-xs text-muted-foreground">Search by name or phone</span>
                     </span>
-                    <ChevronsUpDown className="size-4 shrink-0 text-dash-muted" aria-hidden />
-                </button>
+                    <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
                 <Command>
@@ -81,7 +82,7 @@ export function CustomerCombobox({ value, onValueChange }: CustomerComboboxProps
                                     <Check className={cn("mr-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
                                     <div className="flex flex-col">
                                         <span className="font-medium">{c.name}</span>
-                                        {c.phone && <span className="text-xs text-gray-400">{c.phone}</span>}
+                                        {c.phone && <span className="text-xs text-muted-foreground">{c.phone}</span>}
                                     </div>
                                 </CommandItem>
                             ))}

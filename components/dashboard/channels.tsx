@@ -1,6 +1,8 @@
 "use client"
 
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { Card } from "@/components/ui/card"
+import { SectionTitle } from "@/components/common/SectionTitle"
 import { wholeMoney } from "./format"
 import { CardTitle, DashCard, EmptyNote, SectionError, SectionSkeleton } from "./section"
 import { useDashboardSection } from "./use-dashboard-section"
@@ -37,24 +39,24 @@ export function Channels() {
             )
           })}
         </div>
-        <ul>
+        <ul className="divide-y">
           {data.channels.map((c, i) => (
-            <li key={c.key} className="flex items-center gap-2.5 border-b border-dash-border-soft py-2.5 text-[13px]">
+            <li key={c.key} className="flex items-center gap-2.5 py-2.5 text-sm">
               <span className="size-2.5 rounded-[3px]" style={{ background: CHANNEL_COLOR[i % 4] }} aria-hidden />
-              <span className="font-semibold text-dash-ink">{CHANNEL_LABEL[c.key] ?? c.key}</span>
-              <span className="text-dash-muted">{c.orders} orders</span>
-              <span className="ml-auto font-bold text-dash-ink tabular-nums">{formatCurrency(c.revenue)}</span>
+              <span className="font-medium">{CHANNEL_LABEL[c.key] ?? c.key}</span>
+              <span className="text-muted-foreground">{c.orders} orders</span>
+              <span className="ml-auto font-semibold tabular-nums">{formatCurrency(c.revenue)}</span>
             </li>
           ))}
         </ul>
-        <h3 className="mt-2 text-sm font-bold text-dash-ink">Payment methods</h3>
+        <SectionTitle className="mt-2">Payment methods</SectionTitle>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {data.paymentMethods.map((m) => (
-            <div key={m.method} className="rounded-[10px] bg-dash-bg p-2.5">
-              <div className="truncate text-xs text-dash-muted">{m.method}</div>
-              <div className="font-bold text-dash-ink tabular-nums">{formatCurrency(m.revenue)}</div>
-              <div className="text-[11px] text-dash-muted">{Math.round((m.revenue / pmTotal) * 100)}%</div>
-            </div>
+            <Card key={m.method} className="gap-0 p-2.5 shadow-none">
+              <div className="truncate text-xs text-muted-foreground">{m.method}</div>
+              <div className="font-semibold tabular-nums">{formatCurrency(m.revenue)}</div>
+              <div className="text-[11px] text-muted-foreground">{Math.round((m.revenue / pmTotal) * 100)}%</div>
+            </Card>
           ))}
         </div>
       </>

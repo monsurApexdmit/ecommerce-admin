@@ -2,8 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { ColorPicker } from "@/components/common/ColorPicker"
+import { UserAvatar, getInitials } from "@/components/common/UserAvatar"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ACCENTS, ACCENT_STORAGE_KEY, applyAccent } from "@/components/accent-picker"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -55,20 +66,13 @@ const BILLING_KEYS: K[] = ["bEmail", "bPhone", "bAddress", "bCity", "bState", "b
 /* Style tokens                                                        */
 /* ------------------------------------------------------------------ */
 
-const inputCls = "h-[42px] w-full rounded-[10px] border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const card = "flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-[22px]"
 const grid = "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))]"
 
 function Section({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
   return (
-    <section className={card}>
-      <div>
-        <h2 className="font-dash-display text-lg font-bold">{title}</h2>
-        <p className="mt-1 text-[13px] text-dash-muted">{sub}</p>
-      </div>
+    <SectionCard title={title} description={sub} contentClassName="flex flex-col gap-4">
       {children}
-    </section>
+    </SectionCard>
   )
 }
 
@@ -265,43 +269,37 @@ export default function CompanySettingsPage() {
 
   if (blocked) return blocked
 
-  const wrapper = `${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`
-  const heading = (
-    <div>
-      <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Company Settings</h1>
-      <p className="mt-1 text-sm text-dash-muted">Manage your company profile and general settings</p>
-    </div>
-  )
+  const wrapper = "flex flex-col gap-5"
+  const heading = <PageHeader title="Company Settings" description="Manage your company profile and general settings" />
 
   if (loading || !v || !base) {
     return (
       <div className={wrapper}>
         {heading}
-        {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-56 rounded-[14px]" />)}
+        {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-56" />)}
       </div>
     )
   }
 
-  const bd = (k: K) => (errs[k] ? "border-dash-danger" : "border-dash-border")
-  const errLine = (k: K) => (errs[k] ? <span className="text-xs font-normal text-dash-danger">{errs[k]}</span> : null)
   const text = (label: string, k: K, o: { ph?: string; type?: string; span?: boolean; step?: string; min?: string; max?: string } = {}) => (
-    <label key={k} className={cn("flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold", o.span && "col-[1/-1]")}>{label}
-      <input className={cn(inputCls, bd(k))} type={o.type ?? "text"} placeholder={o.ph} step={o.step} min={o.min} max={o.max}
+    <FormField key={k} label={label} htmlFor={`cs-${k}`} error={errs[k]} className={cn("min-w-0", o.span && "col-[1/-1]")}>
+      <Input id={`cs-${k}`} className="w-full" aria-invalid={!!errs[k]} type={o.type ?? "text"} placeholder={o.ph} step={o.step} min={o.min} max={o.max}
         value={v[k]} onChange={(e) => set(k, e.target.value)} />
-      {errLine(k)}
-    </label>
+    </FormField>
   )
   const select = (label: string, k: K, opts: Opt[]) => {
     const all = opts.some(([a]) => a === v[k]) ? opts : [...opts, [v[k], v[k]] as Opt]
     return (
-      <label key={k} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">{label}
-        <select className={cn(inputCls, "border-dash-border")} value={v[k]} onChange={(e) => set(k, e.target.value)}>
-          {all.map(([a, b]) => <option key={a} value={a}>{b}</option>)}
-        </select>
-      </label>
+      <FormField key={k} label={label} htmlFor={`cs-${k}`} className="min-w-0">
+        <Select value={v[k] === "" ? "__none" : v[k]} onValueChange={(val) => set(k, val === "__none" ? "" : val)}>
+          <SelectTrigger id={`cs-${k}`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {all.map(([a, b]) => <SelectItem key={a} value={a === "" ? "__none" : a}>{b}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </FormField>
     )
   }
-  const initials = (v.name || "Company").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("")
 
   const barText = err ? err : dirty ? `${changed.length} unsaved change${changed.length === 1 ? "" : "s"}` : "All changes saved."
 
@@ -309,54 +307,50 @@ export default function CompanySettingsPage() {
     <div className={wrapper}>
       {heading}
 
-      {err && <div role="alert" className="flex items-center gap-2.5 rounded-xl border border-dash-danger/40 bg-dash-danger-soft px-4 py-3.5 text-sm text-dash-danger-fg">{err}</div>}
-      {ok && <div role="status" className="flex items-center gap-2.5 rounded-xl border border-dash-success/40 bg-dash-success-soft px-4 py-3.5 text-sm text-dash-success-fg">✓ {ok}</div>}
+      {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+      {ok && <Alert role="status"><AlertDescription>✓ {ok}</AlertDescription></Alert>}
 
       <Section title="Appearance" sub="Pick the accent colour used across the admin.">
         <div role="group" aria-label="Accent color" className="flex flex-wrap gap-2">
           {ACCENTS.map((a) => {
             const on = v.accentName === a.name
             return (
-              <button key={a.name} type="button" aria-pressed={on} onClick={() => set("accentName", a.name)}
-                style={{ borderColor: on ? a.value : undefined }}
-                className={cn("flex min-h-11 items-center gap-2 rounded-[10px] border-2 bg-dash-card pl-2.5 pr-3.5 text-sm font-semibold", !on && "border-dash-border")}>
+              <Button key={a.name} type="button" variant={on ? "default" : "outline"} aria-pressed={on} onClick={() => set("accentName", a.name)}>
                 <span className="size-5 rounded-full" style={{ background: a.value }} />{a.name}
-              </button>
+              </Button>
             )
           })}
         </div>
-        <div className="flex flex-col gap-3 border-t border-dash-border-soft pt-4">
+        <Separator />
+        <div className="flex flex-col gap-3">
           <div>
-            <h3 className="text-sm font-bold">Storefront brand colors</h3>
-            <p className="mt-1 text-[13px] text-dash-muted">Used on your online store. Saved with the other changes.</p>
+            <h3 className="text-sm font-semibold">Storefront brand colors</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Used on your online store. Saved with the other changes.</p>
           </div>
           <div className={grid.replace("240px", "220px")}>
             {([["primaryColor", "Primary Color"], ["accentColor", "Accent Color"], ["backgroundColor", "Background Color"]] as [K, string][]).map(([k, label]) => (
-              <div key={k} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">{label}
+              <FormField key={k} label={label} htmlFor={`cs-${k}`} error={errs[k]} className="min-w-0">
                 <span className="flex gap-2">
-                  <input type="color" aria-label={`${label} picker`} value={/^#[0-9a-fA-F]{6}$/.test(v[k]) ? v[k] : "#000000"} onChange={(e) => set(k, e.target.value.toUpperCase())}
-                    className="h-[42px] w-12 rounded-[10px] border border-dash-border bg-dash-card p-0.5" />
-                  <input type="text" aria-label={`${label} hex`} value={v[k]} onChange={(e) => set(k, e.target.value)} className={cn(inputCls, "min-w-0 flex-1", bd(k))} />
+                  <ColorPicker aria-label={`${label} picker`} value={/^#[0-9a-fA-F]{6}$/.test(v[k]) ? v[k] : "#000000"} onChange={(hex) => set(k, hex.toUpperCase())} />
+                  <Input id={`cs-${k}`} type="text" aria-label={`${label} hex`} aria-invalid={!!errs[k]} value={v[k]} onChange={(e) => set(k, e.target.value)} className="min-w-0 flex-1" />
                 </span>
-                {errLine(k)}
-              </div>
+              </FormField>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="flex h-9 w-[120px] items-center justify-center rounded-lg border border-dash-border text-xs font-bold" style={{ background: v.backgroundColor, color: v.primaryColor }}>Preview</span>
+            <span className="flex h-9 w-[120px] items-center justify-center rounded-lg border text-xs font-bold" style={{ background: v.backgroundColor, color: v.primaryColor }}>Preview</span>
             <span className="flex h-9 w-[120px] items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: v.accentColor }}>Accent</span>
-            <button type="button" onClick={() => { setV((p) => (p ? { ...p, ...DEF_COL } : p)); setErrs({}); setOk("") }}
-              className="h-9 rounded-lg border border-dash-border bg-dash-card px-3 text-[13px] font-semibold hover:bg-dash-neutral-soft">Reset to defaults</button>
+            <Button type="button" variant="outline" onClick={() => { setV((p) => (p ? { ...p, ...DEF_COL } : p)); setErrs({}); setOk("") }}>Reset to defaults</Button>
           </div>
         </div>
       </Section>
 
       <Section title="Company Profile" sub="Your business identity shown on documents.">
         <div className="flex flex-wrap items-center gap-3.5">
-          <span className="flex size-[72px] items-center justify-center rounded-2xl bg-dash-accent-soft font-dash-display text-[26px] font-bold text-dash-accent-fg">{initials}</span>
+          <UserAvatar shape="square" name={v.name || "Company"} className="size-[72px]" fallback={<span className="text-2xl font-semibold">{getInitials(v.name || "Company")}</span>} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-semibold">Company logo</span>
-            <span className="text-xs text-dash-muted">Upload the logo under Settings &gt; General. Initials are shown here.</span>
+            <span className="text-sm font-medium">Company logo</span>
+            <span className="text-xs text-muted-foreground">Upload the logo under Settings &gt; General. Initials are shown here.</span>
           </div>
         </div>
         <div className={grid}>
@@ -369,10 +363,10 @@ export default function CompanySettingsPage() {
           {text("State", "state", { ph: "NY" })}
           {text("Zip Code", "zipCode", { ph: "10001" })}
           {text("Country", "country", { ph: "United States" })}
-          <label className="col-[1/-1] flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">Description
-            <textarea rows={4} placeholder="Brief description of your company..." value={v.description} onChange={(e) => set("description", e.target.value)}
-              className="w-full resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent" />
-          </label>
+          <FormField label="Description" htmlFor="cs-description" className="col-[1/-1] min-w-0">
+            <Textarea id="cs-description" rows={4} placeholder="Brief description of your company..." value={v.description} onChange={(e) => set("description", e.target.value)}
+              className="w-full" />
+          </FormField>
         </div>
       </Section>
 
@@ -432,16 +426,15 @@ export default function CompanySettingsPage() {
         </div>
       </Section>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2.5 rounded-[14px] border border-dash-border bg-dash-card px-[18px] py-3.5 shadow-[0_-6px_20px_rgba(14,21,37,0.06)]">
-        <span className={cn("text-[13px]", err ? "text-dash-danger" : dirty ? "text-dash-warn-fg" : "text-dash-muted")}>{barText}</span>
+      <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
+        <span className={cn("text-sm", err ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>{barText}</span>
         <div className="ml-auto flex gap-2">
-          <button type="button" onClick={discard} disabled={saving || !dirty} className={outlineBtn}>Discard</button>
-          <button type="button" onClick={save} disabled={saving || !writable}
-            className="inline-flex h-11 items-center justify-center rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-60">
+          <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>Discard</Button>
+          <Button type="button" onClick={save} disabled={saving || !writable}>
             {saving ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

@@ -3,29 +3,32 @@
 import { paymentApi } from "@/lib/paymentApi"
 import { useEffect, useState } from "react"
 import { MapPin, Pencil, Printer } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatusBadge } from "@/components/common/StatusBadge"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
 import { useToast } from "@/hooks/use-toast"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { cn } from "@/lib/utils"
 
-export const SALE_STATUS_STYLE: Record<string, string> = {
-  Pending: "bg-dash-warn-soft text-dash-warn-fg",
-  Processing: "bg-dash-accent-soft text-dash-accent-fg",
-  Packed: "bg-dash-accent-soft text-dash-accent-fg",
-  Shipped: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300",
-  Delivered: "bg-dash-success-soft text-dash-success-fg",
-  Cancelled: "bg-dash-danger-soft text-dash-danger-fg",
-}
-
-export const SALE_PAY_STYLE = {
-  Paid: "bg-dash-success-soft text-dash-success-fg",
-  Partial: "bg-dash-warn-soft text-dash-warn-fg",
-  Due: "bg-dash-danger-soft text-dash-danger-fg",
+/** Badge variant per payment label (Paid / Partial / Due). */
+export const SALE_PAY_VARIANT = {
+  Paid: "default",
+  Partial: "secondary",
+  Due: "destructive",
 } as const
 
 /** Paid / Partial / Due plus the amount still owed for a sale. */
-export function salePayment(s: SellResponse): { label: keyof typeof SALE_PAY_STYLE; due: number } {
+export function salePayment(s: SellResponse): { label: keyof typeof SALE_PAY_VARIANT; due: number } {
   const amount = Number(s.amount) || 0
   if (s.paymentStatus === "paid") return { label: "Paid", due: 0 }
   const due = Math.max(0, amount - (Number(s.paidAmount) || 0))
@@ -76,10 +79,6 @@ interface SaleDetailDialogProps {
   onCreateShipment?: (sale: SellResponse) => void
   /** Called after the order is deleted (the dialog then closes). */
   onDeleted?: (sale: SellResponse) => void
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><p className="text-xs text-dash-muted">{label}</p><div className="font-semibold">{children}</div></div>
 }
 
 export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPayment, onChanged, onCreateShipment, onDeleted }: SaleDetailDialogProps) {
@@ -203,9 +202,9 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
 
   return (
     <Dialog open={!!saleProp} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-2xl">
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-dash-display text-xl font-bold">Order #{sale?.invoiceNo}</DialogTitle>
+          <DialogTitle>Order #{sale?.invoiceNo}</DialogTitle>
           <DialogDescription className="sr-only">Order details</DialogDescription>
         </DialogHeader>
         {sale && (() => {
@@ -233,213 +232,192 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
           const step = cancelled ? null : nextStep(sale)
           const receiverName = sale.shippingFullName || sale.customerName
           const receiverPhone = sale.shippingPhone || sale.shippingAddress?.phone || ""
-          const sumRow = "flex justify-between py-0.5"
           return (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-                <Field label="Date">{new Date(sale.orderTime).toLocaleString()}</Field>
-                <Field label="Customer">{sale.customerName}</Field>
-                <Field label="Method">{sale.method}</Field>
-                <Field label="Status">
-                  <span className={cn("inline-flex rounded-full px-2.5 py-[3px] text-xs font-bold", SALE_STATUS_STYLE[status] ?? "")}>{status}</span>
-                </Field>
-                <Field label="Payment">
-                  <span className={cn("inline-flex rounded-md px-2.5 py-[3px] text-xs font-bold", SALE_PAY_STYLE[pay.label])}>{pay.label}</span>
-                </Field>
-                <Field label="Channel · location">{[sale.source ? sale.source.charAt(0).toUpperCase() + sale.source.slice(1) : "", sale.locationName || ""].filter(Boolean).join(" · ") || "—"}</Field>
-                {sale.couponCode && <Field label="Coupon"><span className="font-mono text-[13px]">{sale.couponCode}</span></Field>}
-                {(sale.transactionId || sale.paymentTransactionId) && <Field label="Transaction ID"><span className="break-all font-mono text-[13px]">{sale.transactionId || sale.paymentTransactionId}</span></Field>}
-              </div>
+              <InfoList className="grid-cols-2 gap-4 sm:grid-cols-3">
+                <InfoRow layout="stacked" label="Date" value={new Date(sale.orderTime).toLocaleString()} />
+                <InfoRow layout="stacked" label="Customer" value={sale.customerName} />
+                <InfoRow layout="stacked" label="Method" value={sale.method} />
+                <InfoRow layout="stacked" label="Status" value={<StatusBadge status={status} />} />
+                <InfoRow layout="stacked" label="Payment" value={<StatusBadge status={pay.label} variant={SALE_PAY_VARIANT[pay.label]} />} />
+                <InfoRow layout="stacked" label="Channel · location" value={[sale.source ? sale.source.charAt(0).toUpperCase() + sale.source.slice(1) : "", sale.locationName || ""].filter(Boolean).join(" · ") || "—"} />
+                {sale.couponCode && <InfoRow layout="stacked" label="Coupon" value={<span className="font-mono text-[13px]">{sale.couponCode}</span>} />}
+                {(sale.transactionId || sale.paymentTransactionId) && <InfoRow layout="stacked" label="Transaction ID" value={<span className="break-all font-mono text-[13px]">{sale.transactionId || sale.paymentTransactionId}</span>} />}
+              </InfoList>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl border border-dash-border p-4">
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-dash-muted">
+                <Card className="gap-2 p-4">
+                  <SectionTitle className="flex items-center gap-1.5">
                     <MapPin className="size-4" aria-hidden /> Delivery address
-                  </p>
+                  </SectionTitle>
                   {saleShippingLines(sale).length ? (
                     <div className="space-y-0.5 text-sm">{saleShippingLines(sale).map((l, i) => <p key={i}>{l}</p>)}</div>
-                  ) : <p className="text-sm text-dash-muted">No delivery address on this order.</p>}
-                </div>
-                <div className="space-y-2 rounded-xl border border-dash-border p-4 text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-dash-muted">Receiver &amp; courier</p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    <Field label="Receiver">{receiverName || "—"}</Field>
-                    <Field label="Phone">{receiverPhone || "—"}</Field>
-                    <Field label="Courier">{courier || "—"}</Field>
-                    <Field label="Zone">{zone || "—"}</Field>
-                    <div className="col-span-2"><Field label="Tracking"><span className="break-all font-mono text-[13px]">{tracking || "—"}</span></Field></div>
-                  </div>
-                </div>
+                  ) : <p className="text-sm text-muted-foreground">No delivery address on this order.</p>}
+                </Card>
+                <Card className="gap-2 p-4 text-sm">
+                  <SectionTitle>Receiver &amp; courier</SectionTitle>
+                  <InfoList className="grid-cols-2 gap-x-3 gap-y-2">
+                    <InfoRow layout="stacked" label="Receiver" value={receiverName || "—"} />
+                    <InfoRow layout="stacked" label="Phone" value={receiverPhone || "—"} />
+                    <InfoRow layout="stacked" label="Courier" value={courier || "—"} />
+                    <InfoRow layout="stacked" label="Zone" value={zone || "—"} />
+                    <InfoRow layout="stacked" className="col-span-2" label="Tracking" value={<span className="break-all font-mono text-[13px]">{tracking || "—"}</span>} />
+                  </InfoList>
+                </Card>
               </div>
 
               {(sale.deliveryNote || sale.notes) && (
-                <div className="rounded-xl border border-dash-border p-4 text-sm">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-dash-muted">{sale.deliveryNote ? "Delivery note" : "Notes"}</p>
+                <Card className="gap-1 p-4 text-sm">
+                  <SectionTitle>{sale.deliveryNote ? "Delivery note" : "Notes"}</SectionTitle>
                   <p className="whitespace-pre-line">{sale.deliveryNote || sale.notes}</p>
-                </div>
+                </Card>
               )}
 
               {editOpen && (
-                <div className="space-y-3 rounded-xl border border-dash-border p-4 text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-dash-muted">Edit delivery details &amp; note</p>
+                <Card className="gap-3 p-4 text-sm">
+                  <SectionTitle>Edit delivery details &amp; note</SectionTitle>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1"><span className="text-xs text-dash-muted">Receiver name</span>
-                      <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm" />
-                      {formErr.name && <span className="text-xs text-dash-danger-fg">{formErr.name}</span>}</label>
-                    <label className="space-y-1"><span className="text-xs text-dash-muted">Phone</span>
-                      <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"
-                        className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm" />
-                      {formErr.phone && <span className="text-xs text-dash-danger-fg">{formErr.phone}</span>}</label>
+                    <FormField label="Receiver name" htmlFor="sale-edit-name" error={formErr.name}>
+                      <Input id="sale-edit-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} aria-invalid={!!formErr.name} />
+                    </FormField>
+                    <FormField label="Phone" htmlFor="sale-edit-phone" error={formErr.phone}>
+                      <Input id="sale-edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel" aria-invalid={!!formErr.phone} />
+                    </FormField>
                   </div>
-                  <label className="block space-y-1"><span className="text-xs text-dash-muted">Address</span>
-                    <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm" />
-                    {formErr.address && <span className="text-xs text-dash-danger-fg">{formErr.address}</span>}</label>
-                  <label className="block space-y-1"><span className="text-xs text-dash-muted">Note</span>
-                    <textarea value={form.note} rows={3} onChange={(e) => setForm({ ...form, note: e.target.value })}
-                      className="w-full rounded-lg border border-dash-border bg-dash-card px-3 py-2 text-sm" />
-                    <span className="flex justify-between text-xs">
-                      <span className="text-dash-danger-fg">{formErr.note}</span>
-                      <span className={form.note.length > 500 ? "text-dash-danger-fg" : "text-dash-muted"}>{form.note.length}/500</span>
-                    </span></label>
+                  <FormField label="Address" htmlFor="sale-edit-address" error={formErr.address}>
+                    <Input id="sale-edit-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} aria-invalid={!!formErr.address} />
+                  </FormField>
+                  <FormField
+                    label="Note" htmlFor="sale-edit-note" error={formErr.note}
+                    description={<span className={cn("tabular-nums", form.note.length > 500 && "text-destructive")}>{form.note.length}/500</span>}
+                  >
+                    <Textarea id="sale-edit-note" value={form.note} rows={3} onChange={(e) => setForm({ ...form, note: e.target.value })} aria-invalid={!!formErr.note} />
+                  </FormField>
                   <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setEditOpen(false)} className="h-9 rounded-[10px] border border-dash-border px-3 text-[13px] font-semibold">Cancel</button>
-                    <button type="button" disabled={busy} onClick={saveDetails}
-                      className="h-9 rounded-[10px] bg-dash-accent px-3 text-[13px] font-semibold text-white disabled:opacity-60">Save details</button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
+                    <Button type="button" size="sm" disabled={busy} onClick={saveDetails}>Save details</Button>
                   </div>
-                </div>
+                </Card>
               )}
 
               {items.length > 0 && (
-                <div className="overflow-hidden rounded-xl border border-dash-border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-dash-bg text-left text-xs text-dash-muted">
-                      <tr>
-                        <th className="px-3 py-2 font-semibold">Product</th>
-                        <th className="px-3 py-2 text-center font-semibold">Qty</th>
-                        <th className="px-3 py-2 text-right font-semibold">Price</th>
-                        {hasLineDisc && <th className="px-3 py-2 text-right font-semibold">Discount</th>}
-                        <th className="px-3 py-2 text-right font-semibold">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <Card className="gap-0 overflow-hidden py-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-center">Qty</TableHead>
+                        <TableHead className="text-right">Price</TableHead>
+                        {hasLineDisc && <TableHead className="text-right">Discount</TableHead>}
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {items.map((it, i) => {
                         const { price, qty, disc } = lineOf(it)
                         return (
-                          <tr key={i} className="border-t border-dash-border-soft">
-                            <td className="px-3 py-2">{(it as any).productName ?? (it as any).product_name}</td>
-                            <td className="px-3 py-2 text-center tabular-nums">{qty}</td>
-                            <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(price)}</td>
-                            {hasLineDisc && <td className="px-3 py-2 text-right tabular-nums">{disc > 0 ? `−${formatCurrency(disc)}` : "—"}</td>}
-                            <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatCurrency(price * qty - disc)}</td>
-                          </tr>
+                          <TableRow key={i}>
+                            <TableCell>{(it as any).productName ?? (it as any).product_name}</TableCell>
+                            <TableCell className="text-center tabular-nums">{qty}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatCurrency(price)}</TableCell>
+                            {hasLineDisc && <TableCell className="text-right tabular-nums">{disc > 0 ? `−${formatCurrency(disc)}` : "—"}</TableCell>}
+                            <TableCell className="text-right tabular-nums">{formatCurrency(price * qty - disc)}</TableCell>
+                          </TableRow>
                         )
                       })}
-                    </tbody>
-                  </table>
-                </div>
+                    </TableBody>
+                  </Table>
+                </Card>
               )}
 
-              <div className="ml-auto w-full max-w-xs text-sm tabular-nums">
-                {items.length > 0 && <div className={sumRow}><span className="text-dash-muted">Subtotal</span><span>{formatCurrency(subtotal)}</span></div>}
+              <InfoList className="ml-auto w-full max-w-xs gap-1 tabular-nums">
+                {items.length > 0 && <InfoRow label="Subtotal" value={formatCurrency(subtotal)} />}
                 {(orderDisc + lineDiscTotal > 0 || sale.couponCode) && (
-                  <div className={sumRow}>
-                    <span className="text-dash-muted">Discount{sale.couponCode ? ` (${sale.couponCode})` : ""}</span>
-                    <span>−{formatCurrency(orderDisc + lineDiscTotal)}</span>
-                  </div>
+                  <InfoRow label={`Discount${sale.couponCode ? ` (${sale.couponCode})` : ""}`} value={`−${formatCurrency(orderDisc + lineDiscTotal)}`} />
                 )}
-                {tax > 0.005 && <div className={sumRow}><span className="text-dash-muted">Tax</span><span>{formatCurrency(tax)}</span></div>}
-                <div className={sumRow}><span className="text-dash-muted">Delivery</span><span>{formatCurrency(delivery)}</span></div>
-                <div className="mt-1 flex justify-between border-t border-dash-border pt-2 font-dash-display text-lg font-bold">
-                  <span>Total</span><span>{formatCurrency(total)}</span>
-                </div>
-                <div className={sumRow}><span className="text-dash-muted">Paid</span><span>{formatCurrency(paid)}</span></div>
-                <div className={cn(sumRow, "font-semibold", pay.due > 0 && "text-dash-danger-fg")}><span>Due</span><span>{formatCurrency(pay.due)}</span></div>
-              </div>
+                {tax > 0.005 && <InfoRow label="Tax" value={formatCurrency(tax)} />}
+                <InfoRow label="Delivery" value={formatCurrency(delivery)} />
+                <Separator className="my-1" />
+                <InfoRow label="Total" value={formatCurrency(total)} className="text-lg font-semibold [&>dt]:text-foreground" />
+                <InfoRow label="Paid" value={formatCurrency(paid)} />
+                <InfoRow label="Due" value={formatCurrency(pay.due)} className={cn("font-semibold", pay.due > 0 ? "[&>*]:text-destructive" : "[&>dt]:text-foreground")} />
+              </InfoList>
 
               {payOpen && !onRecordPayment && (
-                <div className="space-y-3 rounded-xl border border-dash-border p-4 text-sm">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-dash-muted">Record payment</p>
+                <Card className="gap-3 p-4 text-sm">
+                  <SectionTitle>Record payment</SectionTitle>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <label className="space-y-1"><span className="text-xs text-dash-muted">Amount (max {formatCurrency(pay.due)})</span>
-                      <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)}
-                        className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm" /></label>
-                    <label className="space-y-1"><span className="text-xs text-dash-muted">Method</span>
-                      <select value={method} onChange={(e) => setMethod(e.target.value)}
-                        className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm">
-                        {PAY_METHODS.map((m) => <option key={m}>{m}</option>)}
-                      </select></label>
-                    <label className="space-y-1"><span className="text-xs text-dash-muted">Transaction ID (optional)</span>
-                      <input value={txn} onChange={(e) => setTxn(e.target.value)}
-                        className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm" /></label>
+                    <FormField label={`Amount (max ${formatCurrency(pay.due)})`} htmlFor="sale-pay-amount">
+                      <Input id="sale-pay-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="tabular-nums" />
+                    </FormField>
+                    <FormField label="Method" htmlFor="sale-pay-method">
+                      <Select value={method} onValueChange={(v) => setMethod(v)}>
+                        <SelectTrigger id="sale-pay-method" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <FormField label="Transaction ID (optional)" htmlFor="sale-pay-txn">
+                      <Input id="sale-pay-txn" value={txn} onChange={(e) => setTxn(e.target.value)} />
+                    </FormField>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setPayOpen(false)} className="h-9 rounded-[10px] border border-dash-border px-3 text-[13px] font-semibold">Cancel</button>
-                    <button type="button" disabled={busy} onClick={() => submitPayment(pay.due)}
-                      className="h-9 rounded-[10px] bg-dash-accent px-3 text-[13px] font-semibold text-white disabled:opacity-60">Save payment</button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPayOpen(false)}>Cancel</Button>
+                    <Button type="button" size="sm" disabled={busy} onClick={() => submitPayment(pay.due)}>Save payment</Button>
                   </div>
-                </div>
+                </Card>
               )}
 
               {confirm && (
-                <div className="space-y-3 rounded-xl border border-dash-danger-fg/40 p-4 text-sm">
+                <Card className="gap-3 border-destructive/40 p-4 text-sm">
                   <p className="font-semibold">{confirm === "cancel" ? `Cancel order #${sale.invoiceNo}?` : `Delete order #${sale.invoiceNo}? This cannot be undone.`}</p>
                   {confirm === "cancel" && (
-                    <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)"
-                      className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-3 text-sm" />
+                    <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" aria-label="Cancellation reason" />
                   )}
                   <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => setConfirm(null)} className="h-9 rounded-[10px] border border-dash-border px-3 text-[13px] font-semibold">Keep</button>
-                    <button type="button" disabled={busy} onClick={confirm === "cancel" ? cancelOrder : deleteOrder}
-                      className="h-9 rounded-[10px] bg-dash-danger-fg px-3 text-[13px] font-semibold text-white disabled:opacity-60">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setConfirm(null)}>Keep</Button>
+                    <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={confirm === "cancel" ? cancelOrder : deleteOrder}>
                       {confirm === "cancel" ? "Cancel order" : "Delete order"}
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
               )}
 
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <button type="button" onClick={() => onPrint(sale)}
-                  className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+                <Button type="button" variant="outline" onClick={() => onPrint(sale)}>
                   <Printer className="size-4" aria-hidden /> Print invoice
-                </button>
+                </Button>
                 {pay.due > 0 && !cancelled && (
-                  <button type="button" disabled={busy}
-                    onClick={() => (onRecordPayment ? onRecordPayment(sale) : (setAmount(String(pay.due)), setPayOpen((v) => !v)))}
-                    className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+                  <Button type="button" variant="outline" disabled={busy}
+                    onClick={() => (onRecordPayment ? onRecordPayment(sale) : (setAmount(String(pay.due)), setPayOpen((v) => !v)))}>
                     Record payment
-                  </button>
+                  </Button>
                 )}
                 {!editOpen && (
-                  <button type="button" disabled={busy} onClick={() => openEdit(sale)}
-                    className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => openEdit(sale)}>
                     <Pencil className="size-4" aria-hidden /> Edit delivery &amp; note
-                  </button>
+                  </Button>
                 )}
                 {onCreateShipment && !cancelled && sale.status !== "Delivered" && !shipment && (
-                  <button type="button" disabled={busy} onClick={() => onCreateShipment(sale)}
-                    className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => onCreateShipment(sale)}>
                     Create shipment
-                  </button>
+                  </Button>
                 )}
                 {!cancelled && sale.status !== "Delivered" && (
-                  <button type="button" disabled={busy} onClick={() => setConfirm("cancel")}
-                    className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold text-dash-danger-fg hover:bg-dash-neutral-soft">
+                  <Button type="button" variant="destructive" disabled={busy} onClick={() => setConfirm("cancel")}>
                     Cancel order
-                  </button>
+                  </Button>
                 )}
                 {cancelled && !(Number(sale.paidAmount) > 0) && (
-                  <button type="button" disabled={busy} onClick={() => setConfirm("delete")}
-                    className="h-10 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold text-dash-danger-fg hover:bg-dash-neutral-soft">
+                  <Button type="button" variant="destructive" disabled={busy} onClick={() => setConfirm("delete")}>
                     Delete order
-                  </button>
+                  </Button>
                 )}
                 {step && (
-                  <button type="button" disabled={busy} onClick={() => advance(step)}
-                    className="h-10 rounded-[10px] bg-dash-accent px-3.5 text-[13px] font-semibold text-white disabled:opacity-60">
+                  <Button type="button" disabled={busy} onClick={() => advance(step)}>
                     {step.label}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

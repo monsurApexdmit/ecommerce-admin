@@ -1,7 +1,12 @@
 "use client"
 
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { Check } from "lucide-react"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Separator } from "@/components/ui/separator"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import type { SellResponse } from "@/lib/sellsApi"
 import { getCachedReceiptPrefs, loadReceiptPrefs } from "@/lib/receipt-prefs"
@@ -74,19 +79,18 @@ td{padding:2px 0}.sep{border-top:1px dashed #000;margin:6px 0}.tot td{font-weigh
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose()}>
-            <DialogContent showCloseButton={false} className="max-h-[92vh] gap-0 overflow-y-auto rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[400px]">
-                <div className="flex flex-col items-center gap-1 border-b border-dashed border-dash-border px-6 pb-4 pt-6 text-center">
-                    <span className="mb-1 flex size-12 items-center justify-center rounded-full bg-dash-success-soft text-dash-success-fg">
-                        <Check className="size-6" aria-hidden />
-                    </span>
-                    <DialogTitle className="font-dash-display text-xl font-bold">{businessName || "Sale complete"}</DialogTitle>
-                    <DialogDescription className="text-[13px] text-dash-muted">
+            <DialogContent showCloseButton={false} className="max-h-[92vh] gap-0 overflow-y-auto p-0 sm:max-w-[400px]">
+                <DialogHeader className="items-center gap-1 px-6 pb-4 pt-6 text-center sm:text-center">
+                    <UserAvatar className="mb-1 size-12" fallback={<Check className="size-6" aria-hidden />} />
+                    <DialogTitle className="text-xl">{businessName || "Sale complete"}</DialogTitle>
+                    <DialogDescription>
                         Receipt #{sale.invoiceNo} · {when}
                     </DialogDescription>
-                    <p className="text-[13px] text-dash-muted">{sale.customerName}{customerPhone ? ` · ${customerPhone}` : ""} · {location}</p>
-                    {txn && <p className="text-[13px] text-dash-muted">Txn {txn}</p>}
-                </div>
-                <div className="flex flex-col gap-1.5 border-b border-dashed border-dash-border px-6 py-4 text-sm">
+                    <p className="text-sm text-muted-foreground">{sale.customerName}{customerPhone ? ` · ${customerPhone}` : ""} · {location}</p>
+                    {txn && <p className="text-sm text-muted-foreground">Txn {txn}</p>}
+                </DialogHeader>
+                <Separator />
+                <div className="flex flex-col gap-1.5 px-6 py-4 text-sm">
                     {items.map((i, idx) => (
                         <div key={idx} className="flex justify-between gap-3">
                             <span>{i.qty} × {i.name}</span>
@@ -94,21 +98,23 @@ td{padding:2px 0}.sep{border-top:1px dashed #000;margin:6px 0}.tot td{font-weigh
                         </div>
                     ))}
                 </div>
+                <Separator />
                 <div className="flex flex-col gap-1.5 px-6 py-4 text-sm tabular-nums">
-                    <div className="flex justify-between"><span className="text-dash-muted">Subtotal</span><span>{fc(subtotal)}</span></div>
-                    <div className="flex justify-between"><span className="text-dash-muted">Discount{sale.couponCode ? ` (${sale.couponCode})` : ""}</span><span>{discount ? `−${fc(discount)}` : fc(0)}</span></div>
-                    <div className="flex justify-between"><span className="text-dash-muted">{taxLabel}</span><span>{fc(tax)}</span></div>
-                    <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
-                        <span className="font-bold">Total</span>
-                        <span className="font-dash-display text-2xl font-bold">{fc(total)}</span>
-                    </div>
-                    <div className="flex justify-between"><span className="text-dash-muted">Paid ({sale.method})</span><span>{fc(paid)}</span></div>
-                    <div className={`flex justify-between font-semibold ${owing ? "text-dash-danger-fg" : "text-dash-success-fg"}`}><span>{balanceLabel}</span><span>{fc(balance)}</span></div>
-                    <p className="mt-2 text-center text-xs text-dash-muted">Thank you for shopping with us.</p>
+                    <InfoList className="gap-1.5">
+                        <InfoRow label="Subtotal" value={<span className="font-normal">{fc(subtotal)}</span>} />
+                        <InfoRow label={`Discount${sale.couponCode ? ` (${sale.couponCode})` : ""}`} value={<span className="font-normal">{discount ? `−${fc(discount)}` : fc(0)}</span>} />
+                        <InfoRow label={taxLabel} value={<span className="font-normal">{fc(tax)}</span>} />
+                        <Separator />
+                        <InfoRow label={<span className="font-bold text-foreground">Total</span>} value={<span className="text-2xl font-bold">{fc(total)}</span>} className="items-baseline" />
+                        <InfoRow label={`Paid (${sale.method})`} value={<span className="font-normal">{fc(paid)}</span>} />
+                        <InfoRow label={<span className={cn("font-semibold", owing ? "text-destructive" : "text-foreground")}>{balanceLabel}</span>} value={<span className={cn("font-semibold", owing && "text-destructive")}>{fc(balance)}</span>} />
+                    </InfoList>
+                    <p className="mt-2 text-center text-xs text-muted-foreground">Thank you for shopping with us.</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 border-t border-dash-border px-6 py-4">
-                    <button type="button" onClick={print} className="h-12 rounded-xl border border-dash-border bg-dash-card text-sm font-semibold hover:bg-dash-neutral-soft">Print receipt</button>
-                    <button type="button" onClick={onClose} className="h-12 rounded-xl bg-dash-accent text-sm font-bold text-white">New sale</button>
+                <Separator />
+                <div className="grid grid-cols-2 gap-2 px-6 py-4">
+                    <Button type="button" variant="outline" size="lg" onClick={print}>Print receipt</Button>
+                    <Button type="button" size="lg" onClick={onClose}>New sale</Button>
                 </div>
             </DialogContent>
         </Dialog>

@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import transferApi, { type LocationProduct, type TransferDocument } from "@/lib/transferApi"
@@ -11,11 +16,19 @@ import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { Toolbar } from "@/components/common/Toolbar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
 
 const REASONS = ["Restock store", "Rebalance stock", "Customer order pickup", "Return to warehouse"]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
 
 interface Line { key: string; productId: number; variantId: number | null; name: string; avail: number; qty: number }
 
@@ -186,159 +199,178 @@ export default function TransferPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Stock transfers</h1>
-          <p className="mt-1 text-sm text-dash-muted">Move stock between your warehouse and shops.</p>
-        </div>
-        <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Stock transfers"
+        description="Move stock between your warehouse and shops."
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+      />
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full shrink-0 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[520px]">
-          <h2 className="font-dash-display text-lg font-bold">New transfer</h2>
-          <p className="mb-4 text-[13px] text-dash-muted">Move stock between locations. Stock moves immediately and is logged in the history.</p>
-
+        <SectionCard
+          className="w-full shrink-0 xl:w-[520px]"
+          title="New transfer"
+          description="Move stock between locations. Stock moves immediately and is logged in the history."
+        >
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">From
-                <select className={input} value={from} onChange={(e) => changeFrom(e.target.value)}>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </label>
-              <button type="button" onClick={swap} aria-label="Swap locations" className="flex size-[42px] items-center justify-center rounded-[10px] border border-dash-border bg-dash-card hover:bg-dash-neutral-soft">⇄</button>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">To
-                <select className={input} value={to} onChange={(e) => { setTo(e.target.value); setErr("") }}>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </label>
+              <FormField label="From" htmlFor="tr-from">
+                <Select value={from || undefined} onValueChange={changeFrom}>
+                  <SelectTrigger id="tr-from" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <Button type="button" variant="outline" size="icon" onClick={swap} aria-label="Swap locations">⇄</Button>
+              <FormField label="To" htmlFor="tr-to">
+                <Select value={to || undefined} onValueChange={(v) => { setTo(v); setErr("") }}>
+                  <SelectTrigger id="tr-to" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
 
-            <div className="flex flex-col gap-2 text-[13px] font-semibold">
-              Products
-              <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-                <span className="sr-only">Search products</span>
-                <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search or scan a product in ${fromName}…`}
-                  className="min-w-0 flex-1 border-0 bg-transparent text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted" />
-              </label>
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">Products</p>
+              <Label htmlFor="tr-search" className="sr-only">Search products</Label>
+              <Input id="tr-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search or scan a product in ${fromName}…`} />
               {results.length > 0 && (
-                <div className="flex flex-col overflow-hidden rounded-xl border border-dash-border">
+                <Card className="gap-0 overflow-hidden py-0">
                   {results.map((r) => (
-                    <button key={`${r.type}-${r.id}`} type="button" onClick={() => addLine(r)}
-                      className="flex items-center justify-between gap-3 border-b border-dash-border-soft px-3 py-2 text-left font-normal last:border-0 hover:bg-dash-neutral-soft">
+                    <Button key={`${r.type}-${r.id}`} type="button" variant="ghost" onClick={() => addLine(r)}
+                      className="h-auto w-full justify-between gap-3 rounded-none text-left whitespace-normal">
                       <span className="text-sm font-semibold">{r.variantName ? `${r.productName} · ${r.variantName}` : r.productName}</span>
-                      <span className="text-xs text-dash-muted">{r.stock} available</span>
-                    </button>
+                      <span className="text-xs text-muted-foreground">{r.stock} available</span>
+                    </Button>
                   ))}
-                </div>
+                </Card>
               )}
-              {noResults && !stockLoading && <div className="text-xs font-normal text-dash-muted">No matching product with stock in {fromName}.</div>}
+              {noResults && !stockLoading && <div className="text-xs text-muted-foreground">No matching product with stock in {fromName}.</div>}
 
-              <div className="flex flex-col rounded-xl border border-dash-border">
+              <Card className="gap-0 py-0">
                 {lines.length === 0 ? (
-                  <div className="px-3 py-5 text-center text-[13px] font-normal text-dash-muted">Add products to move.</div>
-                ) : lines.map((l) => (
-                  <div key={l.key} className="flex items-center gap-3 border-b border-dash-border-soft px-3 py-2.5 last:border-0">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">{l.name}</div>
-                      <div className="text-xs font-normal text-dash-muted">{l.avail} available in {fromName}</div>
-                    </div>
+                  <EmptyState title="Add products to move." className="p-4 md:p-6" />
+                ) : lines.map((l, i) => (
+                  <div key={l.key}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item size="sm">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="w-full truncate">{l.name}</ItemTitle>
+                      <ItemDescription>{l.avail} available in {fromName}</ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
                     <div className="flex items-center">
-                      <button type="button" aria-label="Decrease quantity" onClick={() => setQty(l.key, l.qty - 1)} className="h-9 w-8 rounded-l-lg border border-dash-border">−</button>
-                      <input type="number" min={1} max={l.avail} aria-label="Quantity" value={l.qty} onChange={(e) => setQty(l.key, Number(e.target.value))}
-                        className="h-9 w-14 border-y border-dash-border bg-dash-card text-center text-sm font-normal outline-none" />
-                      <button type="button" aria-label="Increase quantity" onClick={() => setQty(l.key, l.qty + 1)} className="h-9 w-8 rounded-r-lg border border-dash-border">+</button>
+                      <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => setQty(l.key, l.qty - 1)}>−</Button>
+                      <Input type="number" min={1} max={l.avail} aria-label="Quantity" value={l.qty} onChange={(e) => setQty(l.key, Number(e.target.value))}
+                        className="mx-1 w-16 text-center tabular-nums" />
+                      <Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => setQty(l.key, l.qty + 1)}>+</Button>
                     </div>
-                    <button type="button" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} className="text-lg text-dash-muted hover:text-dash-danger-fg">×</button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button>
+                    </ItemActions>
+                  </Item>
                   </div>
                 ))}
-              </div>
+              </Card>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Reason
-                <select className={input} value={reason} onChange={(e) => setReason(e.target.value)}>{REASONS.map((r) => <option key={r}>{r}</option>)}</select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Sent with
-                <input className={input} value={sentWith} onChange={(e) => setSentWith(e.target.value)} placeholder="e.g. Rafiq / van" />
-              </label>
+              <FormField label="Reason" htmlFor="tr-reason">
+                <Select value={reason} onValueChange={setReason}>
+                  <SelectTrigger id="tr-reason" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Sent with" htmlFor="tr-sent-with">
+                <Input id="tr-sent-with" className="w-full" value={sentWith} onChange={(e) => setSentWith(e.target.value)} placeholder="e.g. Rafiq / van" />
+              </FormField>
             </div>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note
-              <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
-            </label>
+            <FormField label="Note" htmlFor="tr-note">
+              <Textarea id="tr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+            </FormField>
 
-            {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-            <div className="flex items-center justify-between gap-3 border-t border-dash-border-soft pt-3">
-              <span className="text-[13px] text-dash-muted">{units} units · {fromName} → {nameOf(to)}</span>
-              <button type="button" disabled={lines.length === 0 || busy} onClick={submit} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+            {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
+            <Separator />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">{units} units · {fromName} → {nameOf(to)}</span>
+              <Button type="button" disabled={lines.length === 0 || busy} onClick={submit}>
                 {busy ? "Moving…" : `Move ${units} units now`}
-              </button>
+              </Button>
             </div>
           </div>
-        </section>
+        </SectionCard>
 
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-dash-display text-lg font-bold">Transfer history</h2>
-            <button type="button" onClick={cycleLoc} aria-label="Filter by location" className={cn(outlineBtn, "h-10")}>
+        <SectionCard
+          className="w-full min-w-0 flex-1"
+          title="Transfer history"
+          actions={
+            <Button type="button" variant="outline" onClick={cycleLoc} aria-label="Filter by location">
               {locF === "all" ? "All locations" : nameOf(locF)} ▾
-            </button>
-          </div>
-          <div className="mb-3 flex flex-wrap gap-2.5">
-            <label className="flex h-11 min-w-[200px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <span className="sr-only">Search transfers</span>
-              <input type="search" value={hq} onChange={(e) => { setHq(e.target.value); setPage(1) }} placeholder="Search no. or product…"
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            <select aria-label="Status" value={statusF} onChange={(e) => { setStatusF(e.target.value); setPage(1) }} className={cn(input, "w-[160px]")}>
-              <option value="all">Status: All</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-          <div className="mb-3 text-[13px] text-dash-muted">{stats.count} transfer{stats.count === 1 ? "" : "s"} · {stats.unitsMoved} units moved</div>
+            </Button>
+          }
+        >
+          <Toolbar className="mb-3">
+            <div className="min-w-[200px] flex-1">
+              <Label htmlFor="tr-hist-search" className="sr-only">Search transfers</Label>
+              <Input id="tr-hist-search" type="search" value={hq} onChange={(e) => { setHq(e.target.value); setPage(1) }} placeholder="Search no. or product…" />
+            </div>
+            <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
+              <SelectTrigger aria-label="Status" className="w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Status: All</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </Toolbar>
+          <div className="mb-3 text-sm text-muted-foreground">{stats.count} transfer{stats.count === 1 ? "" : "s"} · {stats.unitsMoved} units moved</div>
 
           {histLoading ? (
-            <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+            <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
           ) : history.length === 0 ? (
-            <div className="py-12 text-center text-sm text-dash-muted">{hqDebounced || statusF !== "all" || locF !== "all" ? "No transfers match these filters." : "No transfers yet. Move stock with the form."}</div>
+            <EmptyState title={hqDebounced || statusF !== "all" || locF !== "all" ? "No transfers match these filters." : "No transfers yet. Move stock with the form."} />
           ) : (
             <div className="flex flex-col gap-3">
               {history.map((t) => {
                 const isOpen = open.has(t.id)
                 return (
-                  <article key={t.id} className="rounded-xl border border-dash-border-soft p-3.5">
+                  <Card key={t.id} className="gap-0 p-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold">{t.transferNo}</span>
-                      <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", t.status === "completed" ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-danger-soft text-dash-danger-fg")}>
-                        {t.status !== "completed" ? "Cancelled" : t.isReversal ? "Reversal" : "Completed"}
-                      </span>
+                      <StatusBadge
+                        status={t.status === "completed" ? "completed" : "cancelled"}
+                        label={t.status !== "completed" ? "Cancelled" : t.isReversal ? "Reversal" : "Completed"}
+                      />
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-sm"><strong>{t.from.name}</strong><span aria-hidden>→</span><strong>{t.to.name}</strong></div>
-                    <div className="mt-0.5 text-[13px] text-dash-muted">{t.itemsSummary}</div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">{t.itemsSummary}</div>
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs text-dash-muted">
+                      <span className="text-xs text-muted-foreground">
                         {new Date(t.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {[t.reason, t.sentWith && `sent with ${t.sentWith}`, t.reversedBy && `Returned via ${t.reversedBy}`, t.createdBy].filter(Boolean).join(" · ")}
                       </span>
                       <div className="flex gap-2">
-                        {t.canCancel && <button type="button" onClick={() => cancel(t)} className="h-8 rounded-lg border border-dash-border px-2.5 text-xs font-semibold text-dash-danger-fg hover:bg-dash-danger-soft">Cancel &amp; return stock</button>}
-                        <button type="button" aria-expanded={isOpen} onClick={() => setOpen((p) => { const n = new Set(p); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n })}
-                          className="h-8 rounded-lg border border-dash-border px-2.5 text-xs font-semibold hover:bg-dash-neutral-soft">{isOpen ? "Hide details" : "Details"}</button>
+                        {t.canCancel && <Button type="button" variant="destructive" size="sm" onClick={() => cancel(t)}>Cancel &amp; return stock</Button>}
+                        <Button type="button" variant="outline" size="sm" aria-expanded={isOpen} onClick={() => setOpen((p) => { const n = new Set(p); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n })}>{isOpen ? "Hide details" : "Details"}</Button>
                       </div>
                     </div>
                     {isOpen && (
-                      <div className="mt-3 flex flex-col gap-1 border-t border-dash-border-soft pt-3 text-[13px]">
-                        {t.lines.map((x, i) => <div key={i} className="flex justify-between"><span>{x.name}</span><strong>×{x.quantity}</strong></div>)}
-                        <div className="mt-1 text-dash-muted">{[t.sentWith && `Sent with ${t.sentWith}`, t.reversedBy && `Returned via ${t.reversedBy}`, t.note].filter(Boolean).join(" · ") || "No note."}</div>
-                      </div>
+                      <>
+                      <Separator className="my-3" />
+                      <InfoList className="gap-1">
+                        {t.lines.map((x, i) => <InfoRow key={i} label={x.name} value={`×${x.quantity}`} />)}
+                      </InfoList>
+                      <div className="mt-2 text-sm text-muted-foreground">{[t.sentWith && `Sent with ${t.sentWith}`, t.reversedBy && `Returned via ${t.reversedBy}`, t.note].filter(Boolean).join(" · ") || "No note."}</div>
+                      </>
                     )}
-                  </article>
+                  </Card>
                 )
               })}
             </div>
           )}
 
           {!histLoading && total > 0 && (
-            <div className="mt-3 border-t border-dash-border-soft pt-3">
+            <div className="mt-3">
+              <Separator className="mb-3" />
               <PaginationControl
                 currentPage={page}
                 totalPages={Math.max(1, Math.ceil(total / perPage))}
@@ -349,7 +381,7 @@ export default function TransferPage() {
               />
             </div>
           )}
-        </section>
+        </SectionCard>
       </div>
     </div>
   )

@@ -4,15 +4,28 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { Banknote, Clock, Download, Eye, FileText, Package, Printer, Scissors, Search, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { FilterBar } from "@/components/common/Toolbar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { OrderDetailDialog } from "@/components/tailor/OrderDetailDialog"
 import {
-  PayBadge, StageBadge, StageBar, UrgentBadge, apiError, fmtDate, tIconBtn, tInput, tOutlineBtn, tPrimaryBtn, whenText,
+  PayBadge, StageBadge, StageBar, UrgentBadge, apiError, fmtDate, whenText,
 } from "@/components/tailor/order-ui"
 import {
   TAILOR_STAGE_LABEL, tailorApi, tailorOrdersApi,
@@ -168,20 +181,18 @@ export default function TailorOrdersPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Tailor orders</h1>
-          <p className="mt-1 text-sm text-dash-muted">Every stitching job from measurement to delivery.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleExport} className={tOutlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-          {writable && <Link href="/dashboard/tailor/orders/new" className={tPrimaryBtn}>+ New tailor order</Link>}
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Tailor orders"
+        description="Every stitching job from measurement to delivery."
+        actions={<>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          {writable && <Button asChild><Link href="/dashboard/tailor/orders/new">+ New tailor order</Link></Button>}
+        </>}
+      />
 
       {loading && !stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px]" />)}</div>
       ) : stats ? (
         <StatsCards stats={[
           { label: "Open orders", value: stats.openOrders, icon: <Package className="size-4" />, color: "blue", hint: `${stats.readyForPickup} ready for pickup` },
@@ -193,135 +204,141 @@ export default function TailorOrdersPage() {
         ]} />
       ) : null}
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
             tabs={TABS.map(([v, label]) => ({ value: v, label, count: counts?.[v] }))} />
         </div>
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search</span>
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order, customer or phone…"
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
-          <select aria-label="Dorji" className={cn(tInput, "w-auto min-w-[150px]")} value={dorjiF} onChange={(e) => resetPage(setDorjiF)(e.target.value)}>
-            <option value="all">Dorji: All</option><option value="none">Unassigned</option>
-            {dorjis.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-          <select aria-label="Delivery" className={cn(tInput, "w-auto min-w-[160px]")} value={deliveryF} onChange={(e) => resetPage(setDeliveryF)(e.target.value)}>
-            {DELIVERY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select aria-label="Payment" className={cn(tInput, "w-auto min-w-[140px]")} value={payF} onChange={(e) => resetPage(setPayF)(e.target.value)}>
-            {PAY_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <label className="flex items-center gap-2 text-[13px] font-semibold text-dash-muted">Delivery from
-            <input type="date" aria-label="Delivery from" className={cn(tInput, "w-auto")} value={fromD} onChange={(e) => resetPage(setFromD)(e.target.value)} />
-          </label>
-          <label className="flex items-center gap-2 text-[13px] font-semibold text-dash-muted">to
-            <input type="date" aria-label="Delivery to" className={cn(tInput, "w-auto")} value={toD} onChange={(e) => resetPage(setToD)(e.target.value)} />
-          </label>
-        </div>
+        <FilterBar className="gap-2.5 p-4">
+          <InputGroup className="min-w-[240px] flex-1">
+            <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+            <InputGroupInput type="search" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order, customer or phone…" />
+          </InputGroup>
+          <Select value={dorjiF} onValueChange={(v) => resetPage(setDorjiF)(v)}>
+            <SelectTrigger aria-label="Dorji" className="min-w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Dorji: All</SelectItem><SelectItem value="none">Unassigned</SelectItem>
+              {dorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={deliveryF} onValueChange={(v) => resetPage(setDeliveryF)(v)}>
+            <SelectTrigger aria-label="Delivery" className="min-w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{DELIVERY_OPTS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={payF} onValueChange={(v) => resetPage(setPayF)(v)}>
+            <SelectTrigger aria-label="Payment" className="min-w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{PAY_OPTS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+          </Select>
+          <FormField orientation="horizontal" className="w-auto gap-2" label="Delivery from" htmlFor="tailor-orders-from">
+            <Input id="tailor-orders-from" type="date" aria-label="Delivery from" className="w-auto" value={fromD} onChange={(e) => resetPage(setFromD)(e.target.value)} />
+          </FormField>
+          <FormField orientation="horizontal" className="w-auto gap-2" label="to" htmlFor="tailor-orders-to">
+            <Input id="tailor-orders-to" type="date" aria-label="Delivery to" className="w-auto" value={toD} onChange={(e) => resetPage(setToD)(e.target.value)} />
+          </FormField>
+        </FilterBar>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th className="py-3 pl-4 pr-2 font-semibold">Order</th><th className="px-2 py-3 font-semibold">Customer</th>
-                <th className="px-2 py-3 font-semibold">Items</th><th className="px-2 py-3 font-semibold">Progress</th>
-                <th className="px-2 py-3 font-semibold">Dorji</th><th className="px-2 py-3 font-semibold">Delivery</th>
-                <th className="px-2 py-3 text-right font-semibold">Total / due</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Next step</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+          <Table className="min-w-[1040px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order</TableHead><TableHead>Customer</TableHead>
+                <TableHead>Items</TableHead><TableHead>Progress</TableHead>
+                <TableHead>Dorji</TableHead><TableHead>Delivery</TableHead>
+                <TableHead className="text-right">Total / due</TableHead><TableHead className="text-right">Next step</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-10" /></TableCell></TableRow>) :
                 rows.length === 0 ? (
-                  <tr><td colSpan={8} className="py-14 text-center">
-                    <Scissors className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">No orders found</p>
-                    <p className="text-sm text-dash-muted">{hasFilter || tab !== "open" ? "No orders match these filters." : "No tailor orders yet. Create the first one with “+ New tailor order”."}</p>
-                  </td></tr>
+                  <TableRow><TableCell colSpan={8} className="whitespace-normal">
+                    <EmptyState icon={Scissors} title="No orders found" className="p-4 md:p-6"
+                      description={hasFilter || tab !== "open" ? "No orders match these filters." : "No tailor orders yet. Create the first one with “+ New tailor order”."} />
+                  </TableCell></TableRow>
                 ) : rows.map((r) => {
                   const when = whenText(r.daysLeft, r.stage)
                   const open = r.stage !== "delivered" && r.stage !== "cancelled"
                   const busy = busyId === r.id
                   return (
-                    <tr key={r.id} className="hover:bg-dash-bg/60">
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                    <TableRow key={r.id}>
+                      <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <button type="button" onClick={() => openView(r.id)} className="font-bold hover:underline">{r.orderNumber}</button>
+                          <Button type="button" variant="link" onClick={() => openView(r.id)} className="h-auto p-0">{r.orderNumber}</Button>
                           {r.isUrgent && <UrgentBadge />}
                         </div>
-                        <div className="text-xs text-dash-muted">{fmtDate(r.orderDate)}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="text-xs text-muted-foreground">{fmtDate(r.orderDate)}</div>
+                      </TableCell>
+                      <TableCell>
                         <div className="font-semibold">{r.customer?.name ?? "—"}</div>
-                        <div className="text-xs text-dash-muted">{r.customer?.phone}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3"><div className="max-w-[200px] truncate" title={r.itemsSummary}>{r.itemsSummary || "—"}</div></td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="text-xs text-muted-foreground">{r.customer?.phone}</div>
+                      </TableCell>
+                      <TableCell><div className="max-w-[200px] truncate" title={r.itemsSummary}>{r.itemsSummary || "—"}</div></TableCell>
+                      <TableCell>
                         <StageBadge stage={r.stage} />
                         <StageBar stageIndex={r.stageIndex} stage={r.stage} />
-                        {r.progress.total > 0 && <div className="mt-1 text-[11px] text-dash-muted">{r.progress.done}/{r.progress.total} done by dorji</div>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        {r.dorjiNames.length > 0 ? <span className="rounded-full bg-dash-neutral-soft px-2.5 py-[3px] text-xs font-semibold text-dash-neutral-fg">{r.dorjiNames.join(", ")}</span>
-                          : open ? <Link href="/dashboard/tailor/assignments" className="text-xs font-semibold text-dash-accent hover:underline">+ Assign</Link> : <span className="text-dash-muted">—</span>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        {r.progress.total > 0 && <div className="mt-1 text-[11px] text-muted-foreground">{r.progress.done}/{r.progress.total} done by dorji</div>}
+                      </TableCell>
+                      <TableCell>
+                        {r.dorjiNames.length > 0 ? <Badge variant="secondary">{r.dorjiNames.join(", ")}</Badge>
+                          : open ? <Link href="/dashboard/tailor/assignments" className="text-xs font-medium text-primary underline-offset-4 hover:underline">+ Assign</Link> : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
                         <div className="font-semibold">{fmtDate(r.deliveryDate)}</div>
                         <div className={cn("text-xs font-semibold", when.cls)}>{when.text}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         <div className="font-bold">{formatCurrency(r.totalAmount)}</div>
-                        <div className={cn("text-xs font-semibold", r.stage === "cancelled" ? "text-dash-muted" : r.dueAmount > 0 ? "text-dash-danger" : "text-dash-success-fg")}>
+                        <div className={cn("text-xs font-semibold", r.stage === "cancelled" ? "text-muted-foreground" : r.dueAmount > 0 ? "text-destructive" : "text-dash-success-fg")}>
                           {r.stage === "cancelled" ? "Cancelled" : r.dueAmount > 0 ? `Due ${formatCurrency(r.dueAmount)}` : "Paid in full"}
                         </div>
-                        <PayBadge status={r.paymentStatus} className="mt-0.5 inline-block" />
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        <PayBadge status={r.paymentStatus} className="mt-0.5" />
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center justify-end gap-1">
                           {writable && open && r.nextStage && (
-                            <button type="button" disabled={busy} onClick={() => onMove(r)}
-                              className={cn("mr-1 h-9 rounded-lg px-3 text-[13px] font-semibold disabled:opacity-40", r.stage === "ready" ? "bg-dash-ink text-dash-bg" : "bg-dash-accent-soft text-dash-accent-fg")}>
+                            <Button type="button" disabled={busy} onClick={() => onMove(r)}
+                              variant={r.stage === "ready" ? "default" : "secondary"} className="mr-1">
                               {r.stage === "ready" ? `Deliver${r.dueAmount > 0 ? ` & collect ${formatCurrency(r.dueAmount)}` : ""}` : `→ ${TAILOR_STAGE_LABEL[r.nextStage]}`}
-                            </button>
+                            </Button>
                           )}
-                          {writable && r.dueAmount > 0 && <button type="button" aria-label="Record payment" title="Record payment" className={tIconBtn} onClick={() => openView(r.id, true)}><Banknote className="size-4" /></button>}
-                          <button type="button" aria-label="View order" title="View order" className={tIconBtn} onClick={() => openView(r.id)}><Eye className="size-4" /></button>
-                          <button type="button" aria-label="Print invoice" title="Print invoice" className={tIconBtn} onClick={() => printInv(r)}><FileText className="size-4" /></button>
-                          <button type="button" aria-label="Print job card" title="Print job card" className={tIconBtn} onClick={() => printCard(r)}><Printer className="size-4" /></button>
+                          {writable && r.dueAmount > 0 && <WithTooltip content="Record payment"><Button type="button" variant="outline" size="icon" aria-label="Record payment" onClick={() => openView(r.id, true)}><Banknote className="size-4" /></Button></WithTooltip>}
+                          <WithTooltip content="View order"><Button type="button" variant="outline" size="icon" aria-label="View order" onClick={() => openView(r.id)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content="Print invoice"><Button type="button" variant="outline" size="icon" aria-label="Print invoice" onClick={() => printInv(r)}><FileText className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content="Print job card"><Button type="button" variant="outline" size="icon" aria-label="Print job card" onClick={() => printCard(r)}><Printer className="size-4" /></Button></WithTooltip>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {!loading && total > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
+          <>
+          <Separator />
+          <div className="p-4 pt-3">
             <PaginationControl currentPage={page} totalPages={Math.max(1, data?.pagination.lastPage ?? 1)} itemsPerPage={perPage} totalItems={total}
               onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
           </div>
+          </>
         )}
-        <div className="border-t border-dash-border-soft px-4 py-2.5 text-xs text-dash-muted">Showing {total} order{total === 1 ? "" : "s"}</div>
-      </section>
+        <Separator />
+        <div className="px-4 py-2.5 text-xs text-muted-foreground">Showing {total} order{total === 1 ? "" : "s"}</div>
+      </Card>
 
       <OrderDetailDialog orderId={viewId} focusPay={focusPay} canWrite={writable}
         onClose={() => { setViewId(null); setFocusPay(false) }} onChanged={load} />
 
       <Dialog open={!!confirmRow} onOpenChange={(o) => !o && setConfirmRow(null)}>
-        <DialogContent className="gap-0 border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-md">
-          <div className="border-b border-dash-border-soft px-6 py-4">
-            <DialogTitle className="font-dash-display text-xl font-bold">Deliver {confirmRow?.orderNumber}</DialogTitle>
-            <DialogDescription className="text-[13px]">Collect {formatCurrency(confirmRow?.dueAmount ?? 0)} in cash and mark this order as delivered?</DialogDescription>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2 px-6 py-4">
-            <button type="button" className={tOutlineBtn} onClick={() => setConfirmRow(null)} disabled={busyId != null}>Cancel</button>
-            <button type="button" className={tPrimaryBtn} onClick={() => confirmRow && move(confirmRow)} disabled={busyId != null}>Collect &amp; deliver</button>
-          </div>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Deliver {confirmRow?.orderNumber}</DialogTitle>
+            <DialogDescription>Collect {formatCurrency(confirmRow?.dueAmount ?? 0)} in cash and mark this order as delivered?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmRow(null)} disabled={busyId != null}>Cancel</Button>
+            <Button type="button" onClick={() => confirmRow && move(confirmRow)} disabled={busyId != null}>Collect &amp; deliver</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

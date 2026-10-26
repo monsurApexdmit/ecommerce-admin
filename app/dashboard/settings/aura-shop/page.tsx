@@ -4,10 +4,22 @@ import { useCallback, useEffect, useState } from "react"
 import { Globe } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { settingsApi, resolveStorageUrl, type AuraShopHeroSlide } from "@/lib/settingsApi"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { SlideDots } from "@/components/common/SlideDots"
+import { EmptyState } from "@/components/common/EmptyState"
 
 const TYPES = ["Retail", "Wholesale", "Manufacturing", "Service", "Restaurant", "Other"]
 const PRESETS: [string, string][] = [
@@ -36,12 +48,6 @@ interface Form {
   slides: Slide[]
 }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const textarea = "w-full resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const label = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const outlineBtn = "inline-flex h-11 items-center justify-center rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const smBtn = "inline-flex h-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card px-3 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:opacity-40"
-const card = "flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5"
 
 const S = (v: unknown) => (typeof v === "string" ? v : "")
 const URLRE = /^https?:\/\/[^\s/$.?#][^\s]*$/i
@@ -122,20 +128,15 @@ export default function AuraShopSettingsPage() {
 
   if (blocked) return blocked
 
-  const shell = `${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`
-  const header = (
-    <div>
-      <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Aura Shop</h1>
-      <p className="mt-1 text-sm text-dash-muted">Manage the Aura Shop storefront homepage hero slider.</p>
-    </div>
-  )
+  const shell = "flex flex-col gap-5"
+  const header = <PageHeader title="Aura Shop" description="Manage the Aura Shop storefront homepage hero slider." />
 
   if (loading || !d || !saved) {
     return (
       <div className={shell}>
         {header}
-        <Skeleton className="h-64 w-full rounded-[14px]" />
-        <Skeleton className="h-96 w-full rounded-[14px]" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     )
   }
@@ -224,29 +225,26 @@ export default function AuraShopSettingsPage() {
   }
 
   const text = (lbl: string, key: keyof Omit<Form, "slides" | "type">, placeholder = "") => (
-    <label className={label}>
-      {lbl}
-      <input type="text" className={input} value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: e.target.value })} />
-    </label>
+    <FormField label={lbl} htmlFor={`aura-${key}`} className="min-w-0">
+      <Input id={`aura-${key}`} type="text" value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: e.target.value })} />
+    </FormField>
   )
 
   return (
     <div className={shell}>
       {header}
 
-      <section aria-label="Business details" className={card}>
-        <div>
-          <h2 className="font-dash-display text-lg font-bold">Business details</h2>
-          <p className="mt-1 text-[13px] text-dash-muted">Shown on the storefront footer and contact areas.</p>
-        </div>
+      <SectionCard aria-label="Business details" title="Business details" description="Shown on the storefront footer and contact areas.">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
           {text("Business name *", "name", "e.g. Aura Retail")}
-          <label className={label}>
-            Business type
-            <select className={cn(input, "px-2.5")} value={d.type} onChange={(e) => patch({ type: e.target.value })}>
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
+          <FormField label="Business type" htmlFor="aura-type" className="min-w-0">
+            <Select value={String(d.type)} onValueChange={(val) => patch({ type: val })}>
+              <SelectTrigger id="aura-type" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TYPES.map((t) => <SelectItem key={t} value={String(t)}>{t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
           {text("Registration number", "reg")}
           {text("GST / VAT number", "gst")}
           {text("Website", "web", "https://example.com")}
@@ -254,120 +252,104 @@ export default function AuraShopSettingsPage() {
           {text("Instagram", "ig", "https://instagram.com/…")}
           {text("Twitter / X", "tw", "https://x.com/…")}
         </div>
-      </section>
+      </SectionCard>
 
-      <section aria-label="Homepage hero" className={card}>
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-[10px] bg-dash-accent-soft text-dash-accent"><Globe className="size-5" /></span>
-          <div>
-            <h2 className="font-dash-display text-lg font-bold">Homepage Hero</h2>
-            <p className="mt-0.5 text-[13px] text-dash-muted">Control the large slider shown on the Aura Shop landing page.</p>
-          </div>
-        </div>
-
-        <label className={cn(label, "max-w-[360px]")}>
-          Autoplay Interval (milliseconds)
-          <input type="number" min={2000} step={500} className={input} value={d.auto} onChange={(e) => patch({ auto: e.target.value })} />
-          <span className="text-xs font-normal text-dash-muted">Example: 6000 rotates slides every 6 seconds. Minimum 2000.</span>
-        </label>
+      <SectionCard
+        aria-label="Homepage hero"
+        title={<span className="flex items-center gap-2"><Globe className="size-5 text-muted-foreground" />Homepage Hero</span>}
+        description="Control the large slider shown on the Aura Shop landing page."
+        contentClassName="flex flex-col gap-4"
+      >
+        <FormField label="Autoplay Interval (milliseconds)" htmlFor="aura-auto" description="Example: 6000 rotates slides every 6 seconds. Minimum 2000." className="max-w-[360px]">
+          <Input id="aura-auto" type="number" min={2000} step={500} value={d.auto} onChange={(e) => patch({ auto: e.target.value })} />
+        </FormField>
 
         <div aria-label="Live preview" className="relative flex h-[220px] flex-col justify-center gap-2.5 overflow-hidden rounded-2xl px-9 text-white" style={{ background: pv.bg }}>
           <span className="absolute inset-0" style={{ background: pv.over }} />
-          <span className="relative self-start rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold">{pv.tag}</span>
-          <span className="relative max-w-[560px] font-dash-display text-[28px] font-bold leading-[1.1]">{pv.title}</span>
+          <Badge variant="secondary" className="relative self-start">{pv.tag}</Badge>
+          <span className="relative max-w-[560px] text-[28px] font-bold leading-[1.1]">{pv.title}</span>
           <span className="relative max-w-[520px] text-sm opacity-90">{pv.sub}</span>
-          <span className="relative flex h-10 items-center self-start rounded-[10px] bg-white px-4 text-sm font-bold text-dash-ink">{pv.cta} →</span>
-          <span className="absolute right-3.5 top-3 rounded-md bg-black/35 px-2 py-[3px] text-[11px] font-bold">{pv.note}</span>
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {enabledIdx.map((i) => (
-              <button key={i} type="button" aria-label={`Show slide ${i + 1}`} onClick={() => setCur(i)} className="h-2 rounded-full bg-white" style={{ width: i === curIdx ? 22 : 8, opacity: i === curIdx ? 1 : 0.5 }} />
-            ))}
-          </div>
+          <Button type="button" variant="secondary" tabIndex={-1} aria-hidden="true" className="pointer-events-none relative self-start">{pv.cta} →</Button>
+          <Badge variant="secondary" className="absolute right-3.5 top-3">{pv.note}</Badge>
+          <SlideDots tone="light" indices={enabledIdx} current={curIdx} onSelect={setCur} className="absolute bottom-3 left-1/2 -translate-x-1/2" />
         </div>
-        <p className="text-[13px] text-dash-muted">
+        <p className="text-sm text-muted-foreground">
           {enabledIdx.length} of {d.slides.length} slide(s) enabled · rotates every {(Number(d.auto) || 6000) / 1000}s on the storefront.
         </p>
 
         {d.slides.length === 0 && (
-          <div className="rounded-xl border-2 border-dashed border-dash-border p-6 text-center text-sm text-dash-muted">
-            No slides yet. Use “+ Add slide” to create the first hero slide.
-          </div>
+          <EmptyState bordered title="No slides yet" description="Use “+ Add slide” to create the first hero slide." />
         )}
 
         <div className="flex flex-col gap-4">
           {d.slides.map((s, i) => (
-            <div key={s.id + i} className="flex flex-col gap-4 rounded-xl border border-dash-border p-4">
+            <Card key={s.id + i} className="gap-4 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div>
-                  <h3 className="text-base font-bold">Slide {i + 1}</h3>
-                  <p className="mt-0.5 text-[13px] text-dash-muted">Edit image, headline, CTA, and link.</p>
+                  <h3 className="text-base font-semibold">Slide {i + 1}</h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">Edit image, headline, CTA, and link.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-2 text-[13px]">
-                    Enabled
-                    <button type="button" role="switch" aria-checked={s.enabled} aria-label="Slide enabled" onClick={() => patchSlide(i, { enabled: !s.enabled })}
-                      className={cn("flex h-5 w-9 items-center rounded-full p-0.5 transition-colors", s.enabled ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}>
-                      <span className="size-4 rounded-full bg-white" />
-                    </button>
-                  </span>
-                  <button type="button" className={cn(smBtn, "w-9 px-0")} disabled={i === 0} aria-label="Move slide up" onClick={() => move(i, -1)}>↑</button>
-                  <button type="button" className={cn(smBtn, "w-9 px-0")} disabled={i === d.slides.length - 1} aria-label="Move slide down" onClick={() => move(i, 1)}>↓</button>
-                  <button type="button" className={cn(smBtn, "text-dash-danger-fg")} onClick={() => { if (window.confirm(`Delete slide ${i + 1}? Save to apply.`)) patch({ slides: d.slides.filter((_, k) => k !== i) }) }}>Delete</button>
+                  <FormField orientation="horizontal" label="Enabled" htmlFor={`slide-${i}-enabled`} className="w-auto gap-2">
+                    <Switch id={`slide-${i}-enabled`} checked={s.enabled} aria-label="Slide enabled" onCheckedChange={() => patchSlide(i, { enabled: !s.enabled })} />
+                  </FormField>
+                  <Button type="button" variant="outline" size="icon-sm" disabled={i === 0} aria-label="Move slide up" onClick={() => move(i, -1)}>↑</Button>
+                  <Button type="button" variant="outline" size="icon-sm" disabled={i === d.slides.length - 1} aria-label="Move slide down" onClick={() => move(i, 1)}>↓</Button>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => { if (window.confirm(`Delete slide ${i + 1}? Save to apply.`)) patch({ slides: d.slides.filter((_, k) => k !== i) }) }}>Delete</Button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-4">
                 <div className="flex max-w-[320px] flex-[1_1_240px] flex-col gap-2.5">
-                  <div className="flex h-40 items-center justify-center overflow-hidden rounded-[10px] border border-dash-border bg-dash-neutral-soft text-[13px] text-dash-muted" style={s.imagePath ? { background: imgBg(s.imagePath) } : undefined}>
+                  <div className="flex h-40 items-center justify-center overflow-hidden rounded-md border bg-muted text-sm text-muted-foreground" style={s.imagePath ? { background: imgBg(s.imagePath) } : undefined}>
                     {s.imagePath ? "" : "No image uploaded"}
                   </div>
-                  <label className="block cursor-pointer rounded-[10px] border-2 border-dashed border-dash-border bg-dash-neutral-soft p-3 text-center">
-                    <input type="file" accept="image/*" className="sr-only" disabled={uploading !== null} onChange={(e) => { upload(i, e.target.files?.[0]); e.target.value = "" }} />
-                    <span className="block text-sm font-semibold text-dash-accent">{uploading === i ? "Uploading…" : s.imagePath ? "Change slide image" : "Upload slide image"}</span>
-                    <span className="block text-xs text-dash-muted">PNG, JPG, WEBP up to 10MB</span>
-                  </label>
-                  {s.imagePath && <button type="button" className={smBtn} onClick={() => patchSlide(i, { imagePath: "" })}>Remove image</button>}
+                  <Label className="cursor-pointer">
+                    <Input type="file" accept="image/*" className="sr-only" disabled={uploading !== null} onChange={(e) => { upload(i, e.target.files?.[0]); e.target.value = "" }} />
+                    <span className="block text-sm font-semibold text-primary">{uploading === i ? "Uploading…" : s.imagePath ? "Change slide image" : "Upload slide image"}</span>
+                    <span className="block text-xs text-muted-foreground">PNG, JPG, WEBP up to 10MB</span>
+                  </Label>
+                  {s.imagePath && <Button type="button" variant="outline" size="sm" onClick={() => patchSlide(i, { imagePath: "" })}>Remove image</Button>}
                 </div>
                 <div className="grid min-w-0 flex-[999_1_360px] grid-cols-[repeat(auto-fit,minmax(240px,1fr))] content-start gap-3">
-                  <label className={label}>Badge Tag<input type="text" className={input} value={s.tag} onChange={(e) => patchSlide(i, { tag: e.target.value })} /></label>
-                  <label className={label}>CTA Label<input type="text" className={input} value={s.cta} onChange={(e) => patchSlide(i, { cta: e.target.value })} /></label>
-                  <label className={cn(label, "col-span-full")}>Title *<textarea rows={2} className={textarea} value={s.title} onChange={(e) => patchSlide(i, { title: e.target.value })} /></label>
-                  <label className={cn(label, "col-span-full")}>Subtitle<textarea rows={3} className={textarea} value={s.subtitle} onChange={(e) => patchSlide(i, { subtitle: e.target.value })} /></label>
-                  <label className={label}>Button Link<input type="text" className={input} value={s.link} placeholder="/shop" onChange={(e) => patchSlide(i, { link: e.target.value })} /></label>
-                  <div className={label}>
-                    Overlay Gradient Classes
-                    <input type="text" aria-label="Overlay Gradient Classes" className={input} value={s.gradient} onChange={(e) => patchSlide(i, { gradient: e.target.value })} />
+                  <FormField label="Badge Tag" htmlFor={`slide-${i}-tag`} className="min-w-0"><Input id={`slide-${i}-tag`} type="text" value={s.tag} onChange={(e) => patchSlide(i, { tag: e.target.value })} /></FormField>
+                  <FormField label="CTA Label" htmlFor={`slide-${i}-cta`} className="min-w-0"><Input id={`slide-${i}-cta`} type="text" value={s.cta} onChange={(e) => patchSlide(i, { cta: e.target.value })} /></FormField>
+                  <FormField label="Title *" htmlFor={`slide-${i}-title`} className="col-span-full min-w-0"><Textarea id={`slide-${i}-title`} rows={2} value={s.title} onChange={(e) => patchSlide(i, { title: e.target.value })} /></FormField>
+                  <FormField label="Subtitle" htmlFor={`slide-${i}-subtitle`} className="col-span-full min-w-0"><Textarea id={`slide-${i}-subtitle`} rows={3} value={s.subtitle} onChange={(e) => patchSlide(i, { subtitle: e.target.value })} /></FormField>
+                  <FormField label="Button Link" htmlFor={`slide-${i}-link`} className="min-w-0"><Input id={`slide-${i}-link`} type="text" value={s.link} placeholder="/shop" onChange={(e) => patchSlide(i, { link: e.target.value })} /></FormField>
+                  <FormField label="Overlay Gradient Classes" htmlFor={`slide-${i}-gradient`} className="min-w-0">
+                    <Input id={`slide-${i}-gradient`} type="text" value={s.gradient} onChange={(e) => patchSlide(i, { gradient: e.target.value })} />
                     <div className="flex flex-wrap gap-1.5">
                       {PRESETS.map(([l, g]) => (
-                        <button key={l} type="button" onClick={() => patchSlide(i, { gradient: g })} className="h-[30px] rounded-full border border-dash-border bg-dash-card px-2.5 text-xs font-semibold hover:bg-dash-neutral-soft">{l}</button>
+                        <Button key={l} type="button" variant="outline" size="sm" onClick={() => patchSlide(i, { gradient: g })}>{l}</Button>
                       ))}
                     </div>
-                  </div>
+                  </FormField>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="h-11 rounded-[10px] border-2 border-dashed border-dash-border bg-dash-neutral-soft px-4 text-sm font-semibold hover:bg-dash-border/40"
+          <Button type="button" variant="outline"
             onClick={() => patch({ slides: [...d.slides, { id: `aura-${Date.now().toString(36)}`, imagePath: "", tag: "", title: "New slide", subtitle: "", cta: "Shop now", link: "/shop", gradient: PRESETS[0][1], enabled: true }] })}>
             + Add slide
-          </button>
-          <button type="button" className={outlineBtn} onClick={() => { if (window.confirm("Replace all slides with the three default slides? Save to apply.")) patch({ slides: DEFAULT_SLIDES.map((x) => ({ ...x })) }) }}>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => { if (window.confirm("Replace all slides with the three default slides? Save to apply.")) patch({ slides: DEFAULT_SLIDES.map((x) => ({ ...x })) }) }}>
             Restore default slides
-          </button>
+          </Button>
         </div>
-      </section>
+      </SectionCard>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2.5 rounded-[14px] border border-dash-border bg-dash-card px-4 py-3.5 shadow-[0_-6px_20px_rgba(14,21,37,0.06)]">
-        <span className={cn("text-[13px]", err ? "text-dash-danger-fg" : "text-dash-muted")}>{err || (dirty ? "You have unsaved changes." : "All changes saved.")}</span>
+      <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
+        <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>{err || (dirty ? "You have unsaved changes." : "All changes saved.")}</span>
         <div className="ml-auto flex gap-2">
-          <button type="button" className={outlineBtn} disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(undefined); toast.success("Changes discarded") }}>Discard</button>
-          <button type="button" className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-50" disabled={!dirty || saving || uploading !== null} onClick={save}>
+          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(undefined); toast.success("Changes discarded") }}>Discard</Button>
+          <Button type="button" disabled={!dirty || saving || uploading !== null} onClick={save}>
             {saving ? "Saving…" : "Save Aura Shop Settings"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

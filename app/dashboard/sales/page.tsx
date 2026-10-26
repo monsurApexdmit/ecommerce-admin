@@ -7,14 +7,25 @@ import {
   Banknote, CheckCircle2, ChevronsRight, Clock, Download, Eye, MapPin, Plus, Printer, Receipt, Search, Truck, Wallet, X, XCircle,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { DateRangeFilter } from "@/components/ui/date-range-filter"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
-import { saleDisplayStatus, SALE_STATUS_STYLE, SaleDetailDialog } from "@/components/sales/sale-detail-dialog"
+import { Card } from "@/components/ui/card"
+import { Kbd } from "@/components/ui/kbd"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/common/PageHeader"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { saleDisplayStatus, SALE_PAY_VARIANT, SaleDetailDialog } from "@/components/sales/sale-detail-dialog"
 import { RecordPaymentDialog, salePaymentDue } from "@/components/sales/record-payment-dialog"
 import { NewSaleModal } from "@/components/sales/new-sale-modal"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
@@ -24,15 +35,8 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
 
-const STATUS_STYLE = SALE_STATUS_STYLE
-
-const PAY_STYLE = {
-  Paid: "bg-dash-success-soft text-dash-success-fg",
-  Partial: "bg-dash-warn-soft text-dash-warn-fg",
-  Due: "bg-dash-danger-soft text-dash-danger-fg",
-} as const
+const PAY_STYLE = SALE_PAY_VARIANT
 
 interface Stats {
   totalSells: number
@@ -100,9 +104,6 @@ function shippingLines(s: SellResponse): string[] {
   ].filter(Boolean)
 }
 
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
 
 export default function SalesPage() {
   const { formatCurrency, settings } = useCompanySettings()
@@ -338,32 +339,29 @@ export default function SalesPage() {
   const selectedTotal = selectedSales.reduce((n, s) => n + (s.status === "Cancelled" ? 0 : Number(s.amount) || 0), 0)
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className="flex flex-col gap-5">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Sales</h1>
-          <p className="mt-1 text-sm text-dash-muted">
-            Sales, POS and online orders with customer, payment and delivery details. Fulfilment and shipments live in{" "}
-            <Link href="/dashboard/orders" className="font-semibold text-dash-accent hover:underline">Orders</Link>.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/pos" className="inline-flex h-11 items-center rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">
-            Open POS
-          </Link>
-          <button type="button" onClick={() => setNewOpen(true)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+      <PageHeader
+        title="Sales"
+        description={<>
+          Sales, POS and online orders with customer, payment and delivery details. Fulfilment and shipments live in{" "}
+          <Link href="/dashboard/orders" className="font-medium text-primary underline-offset-4 hover:underline">Orders</Link>.
+        </>}
+        actions={<>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/pos">Open POS</Link>
+          </Button>
+          <Button type="button" onClick={() => setNewOpen(true)}>
             <Plus className="size-4" aria-hidden /> New sale
-            <kbd className="rounded-md border border-white/50 px-1.5 py-px text-[11px]">N</kbd>
-          </button>
-        </div>
-      </div>
+            <Kbd>N</Kbd>
+          </Button>
+        </>}
+      />
 
       {/* KPIs */}
       {statsLoading || !stats ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px]" />)}
         </div>
       ) : (
         <StatsCards stats={[
@@ -382,7 +380,7 @@ export default function SalesPage() {
       )}
 
       {/* Table card */}
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs
             value={tab}
@@ -401,19 +399,20 @@ export default function SalesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[260px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search sales</span>
-            <input
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Label htmlFor="sales-search" className="sr-only">Search sales</Label>
+            <Input
+              id="sales-search"
               type="search"
               placeholder="Search invoice, customer or phone…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted"
+              className="pl-8"
             />
-          </label>
+          </div>
           <Select value={paymentFilter} onValueChange={(v) => { setPaymentFilter(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment status" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Payment status" className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Payment: All</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
@@ -422,7 +421,7 @@ export default function SalesPage() {
             </SelectContent>
           </Select>
           <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment method" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Payment method" className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Method: All</SelectItem>
               <SelectItem value="Cash">Cash</SelectItem>
@@ -435,7 +434,7 @@ export default function SalesPage() {
             </SelectContent>
           </Select>
           <Select value={channel} onValueChange={(v) => { setChannel(v); setPage(1) }}>
-            <SelectTrigger aria-label="Channel" className={cn(filterSelect, "w-[150px]")}><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Channel" className="w-[150px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Channel: All</SelectItem>
               <SelectItem value="manual">Channel: Sales</SelectItem>
@@ -451,80 +450,70 @@ export default function SalesPage() {
             className="flex flex-wrap items-center gap-2"
           />
           {hasFilters && (
-            <button type="button" onClick={resetFilters} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+            <Button type="button" variant="ghost" onClick={resetFilters}>
               <X className="size-4" aria-hidden /> Clear
-            </button>
+            </Button>
           )}
-          {mayExport && <button type="button" onClick={handleExport} disabled={exporting}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:opacity-50">
+          {mayExport && <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}>
             <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : checked.size > 0 ? `Export ${checked.size}` : "Export"}
-          </button>}
+          </Button>}
         </div>
 
         {/* Bulk actions */}
-        {checked.size > 0 && (
-          <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
-            <span className="text-sm font-semibold">{checked.size} selected</span>
-            <button type="button" onClick={() => setStatus(selectedSales.filter((s) => s.status === "Pending"), "Processing")}
-              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">
+        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+            <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selectedSales.filter((s) => s.status === "Pending"), "Processing")}>
               Mark processing
-            </button>
-            <button type="button" onClick={() => setStatus(selectedSales.filter((s) => s.status !== "Delivered" && s.status !== "Cancelled"), "Delivered")}
-              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selectedSales.filter((s) => s.status !== "Delivered" && s.status !== "Cancelled"), "Delivered")}>
               Mark delivered
-            </button>
-            <button type="button" onClick={printSelected}
-              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={printSelected}>
               Print invoices
-            </button>
-            <button type="button" onClick={() => sendToCourier(selectedSales)}
-              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => sendToCourier(selectedSales)}>
               Send to courier
-            </button>
-            <button type="button" disabled={unpaidSelected.length === 0}
-              onClick={() => setPayTargets(unpaidSelected)}
-              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10 disabled:opacity-40">
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={unpaidSelected.length === 0}
+              onClick={() => setPayTargets(unpaidSelected)}>
               Record payment
-            </button>
-            <button type="button" onClick={() => setChecked(new Set())}
-              className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">
-              Clear
-            </button>
-          </div>
-        )}
+            </Button>
+        </BulkBar>
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th scope="col" className="w-5 py-3 pl-4 pr-2">
+          <Table className="min-w-[980px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="w-5 pl-4">
                   <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
-                </th>
-                <th scope="col" className="px-2 py-3 font-semibold">Invoice</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Customer</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Delivery</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Items</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Method</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Amount</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Payment</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Status</th>
-                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+                <TableHead scope="col">Invoice</TableHead>
+                <TableHead scope="col">Customer</TableHead>
+                <TableHead scope="col">Delivery</TableHead>
+                <TableHead scope="col">Items</TableHead>
+                <TableHead scope="col">Method</TableHead>
+                <TableHead scope="col" className="text-right">Amount</TableHead>
+                <TableHead scope="col">Payment</TableHead>
+                <TableHead scope="col">Status</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
                 [1, 2, 3, 4, 5].map((i) => (
-                  <tr key={i}><td colSpan={10} className="px-4 py-3"><Skeleton className="h-9 rounded" /></td></tr>
+                  <TableRow key={i}><TableCell colSpan={10} className="px-4"><Skeleton className="h-9" /></TableCell></TableRow>
                 ))
               ) : sales.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="py-14 text-center">
-                    <Receipt className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">No sales found</p>
-                    <p className="text-sm text-dash-muted">{hasFilters ? "Try clearing the filters." : "Create your first sale with New sale."}</p>
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={10} className="whitespace-normal">
+                    <EmptyState
+                      icon={Receipt}
+                      title="No sales found"
+                      description={hasFilters ? "Try clearing the filters." : "Create your first sale with New sale."}
+                      className="p-4 md:p-6"
+                    />
+                  </TableCell>
+                </TableRow>
               ) : (
                 sales.map((s) => {
                   const pay = paymentOf(s)
@@ -533,76 +522,82 @@ export default function SalesPage() {
                   const ck = checked.has(s.id)
                   const step = nextStep(s)
                   return (
-                    <tr key={s.id} className={ck ? "bg-dash-accent-soft/40" : ""}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                    <TableRow key={s.id} data-state={ck ? "selected" : undefined}>
+                      <TableCell className="pl-4">
                         <Checkbox checked={ck} onCheckedChange={() => toggleOne(s.id)} aria-label={`Select ${s.invoiceNo}`} />
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                      </TableCell>
+                      <TableCell>
                         <div className="font-semibold">#{s.invoiceNo}</div>
-                        <div className="text-xs text-dash-muted">
+                        <div className="text-xs text-muted-foreground">
                           {new Date(s.orderTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ·{" "}
                           {new Date(s.orderTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase()}
                         </div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                      </TableCell>
+                      <TableCell>
                         <div className="font-semibold">{s.customerName}</div>
-                        <div className="text-xs text-dash-muted">{s.shippingPhone || "—"} · {CHANNEL_LABEL[s.source ?? "manual"] ?? s.source}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="text-xs text-muted-foreground">{s.shippingPhone || "—"} · {CHANNEL_LABEL[s.source ?? "manual"] ?? s.source}</div>
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1">
-                          {place && <MapPin className="size-3.5 shrink-0 text-dash-muted" aria-hidden />}
+                          {place && <MapPin className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
                           <span>{place || "No delivery"}</span>
                         </div>
-                        <div className="text-xs text-dash-muted">{s.carrier || s.shippingMethodName || "Pickup"}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-dash-neutral-fg tabular-nums">
+                        <div className="text-xs text-muted-foreground">{s.carrier || s.shippingMethodName || "Pickup"}</div>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
                         {qty > 0 ? `${qty} item${qty === 1 ? "" : "s"}` : "—"}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">{s.method}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">
+                      </TableCell>
+                      <TableCell>{s.method}</TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {formatCurrency(Number(s.amount))}
-                        {pay.due > 0 && <div className="text-xs font-medium text-dash-danger-fg">Due {formatCurrency(pay.due)}</div>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <span className={cn("rounded-md px-2.5 py-[3px] text-xs font-bold", PAY_STYLE[pay.label])}>{pay.label}</span>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-xs font-bold", STATUS_STYLE[saleDisplayStatus(s)] ?? "bg-dash-neutral-soft text-dash-neutral-fg")}>
-                          <span className="size-1.5 rounded-full bg-current" aria-hidden /> {saleDisplayStatus(s)}
-                        </span>
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        {pay.due > 0 && <div className="text-xs font-medium text-destructive">Due {formatCurrency(pay.due)}</div>}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={pay.label} variant={PAY_STYLE[pay.label]} />
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={saleDisplayStatus(s)} />
+                      </TableCell>
+                      <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <button type="button" aria-label={`View ${s.invoiceNo}`} className={iconBtn} onClick={() => openDetail(s)}><Eye className="size-4" /></button>
-                          <button type="button" aria-label={`Print ${s.invoiceNo}`} className={iconBtn} onClick={() => printInvoice(s)}><Printer className="size-4" /></button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`View ${s.invoiceNo}`} onClick={() => openDetail(s)}><Eye className="size-4" /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`Print ${s.invoiceNo}`} onClick={() => printInvoice(s)}><Printer className="size-4" /></Button>
                           {step && (
-                            <button type="button" aria-label={`${step.label} ${s.invoiceNo}`} title={step.label}
-                              className={cn(iconBtn, "text-dash-accent")} onClick={() => advance(s)}><ChevronsRight className="size-4" /></button>
+                            <WithTooltip content={step.label}>
+                              <Button type="button" variant="outline" size="icon" aria-label={`${step.label} ${s.invoiceNo}`}
+                                onClick={() => advance(s)}><ChevronsRight className="size-4" /></Button>
+                            </WithTooltip>
                           )}
                           {pay.due > 0 && s.status !== "Cancelled" && (
-                            <button type="button" aria-label={`Record payment for ${s.invoiceNo}`} title="Record payment"
-                              className={iconBtn} onClick={() => setPayTargets([s])}><Wallet className="size-4" /></button>
+                            <WithTooltip content="Record payment">
+                              <Button type="button" variant="outline" size="icon" aria-label={`Record payment for ${s.invoiceNo}`}
+                                onClick={() => setPayTargets([s])}><Wallet className="size-4" /></Button>
+                            </WithTooltip>
                           )}
                           {s.status !== "Delivered" && s.status !== "Cancelled" && (
-                            <button type="button" aria-label={`Cancel ${s.invoiceNo}`} title="Cancel sale"
-                              className={cn(iconBtn, "text-dash-danger-fg")} onClick={() => setStatus([s], "Cancelled")}><XCircle className="size-4" /></button>
+                            <WithTooltip content="Cancel sale">
+                              <Button type="button" variant="outline" size="icon" aria-label={`Cancel ${s.invoiceNo}`}
+                                className="text-destructive" onClick={() => setStatus([s], "Cancelled")}><XCircle className="size-4" /></Button>
+                            </WithTooltip>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {!loading && sales.length > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
+          <>
+          <Separator />
+          <div className="p-4 pt-3">
             {checked.size > 0 ? (
-              <p className="mb-3 text-xs text-dash-muted tabular-nums">{checked.size} selected · Total {formatCurrency(selectedTotal)}</p>
+              <p className="mb-3 text-xs text-muted-foreground tabular-nums">{checked.size} selected · Total {formatCurrency(selectedTotal)}</p>
             ) : summary ? (
-              <p className="mb-3 text-xs text-dash-muted tabular-nums">{rangeLabel(summary.count)} · Total {formatCurrency(summary.total)}</p>
+              <p className="mb-3 text-xs text-muted-foreground tabular-nums">{rangeLabel(summary.count)} · Total {formatCurrency(summary.total)}</p>
             ) : null}
             <PaginationControl
               currentPage={page}
@@ -613,8 +608,9 @@ export default function SalesPage() {
               onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
             />
           </div>
+          </>
         )}
-      </section>
+      </Card>
 
       <SaleDetailDialog
         sale={selected}

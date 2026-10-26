@@ -5,6 +5,8 @@ import { Package } from "lucide-react"
 import type { Product } from "@/contexts/product-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 export interface PosTint {
     bg: string
@@ -38,18 +40,20 @@ export function variantUnitPrice(product: Product, v: NonNullable<Product["varia
     return applyOffer(base, v.offerPrice ?? product.offerPrice, v.offerType ?? product.offerType)
 }
 
-/** Lowest price shown on the card; products with variants read "From ৳X". */
+/** Lowest price shown on the card; reads "From ৳X" only when variant prices differ. */
 export function cardPrice(product: Product): { price: number; from: boolean } {
     const vs = product.variants ?? []
     if (vs.length === 0) return { price: productUnitPrice(product), from: false }
     const prices = vs.map((v) => variantUnitPrice(product, v))
-    return { price: Math.min(...prices), from: vs.length > 1 }
+    const min = Math.min(...prices)
+    // "From" only when variants are priced differently
+    return { price: min, from: Math.max(...prices) - min > 0.005 }
 }
 
-export function stockPill(available: number, lowAt = 5) {
-    if (available <= 0) return { text: "Out of stock", short: "Out", cls: "bg-dash-danger-soft text-dash-danger-fg" }
-    if (available <= lowAt) return { text: `Only ${available} left`, short: `${available} left`, cls: "bg-dash-warn-soft text-dash-warn-fg" }
-    return { text: `${available} in stock`, short: `${available} left`, cls: "bg-dash-neutral-soft text-dash-neutral-fg" }
+export function stockPill(available: number, lowAt = 5): { text: string; short: string; variant: "destructive" | "secondary" | "outline"; tone: string } {
+    if (available <= 0) return { text: "Out of stock", short: "Out", variant: "destructive", tone: "text-destructive" }
+    if (available <= lowAt) return { text: `Only ${available} left`, short: `${available} left`, variant: "secondary", tone: "text-foreground" }
+    return { text: `${available} in stock`, short: `${available} left`, variant: "outline", tone: "text-muted-foreground" }
 }
 
 export function PosProductCard({ product, available, inCartQty, tint, onAddToCart, compact, lowAt }: PosProductCardProps) {
@@ -64,25 +68,23 @@ export function PosProductCard({ product, available, inCartQty, tint, onAddToCar
     const hasImage = !!product.image && product.image !== "/placeholder.svg" && !imgFailed
 
     return (
-        <button
+        <Button
             type="button"
+            variant={inCartQty > 0 ? "secondary" : "outline"}
             onClick={() => !out && onAddToCart(product)}
             disabled={out}
             aria-label={`Add ${product.name}, ${price}`}
             className={cn(
-                "relative flex flex-col text-left font-dash-body text-dash-ink transition-colors",
-                compact ? "min-h-[88px] justify-between gap-1.5 rounded-xl px-3 py-2.5" : "gap-2.5 rounded-[14px] p-2.5",
-                inCartQty > 0 ? "border-2 border-dash-accent" : "border border-dash-border hover:border-dash-accent/50",
-                out ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                "relative h-auto w-full min-w-0 flex-col items-stretch overflow-hidden whitespace-normal text-left",
+                compact ? "min-h-[88px] justify-between gap-1.5" : "justify-start gap-2.5",
             )}
-            style={{ background: compact && !out ? tint.bg : "var(--dash-card)" }}
         >
             {compact ? (
                 <>
-                    <span className="pr-6 text-[13px] font-semibold leading-snug">{product.name}</span>
-                    <span className="flex items-baseline justify-between gap-2">
-                        <span className="text-[15px] font-bold tabular-nums">{price}</span>
-                        <span className={cn("text-[11px] font-semibold", pill.cls.split(" ")[1])}>{pill.short}</span>
+                    <span className="pr-6 text-sm font-semibold leading-snug">{product.name}</span>
+                    <span className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                        <span className="whitespace-nowrap font-bold tabular-nums">{price}</span>
+                        <span className={cn("whitespace-nowrap text-xs font-semibold", pill.tone)}>{pill.short}</span>
                     </span>
                 </>
             ) : (
@@ -104,22 +106,23 @@ export function PosProductCard({ product, available, inCartQty, tint, onAddToCar
                     </span>
                     <span className="flex flex-col gap-0.5">
                         <span className="line-clamp-2 text-sm font-semibold leading-snug">{product.name}</span>
-                        <span className="text-xs text-dash-muted">{product.sku || "—"}</span>
+                        <span className="text-xs text-muted-foreground">{product.sku || "—"}</span>
                     </span>
-                    <span className="flex items-center justify-between gap-1.5">
-                        <span className="flex flex-col">
-                            <span className="font-dash-display text-[17px] font-bold tabular-nums">{price}</span>
-                            {offerNote && <span className="text-[11px] font-semibold text-dash-success-fg">{offerNote}</span>}
+                    <span className="mt-auto flex min-w-0 flex-col items-start gap-1.5">
+                        <span className="flex min-w-0 max-w-full items-baseline gap-1 whitespace-nowrap">
+                            {cp.from && <span className="text-xs font-medium text-muted-foreground">From</span>}
+                            <span className="truncate text-lg font-bold tabular-nums">{formatCurrency(cp.price)}</span>
                         </span>
-                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", pill.cls)}>{pill.text}</span>
+                        {offerNote && <span className="text-xs font-semibold text-muted-foreground">{offerNote}</span>}
+                        <Badge variant={pill.variant} className="max-w-full">{pill.text}</Badge>
                     </span>
                 </>
             )}
             {inCartQty > 0 && (
-                <span className="absolute right-2 top-2 flex h-[26px] min-w-[26px] items-center justify-center rounded-full bg-dash-accent px-1.5 text-xs font-bold text-white">
+                <Badge className="absolute right-2 top-2 h-6 min-w-6 rounded-full px-1.5 tabular-nums">
                     ×{inCartQty}
-                </span>
+                </Badge>
             )}
-        </button>
+        </Button>
     )
 }

@@ -5,6 +5,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { FormField } from "@/components/common/FormField"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { StatTile } from "@/components/common/StatTile"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Trash2 } from "lucide-react"
@@ -47,10 +59,6 @@ const METHODS: { value: PayMethod; label: string }[] = [
 const STORE_PICKUP = "pickup"
 const COURIERS = ["Own delivery", "Pathao", "Steadfast", "RedX", "Paperfly"]
 const emptyShip = { name: "", phone: "", line1: "", city: "", state: "", zip: "", country: "" }
-
-const sectionTitle = "text-[13px] font-bold uppercase tracking-[0.06em] text-dash-muted"
-const field =
-  "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
 
 export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId }: {
   open: boolean
@@ -356,33 +364,33 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
-        className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[1080px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[1080px]"
+        className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[1080px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
       >
-        <DialogHeader className="border-b border-dash-border px-6 py-[18px] text-left">
-          <DialogTitle className="font-dash-display text-[22px] font-bold">New sale</DialogTitle>
-          <DialogDescription className="text-[13px] text-dash-muted">{today}</DialogDescription>
+        <DialogHeader className="px-6 py-4 text-left">
+          <DialogTitle>New sale</DialogTitle>
+          <DialogDescription>{today}</DialogDescription>
         </DialogHeader>
+        <Separator />
 
         <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-y-auto">
           {/* Left column */}
           <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-[22px] px-6 py-5">
             {/* 1 · Customer */}
             <fieldset className="flex flex-col gap-2.5">
-              <legend className={cn(sectionTitle, "mb-2.5")}>1 · Customer</legend>
+              <SectionTitle as="legend" className="mb-2.5">1 · Customer</SectionTitle>
               <div className="flex gap-2">
                 <div className="min-w-0 flex-1">
                   <CustomerCombobox value={customerId} onValueChange={onCustomerChange} />
                 </div>
-                <button type="button" onClick={() => setAddCustOpen(true)}
-                  className="h-[52px] shrink-0 rounded-xl border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setAddCustOpen(true)}>
                   + New customer
-                </button>
+                </Button>
               </div>
               {customerId && (() => {
                 const c = getCustomerById(customerId)
                 const limit = Number((c as any)?.creditLimit ?? 0)
                 return c ? (
-                  <p className="text-xs text-dash-muted">
+                  <p className="text-xs text-muted-foreground">
                     {[
                       c.phone,
                       c.totalOrders !== undefined ? `${c.totalOrders} past orders` : "",
@@ -392,22 +400,24 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                   </p>
                 ) : null
               })()}
-              {!customerId && <p className="text-xs text-dash-muted">Walk-in sales must be paid in full.</p>}
+              {!customerId && <p className="text-xs text-muted-foreground">Walk-in sales must be paid in full.</p>}
             </fieldset>
 
             {/* 2 · Products */}
             <fieldset className="flex flex-col gap-2">
-              <legend className={cn(sectionTitle, "mb-2.5")}>2 · Products</legend>
-              <label className="flex items-center gap-2 text-[13px] font-semibold">Stock location
-                <select aria-label="Stock location" value={locationId} onChange={(e) => setLocationId(e.target.value)}
-                  className="h-9 min-w-[180px] rounded-lg border border-dash-border bg-dash-card px-2 text-[13px] font-normal outline-none focus-visible:border-dash-accent">
-                  {warehouses.length === 0 && <option value="">Default</option>}
-                  {warehouses.map((w) => <option key={w.id} value={String(w.id)}>{w.name}</option>)}
-                </select>
-              </label>
+              <SectionTitle as="legend" className="mb-2.5">2 · Products</SectionTitle>
+              <FormField label="Stock location" htmlFor="ns-location" orientation="horizontal" className="w-fit">
+                <Select value={locationId || (warehouses.length === 0 ? "__none" : undefined)} onValueChange={(v) => setLocationId(v === "__none" ? "" : v)}>
+                  <SelectTrigger id="ns-location" aria-label="Stock location" className="min-w-[180px]"><SelectValue placeholder="Select location" /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.length === 0 && <SelectItem value="__none">Default</SelectItem>}
+                    {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
               <div className="overflow-x-auto">
                 <div className="flex min-w-[640px] flex-col gap-2">
-                  <div className="grid grid-cols-[minmax(0,1fr)_120px_100px_90px_100px_40px] gap-2 px-0.5 text-xs font-semibold text-dash-muted">
+                  <div className="grid grid-cols-[minmax(0,1fr)_120px_100px_90px_100px_40px] gap-2 px-0.5 text-xs font-medium text-muted-foreground">
                     <span>Product</span><span>Qty</span><span className="text-right">Unit price</span><span className="text-right">Discount</span><span className="text-right">Line total</span><span />
                   </div>
                   {rows.map((r, i) => {
@@ -415,7 +425,7 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                     const over = stock !== null && r.quantity > stock
                     const lErr = tried ? lineErr(r) : ""
                     return (
-                      <div key={i} className="grid grid-cols-[minmax(0,1fr)_120px_100px_90px_100px_40px] items-center gap-2 rounded-xl border border-dash-border p-2">
+                      <Card key={i} className="grid grid-cols-[minmax(0,1fr)_120px_100px_90px_100px_40px] items-center gap-2 p-2">
                         <div className="flex min-w-0 flex-col gap-1">
                           <SearchableSelect
                             value={r.productId}
@@ -431,189 +441,199 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                               }
                             })}
                           />
-                          <span className={cn("text-xs", over ? "text-dash-danger" : "text-dash-muted")}>
+                          <span className={cn("text-xs", over ? "text-destructive" : "text-muted-foreground")}>
                             {r.auto && r.productId && unitFor(r.productId, r.quantity).wholesale ? "Wholesale price applied · " : ""}{stock === null ? "Choose a product" : over ? `Only ${stock} in stock${locationName ? ` at ${locationName}` : ""}` : `${stock} in stock${locationName ? ` at ${locationName}` : ""}`}
                           </span>
-                          {lErr && <span className="text-xs text-dash-danger">{lErr}</span>}
+                          {lErr && <span className="text-xs text-destructive">{lErr}</span>}
                         </div>
-                        <div className="flex h-10 items-center rounded-lg border border-dash-border">
-                          <button type="button" aria-label="Decrease quantity" className="h-[38px] w-9 text-lg hover:bg-dash-neutral-soft"
-                            onClick={() => setQty(i, Math.max(1, r.quantity - 1))}>−</button>
-                          <span className="flex-1 text-center font-bold tabular-nums">{r.quantity}</span>
-                          <button type="button" aria-label="Increase quantity" className="h-[38px] w-9 text-lg hover:bg-dash-neutral-soft"
-                            onClick={() => setQty(i, r.quantity + 1)}>+</button>
-                        </div>
-                        <input
+                        <ButtonGroup className="w-full">
+                          <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity"
+                            onClick={() => setQty(i, Math.max(1, r.quantity - 1))}>−</Button>
+                          <ButtonGroupText className="min-w-0 flex-1 justify-center px-1 tabular-nums">{r.quantity}</ButtonGroupText>
+                          <Button type="button" variant="outline" size="icon" aria-label="Increase quantity"
+                            onClick={() => setQty(i, r.quantity + 1)}>+</Button>
+                        </ButtonGroup>
+                        <Input
                           type="number" min={0} step="0.01" aria-label="Unit price" value={r.price}
                           onChange={(e) => setRow(i, { price: Number(e.target.value) || 0, auto: false })}
-                          className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-2 text-right text-sm tabular-nums outline-none focus-visible:border-dash-accent"
+                          className="text-right tabular-nums"
                         />
-                        <input
+                        <Input
                           type="number" min={0} step="0.01" aria-label="Line discount" value={r.discount || ""} placeholder="0"
                           onChange={(e) => setRow(i, { discount: Math.max(0, Number(e.target.value) || 0) })}
-                          className="h-10 w-full rounded-lg border border-dash-border bg-dash-card px-2 text-right text-sm tabular-nums outline-none focus-visible:border-dash-accent"
+                          className="text-right tabular-nums"
                         />
-                        <span className="text-right text-sm font-bold tabular-nums">{formatCurrency(Math.max(0, r.price * r.quantity - r.discount))}</span>
-                        <button type="button" aria-label="Remove line" disabled={rows.length === 1}
-                          onClick={() => setRows((p) => p.filter((_, idx) => idx !== i))}
-                          className="flex size-9 items-center justify-center rounded-lg text-dash-danger-fg hover:bg-dash-danger-soft disabled:opacity-30">
+                        <span className="text-right text-sm font-semibold tabular-nums">{formatCurrency(Math.max(0, r.price * r.quantity - r.discount))}</span>
+                        <Button type="button" variant="ghost" size="icon" aria-label="Remove line" disabled={rows.length === 1}
+                          onClick={() => setRows((p) => p.filter((_, idx) => idx !== i))}>
                           <Trash2 className="size-4" />
-                        </button>
-                      </div>
+                        </Button>
+                      </Card>
                     )
                   })}
                 </div>
               </div>
-              <button type="button" onClick={() => setRows((p) => [...p, emptyRow()])}
-                className="h-10 self-start rounded-[10px] border border-dashed border-dash-neutral bg-dash-bg px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+              <Button type="button" variant="outline" className="self-start" onClick={() => setRows((p) => [...p, emptyRow()])}>
                 + Add product
-              </button>
+              </Button>
             </fieldset>
 
             {/* 3 · Delivery */}
             <fieldset className="flex flex-col gap-3">
-              <legend className={cn(sectionTitle, "mb-2.5")}>3 · Delivery</legend>
-              <div role="radiogroup" aria-label="Delivery type" className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2">
+              <SectionTitle as="legend" className="mb-2.5">3 · Delivery</SectionTitle>
+              <ChoiceCardGroup
+                value={delivery}
+                onValueChange={(v) => { setDelivery(v); setShipOverride(null) }}
+                aria-label="Delivery type"
+                className="grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
+              >
                 {[{ id: STORE_PICKUP, label: "Store pickup", sub: "No delivery charge" },
                   ...shippingMethods.map((m) => ({
                     id: String(m.id), label: m.name,
                     sub: `${formatCurrency(Number(m.price) || 0)}${m.estimatedDays ? ` · ${m.estimatedDays}` : ""}`,
-                  }))].map((z) => {
-                  const on = delivery === z.id
-                  return (
-                    <button key={z.id} type="button" role="radio" aria-checked={on} onClick={() => { setDelivery(z.id); setShipOverride(null) }}
-                      className={cn("flex min-h-14 flex-col gap-0.5 rounded-xl border-2 px-3 py-2 text-left",
-                        on ? "border-dash-accent bg-dash-accent-soft" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
-                      <span className="text-sm font-semibold">{z.label}</span>
-                      <span className="text-xs text-dash-muted">{z.sub}</span>
-                    </button>
-                  )
-                })}
-              </div>
+                  }))].map((z) => (
+                  <ChoiceCard key={z.id} value={z.id} title={z.label} description={z.sub} />
+                ))}
+              </ChoiceCardGroup>
               {needsAddress && (
                 <div className="grid grid-cols-2 gap-2.5">
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Receiver name
-                    <input className={field} value={ship.name} onChange={(e) => setShip({ ...ship, name: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Phone
-                    <input className={field} type="tel" value={ship.phone} onChange={(e) => setShip({ ...ship, phone: e.target.value })} />
-                    {(tried || ship.phone.trim() !== "") && phoneErr && <span className="text-xs font-normal text-dash-danger">{phoneErr}</span>}
-                  </label>
-                  <label className="col-span-2 flex flex-col gap-1.5 text-[13px] font-semibold">Address
-                    <input className={field} placeholder="House, road, area" value={ship.line1} onChange={(e) => setShip({ ...ship, line1: e.target.value })} />
-                    {tried && addressErr && <span className="text-xs font-normal text-dash-danger">{addressErr}</span>}
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">City / District
-                    <input className={field} placeholder="e.g. Dhaka" value={ship.city} onChange={(e) => setShip({ ...ship, city: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">State / Area
-                    <input className={field} placeholder="e.g. Mirpur" value={ship.state} onChange={(e) => setShip({ ...ship, state: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Postal code
-                    <input className={field} value={ship.zip} onChange={(e) => setShip({ ...ship, zip: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Country
-                    <input className={field} value={ship.country} onChange={(e) => setShip({ ...ship, country: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Courier
-                    <select className={field} value={courier} onChange={(e) => setCourier(e.target.value)}>
-                      {COURIERS.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-                  <label className="col-span-2 flex flex-col gap-1.5 text-[13px] font-semibold">Delivery note
-                    <input className={field} placeholder="e.g. Call before delivery" value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
-                  </label>
+                  <FormField label="Receiver name" htmlFor="ns-ship-name">
+                    <Input id="ns-ship-name" value={ship.name} onChange={(e) => setShip({ ...ship, name: e.target.value })} />
+                  </FormField>
+                  <FormField label="Phone" htmlFor="ns-ship-phone" error={(tried || ship.phone.trim() !== "") && phoneErr ? phoneErr : undefined}>
+                    <Input id="ns-ship-phone" type="tel" value={ship.phone} onChange={(e) => setShip({ ...ship, phone: e.target.value })} />
+                  </FormField>
+                  <FormField label="Address" htmlFor="ns-ship-line1" className="col-span-2" error={tried && addressErr ? addressErr : undefined}>
+                    <Input id="ns-ship-line1" placeholder="House, road, area" value={ship.line1} onChange={(e) => setShip({ ...ship, line1: e.target.value })} />
+                  </FormField>
+                  <FormField label="City / District" htmlFor="ns-ship-city">
+                    <Input id="ns-ship-city" placeholder="e.g. Dhaka" value={ship.city} onChange={(e) => setShip({ ...ship, city: e.target.value })} />
+                  </FormField>
+                  <FormField label="State / Area" htmlFor="ns-ship-state">
+                    <Input id="ns-ship-state" placeholder="e.g. Mirpur" value={ship.state} onChange={(e) => setShip({ ...ship, state: e.target.value })} />
+                  </FormField>
+                  <FormField label="Postal code" htmlFor="ns-ship-zip">
+                    <Input id="ns-ship-zip" value={ship.zip} onChange={(e) => setShip({ ...ship, zip: e.target.value })} />
+                  </FormField>
+                  <FormField label="Country" htmlFor="ns-ship-country">
+                    <Input id="ns-ship-country" value={ship.country} onChange={(e) => setShip({ ...ship, country: e.target.value })} />
+                  </FormField>
+                  <FormField label="Courier" htmlFor="ns-ship-courier">
+                    <Select value={courier} onValueChange={(v) => setCourier(v)}>
+                      <SelectTrigger id="ns-ship-courier" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {COURIERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label="Delivery note" htmlFor="ns-ship-note" className="col-span-2">
+                    <Input id="ns-ship-note" placeholder="e.g. Call before delivery" value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
+                  </FormField>
                 </div>
               )}
             </fieldset>
           </div>
 
           {/* Right column: summary & payment */}
-          <aside aria-label="Summary and payment" className="flex min-w-0 flex-[1_1_340px] flex-col gap-[18px] border-l border-dash-border bg-dash-bg px-6 py-5">
+          <aside aria-label="Summary and payment" className="flex min-w-0 flex-[1_1_340px] flex-col gap-[18px] border-l bg-muted/40 px-6 py-5">
             <div className="flex flex-col gap-2 text-sm">
-              <span className={cn(sectionTitle, "mb-1")}>4 · Summary</span>
-              <div className="flex justify-between"><span className="text-dash-muted">Subtotal · {itemCount} items</span><span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span></div>
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="ns-disc" className="text-dash-muted">Discount</label>
-                <select aria-label="Discount type" value={discType} onChange={(e) => setDiscType(e.target.value as "flat" | "percent")}
-                  className="h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-[13px] outline-none focus-visible:border-dash-accent">
-                  <option value="flat">Flat</option><option value="percent">Percent %</option>
-                </select>
-                <input id="ns-disc" type="number" min={0} step="0.01" value={discount} placeholder="0"
-                  onChange={(e) => setDiscount(e.target.value)}
-                  className="h-9 w-[110px] rounded-lg border border-dash-border bg-dash-card px-2.5 text-right text-sm tabular-nums outline-none focus-visible:border-dash-accent" />
-              </div>
-              {discountErr && <p className="text-right text-xs text-dash-danger">{discountErr}</p>}
-              <div className="flex justify-between"><span className="text-dash-muted">VAT ({taxRate}%) · after discount</span><span className="font-semibold tabular-nums">{formatCurrency(tax)}</span></div>
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="ns-ship" className="text-dash-muted">Delivery charge</label>
-                <input id="ns-ship" type="number" min={0} step="0.01" value={needsAddress && shipOverride !== null ? shipOverride : String(zoneCost)} disabled={!needsAddress}
-                  onChange={(e) => setShipOverride(e.target.value)}
-                  className="h-9 w-[110px] rounded-lg border border-dash-border bg-dash-card px-2.5 text-right text-sm tabular-nums outline-none focus-visible:border-dash-accent disabled:opacity-60" />
-              </div>
-              {chargeErr && <p className="text-right text-xs text-dash-danger">{chargeErr}</p>}
-              <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2.5">
-                <span className="font-bold">Total</span>
-                <span className="font-dash-display text-[30px] font-bold tracking-tight tabular-nums">{formatCurrency(total)}</span>
-              </div>
+              <SectionTitle className="mb-1">4 · Summary</SectionTitle>
+              <InfoList>
+                <InfoRow label={`Subtotal · ${itemCount} items`} value={<span className="tabular-nums">{formatCurrency(subtotal)}</span>} />
+                <InfoRow
+                  className="items-center"
+                  label={<Label htmlFor="ns-disc" className="font-normal text-muted-foreground">Discount</Label>}
+                  value={
+                    <span className="flex flex-col items-end gap-1">
+                      <span className="flex items-center gap-2">
+                        <Select value={discType} onValueChange={(v) => setDiscType(v as "flat" | "percent")}>
+                          <SelectTrigger aria-label="Discount type"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="flat">Flat</SelectItem><SelectItem value="percent">Percent %</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input id="ns-disc" type="number" min={0} step="0.01" value={discount} placeholder="0"
+                          onChange={(e) => setDiscount(e.target.value)}
+                          aria-invalid={!!discountErr}
+                          className="w-[110px] text-right tabular-nums" />
+                      </span>
+                      {discountErr && <span className="text-xs font-normal text-destructive">{discountErr}</span>}
+                    </span>
+                  }
+                />
+                <InfoRow label={`VAT (${taxRate}%) · after discount`} value={<span className="tabular-nums">{formatCurrency(tax)}</span>} />
+                <InfoRow
+                  className="items-center"
+                  label={<Label htmlFor="ns-ship" className="font-normal text-muted-foreground">Delivery charge</Label>}
+                  value={
+                    <span className="flex flex-col items-end gap-1">
+                      <Input id="ns-ship" type="number" min={0} step="0.01" value={needsAddress && shipOverride !== null ? shipOverride : String(zoneCost)} disabled={!needsAddress}
+                        onChange={(e) => setShipOverride(e.target.value)}
+                        aria-invalid={!!chargeErr}
+                        className="w-[110px] text-right tabular-nums" />
+                      {chargeErr && <span className="text-xs font-normal text-destructive">{chargeErr}</span>}
+                    </span>
+                  }
+                />
+                <Separator className="my-1" />
+                <InfoRow
+                  className="items-baseline [&>dt]:font-semibold [&>dt]:text-foreground"
+                  label="Total"
+                  value={<span className="text-3xl font-semibold tracking-tight tabular-nums">{formatCurrency(total)}</span>}
+                />
+              </InfoList>
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <span className={sectionTitle}>5 · Payment</span>
+              <SectionTitle>5 · Payment</SectionTitle>
               <div role="radiogroup" aria-label="Payment method" className="grid grid-cols-3 gap-1.5">
                 {methodList.map((m) => {
                   const on = method === m.value
                   return (
-                    <button key={m.value} type="button" role="radio" aria-checked={on}
-                      onClick={() => { setMethod(m.value); if (m.value === "COD") setPaidMode("none") }}
-                      className={cn("h-[42px] rounded-[10px] border-2 text-[13px] font-bold",
-                        on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")}>
+                    <Button key={m.value} type="button" role="radio" aria-checked={on} variant={on ? "default" : "outline"}
+                      onClick={() => { setMethod(m.value); if (m.value === "COD") setPaidMode("none") }}>
                       {m.label}
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
-              <div role="radiogroup" aria-label="Amount paid" className="grid grid-cols-3 gap-1.5 rounded-[10px] bg-dash-neutral-soft p-1">
-                {paidOptions.map(([id, label]) => {
-                  const on = effectivePaidMode === id
-                  const disabled = isCod ? id !== "none" : walkIn ? id !== "full" : false
-                  return (
-                    <button key={id} type="button" role="radio" aria-checked={on} disabled={disabled}
-                      onClick={() => setPaidMode(id)}
-                      className={cn("h-9 rounded-lg text-[13px] font-semibold disabled:opacity-40", on ? "bg-dash-card shadow-sm" : "text-dash-muted")}>
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-              {isCod && <p className="text-xs text-dash-muted">Cash on delivery: the customer pays the courier on delivery, so the sale is saved as unpaid and the full amount is collected then.</p>}
-              {codErr && <p className="text-xs text-dash-danger">{codErr}</p>}
-              {!isCod && walkIn && <p className="text-xs text-dash-muted">Walk-in sales must be paid in full. Pick a customer to allow partial or unpaid sales.</p>}
+              <SegmentedControl
+                aria-label="Amount paid"
+                className="w-full"
+                value={effectivePaidMode}
+                onValueChange={(v) => setPaidMode(v as PaidMode)}
+                options={paidOptions.map(([id, label]) => ({
+                  value: id,
+                  label,
+                  disabled: isCod ? id !== "none" : walkIn ? id !== "full" : false,
+                }))}
+              />
+              {isCod && <p className="text-xs text-muted-foreground">Cash on delivery: the customer pays the courier on delivery, so the sale is saved as unpaid and the full amount is collected then.</p>}
+              {codErr && <p className="text-xs text-destructive">{codErr}</p>}
+              {!isCod && walkIn && <p className="text-xs text-muted-foreground">Walk-in sales must be paid in full. Pick a customer to allow partial or unpaid sales.</p>}
               {effectivePaidMode === "partial" && (
-                <label className="flex items-center justify-between gap-2 text-sm text-dash-muted">Amount received
-                  <input type="number" min={0} step="0.01" value={partialAmount} onChange={(e) => setPartialAmount(e.target.value)}
-                    className="h-[38px] w-[120px] rounded-lg border border-dash-border bg-dash-card px-2.5 text-right text-sm tabular-nums text-dash-ink outline-none focus-visible:border-dash-accent" />
-                </label>
+                <FormField
+                  label="Amount received" htmlFor="ns-partial" orientation="horizontal"
+                  error={(tried || partialAmount !== "") && partialErr ? partialErr : undefined}
+                >
+                  <Input id="ns-partial" type="number" min={0} step="0.01" value={partialAmount} onChange={(e) => setPartialAmount(e.target.value)}
+                    className="w-[120px] text-right tabular-nums" />
+                </FormField>
               )}
-              {effectivePaidMode === "partial" && (tried || partialAmount !== "") && partialErr && <p className="text-xs text-dash-danger">{partialErr}</p>}
               {TX_METHODS.includes(method) && (
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Transaction ID
-                  <input className={cn(field, "h-10 font-normal")} placeholder="e.g. 9JK4XY2LQ8" value={txId} onChange={(e) => setTxId(e.target.value)} />
-                </label>
+                <FormField label="Transaction ID" htmlFor="ns-txid">
+                  <Input id="ns-txid" placeholder="e.g. 9JK4XY2LQ8" value={txId} onChange={(e) => setTxId(e.target.value)} />
+                </FormField>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-[10px] bg-dash-success-soft p-3 text-dash-success-fg">
-                  <div className="text-xs">Paid now</div><div className="text-lg font-bold tabular-nums">{formatCurrency(paidNow)}</div>
-                </div>
-                <div className={cn("rounded-[10px] p-3", dueNow > 0 ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-neutral-soft text-dash-neutral-fg")}>
-                  <div className="text-xs">Due</div><div className="text-lg font-bold tabular-nums">{formatCurrency(dueNow)}</div>
-                </div>
+                <StatTile label="Paid now" value={formatCurrency(paidNow)} className="gap-1 p-3" />
+                <StatTile label="Due" value={formatCurrency(dueNow)} className={cn("gap-1 p-3", dueNow > 0 && "border-destructive/50 [&_p]:text-destructive")} />
               </div>
             </div>
 
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Order status
+            <FormField label="Order status" htmlFor="ns-status">
               <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                <SelectTrigger className="h-[42px] w-full rounded-[10px] border-dash-border bg-dash-card font-normal"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="ns-status" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="Processing">Processing</SelectItem>
@@ -622,29 +642,27 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                   <SelectItem value="Delivered">Delivered</SelectItem>
                 </SelectContent>
               </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Internal note
-              <textarea rows={2} placeholder="Only visible to staff" value={note} onChange={(e) => setNote(e.target.value)}
-                className="resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent" />
-            </label>
-            <label className="flex min-h-8 items-center gap-2.5 text-sm">
-              <input type="checkbox" checked={printAfter} onChange={(e) => setPrintAfter(e.target.checked)} className="size-[18px] accent-[var(--dash-accent)]" />
-              Print invoice after saving
-            </label>
+            </FormField>
+            <FormField label="Internal note" htmlFor="ns-note">
+              <Textarea id="ns-note" rows={2} placeholder="Only visible to staff" value={note} onChange={(e) => setNote(e.target.value)} />
+            </FormField>
+            <Field orientation="horizontal">
+              <Checkbox id="ns-print-after" checked={printAfter} onCheckedChange={(v) => setPrintAfter(v === true)} />
+              <FieldLabel htmlFor="ns-print-after" className="font-normal">Print invoice after saving</FieldLabel>
+            </Field>
           </aside>
         </div>
 
-        <DialogFooter className="flex flex-row flex-wrap items-center gap-2.5 border-t border-dash-border bg-dash-card px-6 py-4 sm:justify-between">
-          <span className="text-[13px] text-dash-muted">{locationName ? `Stock will be deducted from ${locationName}` : "Stock is deducted when the sale is saved"}</span>
+        <Separator />
+        <DialogFooter className="flex flex-row flex-wrap items-center gap-2.5 px-6 py-4 sm:justify-between">
+          <span className="text-sm text-muted-foreground">{locationName ? `Stock will be deducted from ${locationName}` : "Stock is deducted when the sale is saved"}</span>
           <div className="ml-auto flex flex-wrap gap-2">
-            <button type="button" onClick={() => onOpenChange(false)}
-              className="h-12 rounded-xl border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft">
+            <Button type="button" variant="outline" size="lg" onClick={() => onOpenChange(false)}>
               Cancel
-            </button>
-            <button type="button" onClick={submit} disabled={saving || itemCount === 0 || overStock}
-              className="h-12 rounded-xl bg-dash-accent px-[22px] text-[15px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+            </Button>
+            <Button type="button" size="lg" onClick={submit} disabled={saving || itemCount === 0 || overStock}>
               {saving ? "Creating…" : `Create sale · ${formatCurrency(total)}`}
-            </button>
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>
@@ -654,23 +672,20 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Customer</DialogTitle></DialogHeader>
           <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label>Full Name *</Label>
-              <Input value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="John Doe" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone *</Label>
-              <Input value={newCust.phone} onChange={(e) => { setCustErr(""); setNewCust({ ...newCust, phone: e.target.value }) }} placeholder="01XXXXXXXXX" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="john@example.com" />
-            </div>
-            {custErr && <p className="text-xs text-dash-danger">{custErr}</p>}
+            <FormField label="Full Name *" htmlFor="ns-cust-name">
+              <Input id="ns-cust-name" value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="John Doe" />
+            </FormField>
+            <FormField label="Phone *" htmlFor="ns-cust-phone">
+              <Input id="ns-cust-phone" value={newCust.phone} onChange={(e) => { setCustErr(""); setNewCust({ ...newCust, phone: e.target.value }) }} placeholder="01XXXXXXXXX" />
+            </FormField>
+            <FormField label="Email" htmlFor="ns-cust-email">
+              <Input id="ns-cust-email" type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="john@example.com" />
+            </FormField>
+            {custErr && <p className="text-xs text-destructive">{custErr}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddCustOpen(false)}>Cancel</Button>
-            <Button className="bg-dash-accent text-white hover:brightness-110" onClick={quickAddCustomer} disabled={addingCust}>
+            <Button onClick={quickAddCustomer} disabled={addingCust}>
               {addingCust ? "Adding…" : "Add Customer"}
             </Button>
           </DialogFooter>

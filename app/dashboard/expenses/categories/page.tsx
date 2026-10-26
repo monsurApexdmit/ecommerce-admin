@@ -13,13 +13,26 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Toolbar } from "@/components/common/Toolbar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { SwatchPicker } from "@/components/common/SwatchPicker"
 
 const TYPES = ["Operating cost", "Cost of goods", "Owner drawing", "Tax / fees"]
 const SWATCHES = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8", "#DB2777", "#0E1525"]
-
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
 
 const emptyForm = { name: "", description: "", color: SWATCHES[0], budget: "", type: TYPES[0] }
 
@@ -112,17 +125,15 @@ export default function ExpenseCategoriesPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Expense categories</h1>
-          <p className="mt-1 text-sm text-dash-muted">Group spending and set monthly budgets so nothing creeps up unnoticed.</p>
-        </div>
-        <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
+      <PageHeader
+        title="Expense categories"
+        description="Group spending and set monthly budgets so nothing creeps up unnoticed."
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+      />
 
       {loading || !stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
           { label: "Categories", value: stats.activeCount, icon: <Tag className="size-4" />, color: "blue", hint: `${stats.inactiveCount} inactive` },
@@ -133,65 +144,72 @@ export default function ExpenseCategoriesPage() {
         ]} />
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-dash-muted">
-          <span className="sr-only">Search categories</span>
-          <input type="search" placeholder="Search name, description or type…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
-            className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-        </label>
-        <label className="flex items-center gap-2 text-[13px] font-semibold">
-          <input type="checkbox" checked={showInactive} onChange={(e) => { setShowInactive(e.target.checked); setPage(1) }} className="size-4" />Show inactive ({inactiveCount})
-        </label>
-      </div>
+      <Toolbar>
+        <div className="min-w-[240px] flex-1">
+          <Label htmlFor="category-search" className="sr-only">Search categories</Label>
+          <Input id="category-search" type="search" placeholder="Search name, description or type…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
+        </div>
+        <Label className="flex items-center gap-2">
+          <Checkbox checked={showInactive} onCheckedChange={(v) => { setShowInactive(v === true); setPage(1) }} />Show inactive ({inactiveCount})
+        </Label>
+      </Toolbar>
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <section className="w-full min-w-0 flex-1">
           {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[190px] rounded-[14px]" />)}</div>
+            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[190px]" />)}</div>
           ) : pageItems.length === 0 ? (
-            <div className="rounded-[14px] border border-dash-border bg-dash-card py-14 text-center">
-              <Tag className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-              <p className="font-semibold">{cats.length === 0 ? "No categories yet" : "No categories match"}</p>
-              <p className="text-sm text-dash-muted">{cats.length === 0 ? "Add one with the form on the right." : "Try a different search."}</p>
-            </div>
+            <EmptyState
+              bordered
+              icon={Tag}
+              title={cats.length === 0 ? "No categories yet" : "No categories match"}
+              description={cats.length === 0 ? "Add one with the form on the right." : "Try a different search."}
+            />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {pageItems.map((c) => {
                 const spent = c.spentThisMonth ?? 0
                 const budget = c.monthlyBudget ?? 0
                 const pct = budget ? Math.round((spent / budget) * 100) : 0
-                const barColor = !budget ? "var(--dash-border)" : pct > 100 ? "#B42318" : pct >= 80 ? "#F59E0B" : "#0F766E"
+                const barColor = !budget ? "var(--border)" : pct > 100 ? "#B42318" : pct >= 80 ? "#F59E0B" : "#0F766E"
                 const on = c.status !== false
                 const warn = budget && pct > 100 ? `Over budget by ${formatCurrency(spent - budget)}` : budget && pct >= 80 ? `${pct}% of the budget used` : ""
                 return (
-                  <article key={c.id} className={cn("flex flex-col gap-3 rounded-[14px] border bg-dash-card p-4", editing?.id === c.id ? "border-dash-accent" : "border-dash-border", !on && "opacity-70")}>
+                  <Card key={c.id} className={cn("gap-3 p-4", editing?.id === c.id && "border-primary", !on && "opacity-70")}>
                     <div className="flex items-start gap-3">
-                      <span className="mt-0.5 size-9 shrink-0 rounded-[10px]" style={{ background: c.color || SWATCHES[0] }} aria-hidden />
+                      <span className="mt-0.5 size-9 shrink-0 rounded-md" style={{ background: c.color || SWATCHES[0] }} aria-hidden />
                       <div className="min-w-0">
-                        <div className="font-semibold">{c.name}{!on && <span className="ml-2 rounded-full bg-dash-neutral-soft px-2 py-px text-[11px] font-bold text-dash-neutral-fg">Inactive</span>}</div>
-                        <div className="truncate text-xs text-dash-muted">{c.description || "—"}</div>
-                        <div className="text-xs text-dash-muted">{c.type}</div>
+                        <div className="font-medium">{c.name}{!on && <Badge variant="secondary" className="ml-2">Inactive</Badge>}</div>
+                        <div className="truncate text-xs text-muted-foreground">{c.description || "—"}</div>
+                        <div className="text-xs text-muted-foreground">{c.type}</div>
                       </div>
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <span className="font-dash-display text-xl font-bold tabular-nums">{formatCurrency(spent)}</span>
-                      <span className="text-xs text-dash-muted">{c.countThisMonth ?? 0} this month</span>
+                      <span className="text-xl font-semibold tabular-nums">{formatCurrency(spent)}</span>
+                      <span className="text-xs text-muted-foreground">{c.countThisMonth ?? 0} this month</span>
                     </div>
-                    <div className="text-xs text-dash-muted tabular-nums">All time: {formatCurrency(c.allTimeSpent ?? 0)} · {c.allTimeCount ?? 0} expenses</div>
+                    <div className="text-xs text-muted-foreground tabular-nums">All time: {formatCurrency(c.allTimeSpent ?? 0)} · {c.allTimeCount ?? 0} expenses</div>
                     <div className="flex flex-col gap-1.5">
-                      <div className="flex justify-between text-xs"><span className="text-dash-muted">{budget ? `Budget ${formatCurrency(budget)}` : "No budget"}</span>
-                        {budget > 0 && <strong className={cn("tabular-nums", spent > budget && "text-dash-danger-fg")}>{spent > budget ? `Over by ${formatCurrency(spent - budget)}` : `${formatCurrency(budget - spent)} left`}</strong>}</div>
-                      <div className="h-2 overflow-hidden rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full" style={{ width: `${Math.min(100, budget ? pct : 0)}%`, background: barColor }} /></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">{budget ? `Budget ${formatCurrency(budget)}` : "No budget"}</span>
+                        {budget > 0 && <strong className={cn("tabular-nums", spent > budget && "text-destructive")}>{spent > budget ? `Over by ${formatCurrency(spent - budget)}` : `${formatCurrency(budget - spent)} left`}</strong>}</div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${Math.min(100, budget ? pct : 0)}%`, background: barColor }} /></div>
                     </div>
-                    {warn && <span className={cn("text-xs font-semibold", pct > 100 ? "text-dash-danger-fg" : "text-dash-warn-fg")}>{warn}</span>}
+                    {warn && <span className={cn("text-xs font-medium", pct > 100 ? "text-destructive" : "text-amber-600")}>{warn}</span>}
                     <div className="mt-auto flex items-center gap-1.5 pt-1">
-                      <button type="button" aria-label={`Edit ${c.name}`} className={iconBtn} onClick={() => startEdit(c)}><Pencil className="size-4" /></button>
-                      <button type="button" aria-label={`Delete ${c.name}`} disabled={c.system} title={c.system ? "Managed by payroll" : undefined} className={cn(iconBtn, c.system && "cursor-not-allowed opacity-40")} onClick={() => remove(c)}><Trash2 className="size-4" /></button>
-                      <button type="button" role="switch" aria-checked={on} aria-label={`${c.name} active`} disabled={c.system} title={c.system ? "Managed by payroll" : undefined} onClick={() => flip(c)}
-                        className={cn("ml-1 flex h-5 w-9 items-center rounded-full p-0.5", on ? "justify-end bg-dash-accent" : "justify-start bg-dash-border", c.system && "cursor-not-allowed opacity-40")}><span className="size-4 rounded-full bg-white" /></button>
-                      <Link href="/dashboard/expenses" className="ml-auto text-[13px] font-semibold text-dash-accent hover:underline">View expenses</Link>
+                      <Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.name}`} onClick={() => startEdit(c)}><Pencil className="size-4" /></Button>
+                      <WithTooltip content={c.system ? "Managed by payroll" : undefined}>
+                        <span tabIndex={c.system ? 0 : undefined}>
+                          <Button type="button" variant="outline" size="icon" aria-label={`Delete ${c.name}`} disabled={c.system} onClick={() => remove(c)}><Trash2 className="size-4" /></Button>
+                        </span>
+                      </WithTooltip>
+                      <WithTooltip content={c.system ? "Managed by payroll" : undefined}>
+                        <span tabIndex={c.system ? 0 : undefined} className="ml-1 inline-flex">
+                          <Switch checked={on} aria-label={`${c.name} active`} disabled={c.system} onCheckedChange={() => flip(c)} />
+                        </span>
+                      </WithTooltip>
+                      <Button asChild variant="link" size="sm" className="ml-auto"><Link href="/dashboard/expenses">View expenses</Link></Button>
                     </div>
-                  </article>
+                  </Card>
                 )
               })}
             </div>
@@ -204,30 +222,29 @@ export default function ExpenseCategoriesPage() {
           )}
         </section>
 
-        <aside className="flex w-full shrink-0 flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[360px]">
-          <h2 className="font-dash-display text-lg font-bold">{editing ? `Edit ${editing.name}` : "New category"}</h2>
-          {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Name *
-            <input className={input} disabled={!!editing?.system} title={editing?.system ? "The Salaries category is managed by payroll" : undefined} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Packaging" /></label>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Description
-            <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What goes here" /></label>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Colour
-            <div className="flex flex-wrap gap-2">
-              {SWATCHES.map((s) => (
-                <button key={s} type="button" aria-label={s} aria-pressed={form.color === s} onClick={() => setForm({ ...form, color: s })}
-                  className={cn("size-8 rounded-full border-2", form.color === s ? "border-dash-ink" : "border-transparent")} style={{ background: s }} />
-              ))}
+        <aside className="w-full shrink-0 xl:w-[360px]">
+          <SectionCard title={editing ? `Edit ${editing.name}` : "New category"} contentClassName="flex flex-col gap-3.5">
+            {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+            <FormField label="Name" required htmlFor="cat-name" description={editing?.system ? "The Salaries category is managed by payroll" : undefined}>
+              <Input id="cat-name" disabled={!!editing?.system} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Packaging" /></FormField>
+            <FormField label="Description" htmlFor="cat-desc">
+              <Textarea id="cat-desc" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What goes here" /></FormField>
+            <FormField label="Colour">
+              <SwatchPicker size="sm" aria-label="Colour" options={SWATCHES.map((s) => ({ value: s, label: s, color: s }))} value={form.color} onValueChange={(s) => setForm({ ...form, color: s })} />
+            </FormField>
+            <FormField label="Monthly budget (optional)" htmlFor="cat-budget" description="We warn you at 80% and when you go over.">
+              <Input id="cat-budget" type="number" min={0} className="tabular-nums" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} placeholder="e.g. 5000" />
+            </FormField>
+            <FormField label="Type" htmlFor="cat-type">
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger id="cat-type" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select></FormField>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+              <Button type="button" disabled={saving} onClick={save}>{saving ? "Saving…" : editing ? "Save changes" : "Add category"}</Button>
             </div>
-          </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Monthly budget (optional)
-            <input type="number" min={0} className={input} value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} placeholder="e.g. 5000" />
-            <span className="text-xs font-normal text-dash-muted">We warn you at 80% and when you go over.</span></label>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Type
-            <select className={input} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => startEdit(null)} className={outlineBtn}>Clear</button>
-            <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Saving…" : editing ? "Save changes" : "Add category"}</button>
-          </div>
+          </SectionCard>
         </aside>
       </div>
     </div>

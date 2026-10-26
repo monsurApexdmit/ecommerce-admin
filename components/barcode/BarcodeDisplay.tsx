@@ -3,8 +3,15 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { SectionCard } from "@/components/common/SectionCard"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
 import { barcodeApi } from "@/lib/barcodeApi"
-import { Copy, RefreshCw, Download, Loader } from "lucide-react"
+import { Copy, RefreshCw, Download, Info } from "lucide-react"
 import { toast } from "sonner"
 
 interface BarcodeDisplayProps {
@@ -91,94 +98,76 @@ export default function BarcodeDisplay({
   }
 
   return (
-    <Card className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Product Barcode</h3>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopyBarcode}
-            title="Copy barcode number"
-          >
-            <Copy className="w-4 h-4 mr-2" />
+    <SectionCard
+      title="Product Barcode"
+      actions={<>
+        <WithTooltip content="Copy barcode number">
+          <Button size="sm" variant="outline" onClick={handleCopyBarcode}>
+            <Copy className="size-4" />
             Copy
           </Button>
+        </WithTooltip>
 
-          {barcodeImagePath && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadBarcode}
-              title="Download barcode image"
-            >
-              <Download className="w-4 h-4 mr-2" />
+        {barcodeImagePath && (
+          <WithTooltip content="Download barcode image">
+            <Button size="sm" variant="outline" onClick={handleDownloadBarcode}>
+              <Download className="size-4" />
               Download
             </Button>
-          )}
+          </WithTooltip>
+        )}
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleRegenerateBarcode}
-            disabled={regenerating}
-            title="Regenerate new barcode"
-          >
-            {regenerating ? (
-              <>
-                <Loader className="w-4 h-4 mr-2 animate-spin" />
-                Regenerating...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Regenerate
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
+        <WithTooltip content="Regenerate new barcode">
+          <span tabIndex={regenerating ? 0 : undefined}>
+            <Button size="sm" variant="outline" onClick={handleRegenerateBarcode} disabled={regenerating}>
+              {regenerating ? (
+                <>
+                  <Spinner />
+                  Regenerating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="size-4" />
+                  Regenerate
+                </>
+              )}
+            </Button>
+          </span>
+        </WithTooltip>
+      </>}
+      contentClassName="space-y-4"
+    >
       {/* Barcode Image */}
       {barcodeImagePath ? (
-        <div className="bg-white p-4 rounded border border-gray-200 flex justify-center">
+        <Card className="items-center bg-white p-4">
           <img
             src={barcodeImagePath}
             alt={`Barcode for ${barcodeNumber}`}
             className="max-h-32 w-auto"
           />
-        </div>
+        </Card>
       ) : (
-        <div className="bg-gray-50 p-4 rounded border border-gray-200 text-center text-gray-500">
-          <p className="text-sm">Barcode image not available</p>
-        </div>
+        <EmptyState bordered title="Barcode image not available" className="p-4 md:p-6" />
       )}
 
       {/* Barcode Number */}
-      <div className="bg-gray-50 p-3 rounded border border-gray-200">
-        <p className="text-xs text-gray-600 font-semibold mb-1">Barcode Number</p>
+      <FormField label="Barcode Number" htmlFor={`barcode-number-${productId}`}>
         <div className="flex items-center gap-2">
-          <code className="flex-1 text-sm font-mono font-medium text-blue-600 bg-white px-3 py-2 rounded border border-gray-200">
-            {barcodeNumber}
-          </code>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleCopyBarcode}
-            className="text-gray-600"
-          >
-            <Copy className="w-4 h-4" />
+          <Input id={`barcode-number-${productId}`} readOnly value={barcodeNumber} className="flex-1 font-mono" />
+          <Button size="icon" variant="ghost" aria-label="Copy barcode number" onClick={handleCopyBarcode}>
+            <Copy className="size-4" />
           </Button>
         </div>
-      </div>
+      </FormField>
 
       {/* Info */}
-      <div className="bg-blue-50 p-3 rounded border border-blue-200 text-xs text-blue-800">
-        <p>
-          <strong>ℹ️ Info:</strong> This barcode uniquely identifies the product. Scan or enter it
+      <Alert>
+        <Info />
+        <AlertDescription>
+          This barcode uniquely identifies the product. Scan or enter it
           to retrieve product details during checkout or inventory operations.
-        </p>
-      </div>
-    </Card>
+        </AlertDescription>
+      </Alert>
+    </SectionCard>
   )
 }

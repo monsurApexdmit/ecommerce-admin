@@ -6,21 +6,35 @@ import { Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { saasBillingApi, type BillingUsage, type Plan, type Subscription, type UpdatePlanPayload } from "@/lib/saasBillingApi"
 import { settingsApi } from "@/lib/settingsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { FormField } from "@/components/common/FormField"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { EmptyState } from "@/components/common/EmptyState"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const UNLIMITED = 999999
 const TAX_RATE = 0.1
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const primaryBtn = "inline-flex h-11 items-center justify-center rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
-const dialogCls = "max-h-[90vh] overflow-y-auto border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md"
+const dialogCls = "max-h-[90vh] overflow-y-auto sm:max-w-md"
 
 const METHODS = [
   { id: "card", label: "Credit / debit card" },
@@ -86,11 +100,11 @@ export default function PlansPage() {
 
   const banner = useMemo(() => {
     const dl = sub?.daysRemaining ?? 0
-    if (subStatus === "trial") return { cls: "bg-dash-success-soft text-dash-success-fg", t: "Free trial active.", x: `${dl} day${dl === 1 ? "" : "s"} remaining • Select a plan below to upgrade.` }
-    if (subStatus === "cancelled") return { cls: "bg-dash-warn-soft text-dash-warn-fg", t: "Subscription cancelled.", x: `Access continues until ${fmtD(periodEnd)}. Pick a plan to resubscribe.` }
-    if (subStatus === "expired") return { cls: "bg-dash-danger-soft text-dash-danger-fg", t: "Subscription expired.", x: "Choose a plan to regain access." }
-    if (subStatus === "none") return { cls: "bg-dash-neutral-soft text-dash-neutral-fg", t: "No active plan.", x: "Pick a plan below to get started." }
-    return { cls: "bg-dash-success-soft text-dash-success-fg", t: "Active subscription.", x: `Current plan: ${curPlan?.name ?? sub?.planName ?? "No active plan"}${periodEnd ? ` • renews ${fmtD(sub?.nextBillingDate ?? periodEnd)}` : ""}` }
+    if (subStatus === "trial") return { danger: false, t: "Free trial active.", x: `${dl} day${dl === 1 ? "" : "s"} remaining • Select a plan below to upgrade.` }
+    if (subStatus === "cancelled") return { danger: false, t: "Subscription cancelled.", x: `Access continues until ${fmtD(periodEnd)}. Pick a plan to resubscribe.` }
+    if (subStatus === "expired") return { danger: true, t: "Subscription expired.", x: "Choose a plan to regain access." }
+    if (subStatus === "none") return { danger: false, t: "No active plan.", x: "Pick a plan below to get started." }
+    return { danger: false, t: "Active subscription.", x: `Current plan: ${curPlan?.name ?? sub?.planName ?? "No active plan"}${periodEnd ? ` • renews ${fmtD(sub?.nextBillingDate ?? periodEnd)}` : ""}` }
   }, [sub, subStatus, periodEnd, curPlan])
 
   // ---- checkout ----
@@ -178,34 +192,35 @@ export default function PlansPage() {
   const paidEver = !!sub && !(sub.isTrial || sub.status === "trialing" || curPlan?.price === 0)
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Choose your plan</h1>
-          <p className="mt-1 max-w-2xl text-sm text-dash-muted">Start with a free trial or pick a plan that scales with your business. All plans include a 30-day money-back guarantee.</p>
-        </div>
-        <Link href="/dashboard/billing/subscriptions" className={outlineBtn}>My subscription</Link>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Choose your plan"
+        description={<span className="block max-w-2xl">Start with a free trial or pick a plan that scales with your business. All plans include a 30-day money-back guarantee.</span>}
+        actions={<Button asChild variant="outline"><Link href="/dashboard/billing/subscriptions">My subscription</Link></Button>}
+      />
 
-      {!loading && <div role="status" className={cn("rounded-[10px] px-4 py-3 text-[13px]", banner.cls)}><strong>{banner.t}</strong> <span>{banner.x}</span></div>}
+      {!loading && (
+        <Alert role="status" variant={banner.danger ? "destructive" : "default"}>
+          <AlertTitle>{banner.t}</AlertTitle>
+          <AlertDescription>{banner.x}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-[10px] bg-dash-neutral-soft p-1">
-          {([["monthly", "Monthly"], ["yearly", "Yearly · 2 months free"]] as const).map(([id, label]) => (
-            <button key={id} type="button" role="radio" aria-checked={period === id} onClick={() => setPeriod(id)}
-              className={cn("h-9 rounded-lg px-3.5 text-[13px] font-semibold", period === id ? "bg-dash-card shadow-sm" : "text-dash-muted")}>{label}</button>
-          ))}
-        </div>
-        <span className="text-xs text-dash-muted">Prices exclude {Math.round(TAX_RATE * 100)}% tax added at checkout.</span>
+        <SegmentedControl
+          aria-label="Billing period"
+          size="default"
+          value={period}
+          onValueChange={(id) => setPeriod(id as Period)}
+          options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly · 2 months free" }]}
+        />
+        <span className="text-xs text-muted-foreground">Prices exclude {Math.round(TAX_RATE * 100)}% tax added at checkout.</span>
       </div>
 
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[440px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[440px]" />)}</div>
       ) : plans.length === 0 ? (
-        <div className="rounded-[14px] border border-dash-border bg-dash-card p-10 text-center">
-          <div className="font-semibold">No plans available</div>
-          <div className="text-sm text-dash-muted">Please contact support for assistance.</div>
-        </div>
+        <EmptyState bordered title="No plans available" description="Please contact support for assistance." />
       ) : (
         <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           {plans.map((p) => {
@@ -219,85 +234,84 @@ export default function PlansPage() {
             const cta = isCur ? "Current plan" : trialLocked ? "Trial already used" : free ? "Start free trial"
               : subStatus === "expired" || subStatus === "none" ? "Get started" : rank(p.id) > rank(sub?.planId) ? "Upgrade" : "Switch plan"
             return (
-              <article key={p.id} className={cn("relative flex flex-col gap-4 rounded-[14px] bg-dash-card p-6", popular ? "border-2 border-dash-accent shadow-lg" : isCur ? "border-2 border-dash-success" : "border border-dash-border")}>
-                {popular && <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-dash-accent px-3 py-1 text-[11px] font-bold tracking-wide text-white">MOST POPULAR</span>}
+              <Card key={p.id} className={cn("relative gap-4 p-6", (popular || isCur) && "border-primary")}>
+                {popular && <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">MOST POPULAR</Badge>}
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    {isCur && <span className="mb-1.5 inline-block rounded-full bg-dash-success-soft px-2.5 py-[3px] text-[11px] font-bold text-dash-success-fg">Current plan</span>}
-                    <h2 className="font-dash-display text-2xl font-bold">{p.name}</h2>
+                    {isCur && <Badge variant="secondary" className="mb-1.5">Current plan</Badge>}
+                    <h2 className="text-2xl font-bold">{p.name}</h2>
                   </div>
                   {isSuperAdmin && (
-                    <button type="button" aria-label={`Edit ${p.name}`} onClick={() => openEdit(p)} className="flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card hover:bg-dash-neutral-soft"><Pencil className="size-4" /></button>
+                    <Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openEdit(p)}><Pencil className="size-4" /></Button>
                   )}
                 </div>
-                <p className="min-h-10 text-[13px] text-dash-muted">{p.description}</p>
+                <p className="min-h-10 text-sm text-muted-foreground">{p.description}</p>
                 <div>
-                  <span className="font-dash-display text-4xl font-bold tabular-nums">{free ? "Free" : money(price)}</span>{" "}
-                  <span className="text-sm text-dash-muted">{free ? "· 10-day trial" : period === "yearly" ? "/ year" : "/ month"}</span>
-                  {!free && period === "yearly" && <div className="text-xs font-semibold text-dash-success-fg">Save {money(p.price * 12 - price)} vs monthly</div>}
+                  <span className="text-4xl font-bold tabular-nums">{free ? "Free" : money(price)}</span>{" "}
+                  <span className="text-sm text-muted-foreground">{free ? "· 10-day trial" : period === "yearly" ? "/ year" : "/ month"}</span>
+                  {!free && period === "yearly" && <div className="text-xs font-semibold text-primary">Save {money(p.price * 12 - price)} vs monthly</div>}
                 </div>
-                <button type="button" disabled={dis} onClick={() => openCheckout(p)}
-                  className={cn("h-11 rounded-[10px] text-sm font-semibold disabled:cursor-not-allowed", dis ? "bg-dash-border text-dash-muted" : popular ? "bg-dash-accent text-white" : "bg-dash-ink text-dash-card")}>{cta}</button>
+                <Button type="button" disabled={dis} onClick={() => openCheckout(p)}
+                  variant={popular ? "default" : "outline"}>{cta}</Button>
                 <div>
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Limits</div>
-                  <div className="flex flex-col gap-1 text-[13px]">
+                  <SectionTitle className="mb-2">Limits</SectionTitle>
+                  <div className="flex flex-col gap-1 text-sm">
                     <span><strong>{limitLabel(p.maxUsers)}</strong> team members</span>
                     <span><strong>{limitLabel(p.maxProducts)}</strong> products</span>
                     <span><strong>{limitLabel(p.maxBranches)}</strong> branches</span>
                   </div>
                 </div>
                 <div>
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Features</div>
-                  <ul className="flex flex-col gap-1.5 text-[13px]">
-                    {shown.map((f, i) => <li key={`${f}-${i}`} className="flex gap-2"><span aria-hidden className="text-dash-success">&#10003;</span><span>{f}</span></li>)}
+                  <SectionTitle className="mb-2">Features</SectionTitle>
+                  <ul className="flex flex-col gap-1.5 text-sm">
+                    {shown.map((f, i) => <li key={`${f}-${i}`} className="flex gap-2"><span aria-hidden className="text-primary">&#10003;</span><span>{f}</span></li>)}
                   </ul>
                   {feats.length > 5 && (
-                    <button type="button" onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="mt-2 text-xs font-semibold text-dash-accent hover:underline">
+                    <Button type="button" variant="link" size="sm" onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="mt-2">
                       {open ? "Show less" : `+ ${feats.length - 5} more features`}
-                    </button>
+                    </Button>
                   )}
                 </div>
-              </article>
+              </Card>
             )
           })}
         </div>
       )}
 
       {!loading && plans.length > 0 && (
-        <section className="rounded-[14px] border border-dash-border bg-dash-card">
-          <div className="p-5 pb-3"><h2 className="font-dash-display text-lg font-bold">Compare plans</h2></div>
+        <SectionCard title="Compare plans" contentClassName="px-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th className="py-3 pl-5 pr-2 font-semibold">Feature</th>
+            <Table className="min-w-[720px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Feature</TableHead>
                   {plans.map((p) => (
-                    <th key={p.id} className={cn("px-2 py-3 font-semibold", p.id === sub?.planId && "bg-dash-accent-soft/50")}>
-                      <div className="text-dash-ink">{p.name}</div>
-                      <div className="font-normal">{isFree(p) ? "Free" : `${money(priceOf(p, period))}${period === "yearly" ? "/yr" : "/mo"}`}</div>
-                    </th>
+                    <TableHead key={p.id} className={cn("h-auto py-2", p.id === sub?.planId && "bg-muted/50")}>
+                      <div>{p.name}</div>
+                      <div className="font-normal text-muted-foreground">{isFree(p) ? "Free" : `${money(priceOf(p, period))}${period === "yearly" ? "/yr" : "/mo"}`}</div>
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {[
                   ["Team members", (p: Plan) => limitLabel(p.maxUsers)],
                   ["Products", (p: Plan) => limitLabel(p.maxProducts)],
                   ["Branches", (p: Plan) => limitLabel(p.maxBranches)],
                   ...featUnion.map((f) => [f, (p: Plan) => ((p.features || []).map(featName).includes(f) ? "✓" : "—")] as [string, (p: Plan) => string]),
                 ].map(([name, fn]) => (
-                  <tr key={name as string}>
-                    <td className="border-b border-dash-border-soft py-2.5 pl-5 pr-2">{name as string}</td>
+                  <TableRow key={name as string}>
+                    <TableCell>{name as string}</TableCell>
                     {plans.map((p) => {
                       const v = (fn as (p: Plan) => string)(p)
-                      return <td key={p.id} className={cn("border-b border-dash-border-soft px-2 py-2.5", v === "—" && "text-dash-muted/50", p.id === sub?.planId && "bg-dash-accent-soft/50")}>{v}</td>
+                      return <TableCell key={p.id} className={cn(v === "—" && "text-muted-foreground", p.id === sub?.planId && "bg-muted/50")}>{v}</TableCell>
                     })}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
-        </section>
+        </SectionCard>
       )}
 
       {/* Checkout */}
@@ -310,36 +324,44 @@ export default function PlansPage() {
             const over = overLimits(co.plan)
             return (
               <>
-                <DialogTitle className="font-dash-display text-xl font-bold">{free ? "Start your free trial" : `Confirm ${co.plan.name} plan`}</DialogTitle>
-                <DialogDescription className="text-[13px]">Review your order, choose how you want to pay and confirm.</DialogDescription>
-                <div className="flex flex-col gap-1.5 rounded-[10px] bg-dash-bg p-4 text-sm">
-                  <div className="flex justify-between"><span>{co.plan.name} ({free ? "10-day trial" : co.period === "yearly" ? "Yearly" : "Monthly"})</span><span className="tabular-nums">{money(sub0)}</span></div>
-                  <div className="flex justify-between text-dash-muted"><span>Tax ({Math.round(TAX_RATE * 100)}%)</span><span className="tabular-nums">{money(tax)}</span></div>
-                  <div className="flex justify-between border-t border-dash-border pt-1.5 font-bold"><span>Total</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
-                </div>
+                <DialogTitle>{free ? "Start your free trial" : `Confirm ${co.plan.name} plan`}</DialogTitle>
+                <DialogDescription>Review your order, choose how you want to pay and confirm.</DialogDescription>
+                <Card className="gap-1.5 bg-muted/50 p-4 shadow-none">
+                  <InfoList className="gap-1.5">
+                    <InfoRow label={`${co.plan.name} (${free ? "10-day trial" : co.period === "yearly" ? "Yearly" : "Monthly"})`} value={<span className="tabular-nums">{money(sub0)}</span>} />
+                    <InfoRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} value={<span className="tabular-nums">{money(tax)}</span>} />
+                  </InfoList>
+                  <Separator />
+                  <div className="flex justify-between text-sm font-bold"><span>Total</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
+                </Card>
                 {over.length > 0 && (
-                  <div className="rounded-[10px] bg-dash-warn-soft px-3.5 py-2.5 text-[13px] text-dash-warn-fg">
-                    You currently exceed this plan&apos;s limits for {over.join(", ")}. Existing data is kept, but you will not be able to add more until you are within the limit.
-                  </div>
+                  <Alert>
+                    <AlertDescription>
+                      You currently exceed this plan&apos;s limits for {over.join(", ")}. Existing data is kept, but you will not be able to add more until you are within the limit.
+                    </AlertDescription>
+                  </Alert>
                 )}
                 {!free && (
                   <div className="flex flex-col gap-3">
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Payment method
-                      <select className={input} value={co.method} onChange={(e) => setCo({ ...co, method: e.target.value as Method, err: "" })}>
-                        {METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                      </select></label>
-                    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Billing email *
-                      <input type="email" className={input} value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder="billing@yourshop.com" /></label>
+                    <FormField label="Payment method" htmlFor="co-method">
+                      <Select value={String(co.method)} onValueChange={(val) => setCo({ ...co, method: val as Method, err: "" })}>
+                        <SelectTrigger id="co-method" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {METHODS.map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select></FormField>
+                    <FormField label="Billing email *" htmlFor="co-email">
+                      <Input id="co-email" type="email" value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder="billing@yourshop.com" /></FormField>
                   </div>
                 )}
-                <label className="flex items-start gap-2 text-[13px]">
-                  <input type="checkbox" className="mt-0.5" checked={co.terms} onChange={(e) => setCo({ ...co, terms: e.target.checked, err: "" })} />
-                  <span>I agree to the terms of service and the 30-day money-back policy.</span>
-                </label>
-                {co.err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{co.err}</p>}
+                <FormField orientation="horizontal" label="I agree to the terms of service and the 30-day money-back policy." htmlFor="co-terms"
+                  className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
+                  <Checkbox id="co-terms" checked={co.terms} onCheckedChange={(c) => setCo({ ...co, terms: c === true, err: "" })} />
+                </FormField>
+                {co.err && <Alert variant="destructive"><AlertDescription>{co.err}</AlertDescription></Alert>}
                 <div className="flex justify-end gap-2">
-                  <button type="button" disabled={co.busy} onClick={() => setCo(null)} className={outlineBtn}>Cancel</button>
-                  <button type="button" disabled={co.busy} onClick={confirmCheckout} className={primaryBtn}>{co.busy ? "Processing…" : free ? "Start free trial" : `Pay ${money(sub0 + tax)}`}</button>
+                  <Button type="button" variant="outline" disabled={co.busy} onClick={() => setCo(null)}>Cancel</Button>
+                  <Button type="button" disabled={co.busy} onClick={confirmCheckout}>{co.busy ? "Processing…" : free ? "Start free trial" : `Pay ${money(sub0 + tax)}`}</Button>
                 </div>
               </>
             )
@@ -352,40 +374,44 @@ export default function PlansPage() {
         <DialogContent className={dialogCls}>
           {ed && (
             <>
-              <DialogTitle className="font-dash-display text-xl font-bold">Edit plan: {plans.find((p) => p.id === ed.id)?.name}</DialogTitle>
-              <DialogDescription className="text-[13px]">Update plan details, pricing, limits, and features.</DialogDescription>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Plan name *
-                <input className={input} value={ed.name} onChange={(e) => setE({ name: e.target.value })} placeholder="e.g. Professional" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Description
-                <textarea rows={2} className="rounded-[10px] border border-dash-border bg-dash-card px-3 py-2 text-sm font-normal outline-none focus-visible:border-dash-accent" value={ed.desc} onChange={(e) => setE({ desc: e.target.value })} placeholder="Short description of the plan" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Price (per month)
-                <input type="number" step="0.01" min={0} className={input} value={ed.price} onChange={(e) => setE({ price: e.target.value })} placeholder="e.g. 149" />
-                <span className="text-xs font-normal text-dash-muted">Yearly price is 10 times the monthly price (2 months free).</span></label>
+              <DialogTitle>Edit plan: {plans.find((p) => p.id === ed.id)?.name}</DialogTitle>
+              <DialogDescription>Update plan details, pricing, limits, and features.</DialogDescription>
+              <FormField label="Plan name *" htmlFor="ed-name">
+                <Input id="ed-name" value={ed.name} onChange={(e) => setE({ name: e.target.value })} placeholder="e.g. Professional" /></FormField>
+              <FormField label="Description" htmlFor="ed-desc">
+                <Textarea id="ed-desc" rows={2} value={ed.desc} onChange={(e) => setE({ desc: e.target.value })} placeholder="Short description of the plan" /></FormField>
+              <FormField label="Price (per month)" htmlFor="ed-price" description="Yearly price is 10 times the monthly price (2 months free).">
+                <Input id="ed-price" type="number" step="0.01" min={0} value={ed.price} onChange={(e) => setE({ price: e.target.value })} placeholder="e.g. 149" /></FormField>
               <div className="grid grid-cols-3 gap-2.5">
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Max team members<input type="number" min={0} className={input} value={ed.users} onChange={(e) => setE({ users: e.target.value })} /></label>
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Max products<input type="number" min={0} className={input} value={ed.products} onChange={(e) => setE({ products: e.target.value })} /></label>
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Max branches<input type="number" min={0} className={input} value={ed.branches} onChange={(e) => setE({ branches: e.target.value })} /></label>
+                <FormField label="Max team members" htmlFor="ed-users"><Input id="ed-users" type="number" min={0} value={ed.users} onChange={(e) => setE({ users: e.target.value })} /></FormField>
+                <FormField label="Max products" htmlFor="ed-products"><Input id="ed-products" type="number" min={0} value={ed.products} onChange={(e) => setE({ products: e.target.value })} /></FormField>
+                <FormField label="Max branches" htmlFor="ed-branches"><Input id="ed-branches" type="number" min={0} value={ed.branches} onChange={(e) => setE({ branches: e.target.value })} /></FormField>
               </div>
-              <span className="-mt-1 text-xs text-dash-muted">999999 means unlimited.</span>
-              <label className="flex items-center gap-2 text-[13px] font-semibold"><input type="checkbox" checked={ed.featured} onChange={(e) => setE({ featured: e.target.checked })} />Mark as &quot;Most popular&quot;</label>
+              <span className="-mt-1 text-xs text-muted-foreground">999999 means unlimited.</span>
+              <FormField orientation="horizontal" label={<>Mark as &quot;Most popular&quot;</>} htmlFor="ed-featured"
+                className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
+                <Checkbox id="ed-featured" checked={ed.featured} onCheckedChange={(c) => setE({ featured: c === true })} />
+              </FormField>
               <div className="flex flex-col gap-2">
-                <span className="text-[13px] font-semibold">Features</span>
+                <span className="text-sm font-medium">Features</span>
                 {ed.feats.map((f, i) => (
-                  <div key={`${f}-${i}`} className="flex items-center justify-between gap-2 rounded-lg bg-dash-bg px-3 py-2 text-[13px]">
-                    <span>{f}</span>
-                    <button type="button" aria-label="Remove feature" onClick={() => setE({ feats: ed.feats.filter((_, j) => j !== i) })} className="text-dash-danger">&times;</button>
-                  </div>
+                  <Item key={`${f}-${i}`} variant="muted" size="sm" className="py-2">
+                    <ItemContent>{f}</ItemContent>
+                    <ItemActions>
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove feature" onClick={() => setE({ feats: ed.feats.filter((_, j) => j !== i) })}>&times;</Button>
+                    </ItemActions>
+                  </Item>
                 ))}
                 <div className="flex gap-2">
-                  <input className={input} value={ed.newFeat} onChange={(e) => setEd({ ...ed, newFeat: e.target.value })} placeholder="Add new feature..."
+                  <Input value={ed.newFeat} onChange={(e) => setEd({ ...ed, newFeat: e.target.value })} placeholder="Add new feature..."
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const t = ed.newFeat.trim(); if (t) setE({ feats: [...ed.feats, t], newFeat: "" }) } }} />
-                  <button type="button" className={outlineBtn} onClick={() => { const t = ed.newFeat.trim(); if (t) setE({ feats: [...ed.feats, t], newFeat: "" }) }}>Add</button>
+                  <Button type="button" variant="outline" onClick={() => { const t = ed.newFeat.trim(); if (t) setE({ feats: [...ed.feats, t], newFeat: "" }) }}>Add</Button>
                 </div>
               </div>
-              {ed.err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{ed.err}</p>}
+              {ed.err && <Alert variant="destructive"><AlertDescription>{ed.err}</AlertDescription></Alert>}
               <div className="flex justify-end gap-2">
-                <button type="button" disabled={ed.saving} onClick={() => setEd(null)} className={outlineBtn}>Cancel</button>
-                <button type="button" disabled={ed.saving} onClick={saveEdit} className={primaryBtn}>{ed.saving ? "Saving…" : "Save changes"}</button>
+                <Button type="button" variant="outline" disabled={ed.saving} onClick={() => setEd(null)}>Cancel</Button>
+                <Button type="button" disabled={ed.saving} onClick={saveEdit}>{ed.saving ? "Saving…" : "Save changes"}</Button>
               </div>
             </>
           )}

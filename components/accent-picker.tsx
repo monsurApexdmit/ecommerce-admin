@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { Check } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 // Runtime-selectable brand accents. The value is written to the `--brand` CSS
 // var on <html>; every brand-tinted element (active nav, buttons, badges, POS
@@ -56,27 +58,23 @@ export function AccentPicker() {
         {ACCENTS.map((a) => {
           const active = mounted && accent === a.value
           return (
-            <button
-              key={a.value}
-              type="button"
-              onClick={() => pick(a.value)}
-              title={a.name}
-              aria-label={a.name}
-              aria-pressed={active}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                active
-                  ? "border-foreground/30 bg-accent"
-                  : "border-border hover:bg-accent/60"
-              }`}
-            >
-              <span
-                className="flex size-5 items-center justify-center rounded-full"
-                style={{ background: a.value }}
+            <WithTooltip key={a.value} content={a.name}>
+              <Button
+                type="button"
+                variant={active ? "default" : "outline"}
+                onClick={() => pick(a.value)}
+                aria-label={a.name}
+                aria-pressed={active}
               >
-                {active && <Check className="size-3 text-white" strokeWidth={3} />}
-              </span>
-              <span className="text-foreground">{a.name}</span>
-            </button>
+                <span
+                  className="flex size-5 items-center justify-center rounded-full"
+                  style={{ background: a.value }}
+                >
+                  {active && <Check className="size-3 text-white" strokeWidth={3} />}
+                </span>
+                <span>{a.name}</span>
+              </Button>
+            </WithTooltip>
           )
         })}
       </div>

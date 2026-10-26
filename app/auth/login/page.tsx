@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { FormField } from "@/components/common/FormField"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
 import { Eye, EyeOff, AlertCircle } from "lucide-react"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 
@@ -77,38 +81,33 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">SAAS Inventory</h1>
-          <p className="text-sm text-gray-600 mt-2">Sign in to your account</p>
+          <h1 className="text-2xl font-bold">SAAS Inventory</h1>
+          <p className="text-sm text-muted-foreground mt-2">Sign in to your account</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-1 p-1 mb-6 bg-gray-100 rounded-lg" role="tablist">
-          {(["password", "pin"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => {
-                setMode(m)
-                setError("")
-                if (m === "pin" && !companyId) {
-                  try { setCompanyId(localStorage.getItem("last_pin_company_id") || "") } catch {}
-                }
-              }}
-              className={`h-9 rounded-md text-sm font-medium transition-colors ${
-                mode === m ? "bg-white text-emerald-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              {m === "password" ? "Email & Password" : "Staff PIN"}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          aria-label="Sign-in method"
+          size="default"
+          className="mb-6 w-full"
+          value={mode}
+          onValueChange={(v) => {
+            const m = v as "password" | "pin"
+            setMode(m)
+            setError("")
+            if (m === "pin" && !companyId) {
+              try { setCompanyId(localStorage.getItem("last_pin_company_id") || "") } catch {}
+            }
+          }}
+          options={[
+            { value: "password", label: "Email & Password" },
+            { value: "pin", label: "Staff PIN" },
+          ]}
+        />
 
         <form onSubmit={handleLogin} className="space-y-6">
           {mode === "pin" ? (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="companyId" className="text-sm font-medium">Company ID</Label>
+              <FormField label="Company ID" htmlFor="companyId" description={<>Ask your manager for your company&apos;s numeric ID.</>}>
                 <Input
                   id="companyId"
                   inputMode="numeric"
@@ -117,25 +116,20 @@ export default function LoginPage() {
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value.replace(/\D/g, ""))}
                   required
-                  className="h-11"
                   disabled={loading}
                 />
-                <p className="text-xs text-gray-500">Ask your manager for your company&apos;s numeric ID.</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="identifier" className="text-sm font-medium">Phone, Email or Staff ID</Label>
+              </FormField>
+              <FormField label="Phone, Email or Staff ID" htmlFor="identifier">
                 <Input
                   id="identifier"
                   autoComplete="username"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   required
-                  className="h-11"
                   disabled={loading}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pin" className="text-sm font-medium">PIN</Label>
+              </FormField>
+              <FormField label="PIN" htmlFor="pin">
                 <Input
                   id="pin"
                   type="password"
@@ -147,17 +141,14 @@ export default function LoginPage() {
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   required
-                  className="h-11 tracking-widest"
+                  className="tracking-widest"
                   disabled={loading}
                 />
-              </div>
+              </FormField>
             </>
           ) : (
           <>
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">
-              Email Address
-            </Label>
+          <FormField label="Email Address" htmlFor="email">
             <Input
               id="email"
               type="email"
@@ -165,19 +156,18 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-11"
               disabled={loading}
             />
-          </div>
+          </FormField>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-sm font-medium">
+              <Label htmlFor="password">
                 Password
               </Label>
-              <a href="/auth/forgot-password" className="text-xs text-emerald-600 hover:underline">
-                Forgot?
-              </a>
+              <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
+                <a href="/auth/forgot-password">Forgot?</a>
+              </Button>
             </div>
             <div className="relative">
               <Input
@@ -187,40 +177,44 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-11 pr-10"
+                className="pr-10"
                 disabled={loading}
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+              </Button>
             </div>
           </div>
           </>
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
-            </div>
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
           <Button
             type="submit"
-            className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            className="w-full"
             disabled={loading}
           >
             {loading ? "Signing in..." : "Sign In"}
           </Button>
 
-          <div className="text-center text-sm text-gray-600 border-t pt-4">
+          <Separator />
+          <div className="text-center text-sm text-muted-foreground">
             <p>
               Don't have an account?{" "}
-              <a href="/auth/signup" className="text-emerald-600 hover:underline font-medium">
+              <a href="/auth/signup" className="text-primary hover:underline font-medium">
                 Start Free Trial
               </a>
             </p>

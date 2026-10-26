@@ -1,14 +1,13 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/common/PageHeader"
 import Link from "next/link"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useDashboardSection } from "./use-dashboard-section"
 import { exportToCSV } from "@/lib/export-import-utils"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useDashboardFilters } from "./dashboard-context"
-
-const quick =
-  "inline-flex h-10 items-center rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold text-dash-ink hover:bg-dash-neutral-soft"
 
 export function Greeting() {
   const { user } = useSaasAuth()
@@ -40,20 +39,22 @@ export function Greeting() {
   }
 
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p className="mb-1 text-[13px] text-dash-muted">{today}</p>
-        <h1 className="font-dash-display text-[28px] font-bold tracking-tight text-dash-ink sm:text-[34px]">
-          {hello}{first ? `, ${first}` : ""}
-        </h1>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Link href="/dashboard/vendors/purchase-orders" className={quick}>Receive stock</Link>
-        <Link href="/dashboard/vendors/purchase-orders?new=1" className={quick}>Create purchase order</Link>
-        <button type="button" onClick={exportReport} disabled={!kpis.data} className={`${quick} disabled:opacity-50`}>
-          Export report
-        </button>
-      </div>
-    </div>
+    <PageHeader
+      title={<>{hello}{first ? `, ${first}` : ""}</>}
+      description={today}
+      actions={
+        <>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/vendors/purchase-orders">Receive stock</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/vendors/purchase-orders?new=1">Create purchase order</Link>
+          </Button>
+          <Button type="button" variant="outline" onClick={exportReport} disabled={!kpis.data}>
+            Export report
+          </Button>
+        </>
+      }
+    />
   )
 }

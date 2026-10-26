@@ -3,7 +3,20 @@
 import { useCallback, useEffect, useState } from "react"
 import { Banknote, Landmark, CreditCard, Wallet, QrCode, Smartphone, Pencil, Trash2, Plus } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch as UISwitch } from "@/components/ui/switch"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { EmptyState } from "@/components/common/EmptyState"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
@@ -34,17 +47,10 @@ const GATEWAYS: { value: PaymentGatewayType | string; label: string }[] = [
 const gatewayLabel = (g: string) => GATEWAYS.find((x) => x.value === g)?.label ?? g
 const NEEDS_KEYS = ["sslcommerz", "portwallet", "stripe", "paypal", "bkash", "nagad"]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft disabled:opacity-50"
 
-function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; onClick: () => void; disabled?: boolean }) {
+function Switch({ on, label, onClick, disabled, id }: { on: boolean; label: string; onClick: () => void; disabled?: boolean; id?: string }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onClick}
-      className={cn("flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-50", on ? "bg-dash-accent justify-end" : "bg-dash-border justify-start")}>
-      <span className="size-4 rounded-full bg-white" />
-    </button>
+    <UISwitch id={id} checked={on} aria-label={label} disabled={disabled} onCheckedChange={() => onClick()} />
   )
 }
 
@@ -233,226 +239,221 @@ export default function PaymentMethodsPage() {
   }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Payments</h1>
-        <p className="mt-1 text-sm text-dash-muted">How customers pay you — in the shop and online. One place for methods and gateway keys.</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Payments" description="How customers pay you — in the shop and online. One place for methods and gateway keys." />
 
       {!loading && (
-        <div className={cn("rounded-[14px] px-4 py-3 text-sm", testCount ? "bg-dash-warn-soft text-dash-warn-fg" : "bg-dash-success-soft text-dash-success-fg")}>
-          <strong>{testCount ? `${testCount} gateway${testCount > 1 ? "s are" : " is"} in test mode.` : `${onCount} of ${FIXED.length} methods on.`}</strong>{" "}
-          {testCount ? `Switch them to live when you are ready to take real payments. Default: ${defName}.` : `Default method: ${defName}.`}
-        </div>
+        <Alert role="status">
+          <AlertTitle>{testCount ? `${testCount} gateway${testCount > 1 ? "s are" : " is"} in test mode.` : `${onCount} of ${FIXED.length} methods on.`}</AlertTitle>
+          <AlertDescription>{testCount ? `Switch them to live when you are ready to take real payments. Default: ${defName}.` : `Default method: ${defName}.`}</AlertDescription>
+        </Alert>
       )}
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
-        <div className="border-b border-dash-border-soft px-5 py-4">
-          <h2 className="font-dash-display text-lg font-bold">Payment methods</h2>
-          <p className="text-sm text-dash-muted">Turn on the methods you accept and choose the default.</p>
-        </div>
+      <SectionCard title="Payment methods" description="Turn on the methods you accept and choose the default." contentClassName="px-0">
         {loading ? (
-          <div className="flex flex-col gap-2.5 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-[12px]" />)}</div>
-        ) : FIXED.map((f) => {
+          <div className="flex flex-col gap-2.5 px-6">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
+        ) : FIXED.map((f, fi) => {
           const m = pm[f.slug]
           const isDef = def === f.slug
           const open = openSlug === f.slug
           const status = !m.enabled ? "Off" : f.gateway && m.test ? "Test mode" : "Live"
-          const sCls = status === "Live" ? "bg-dash-success-soft text-dash-success-fg" : status === "Test mode" ? "bg-dash-warn-soft text-dash-warn-fg" : "bg-dash-neutral-soft text-dash-neutral-fg"
           return (
-            <div key={f.slug} className="border-b border-dash-border-soft last:border-b-0">
-              <div className="flex flex-wrap items-center gap-3.5 px-5 py-3.5">
+            <div key={f.slug}>
+              {fi > 0 && <Separator />}
+              <div className="flex flex-wrap items-center gap-3.5 px-6 py-3.5">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white" style={{ background: f.color }}>{f.ini}</span>
                 <div className="min-w-0 flex-1 basis-48">
-                  <div className="font-bold">{f.name}</div>
-                  <div className="text-xs text-dash-muted">{f.sub}</div>
+                  <div className="font-medium">{f.name}</div>
+                  <div className="text-xs text-muted-foreground">{f.sub}</div>
                 </div>
-                <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", sCls)}>{status}</span>
-                <button type="button" aria-pressed={isDef} onClick={() => makeDefault(f.slug)}
-                  className={cn("h-9 rounded-lg border px-3 text-[13px] font-semibold", isDef ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                <StatusBadge status={status} variant={status === "Live" ? "default" : status === "Test mode" ? "secondary" : "outline"} />
+                <Button type="button" size="sm" variant={isDef ? "default" : "outline"} aria-pressed={isDef} onClick={() => makeDefault(f.slug)}>
                   {isDef ? "Default" : "Make default"}
-                </button>
+                </Button>
                 <span className="flex gap-1.5">{f.where.map((w) => {
                   const ch = w.toLowerCase() as Channel
                   const on = m.channels.includes(ch)
                   return (
-                    <button key={w} type="button" aria-pressed={on} title={`Available in ${w}`}
-                      onClick={(ev) => { ev.stopPropagation(); setM(f.slug, { channels: on ? m.channels.filter((c) => c !== ch) : [...m.channels, ch] }) }}
-                      className={cn("rounded-md px-2 py-0.5 text-[11px] font-semibold", on ? "bg-dash-neutral-soft text-dash-neutral-fg" : "border border-dash-border text-dash-muted line-through")}>{w}</button>
+                    <WithTooltip key={w} content={`Available in ${w}`}>
+                      <Button type="button" size="sm" variant={on ? "default" : "outline"} aria-pressed={on}
+                        onClick={(ev) => { ev.stopPropagation(); setM(f.slug, { channels: on ? m.channels.filter((c) => c !== ch) : [...m.channels, ch] }) }}
+                        className={cn(!on && "line-through")}>{w}</Button>
+                    </WithTooltip>
                   )
                 })}</span>
                 <Switch on={m.enabled} label={`${f.name} enabled`} onClick={() => toggleOn(f.slug)} />
-                <button type="button" aria-expanded={open} onClick={() => setOpenSlug(open ? null : f.slug)} className={cn(outlineBtn, "h-9 px-3 text-[13px]")}>
+                <Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={() => setOpenSlug(open ? null : f.slug)}>
                   {f.fields.length ? (open ? "Close" : "Edit details") : "Details"}
-                </button>
+                </Button>
               </div>
               {open && (
-                <div className="mx-5 mb-4 flex flex-col gap-3 rounded-[12px] bg-dash-neutral-soft p-4 sm:ml-[78px]">
+                <Card className="mx-6 mb-4 gap-3 bg-muted/50 p-4 shadow-none sm:ml-[84px]">
                   {f.fields.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                       {f.fields.map(([k, label, ph]) => (
-                        <label key={k} className="flex flex-col gap-1.5 text-[13px] font-semibold">{label}
-                          <input className={cn(input, "font-mono")} value={m.fields[k] ?? ""} placeholder={ph} onChange={(e) => setM(f.slug, { fields: { ...m.fields, [k]: e.target.value } })} />
-                        </label>
+                        <FormField key={k} label={label} htmlFor={`pm-${f.slug}-${k}`}>
+                          <Input id={`pm-${f.slug}-${k}`} className="font-mono" value={m.fields[k] ?? ""} placeholder={ph} onChange={(e) => setM(f.slug, { fields: { ...m.fields, [k]: e.target.value } })} />
+                        </FormField>
                       ))}
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-3">
                     {f.gateway && (
-                      <span className="flex items-center gap-2 text-sm font-semibold">
-                        <Switch on={m.test} label="Test mode" onClick={() => setM(f.slug, { test: !m.test })} />Test mode
-                      </span>
+                      <FormField orientation="horizontal" label="Test mode" htmlFor={`pm-${f.slug}-test`} className="w-auto gap-2">
+                        <Switch id={`pm-${f.slug}-test`} on={m.test} label="Test mode" onClick={() => setM(f.slug, { test: !m.test })} />
+                      </FormField>
                     )}
-                    <span className="min-w-[200px] flex-1 text-xs text-dash-muted">
+                    <span className="min-w-[200px] flex-1 text-xs text-muted-foreground">
                       {f.fields.length ? "These details appear on invoices and checkout so customers know where to pay." : f.slug === "cod" ? "Limits and fees are set under Cash on delivery below." : "No account details needed."}
                     </span>
                   </div>
-                  {f.gateway && m.test && <span className="text-xs text-dash-warn-fg">Test mode — use the sandbox credentials from the {f.name} developer portal. No real money moves.</span>}
-                  <span className="text-xs text-dash-muted">Use the Save changes bar at the bottom of the page to apply.</span>
-                </div>
+                  {f.gateway && m.test && <span className="text-xs text-foreground">Test mode — use the sandbox credentials from the {f.name} developer portal. No real money moves.</span>}
+                  <span className="text-xs text-muted-foreground">Use the Save changes bar at the bottom of the page to apply.</span>
+                </Card>
               )}
             </div>
           )
         })}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card p-[18px]">
-        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-dash-display text-lg font-bold">Checkout payment methods</h2>
-            <p className="text-sm text-dash-muted">Payment options shown to online customers at checkout. Changes here save instantly.</p>
-          </div>
-          <button type="button" onClick={openNew} className={primaryBtn}><Plus className="size-4" /> Add method</button>
-        </div>
-
+      <SectionCard
+        title="Checkout payment methods"
+        description="Payment options shown to online customers at checkout. Changes here save instantly."
+        actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> Add method</Button>}
+      >
         {form && (
-          <div className="mb-3.5 flex flex-col gap-3 rounded-[12px] bg-dash-neutral-soft p-4">
+          <Card className="mb-3.5 gap-3 bg-muted/50 p-4 shadow-none">
             <strong>{form.id ? "Edit payment method" : "Add payment method"}</strong>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Name *
-                <input className={input} value={form.name} placeholder="Cash on Delivery" onChange={(e) => patch({ name: e.target.value })} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Description
-                <input className={input} value={form.desc} placeholder="Pay when your order arrives" onChange={(e) => patch({ desc: e.target.value })} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Gateway type
-                <select className={input} value={form.gateway} onChange={(e) => patch({ gateway: e.target.value })}>
-                  {GATEWAYS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Icon
-                <select className={input} value={form.icon} onChange={(e) => patch({ icon: e.target.value })}>
-                  {ICONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Sort order
-                <input className={input} type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Status
-                <select className={input} value={form.active ? "active" : "inactive"} onChange={(e) => patch({ active: e.target.value === "active" })}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </label>
+              <FormField label="Name *" htmlFor="pm-form-name">
+                <Input id="pm-form-name" value={form.name} placeholder="Cash on Delivery" onChange={(e) => patch({ name: e.target.value })} />
+              </FormField>
+              <FormField label="Description" htmlFor="pm-form-desc">
+                <Input id="pm-form-desc" value={form.desc} placeholder="Pay when your order arrives" onChange={(e) => patch({ desc: e.target.value })} />
+              </FormField>
+              <FormField label="Gateway type" htmlFor="pm-form-gateway">
+                <Select value={String(form.gateway)} onValueChange={(val) => patch({ gateway: val })}>
+                  <SelectTrigger id="pm-form-gateway" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {GATEWAYS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Icon" htmlFor="pm-form-icon">
+                <Select value={String(form.icon)} onValueChange={(val) => patch({ icon: val })}>
+                  <SelectTrigger id="pm-form-icon" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ICONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Sort order" htmlFor="pm-form-sort">
+                <Input id="pm-form-sort" type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
+              </FormField>
+              <FormField label="Status" htmlFor="pm-form-status">
+                <Select value={String(form.active ? "active" : "inactive")} onValueChange={(val) => patch({ active: val === "active" })}>
+                  <SelectTrigger id="pm-form-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
             {NEEDS_KEYS.includes(form.gateway) && (
-              <span className="rounded-lg bg-dash-warn-soft px-3 py-2 text-xs text-dash-warn-fg">Credentials for this gateway are configured in Settings, General, Payment gateway credentials.</span>
+              <Alert><AlertDescription>Credentials for this gateway are configured in Settings, General, Payment gateway credentials.</AlertDescription></Alert>
             )}
-            <div className="flex items-center gap-3 rounded-[10px] border border-dash-border bg-dash-card p-3">
-              {(() => { const I = iconOf(form.icon); return <span className="flex size-10 items-center justify-center rounded-xl bg-dash-success-soft text-dash-success-fg"><I className="size-5" /></span> })()}
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate font-bold">{form.name.trim() || "Method name"}</span>
-                <span className="truncate text-xs text-dash-muted">{form.desc.trim() || "Description"}</span>
-              </span>
-            </div>
-            {formErr && <p className="text-[13px] font-semibold text-dash-danger">{formErr}</p>}
+            <Item variant="outline" size="sm" className="bg-card">
+              {(() => { const I = iconOf(form.icon); return <ItemMedia variant="icon" className="size-10"><I className="size-5" /></ItemMedia> })()}
+              <ItemContent className="min-w-0">
+                <ItemTitle className="truncate">{form.name.trim() || "Method name"}</ItemTitle>
+                <ItemDescription className="truncate">{form.desc.trim() || "Description"}</ItemDescription>
+              </ItemContent>
+            </Item>
+            {formErr && <p className="text-sm font-medium text-destructive">{formErr}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setForm(null)} className={outlineBtn}>Cancel</button>
-              <button type="button" onClick={saveMethod} disabled={saving} className={primaryBtn}>{saving ? "Saving…" : form.id ? "Save changes" : "Add method"}</button>
+              <Button type="button" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
+              <Button type="button" onClick={saveMethod} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Add method"}</Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {loading ? (
-          <div className="flex flex-col gap-2.5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[68px] rounded-[12px]" />)}</div>
+          <div className="flex flex-col gap-2.5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[68px]" />)}</div>
         ) : methods.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-[12px] bg-dash-neutral-soft p-8 text-sm text-dash-muted">
-            No payment methods yet.
-            <button type="button" onClick={openNew} className={outlineBtn}>Add first method</button>
-          </div>
+          <EmptyState bordered title="No payment methods yet." action={<Button type="button" variant="outline" onClick={openNew}>Add first method</Button>} />
         ) : (
           <div className="flex flex-col gap-2.5">
             {methods.map((m) => {
               const I = iconOf(m.icon)
               return (
-                <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-[12px] border border-dash-border-soft p-3">
-                  <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl", m.isActive ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-neutral-soft text-dash-muted")}><I className="size-5" /></span>
-                  <div className="min-w-0 flex-1">
-                    <div className={cn("truncate font-bold", !m.isActive && "text-dash-muted")}>{m.name}</div>
-                    {m.description && <div className="truncate text-xs text-dash-muted">{m.description}</div>}
-                    <div className="truncate text-xs text-dash-muted">{gatewayLabel(m.gateway_type)} · Sort #{m.sortOrder}</div>
-                  </div>
-                  <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", m.isActive ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-neutral-soft text-dash-neutral-fg")}>
-                    {m.isActive ? "Active" : "Inactive"}
-                  </span>
+                <Item key={m.id} variant="outline" size="sm">
+                  <ItemMedia variant="icon" className={cn("size-10", !m.isActive && "text-muted-foreground")}><I className="size-5" /></ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className={cn("truncate", !m.isActive && "text-muted-foreground")}>{m.name}</ItemTitle>
+                    {m.description && <ItemDescription className="truncate">{m.description}</ItemDescription>}
+                    <ItemDescription className="truncate">{gatewayLabel(m.gateway_type)} · Sort #{m.sortOrder}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                  <StatusBadge status={m.isActive ? "active" : "inactive"} label={m.isActive ? "Active" : "Inactive"} />
                   <Switch on={m.isActive} label={m.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === m.id} onClick={() => toggle(m)} />
                   <div className="flex gap-1.5">
-                    <button type="button" aria-label={`Edit ${m.name}`} onClick={() => openEdit(m)} className={iconBtn}><Pencil className="size-4" /></button>
-                    <button type="button" aria-label={`Delete ${m.name}`} disabled={busyId === m.id} onClick={() => remove(m)} className={cn(iconBtn, "text-dash-danger")}><Trash2 className="size-4" /></button>
+                    <Button type="button" variant="outline" size="icon" aria-label={`Edit ${m.name}`} onClick={() => openEdit(m)}><Pencil className="size-4" /></Button>
+                    <Button type="button" variant="destructive" size="icon" aria-label={`Delete ${m.name}`} disabled={busyId === m.id} onClick={() => remove(m)}><Trash2 className="size-4" /></Button>
                   </div>
-                </div>
+                  </ItemActions>
+                </Item>
               )
             })}
           </div>
         )}
-        <p className="mt-3.5 rounded-[10px] bg-dash-accent-soft px-3 py-2 text-[13px] text-dash-accent-fg">
-          <strong>Display order.</strong> Methods are shown to customers ordered by Sort order (lowest first). Set the number when adding or editing a method.
-        </p>
-      </section>
+        <Alert className="mt-3.5">
+          <AlertTitle>Display order.</AlertTitle>
+          <AlertDescription>Methods are shown to customers ordered by Sort order (lowest first). Set the number when adding or editing a method.</AlertDescription>
+        </Alert>
+      </SectionCard>
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card p-[18px]">
-        <div className="mb-3.5">
-          <h2 className="font-dash-display text-lg font-bold">Cash on delivery</h2>
-          <p className="text-sm text-dash-muted">Reduce fake COD orders.</p>
-        </div>
-        {loading ? <Skeleton className="h-28 rounded-[12px]" /> : (
+      <SectionCard title="Cash on delivery" description="Reduce fake COD orders.">
+        {loading ? <Skeleton className="h-28" /> : (
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <span className="flex flex-col">
-                <span className="text-sm font-semibold">Ask for delivery charge upfront</span>
-                <span className="text-xs text-dash-muted">Customer pays shipping online; the rest is paid on delivery.</span>
+                <span className="text-sm font-medium">Ask for delivery charge upfront</span>
+                <span className="text-xs text-muted-foreground">Customer pays shipping online; the rest is paid on delivery.</span>
               </span>
               <Switch on={cod.deposit} label="Delivery charge upfront" onClick={() => setCod((c) => ({ ...c, deposit: !c.deposit }))} />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">COD only for orders under ({cur})
-                <input className={input} type="number" min={0} value={cod.max} onChange={(e) => { setCod({ ...cod, max: e.target.value }); setCodErr("") }} />
-                <span className="text-xs font-normal text-dash-muted">0 = no limit</span>
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Extra COD fee ({cur})
-                <input className={input} type="number" min={0} value={cod.fee} onChange={(e) => { setCod({ ...cod, fee: e.target.value }); setCodErr("") }} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Phone verification
-                <select className={input} value={cod.verify} onChange={(e) => setCod({ ...cod, verify: e.target.value as Cod["verify"] })}>
-                  <option value="new">OTP for new customers</option>
-                  <option value="always">Always</option>
-                  <option value="never">Never</option>
-                </select>
-              </label>
+              <FormField label={`COD only for orders under (${cur})`} htmlFor="pm-cod-max" description="0 = no limit">
+                <Input id="pm-cod-max" type="number" min={0} value={cod.max} onChange={(e) => { setCod({ ...cod, max: e.target.value }); setCodErr("") }} />
+              </FormField>
+              <FormField label={`Extra COD fee (${cur})`} htmlFor="pm-cod-fee">
+                <Input id="pm-cod-fee" type="number" min={0} value={cod.fee} onChange={(e) => { setCod({ ...cod, fee: e.target.value }); setCodErr("") }} />
+              </FormField>
+              <FormField label="Phone verification" htmlFor="pm-cod-verify">
+                <Select value={String(cod.verify)} onValueChange={(val) => setCod({ ...cod, verify: val as Cod["verify"] })}>
+                  <SelectTrigger id="pm-cod-verify" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">OTP for new customers</SelectItem>
+                    <SelectItem value="always">Always</SelectItem>
+                    <SelectItem value="never">Never</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
           </div>
         )}
-      </section>
+      </SectionCard>
 
-      <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-dash-border bg-dash-card px-[18px] py-3">
-        <span className={cn("text-sm", codErr ? "text-dash-danger" : dirty ? "text-dash-warn-fg" : "text-dash-muted")}>
+      <Card className="sticky bottom-0 flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <span className={cn("text-sm", codErr ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>
           {codErr || (dirty ? "You have unsaved changes." : "Saved methods apply to new sales.")}
         </span>
         <div className="flex gap-2">
-          <button type="button" className={outlineBtn} onClick={() => { setCod(base); setPm(pmBase.m); setDef(pmBase.def); setCodErr("") }} disabled={!dirty}>Discard</button>
-          <button type="button" className={primaryBtn} onClick={saveCod} disabled={codSaving || !dirty}>{codSaving ? "Saving…" : "Save changes"}</button>
+          <Button type="button" variant="outline" onClick={() => { setCod(base); setPm(pmBase.m); setDef(pmBase.def); setCodErr("") }} disabled={!dirty}>Discard</Button>
+          <Button type="button" onClick={saveCod} disabled={codSaving || !dirty}>{codSaving ? "Saving…" : "Save changes"}</Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

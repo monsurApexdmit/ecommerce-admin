@@ -1,35 +1,47 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Ban, CheckCircle2, Clock, Download, Eye, Pencil, Search, Trash2, UserCheck, Users, Wallet } from "lucide-react"
+import { Ban, CheckCircle2, ChevronDown, Clock, Download, Eye, Pencil, Search, Trash2, UserCheck, Users, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import staffApi, { staffUiApi, type StaffOverview, type StaffRow, type StaffSalarySummary } from "@/lib/staffApi"
 import { exportToCSV } from "@/lib/export-import-utils"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
-import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Toolbar } from "@/components/common/Toolbar"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
 
 type Tab = "all" | "Active" | "Invited" | "On leave" | "Inactive"
 const TABS: Tab[] = ["all", "Active", "Invited", "On leave", "Inactive"]
-const STATUS_STYLE: Record<string, string> = {
-  Active: "bg-dash-success-soft text-dash-success-fg", Invited: "bg-dash-warn-soft text-dash-warn-fg",
-  "On leave": "bg-dash-accent-soft text-dash-accent-fg", Inactive: "bg-dash-neutral-soft text-dash-neutral-fg",
-}
 const PAY_METHODS = ["Cash", "bKash", "Bank transfer", "Check"]
 const STATUSES = ["Active", "Invited", "On leave", "Inactive"]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 const lastActive = (iso: string | null) => {
   if (!iso) return "Never"
   const t = new Date(iso), now = new Date()
@@ -226,20 +238,18 @@ export default function StaffPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Staff</h1>
-          <p className="mt-1 text-sm text-dash-muted">Your team, what they can access, and where they work.</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setActivityOpen(true)} className={outlineBtn}>Activity log</button>
-          <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Staff"
+        description="Your team, what they can access, and where they work."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setActivityOpen(true)}>Activity log</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+        </>}
+      />
 
       {loading || !stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
           { label: "Team members", value: stats.total, icon: <Users className="size-4" />, color: "blue", hint: `${stats.owners} owner · ${stats.staffCount} staff` },
@@ -251,112 +261,129 @@ export default function StaffPage() {
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
               tabs={TABS.map((t) => ({ value: t, label: t === "all" ? "All" : t, count: data?.counts[t] }))} />
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search staff</span>
-              <input type="search" placeholder="Search name, email or phone…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            <select aria-label="Role" value={roleF} onChange={(e) => { setRoleF(e.target.value); setPage(1) }} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none">
-              <option value="all">Role: All</option>{roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-            <select aria-label="Location" value={locF} onChange={(e) => { setLocF(e.target.value); setPage(1) }} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none">
-              <option value="all">Location: All</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            <button type="button" onClick={() => { setQ(""); setRoleF("all"); setLocF("all"); setTab("all"); setPage(1) }} className={outlineBtn}>Reset</button>
-          </div>
+          <Toolbar className="p-4">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input type="search" aria-label="Search staff" placeholder="Search name, email or phone…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} className="pl-8" />
+            </div>
+            <Select value={roleF} onValueChange={(v) => { setRoleF(v); setPage(1) }}>
+              <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Role: All</SelectItem>{roles.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={locF} onValueChange={(v) => { setLocF(v); setPage(1) }}>
+              <SelectTrigger aria-label="Location"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Location: All</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" variant="outline" onClick={() => { setQ(""); setRoleF("all"); setLocF("all"); setTab("all"); setPage(1) }}>Reset</Button>
+          </Toolbar>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th className="py-3 pl-4 pr-2 font-semibold">Person</th><th className="px-2 py-3 font-semibold">Role</th><th className="px-2 py-3 font-semibold">Location</th>
-                  <th className="px-2 py-3 font-semibold">Salary</th><th className="px-2 py-3 font-semibold">Last active</th><th className="px-2 py-3 font-semibold">Status</th>
-                  <th className="px-2 py-3 font-semibold">Published</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-12 rounded" /></td></tr>) :
+            <Table className="min-w-[900px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-4">Person</TableHead><TableHead>Role</TableHead><TableHead>Location</TableHead>
+                  <TableHead>Salary</TableHead><TableHead>Last active</TableHead><TableHead>Status</TableHead>
+                  <TableHead>Published</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={8} className="px-4 py-3"><Skeleton className="h-12" /></TableCell></TableRow>) :
                   pageRows.length === 0 ? (
-                    <tr><td colSpan={8} className="py-14 text-center">
-                      <Users className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                      <p className="font-semibold">No staff found</p>
-                      <p className="text-sm text-dash-muted">{qD || tab !== "all" || roleF !== "all" || locF !== "all" ? "Try clearing the filters." : "Add your first team member with the form."}</p>
-                    </td></tr>
+                    <TableRow><TableCell colSpan={8}>
+                      <EmptyState icon={Users} title="No staff found" className="p-4 md:p-6"
+                        description={qD || tab !== "all" || roleF !== "all" || locF !== "all" ? "Try clearing the filters." : "Add your first team member with the form."} />
+                    </TableCell></TableRow>
                   ) : pageRows.map((r) => (
-                    <tr key={r.id} className={editing?.id === r.id ? "bg-dash-accent-soft/40" : ""}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                    <TableRow key={r.id} data-state={editing?.id === r.id ? "selected" : undefined}>
+                      <TableCell className="pl-4">
                         <div className="flex items-center gap-2.5">
-                          <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-dash-accent-soft text-xs font-bold text-dash-accent-fg">{initials(r.name)}</span>
-                          <span className="flex min-w-0 flex-col"><span className="font-semibold">{r.name}</span><span className="truncate text-xs text-dash-muted">{[r.email, r.phone].filter(Boolean).join(" · ") || "—"}</span></span>
+                          <UserAvatar name={r.name} shape="square" className="size-9" />
+                          <span className="flex min-w-0 flex-col"><span className="font-semibold">{r.name}</span><span className="truncate text-xs text-muted-foreground">{[r.email, r.phone].filter(Boolean).join(" · ") || "—"}</span></span>
                         </div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3"><span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-semibold">{r.roleName ?? "No role"}</span></td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">{r.locationNames.join(", ") || "All locations"}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3"><div className="tabular-nums">{r.salary ? formatCurrency(r.salary) : "—"}</div><div className="text-xs text-dash-muted">{r.paymentMethod ?? ""}</div></td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-dash-muted">{lastActive(r.lastActiveAt)}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", STATUS_STYLE[r.status] ?? STATUS_STYLE.Inactive)}>{r.status}</span>
-                        {r.invited && r.email && <div><button type="button" onClick={() => resend(r)} className="text-xs font-semibold text-dash-accent hover:underline">Resend invite</button></div>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <button type="button" role="switch" aria-checked={r.published} aria-label={`Published: ${r.name}`} disabled={!!r.isOnlyOwner} onClick={() => togglePublished(r)}
-                          className={cn("flex h-5 w-9 items-center rounded-full p-0.5", r.published ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}><span className="size-4 rounded-full bg-white" /></button>
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                      </TableCell>
+                      <TableCell><Badge variant="secondary">{r.roleName ?? "No role"}</Badge></TableCell>
+                      <TableCell>{r.locationNames.join(", ") || "All locations"}</TableCell>
+                      <TableCell><div className="tabular-nums">{r.salary ? formatCurrency(r.salary) : "—"}</div><div className="text-xs text-muted-foreground">{r.paymentMethod ?? ""}</div></TableCell>
+                      <TableCell className="text-muted-foreground">{lastActive(r.lastActiveAt)}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={r.status} />
+                        {r.invited && r.email && <div><Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => resend(r)}>Resend invite</Button></div>}
+                      </TableCell>
+                      <TableCell>
+                        <Switch checked={r.published} aria-label={`Published: ${r.name}`} disabled={!!r.isOnlyOwner} onCheckedChange={() => togglePublished(r)} />
+                      </TableCell>
+                      <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <button type="button" aria-label={`View ${r.name}`} className={iconBtn} onClick={() => openView(r)}><Eye className="size-4" /></button>
-                          <button type="button" aria-label={`Edit ${r.name}`} className={iconBtn} onClick={() => startEdit(r)}><Pencil className="size-4" /></button>
-                          <button type="button" disabled={!!r.isOnlyOwner} aria-label={r.status === "Inactive" ? "Reactivate" : "Deactivate"} title={r.isOnlyOwner ? "The only Owner cannot be deactivated" : r.status === "Inactive" ? "Reactivate" : "Deactivate"} className={cn(iconBtn, "disabled:cursor-not-allowed disabled:opacity-40")} onClick={() => toggleActive(r)}>
-                            {r.status === "Inactive" ? <CheckCircle2 className="size-4" /> : <Ban className="size-4" />}
-                          </button>
-                          <button type="button" disabled={!!r.isOnlyOwner} aria-label={`Delete ${r.name}`} title={r.isOnlyOwner ? "The only Owner cannot be removed" : undefined} className={cn(iconBtn, "disabled:cursor-not-allowed disabled:opacity-40")} onClick={() => remove(r)}><Trash2 className="size-4" /></button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`View ${r.name}`} onClick={() => openView(r)}><Eye className="size-4" /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button>
+                          <WithTooltip content={r.isOnlyOwner ? "The only Owner cannot be deactivated" : r.status === "Inactive" ? "Reactivate" : "Deactivate"}>
+                            <span tabIndex={r.isOnlyOwner ? 0 : undefined} className="inline-flex">
+                              <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={r.status === "Inactive" ? "Reactivate" : "Deactivate"} onClick={() => toggleActive(r)}>
+                                {r.status === "Inactive" ? <CheckCircle2 className="size-4" /> : <Ban className="size-4" />}
+                              </Button>
+                            </span>
+                          </WithTooltip>
+                          <WithTooltip content={r.isOnlyOwner ? "The only Owner cannot be removed" : undefined}>
+                            <span tabIndex={r.isOnlyOwner ? 0 : undefined} className="inline-flex">
+                              <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={`Delete ${r.name}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>
+                            </span>
+                          </WithTooltip>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           {!loading && rows.length > 0 && (
             <div className="p-4 pt-3"><PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(rows.length / perPage))} itemsPerPage={perPage} totalItems={rows.length}
               onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} /></div>
           )}
-          {stats && <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted">{stats.seatsUsed} of {stats.seatLimit ?? "unlimited"} seats used{atSeatLimit ? " · limit reached" : ""}</div>}
-        </section>
+          {stats && <>
+            <Separator />
+            <div className="px-4 py-3 text-xs text-muted-foreground">{stats.seatsUsed} of {stats.seatLimit ?? "unlimited"} seats used{atSeatLimit ? " · limit reached" : ""}</div>
+          </>}
+        </Card>
 
-        <aside className="flex w-full shrink-0 flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[400px]">
+        <Card role="complementary" className="w-full shrink-0 gap-3.5 p-5 xl:w-[400px]">
           {viewing && (
-            <div className="flex flex-col gap-2.5 rounded-xl border border-dash-border bg-dash-bg p-3.5">
-              <div className="flex items-center justify-between"><h2 className="font-dash-display text-base font-bold">Staff details</h2><button type="button" onClick={() => setViewing(null)} className="text-[13px] font-semibold text-dash-accent">Close</button></div>
+            <SectionCard
+              title="Staff details"
+              actions={<Button type="button" variant="ghost" size="sm" onClick={() => setViewing(null)}>Close</Button>}
+              className="gap-3 py-4"
+              contentClassName="flex flex-col gap-2.5 px-4"
+            >
               <div className="flex items-center gap-2.5">
-                <span className="flex size-11 items-center justify-center rounded-xl bg-dash-accent-soft font-bold text-dash-accent-fg">{initials(viewing.name)}</span>
-                <span className="flex flex-col"><span className="font-semibold">{viewing.name}</span><span className="text-xs text-dash-muted">{viewing.roleName ?? "No role"}</span></span>
+                <UserAvatar name={viewing.name} shape="square" className="size-11" />
+                <span className="flex flex-col"><span className="font-semibold">{viewing.name}</span><span className="text-xs text-muted-foreground">{viewing.roleName ?? "No role"}</span></span>
               </div>
-              {([["Email", viewing.email], ["Phone", viewing.phone], ["Sign in", viewing.loginMethod === "pin" ? "POS PIN" : "Email link"], ["Locations", viewing.locationNames.join(", ") || "All locations"],
-                ["Joined", fmtD(viewing.joiningDate)], ["Pay", `${viewing.salary ? formatCurrency(viewing.salary) : "—"} · ${viewing.paymentMethod ?? ""}`], ["Account", viewing.account], ["NID", viewing.nid], ["Emergency contact", viewing.emergencyContact], ["Status", viewing.status], ["Published", viewing.published ? "Yes" : "No"], ["Last active", lastActive(viewing.lastActiveAt)]] as [string, string | null][]).map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4 text-[13px]"><span className="text-dash-muted">{k}</span><span className="text-right font-semibold">{v || "—"}</span></div>
-              ))}
-              <div className="mt-1 flex flex-col gap-2 border-t border-dash-border-soft pt-2.5">
-                <div className="flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Salary</span><Link href={`/dashboard/staff/salary?staff=${viewing.id}`} className="text-xs font-semibold text-dash-accent hover:underline">Open in Salary management →</Link></div>
-                {!salary ? <Skeleton className="h-16 rounded-lg" /> : (
+              <InfoList>
+                {([["Email", viewing.email], ["Phone", viewing.phone], ["Sign in", viewing.loginMethod === "pin" ? "POS PIN" : "Email link"], ["Locations", viewing.locationNames.join(", ") || "All locations"],
+                  ["Joined", fmtD(viewing.joiningDate)], ["Pay", `${viewing.salary ? formatCurrency(viewing.salary) : "—"} · ${viewing.paymentMethod ?? ""}`], ["Account", viewing.account], ["NID", viewing.nid], ["Emergency contact", viewing.emergencyContact], ["Status", viewing.status], ["Published", viewing.published ? "Yes" : "No"], ["Last active", lastActive(viewing.lastActiveAt)]] as [string, string | null][]).map(([k, v]) => (
+                  <InfoRow key={k} label={k} value={v || "—"} />
+                ))}
+              </InfoList>
+              <Separator className="mt-1" />
+              <div className="flex flex-col gap-2">
+                <SectionTitle action={<Button variant="link" size="sm" asChild className="h-auto p-0"><Link href={`/dashboard/staff/salary?staff=${viewing.id}`}>Open in Salary management →</Link></Button>}>Salary</SectionTitle>
+                {!salary ? <Skeleton className="h-16" /> : (
                   <>
                     <div className="grid grid-cols-3 gap-2 text-center">
                       {[["Monthly", salary.monthly], ["Paid this year", salary.paidThisYear], ["Due now", salary.dueNow]].map(([l, v]) => (
-                        <div key={l as string} className="rounded-lg bg-dash-card px-2 py-1.5"><div className="text-[11px] text-dash-muted">{l}</div><div className="text-sm font-bold tabular-nums">{formatCurrency(Number(v))}</div></div>
+                        <Card key={l as string} className="gap-0 px-2 py-1.5"><div className="text-xs text-muted-foreground">{l}</div><div className="text-sm font-bold tabular-nums">{formatCurrency(Number(v))}</div></Card>
                       ))}
                     </div>
-                    {salary.history.length === 0 ? <p className="text-xs text-dash-muted">No salary records yet.</p> : salary.history.map((h) => (
-                      <div key={h.id} className="flex items-center justify-between gap-2 text-[13px]">
-                        <span className="flex flex-col"><span className="font-semibold">{h.label}</span><span className="text-xs text-dash-muted">{h.detail}</span></span>
+                    {salary.history.length === 0 ? <p className="text-xs text-muted-foreground">No salary records yet.</p> : salary.history.map((h) => (
+                      <div key={h.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="flex flex-col"><span className="font-semibold">{h.label}</span><span className="text-xs text-muted-foreground">{h.detail}</span></span>
                         <span className="flex items-center gap-2"><strong className="tabular-nums">{formatCurrency(h.net)}</strong>
-                          <span className={cn("rounded-full px-2 py-px text-[11px] font-bold", h.status === "paid" ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-warn-soft text-dash-warn-fg")}>{h.status}</span>
-                          {h.canPay && <button type="button" disabled={payBusy} onClick={() => payOne(h.id)} className="rounded-md bg-dash-accent px-2 py-0.5 text-[11px] font-semibold text-white disabled:opacity-40">Pay</button>}</span>
+                          <StatusBadge status={h.status} variant={h.status === "paid" ? "default" : "secondary"} />
+                          {h.canPay && <Button type="button" size="sm" disabled={payBusy} onClick={() => payOne(h.id)}>Pay</Button>}</span>
                       </div>
                     ))}
                     {(() => {
@@ -366,100 +393,108 @@ export default function StaffPage() {
                       if (!dueCount && !canGenerate) return null
                       return (
                         <div className="flex flex-wrap gap-2 pt-1">
-                          {canGenerate && <button type="button" disabled={payBusy} onClick={generateThisMonth} className={cn(outlineBtn, "h-9 text-xs")}>Generate {monthLabel} salary</button>}
-                          {dueCount > 0 && <button type="button" disabled={payBusy} onClick={payAllDue} className="h-9 rounded-[10px] bg-dash-accent px-3 text-xs font-semibold text-white disabled:opacity-40">Pay all due{dueCount > 1 ? ` (${dueCount})` : ""}</button>}
+                          {canGenerate && <Button type="button" variant="outline" size="sm" disabled={payBusy} onClick={generateThisMonth}>Generate {monthLabel} salary</Button>}
+                          {dueCount > 0 && <Button type="button" size="sm" disabled={payBusy} onClick={payAllDue}>Pay all due{dueCount > 1 ? ` (${dueCount})` : ""}</Button>}
                         </div>
                       )
                     })()}
                   </>
                 )}
               </div>
-            </div>
+            </SectionCard>
           )}
 
-          <div><h2 className="font-dash-display text-lg font-bold">{editing ? `Edit ${editing.name}` : "Add team member"}</h2>
-            {err && <p role="alert" className="mt-2 rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}</div>
-          {atSeatLimit && <p role="alert" className="rounded-[10px] bg-dash-warn-soft px-3 py-2 text-[13px] font-semibold text-dash-warn-fg">All {stats?.seatLimit} seats on your plan are used. <Link href="/dashboard/billing/plans" className="underline">Upgrade your plan</Link> to add more team members.</p>}
-          {editing?.isOnlyOwner && <p className="rounded-[10px] bg-dash-neutral-soft px-3 py-2 text-xs text-dash-muted">You are the only Owner, so this role and status are locked. Make someone else an Owner first to change them.</p>}
+          <div><h2 className="text-lg font-semibold">{editing ? `Edit ${editing.name}` : "Add team member"}</h2>
+            {err && <Alert variant="destructive" role="alert" className="mt-2"><AlertDescription>{err}</AlertDescription></Alert>}</div>
+          {atSeatLimit && <Alert role="alert"><AlertDescription><p>All {stats?.seatLimit} seats on your plan are used. <Link href="/dashboard/billing/plans" className="underline">Upgrade your plan</Link> to add more team members.</p></AlertDescription></Alert>}
+          {editing?.isOnlyOwner && <Alert><AlertDescription>You are the only Owner, so this role and status are locked. Make someone else an Owner first to change them.</AlertDescription></Alert>}
           <div className="grid grid-cols-2 gap-2.5">
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Full name *<input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Rafiq Khan" /></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Phone *
-              <span className="flex h-[42px] items-center overflow-hidden rounded-[10px] border border-dash-border bg-dash-card focus-within:border-dash-accent"><span className="border-r border-dash-border px-2.5 text-sm text-dash-muted">+880</span>
-                <input type="tel" className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-sm font-normal outline-none" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="17XX-XXXXXX" /></span></label>
+            <FormField label="Full name" required htmlFor="staff-name"><Input id="staff-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Rafiq Khan" /></FormField>
+            <FormField label="Phone" required htmlFor="staff-phone">
+              <InputGroup><InputGroupAddon><InputGroupText>+880</InputGroupText></InputGroupAddon>
+                <InputGroupInput id="staff-phone" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="17XX-XXXXXX" /></InputGroup></FormField>
           </div>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Role *
-            <div className="flex flex-wrap gap-1.5">
+          <FormField label="Role" required description={<Link href="/dashboard/staff/roles" className="underline-offset-4 hover:underline">See exactly what each role can do →</Link>}>
+            <ChoiceCardGroup aria-label="Role" className="grid-cols-2" disabled={!!editing?.isOnlyOwner} value={form.roleId}
+              onValueChange={(id) => setForm((f) => ({ ...f, roleId: id, loginMethod: roleMethod(id) }))}>
               {pickableRoles.map((r) => (
-                <button key={r.id} type="button" disabled={!!editing?.isOnlyOwner} aria-pressed={form.roleId === String(r.id)} title={r.description ?? undefined} onClick={() => setForm((f) => ({ ...f, roleId: String(r.id), loginMethod: roleMethod(String(r.id)) }))}
-                  className={cn("flex flex-col items-start rounded-[10px] border-2 px-3 py-1.5 text-left", form.roleId === String(r.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
-                  <span className="text-[13px] font-semibold">{r.name}</span>{r.description && <span className="max-w-[170px] text-[11px] font-normal opacity-80">{r.description}</span>}<span className="text-[11px] font-normal opacity-80">{r.memberCount} member{r.memberCount === 1 ? "" : "s"}</span>
-                </button>
+                <ChoiceCard key={r.id} value={String(r.id)} title={r.name} description={r.description || undefined}>
+                  <span className="text-xs font-normal text-muted-foreground">{r.memberCount} member{r.memberCount === 1 ? "" : "s"}</span>
+                </ChoiceCard>
               ))}
-            </div>
-            <Link href="/dashboard/staff/roles" className="text-xs font-semibold text-dash-accent hover:underline">See exactly what each role can do →</Link>
-          </div>
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">How they sign in
-            <div role="radiogroup" aria-label="Login method" className="grid grid-cols-2 gap-2">
+            </ChoiceCardGroup>
+          </FormField>
+          <FormField label="How they sign in">
+            <ChoiceCardGroup aria-label="Login method" className="grid-cols-2" value={form.loginMethod} onValueChange={(id) => set("loginMethod", id)}>
               {([["email", "Email link", "They set their own password"], ["pin", "POS PIN", "Cashiers, no email needed"]] as const).map(([id, label, sub]) => (
-                <button key={id} type="button" role="radio" aria-checked={form.loginMethod === id} onClick={() => set("loginMethod", id)}
-                  className={cn("flex flex-col rounded-[10px] border-2 px-3 py-2 text-left", form.loginMethod === id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
-                  <span className="text-[13px] font-semibold">{label}</span><span className="text-[11px] font-normal opacity-80">{sub}</span></button>
+                <ChoiceCard key={id} value={id} title={label} description={sub} />
               ))}
-            </div>
-          </div>
+            </ChoiceCardGroup>
+          </FormField>
           {form.loginMethod === "email" ? (
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Email *<input type="email" className={input} value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="name@example.com" />
-              <span className="text-xs font-normal text-dash-muted">They get a link to set their own password. You never see it.</span></label>
+            <FormField label="Email" required htmlFor="staff-email" description="They get a link to set their own password. You never see it.">
+              <Input id="staff-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="name@example.com" />
+            </FormField>
           ) : (
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">4-digit POS PIN<input inputMode="numeric" maxLength={4} className={input} value={form.pin} onChange={(e) => set("pin", e.target.value.replace(/\D/g, ""))} placeholder={editing?.hasPin ? "Leave blank to keep the current PIN" : "e.g. 4821"} />
-              <span className="text-xs font-normal text-dash-muted">For cashiers who only use the POS. No email needed.</span></label>
+            <FormField label="4-digit POS PIN" htmlFor="staff-pin" description="For cashiers who only use the POS. No email needed.">
+              <Input id="staff-pin" inputMode="numeric" maxLength={4} value={form.pin} onChange={(e) => set("pin", e.target.value.replace(/\D/g, ""))} placeholder={editing?.hasPin ? "Leave blank to keep the current PIN" : "e.g. 4821"} />
+            </FormField>
           )}
-          <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Can work at
+          <FormField label="Can work at">
             <div role="group" aria-label="Locations" className="flex flex-wrap gap-1.5">
               {locations.map((l) => {
                 const on = form.locationIds.includes(l.id)
-                return <button key={l.id} type="button" aria-pressed={on} onClick={() => set("locationIds", on ? form.locationIds.filter((x) => x !== l.id) : [...form.locationIds, l.id])}
-                  className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{l.name}</button>
+                return <Button key={l.id} type="button" size="sm" variant={on ? "default" : "outline"} aria-pressed={on} onClick={() => set("locationIds", on ? form.locationIds.filter((x) => x !== l.id) : [...form.locationIds, l.id])}>{l.name}</Button>
               })}
             </div>
-          </div>
-          <details className="rounded-xl border border-dash-border-soft">
-            <summary className="cursor-pointer px-3.5 py-3 text-[13px] font-bold">Pay &amp; employment</summary>
-            <div className="flex flex-col gap-3 px-3.5 pb-3.5">
-              <div className="grid grid-cols-2 gap-2.5">
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Joining date<input type="date" className={input} value={form.joined} onChange={(e) => set("joined", e.target.value)} /></label>
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Monthly salary (৳)<input type="number" min={0} className={input} value={form.salary} onChange={(e) => set("salary", e.target.value)} placeholder="0" /></label>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Paid by<select className={input} value={form.method} onChange={(e) => set("method", e.target.value)}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select></label>
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Account / wallet no.<input className={input} value={form.account} onChange={(e) => set("account", e.target.value)} placeholder="Optional" /></label>
-              </div>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Status<select className={input} disabled={!!editing?.isOnlyOwner} value={form.status} onChange={(e) => set("status", e.target.value)}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">NID number<input className={input} value={form.nid} onChange={(e) => set("nid", e.target.value)} placeholder="Optional" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Emergency contact<input className={input} value={form.emergency} onChange={(e) => set("emergency", e.target.value)} placeholder="Name and phone (optional)" /></label>
-            </div>
-          </details>
+          </FormField>
+          <Collapsible asChild>
+            <Card className="gap-0 py-0">
+              <CollapsibleTrigger asChild>
+                <Button type="button" variant="ghost" className="group w-full justify-between">
+                  Pay &amp; employment
+                  <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="flex flex-col gap-3 px-3.5 pb-3.5 pt-2">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <FormField label="Joining date" htmlFor="staff-joined"><Input id="staff-joined" type="date" value={form.joined} onChange={(e) => set("joined", e.target.value)} /></FormField>
+                  <FormField label="Monthly salary (৳)" htmlFor="staff-salary"><Input id="staff-salary" type="number" min={0} value={form.salary} onChange={(e) => set("salary", e.target.value)} placeholder="0" /></FormField>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <FormField label="Paid by" htmlFor="staff-pay-method"><Select value={form.method} onValueChange={(v) => set("method", v)}><SelectTrigger id="staff-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormField>
+                  <FormField label="Account / wallet no." htmlFor="staff-account"><Input id="staff-account" value={form.account} onChange={(e) => set("account", e.target.value)} placeholder="Optional" /></FormField>
+                </div>
+                <FormField label="Status" htmlFor="staff-status"><Select disabled={!!editing?.isOnlyOwner} value={form.status} onValueChange={(v) => set("status", v)}><SelectTrigger id="staff-status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></FormField>
+                <FormField label="NID number" htmlFor="staff-nid"><Input id="staff-nid" value={form.nid} onChange={(e) => set("nid", e.target.value)} placeholder="Optional" /></FormField>
+                <FormField label="Emergency contact" htmlFor="staff-emergency"><Input id="staff-emergency" value={form.emergency} onChange={(e) => set("emergency", e.target.value)} placeholder="Name and phone (optional)" /></FormField>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => startEdit(null)} className={outlineBtn}>Clear</button>
-            <button type="button" disabled={saving || atSeatLimit} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+            <Button type="button" disabled={saving || atSeatLimit} onClick={save}>
               {saving ? "Saving…" : editing ? "Save changes" : form.loginMethod === "email" ? "Add & send invite" : "Add team member"}
-            </button>
+            </Button>
           </div>
-        </aside>
+        </Card>
       </div>
 
       <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
-          <DialogTitle className="font-dash-display text-xl font-bold">Activity log</DialogTitle>
-          <DialogDescription className="text-[13px]">When each team member was last active.</DialogDescription>
-          <div className="flex flex-col">
-            {[...rows].sort((a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "")).map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 border-b border-dash-border-soft py-2.5 last:border-0">
-                <span className="flex flex-col"><span className="text-sm font-semibold">{r.name}</span><span className="text-xs text-dash-muted">{r.roleName ?? "No role"}</span></span>
-                <span className="text-[13px] text-dash-muted">{lastActive(r.lastActiveAt)}</span>
-              </div>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+          <DialogTitle>Activity log</DialogTitle>
+          <DialogDescription>When each team member was last active.</DialogDescription>
+          <ItemGroup>
+            {[...rows].sort((a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "")).map((r, i) => (
+              <Fragment key={r.id}>
+                {i > 0 && <ItemSeparator />}
+                <Item size="sm" className="px-0">
+                  <ItemContent><ItemTitle>{r.name}</ItemTitle><ItemDescription>{r.roleName ?? "No role"}</ItemDescription></ItemContent>
+                  <ItemActions className="text-sm text-muted-foreground">{lastActive(r.lastActiveAt)}</ItemActions>
+                </Item>
+              </Fragment>
             ))}
-          </div>
+          </ItemGroup>
         </DialogContent>
       </Dialog>
     </div>

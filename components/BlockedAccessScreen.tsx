@@ -2,6 +2,9 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { SectionTitle } from "@/components/common/SectionTitle"
 import { AlertCircle, Mail } from "lucide-react"
 import Link from "next/link"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -57,7 +60,7 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-      <Card className="w-full max-w-md shadow-2xl border-red-200">
+      <Card className="w-full max-w-md py-0">
         <div className="p-8 text-center">
           {/* Icon */}
           <div className="text-6xl mb-6">{content.icon}</div>
@@ -68,15 +71,15 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
           </div>
 
           {/* Title */}
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">{content.title}</h1>
+          <h1 className="text-2xl font-bold mb-2">{content.title}</h1>
 
           {/* Message */}
-          <p className="text-gray-600 text-sm mb-6">{content.message}</p>
+          <p className="text-muted-foreground text-sm mb-6">{content.message}</p>
 
           {/* Features List */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
-            <p className="text-xs font-semibold text-gray-700 mb-2 uppercase">What you need to do:</p>
-            <ul className="text-xs text-gray-600 space-y-1">
+          <Card className="gap-0 p-4 mb-6 text-left shadow-none bg-muted/50">
+            <SectionTitle as="p" className="mb-2">What you need to do:</SectionTitle>
+            <ul className="text-xs text-muted-foreground space-y-1">
               {reason === "trial_expired" && (
                 <>
                   <li>• Select a subscription plan that fits your needs</li>
@@ -99,28 +102,25 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
                 </>
               )}
             </ul>
-          </div>
+          </Card>
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            <Link href={content.primaryButton.href} className="block">
-              <Button className="w-full bg-red-600 hover:bg-red-700 text-white font-medium h-11">
+            <Button asChild className="w-full">
+              <Link href={content.primaryButton.href}>
                 {content.primaryButton.label}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
 
-            <Link href={content.secondaryButton.href} className="block">
-              <Button
-                variant="outline"
-                className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 h-11"
-              >
+            <Button asChild variant="outline" className="w-full">
+              <Link href={content.secondaryButton.href}>
                 {content.secondaryButton.label}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
 
             <Button
               variant="ghost"
-              className="w-full text-gray-600 hover:text-gray-800 h-11"
+              className="w-full"
               onClick={logout}
             >
               Sign Out
@@ -128,31 +128,34 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
           </div>
 
           {/* Support Info */}
-          <div className="border-t mt-6 pt-6">
-            <div className="flex items-center gap-2 text-xs text-gray-600 justify-center mb-2">
+          <Separator className="mt-6" />
+          <div className="pt-6">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center mb-2">
               <Mail className="w-4 h-4" />
               <span>Need help?</span>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Email us at{" "}
-              <a href="mailto:support@company.com" className="text-red-600 hover:underline font-medium">
+              <a href="mailto:support@company.com" className="text-primary hover:underline font-medium">
                 support@company.com
               </a>
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Or visit our{" "}
-              <a href="https://help.company.com" className="text-red-600 hover:underline font-medium">
+              <a href="https://help.company.com" className="text-primary hover:underline font-medium">
                 help center
               </a>
             </p>
           </div>
 
           {/* Additional Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-6 text-left">
-            <p className="text-xs text-blue-800">
-              <strong>Did you know?</strong> Most plans offer a 30-day money-back guarantee. No questions asked.
-            </p>
-          </div>
+          <Alert className="mt-6 text-left">
+            <AlertDescription className="text-xs">
+              <p>
+                <strong className="text-foreground">Did you know?</strong> Most plans offer a 30-day money-back guarantee. No questions asked.
+              </p>
+            </AlertDescription>
+          </Alert>
         </div>
       </Card>
     </div>

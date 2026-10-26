@@ -1,12 +1,18 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { FormField } from "@/components/common/FormField"
 import { Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 
@@ -138,16 +144,16 @@ export default function SignupPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-6 mx-auto">
             <CheckCircle className="w-9 h-9 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
-          <p className="text-sm text-gray-600 mt-3">
+          <h1 className="text-2xl font-bold">Check your email</h1>
+          <p className="text-sm text-muted-foreground mt-3">
             We sent a verification link to{" "}
-            <span className="font-medium text-gray-900">{formData.email}</span>.
+            <span className="font-medium text-foreground">{formData.email}</span>.
           </p>
-          <p className="text-sm text-gray-600 mt-2">
+          <p className="text-sm text-muted-foreground mt-2">
             Please verify your email to activate your account, then log in.
           </p>
           <Button
-            className="w-full mt-8 bg-emerald-600 hover:bg-emerald-700"
+            className="w-full mt-8"
             onClick={() => router.push("/auth/login")}
           >
             Go to Login
@@ -176,16 +182,13 @@ export default function SignupPage() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Start Your Free Trial</h1>
-          <p className="text-sm text-gray-600 mt-2">Get 10 days of free access with no credit card</p>
+          <h1 className="text-2xl font-bold">Start Your Free Trial</h1>
+          <p className="text-sm text-muted-foreground mt-2">Get 10 days of free access with no credit card</p>
         </div>
 
         <form onSubmit={handleSignup} className="space-y-5">
           {/* Company Name */}
-          <div className="space-y-2">
-            <Label htmlFor="companyName" className="text-sm font-medium">
-              Company Name
-            </Label>
+          <FormField label="Company Name" htmlFor="companyName" error={errors.companyName || undefined}>
             <Input
               id="companyName"
               name="companyName"
@@ -193,21 +196,13 @@ export default function SignupPage() {
               placeholder="Your Company"
               value={formData.companyName}
               onChange={handleInputChange}
-              className={`h-10 ${errors.companyName ? "border-red-500 focus:border-red-500" : ""}`}
+              aria-invalid={errors.companyName ? true : undefined}
               disabled={loading}
             />
-            {errors.companyName && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.companyName}
-              </p>
-            )}
-          </div>
+          </FormField>
 
           {/* Owner Full Name */}
-          <div className="space-y-2">
-            <Label htmlFor="ownerFullName" className="text-sm font-medium">
-              Your Full Name
-            </Label>
+          <FormField label="Your Full Name" htmlFor="ownerFullName" error={errors.ownerFullName || undefined}>
             <Input
               id="ownerFullName"
               name="ownerFullName"
@@ -215,21 +210,13 @@ export default function SignupPage() {
               placeholder="John Doe"
               value={formData.ownerFullName}
               onChange={handleInputChange}
-              className={`h-10 ${errors.ownerFullName ? "border-red-500" : ""}`}
+              aria-invalid={errors.ownerFullName ? true : undefined}
               disabled={loading}
             />
-            {errors.ownerFullName && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.ownerFullName}
-              </p>
-            )}
-          </div>
+          </FormField>
 
           {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">
-              Email Address
-            </Label>
+          <FormField label="Email Address" htmlFor="email" error={errors.email || undefined}>
             <Input
               id="email"
               name="email"
@@ -237,21 +224,13 @@ export default function SignupPage() {
               placeholder="you@company.com"
               value={formData.email}
               onChange={handleInputChange}
-              className={`h-10 ${errors.email ? "border-red-500" : ""}`}
+              aria-invalid={errors.email ? true : undefined}
               disabled={loading}
             />
-            {errors.email && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.email}
-              </p>
-            )}
-          </div>
+          </FormField>
 
           {/* Phone */}
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-medium">
-              Phone Number
-            </Label>
+          <FormField label="Phone Number" htmlFor="phone" error={errors.phone || undefined}>
             <Input
               id="phone"
               name="phone"
@@ -259,21 +238,13 @@ export default function SignupPage() {
               placeholder="+1 (555) 123-4567"
               value={formData.phone}
               onChange={handleInputChange}
-              className={`h-10 ${errors.phone ? "border-red-500" : ""}`}
+              aria-invalid={errors.phone ? true : undefined}
               disabled={loading}
             />
-            {errors.phone && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.phone}
-              </p>
-            )}
-          </div>
+          </FormField>
 
           {/* Password */}
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium">
-              Password
-            </Label>
+          <FormField label="Password" htmlFor="password" error={errors.password || undefined}>
             <div className="relative">
               <Input
                 id="password"
@@ -282,47 +253,41 @@ export default function SignupPage() {
                 placeholder="Enter a strong password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className={`h-10 pr-10 ${errors.password ? "border-red-500" : ""}`}
+                className="pr-10"
+                aria-invalid={errors.password ? true : undefined}
                 disabled={loading}
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+              </Button>
             </div>
             {formData.password && strength.level > 0 && (
               <div className="flex items-center gap-2 text-xs">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      strength.level === 1
-                        ? "w-1/4 bg-red-500"
-                        : strength.level === 2
-                          ? "w-2/4 bg-yellow-500"
-                          : strength.level === 3
-                            ? "w-3/4 bg-blue-500"
-                            : "w-full bg-green-500"
-                    }`}
-                  />
-                </div>
+                <Progress
+                  value={strength.level * 25}
+                  aria-label="Password strength"
+                  className={cn("flex-1 bg-muted", strength.level === 1
+                      ? "[&>[data-slot=progress-indicator]]:bg-red-500"
+                      : strength.level === 2
+                        ? "[&>[data-slot=progress-indicator]]:bg-yellow-500"
+                        : strength.level === 3
+                          ? "[&>[data-slot=progress-indicator]]:bg-blue-500"
+                          : "[&>[data-slot=progress-indicator]]:bg-green-500")}
+                />
                 <span className={strength.color}>{strength.text}</span>
               </div>
             )}
-            {errors.password && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.password}
-              </p>
-            )}
-          </div>
+          </FormField>
 
           {/* Confirm Password */}
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-sm font-medium">
-              Confirm Password
-            </Label>
+          <FormField label="Confirm Password" htmlFor="confirmPassword" error={errors.confirmPassword || undefined}>
             <div className="relative">
               <Input
                 id="confirmPassword"
@@ -331,85 +296,81 @@ export default function SignupPage() {
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
                 onChange={handleInputChange}
-                className={`h-10 pr-10 ${errors.confirmPassword ? "border-red-500" : ""}`}
+                className="pr-10"
+                aria-invalid={errors.confirmPassword ? true : undefined}
                 disabled={loading}
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+              </Button>
             </div>
             {!errors.confirmPassword && formData.password && formData.confirmPassword && formData.password === formData.confirmPassword && (
               <p className="text-green-600 text-xs flex items-center gap-1">
                 <CheckCircle className="w-3 h-3" /> Passwords match
               </p>
             )}
-            {errors.confirmPassword && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {errors.confirmPassword}
-              </p>
-            )}
-          </div>
+          </FormField>
 
           {/* Server Error */}
           {serverError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {serverError}
-            </div>
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>{serverError}</AlertDescription>
+            </Alert>
           )}
 
           {/* Terms & Conditions */}
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
+          <FormField error={errors.terms || undefined}>
+            <div className="flex items-start gap-3">
+            <Checkbox
               id="terms"
               checked={agreedToTerms}
-              onChange={(e) => {
-                setAgreedToTerms(e.target.checked)
+              onCheckedChange={(v) => {
+                setAgreedToTerms(v === true)
                 if (errors.terms) {
                   setErrors((prev) => ({ ...prev, terms: "" }))
                 }
               }}
-              className="mt-1 w-4 h-4 accent-emerald-600 rounded"
+              className="mt-1"
               disabled={loading}
             />
-            <label htmlFor="terms" className="text-sm text-gray-600">
+            <Label htmlFor="terms" className="block leading-normal font-normal">
               I agree to the{" "}
-              <a href="/terms" className="text-emerald-600 hover:underline">
+              <a href="/terms" className="text-primary hover:underline">
                 Terms of Service
               </a>{" "}
               and{" "}
-              <a href="/privacy" className="text-emerald-600 hover:underline">
+              <a href="/privacy" className="text-primary hover:underline">
                 Privacy Policy
               </a>
-            </label>
-          </div>
-          {errors.terms && (
-            <p className="text-red-600 text-xs flex items-center gap-1">
-              <AlertCircle className="w-3 h-3" /> {errors.terms}
-            </p>
-          )}
+            </Label>
+            </div>
+          </FormField>
 
           <Button
             type="submit"
-            className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            className="w-full"
             disabled={loading}
           >
             {loading ? "Creating Account..." : "Start 10-Day Free Trial"}
           </Button>
 
-          <div className="text-center text-sm text-gray-600">
+          <div className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <a href="/auth/login" className="text-emerald-600 hover:underline font-medium">
+            <a href="/auth/login" className="text-primary hover:underline font-medium">
               Sign In
             </a>
           </div>
 
-          <div className="border-t pt-5 text-center text-xs text-gray-500">
+          <Separator />
+          <div className="text-center text-xs text-muted-foreground">
             <p className="mb-2">✓ No credit card required</p>
             <p>✓ 10 days of free access</p>
             <p>✓ Cancel anytime</p>

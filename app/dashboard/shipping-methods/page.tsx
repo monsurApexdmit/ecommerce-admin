@@ -3,11 +3,25 @@
 import { useCallback, useEffect, useState } from "react"
 import { Box, Globe, Package, Pencil, Plus, Trash2, Truck, Zap } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Switch as UISwitch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import shippingMethodApi, { courierAccountApi, type CourierAccount, type ShippingMethod } from "@/lib/shippingMethodApi"
 import { settingsApi } from "@/lib/settingsApi"
 
@@ -28,18 +42,9 @@ const COURIERS: [string, string, string][] = [
 ]
 const PACKAGES = ["Small pouch", "Medium box", "Large box"]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft disabled:opacity-50"
-const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft disabled:opacity-50"
-const card = "rounded-[14px] border border-dash-border bg-dash-card p-[18px]"
-
 function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onClick}
-      className={cn("flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-50", on ? "bg-dash-accent justify-end" : "bg-dash-border justify-start")}>
-      <span className="size-4 rounded-full bg-white" />
-    </button>
+    <UISwitch checked={on} aria-label={label} disabled={disabled} onCheckedChange={() => onClick()} />
   )
 }
 
@@ -234,16 +239,16 @@ export default function ShippingMethodsPage() {
     if (z.type !== "pickup" && z.expressRate > 0) checkout.push({ name: `${z.name} — express`, time: z.estimatedDays || "—", price: fee(z, z.expressRate), express: true })
   })
 
-  const presetRows = COURIERS.map(([name, ini, color]) => ({ name, ini, color, acct: couriers.find((c) => c.provider.toLowerCase() === name.toLowerCase()) }))
+  const presetRows = COURIERS.map(([name, ini]) => ({ name, ini, acct: couriers.find((c) => c.provider.toLowerCase() === name.toLowerCase()) }))
   const customRows = couriers.filter((c) => !COURIERS.some(([n]) => n.toLowerCase() === c.provider.toLowerCase()))
 
-  const CourierCard = ({ name, ini, color, acct }: { name: string; ini: string; color: string; acct?: CourierAccount }) => (
-    <div className="flex flex-col gap-3 rounded-[12px] border border-dash-border-soft p-3">
+  const CourierCard = ({ name, ini, acct }: { name: string; ini: string; acct?: CourierAccount }) => (
+    <Card className="gap-3 p-3 shadow-none">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white" style={{ background: color }}>{ini}</span>
+        <UserAvatar shape="square" className="size-10" name={name} fallback={ini} />
         <div className="min-w-0 flex-1">
           <div className="truncate font-bold">{name}</div>
-          <div className={cn("truncate text-xs", acct?.isActive ? "text-dash-success-fg" : "text-dash-muted")}>
+          <div className={cn("truncate text-xs", acct?.isActive ? "text-foreground" : "text-muted-foreground")}>
             {acct ? (acct.isActive ? "Enabled" : "Off") : "Not set up"}
             {acct?.accountId ? ` · ${acct.accountId}` : ""}{acct?.apiKey ? ` · key ${acct.apiKey}` : ""}
           </div>
@@ -252,267 +257,268 @@ export default function ShippingMethodsPage() {
       <div className="flex flex-wrap gap-1.5">
         {acct ? (
           <>
-            <button type="button" className={cn(outlineBtn, "h-9 px-3")} disabled={busyId === -acct.id} onClick={() => toggleCourier(acct)}>{acct.isActive ? "Turn off" : "Turn on"}</button>
-            <button type="button" aria-label={`Edit ${name}`} className={iconBtn} onClick={() => editCourier(acct)}><Pencil className="size-4" /></button>
-            <button type="button" aria-label={`Remove ${name}`} className={cn(iconBtn, "text-dash-danger")} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></button>
+            <Button type="button" variant="outline" disabled={busyId === -acct.id} onClick={() => toggleCourier(acct)}>{acct.isActive ? "Turn off" : "Turn on"}</Button>
+            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${name}`} onClick={() => editCourier(acct)}><Pencil className="size-4" /></Button>
+            <Button type="button" variant="destructive" size="icon" aria-label={`Remove ${name}`} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></Button>
           </>
         ) : (
-          <button type="button" className={cn(outlineBtn, "h-9 px-3")} onClick={() => newCourier(name)}>Set up</button>
+          <Button type="button" variant="outline" onClick={() => newCourier(name)}>Set up</Button>
         )}
       </div>
-    </div>
+    </Card>
   )
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Shipping &amp; delivery</h1>
-        <p className="mt-1 text-sm text-dash-muted">Delivery zones, rates, couriers and what customers see at checkout.</p>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title={<>Shipping &amp; delivery</>}
+        description="Delivery zones, rates, couriers and what customers see at checkout."
+      />
 
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
-          <section className={card}>
-            <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="font-dash-display text-lg font-bold">Delivery zones &amp; shipping methods</h2>
-                <p className="text-sm text-dash-muted">Shipping options shown to customers at checkout: price, estimated delivery and order.</p>
-              </div>
-              <button type="button" onClick={openNew} className={primaryBtn}><Plus className="size-4" /> Add method</button>
-            </div>
-
+          <SectionCard
+            title={<>Delivery zones &amp; shipping methods</>}
+            description="Shipping options shown to customers at checkout: price, estimated delivery and order."
+            actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> Add method</Button>}
+          >
             {form && (
-              <div className="mb-3.5 flex flex-col gap-3 rounded-[12px] bg-dash-neutral-soft p-4">
+              <Card className="mb-3.5 gap-3 p-4 shadow-none">
                 <strong>{form.id ? "Edit shipping method" : "New shipping method"}</strong>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Name *
-                    <input className={input} value={form.name} onChange={(e) => patch({ name: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Zone type
-                    <select className={input} value={form.type} onChange={(e) => patch(e.target.value === "pickup" ? { type: "pickup", std: "0", exp: "" } : { type: "delivery" })}>
-                      <option value="delivery">Delivery (ships to an address)</option>
-                      <option value="pickup">Pickup (collect in store, free)</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">{form.type === "pickup" ? "Pickup locations" : "Areas covered"}
-                    <input className={input} value={form.areas} placeholder="e.g. Dhaka city corporation areas" onChange={(e) => patch({ areas: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Price (standard rate) *
-                    <input className={input} type="number" min={0} value={form.std} disabled={form.type === "pickup"} onChange={(e) => patch({ std: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Express rate (0 = none)
-                    <input className={input} type="number" min={0} value={form.exp} disabled={form.type === "pickup"} onChange={(e) => patch({ exp: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Estimated delivery
-                    <input className={input} value={form.time} placeholder="1–2 days" onChange={(e) => patch({ time: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Description
-                    <input className={input} value={form.desc} onChange={(e) => patch({ desc: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Sort order
-                    <input className={input} type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Icon
-                    <select className={input} value={form.icon} onChange={(e) => patch({ icon: e.target.value })}>
-                      {ICONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Status
-                    <select className={input} value={form.active ? "active" : "inactive"} onChange={(e) => patch({ active: e.target.value === "active" })}>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </label>
+                  <FormField label={"Name *"} htmlFor="sm-name">
+                    <Input id="sm-name" className="w-full" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Zone type"} htmlFor="sm-type">
+                    <Select value={form.type} onValueChange={(v) => patch(v === "pickup" ? { type: "pickup", std: "0", exp: "" } : { type: "delivery" })}>
+                      <SelectTrigger id="sm-type" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="delivery">Delivery (ships to an address)</SelectItem>
+                        <SelectItem value="pickup">Pickup (collect in store, free)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label={form.type === "pickup" ? "Pickup locations" : "Areas covered"} htmlFor="sm-areas">
+                    <Input id="sm-areas" className="w-full" value={form.areas} placeholder="e.g. Dhaka city corporation areas" onChange={(e) => patch({ areas: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Price (standard rate) *"} htmlFor="sm-std">
+                    <Input id="sm-std" className="w-full" type="number" min={0} value={form.std} disabled={form.type === "pickup"} onChange={(e) => patch({ std: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Express rate (0 = none)"} htmlFor="sm-exp">
+                    <Input id="sm-exp" className="w-full" type="number" min={0} value={form.exp} disabled={form.type === "pickup"} onChange={(e) => patch({ exp: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Estimated delivery"} htmlFor="sm-time">
+                    <Input id="sm-time" className="w-full" value={form.time} placeholder="1–2 days" onChange={(e) => patch({ time: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Description"} htmlFor="sm-desc">
+                    <Input id="sm-desc" className="w-full" value={form.desc} onChange={(e) => patch({ desc: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Sort order"} htmlFor="sm-sort">
+                    <Input id="sm-sort" className="w-full" type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
+                  </FormField>
+                  <FormField label={"Icon"} htmlFor="sm-icon">
+                    <Select value={form.icon || undefined} onValueChange={(v) => patch({ icon: v })}>
+                      <SelectTrigger id="sm-icon" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ICONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                  <FormField label={"Status"} htmlFor="sm-status">
+                    <Select value={form.active ? "active" : "inactive"} onValueChange={(v) => patch({ active: v === "active" })}>
+                      <SelectTrigger id="sm-status" className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                 </div>
-                <div className="flex items-center gap-3 rounded-[10px] border border-dash-border bg-dash-card p-3">
-                  {(() => { const I = iconOf(form.icon); return <span className="flex size-10 items-center justify-center rounded-xl bg-dash-success-soft text-dash-success-fg"><I className="size-5" /></span> })()}
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-bold">{form.name.trim() || "Method name"}</span>
-                    <span className="truncate text-xs text-dash-muted">{form.desc.trim() || "Description"}</span>
-                  </span>
-                  <span className="flex flex-col items-end">
+                <Item variant="outline" size="sm" className="flex-nowrap bg-card">
+                  {(() => { const I = iconOf(form.icon); return <ItemMedia variant="icon"><I /></ItemMedia> })()}
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="block w-full truncate">{form.name.trim() || "Method name"}</ItemTitle>
+                    <ItemDescription className="truncate">{form.desc.trim() || "Description"}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="flex-col items-end gap-0">
                     <strong>{form.type === "pickup" || !Number(form.std) ? "Free" : money(Number(form.std))}</strong>
-                    <span className="text-xs text-dash-muted">{form.time.trim() || "Est. days"}</span>
-                  </span>
-                </div>
-                {formErr && <p className="text-[13px] font-semibold text-dash-danger">{formErr}</p>}
+                    <span className="text-xs text-muted-foreground">{form.time.trim() || "Est. days"}</span>
+                  </ItemActions>
+                </Item>
+                {formErr && <p className="text-sm font-medium text-destructive">{formErr}</p>}
                 <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => setForm(null)} className={outlineBtn}>Cancel</button>
-                  <button type="button" onClick={saveZone} disabled={saving} className={primaryBtn}>{saving ? "Saving…" : form.id ? "Save changes" : "Add method"}</button>
+                  <Button type="button" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
+                  <Button type="button" onClick={saveZone} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Add method"}</Button>
                 </div>
-              </div>
+              </Card>
             )}
 
             {loading ? (
-              <div className="flex flex-col gap-2.5">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-[10px]" />)}</div>
+              <div className="flex flex-col gap-2.5">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
             ) : zones.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 rounded-[12px] bg-dash-neutral-soft p-8 text-sm text-dash-muted">
-                No shipping methods yet. Add one to start charging for delivery.
-                <button type="button" onClick={openNew} className={outlineBtn}>Add first method</button>
-              </div>
+              <EmptyState
+                bordered
+                icon={Truck}
+                title="No shipping methods yet"
+                description="Add one to start charging for delivery."
+                action={<Button type="button" variant="outline" onClick={openNew}>Add first method</Button>}
+              />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead>
-                    <tr className="border-b border-dash-border text-left text-xs font-semibold text-dash-muted">
-                      <th className="py-2 pr-3">Zone</th><th className="px-3 py-2">Sort</th><th className="px-3 py-2">Standard</th>
-                      <th className="px-3 py-2">Express</th><th className="px-3 py-2">Time</th><th className="px-3 py-2">On</th><th className="py-2 pl-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div>
+                <Table className="min-w-[640px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Zone</TableHead><TableHead>Sort</TableHead><TableHead>Standard</TableHead>
+                      <TableHead>Express</TableHead><TableHead>Time</TableHead><TableHead>On</TableHead><TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {zones.map((z) => {
                       const I = iconOf(z.icon)
                       return (
-                        <tr key={z.id} className="border-b border-dash-border-soft last:border-0">
-                          <td className="py-2.5 pr-3">
+                        <TableRow key={z.id}>
+                          <TableCell>
                             <div className="flex items-center gap-2.5">
-                              <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", z.isActive ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-neutral-soft text-dash-muted")}><I className="size-4" /></span>
+                              <UserAvatar shape="square" className={cn("size-9", !z.isActive && "opacity-60")} fallback={<I className="size-4" />} />
                               <div className="min-w-0">
-                                <div className={cn("truncate font-bold", !z.isActive && "text-dash-muted")}>{z.name}{z.type === "pickup" && <span className="ml-2 rounded-full bg-dash-neutral-soft px-2 py-[2px] align-middle text-[11px] font-semibold text-dash-neutral-fg">Pickup</span>}</div>
-                                {(z.areasCovered || z.description) && <div className="max-w-[240px] truncate text-xs text-dash-muted">{z.areasCovered || z.description}</div>}
+                                <div className={cn("truncate font-bold", !z.isActive && "text-muted-foreground")}>{z.name}{z.type === "pickup" && <Badge variant="secondary" className="ml-2 align-middle">Pickup</Badge>}</div>
+                                {(z.areasCovered || z.description) && <div className="max-w-[240px] truncate text-xs text-muted-foreground">{z.areasCovered || z.description}</div>}
                               </div>
                             </div>
-                          </td>
-                          <td className="px-3 tabular-nums">{z.sortOrder}</td>
-                          <td className="px-3 font-semibold tabular-nums">{z.price ? money(z.price) : "Free"}</td>
-                          <td className="px-3 tabular-nums">{z.expressRate ? money(z.expressRate) : "—"}</td>
-                          <td className="px-3">{z.estimatedDays || "—"}</td>
-                          <td className="px-3"><Switch on={z.isActive} label={z.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === z.id} onClick={() => toggleZone(z)} /></td>
-                          <td className="py-2.5 pl-3">
+                          </TableCell>
+                          <TableCell className="tabular-nums">{z.sortOrder}</TableCell>
+                          <TableCell className="font-semibold tabular-nums">{z.price ? money(z.price) : "Free"}</TableCell>
+                          <TableCell className="tabular-nums">{z.expressRate ? money(z.expressRate) : "—"}</TableCell>
+                          <TableCell>{z.estimatedDays || "—"}</TableCell>
+                          <TableCell><Switch on={z.isActive} label={z.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === z.id} onClick={() => toggleZone(z)} /></TableCell>
+                          <TableCell>
                             <div className="flex justify-end gap-1.5">
-                              <button type="button" aria-label={`Edit ${z.name}`} className={iconBtn} onClick={() => openEdit(z)}><Pencil className="size-4" /></button>
-                              <button type="button" aria-label={`Delete ${z.name}`} className={cn(iconBtn, "text-dash-danger")} disabled={busyId === z.id} onClick={() => removeZone(z)}><Trash2 className="size-4" /></button>
+                              <Button type="button" variant="outline" size="icon" aria-label={`Edit ${z.name}`} onClick={() => openEdit(z)}><Pencil className="size-4" /></Button>
+                              <Button type="button" variant="destructive" size="icon" aria-label={`Delete ${z.name}`} disabled={busyId === z.id} onClick={() => removeZone(z)}><Trash2 className="size-4" /></Button>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
 
-            <p className="mt-3.5 rounded-[10px] bg-dash-accent-soft px-3 py-2 text-[13px] text-dash-accent-fg">
-              <strong>Display order.</strong> Methods are shown to customers ordered by Sort order (lowest first). Set the number when adding or editing a method.
-            </p>
+            <Alert role="note" className="mt-3.5">
+              <AlertDescription>
+                <p><strong className="text-foreground">Display order.</strong> Methods are shown to customers ordered by Sort order (lowest first). Set the number when adding or editing a method.</p>
+              </AlertDescription>
+            </Alert>
 
             <div className="mt-3.5 flex flex-wrap items-center gap-3">
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-sm font-semibold">Free delivery over a minimum order</span>
-                <span className="text-xs text-dash-muted">Shown as “Add {formatCurrency(0).replace(/[\d.,\s-]/g, "")}X more for free delivery” at checkout</span>
+                <span className="text-xs text-muted-foreground">Shown as “Add {formatCurrency(0).replace(/[\d.,\s-]/g, "")}X more for free delivery” at checkout</span>
               </span>
-              <input type="number" min={0} aria-label="Free delivery threshold amount" value={opts.freeMin} disabled={loading}
-                onChange={(e) => { setOpts({ ...opts, freeMin: e.target.value }); setOptErr("") }} className={cn(input, "w-28")} />
+              <Input type="number" min={0} aria-label="Free delivery threshold amount" value={opts.freeMin} disabled={loading}
+                onChange={(e) => { setOpts({ ...opts, freeMin: e.target.value }); setOptErr("") }} className="w-28" />
               <Switch on={opts.freeOn} label="Free delivery enabled" disabled={loading} onClick={() => { setOpts({ ...opts, freeOn: !opts.freeOn }); setOptErr("") }} />
             </div>
-          </section>
+          </SectionCard>
 
-          <section className={card}>
-            <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="font-dash-display text-lg font-bold">Courier accounts</h2>
-                <p className="text-sm text-dash-muted">Turn on the couriers you ship with.</p>
-              </div>
-              <button type="button" onClick={() => newCourier("")} className={outlineBtn}><Plus className="size-4" /> Add courier</button>
-            </div>
-
+          <SectionCard
+            title="Courier accounts"
+            description="Turn on the couriers you ship with."
+            actions={<Button type="button" variant="outline" onClick={() => newCourier("")}><Plus className="size-4" /> Add courier</Button>}
+          >
             {cform && (
-              <div className="mb-3.5 flex flex-col gap-3 rounded-[12px] bg-dash-neutral-soft p-4">
+              <Card className="mb-3.5 gap-3 p-4 shadow-none">
                 <strong>{cform.id ? `Edit ${cform.provider}` : "Add courier account"}</strong>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Provider *
-                    <input className={input} list="courier-presets" value={cform.provider} disabled={cform.locked} placeholder="Pathao"
+                  <FormField label={"Provider *"} htmlFor="cr-provider">
+                    <Input id="cr-provider" className="w-full" list="courier-presets" value={cform.provider} disabled={cform.locked} placeholder="Pathao"
                       onChange={(e) => { setCform({ ...cform, provider: e.target.value }); setCerr("") }} />
                     <datalist id="courier-presets">{COURIERS.map(([n]) => <option key={n} value={n} />)}</datalist>
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Account / merchant ID
-                    <input className={input} value={cform.accountId} onChange={(e) => setCform({ ...cform, accountId: e.target.value })} />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">API key
-                    <input className={input} type="password" autoComplete="off" value={cform.apiKey}
+                  </FormField>
+                  <FormField label={"Account / merchant ID"} htmlFor="cr-account">
+                    <Input id="cr-account" className="w-full" value={cform.accountId} onChange={(e) => setCform({ ...cform, accountId: e.target.value })} />
+                  </FormField>
+                  <FormField label={"API key"} htmlFor="cr-key">
+                    <Input id="cr-key" className="w-full" type="password" autoComplete="off" value={cform.apiKey}
                       placeholder={cform.id ? "Leave blank to keep the stored key" : ""} onChange={(e) => setCform({ ...cform, apiKey: e.target.value })} />
-                  </label>
+                  </FormField>
                 </div>
-                {cerr && <p className="text-[13px] font-semibold text-dash-danger">{cerr}</p>}
+                {cerr && <p className="text-sm font-medium text-destructive">{cerr}</p>}
                 <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => setCform(null)} className={outlineBtn}>Cancel</button>
-                  <button type="button" onClick={saveCourier} disabled={csaving} className={primaryBtn}>{csaving ? "Saving…" : cform.id ? "Save changes" : "Add courier"}</button>
+                  <Button type="button" variant="outline" onClick={() => setCform(null)}>Cancel</Button>
+                  <Button type="button" onClick={saveCourier} disabled={csaving}>{csaving ? "Saving…" : cform.id ? "Save changes" : "Add courier"}</Button>
                 </div>
-              </div>
+              </Card>
             )}
 
             {loading ? (
-              <div className="grid gap-3 sm:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[100px] rounded-[12px]" />)}</div>
+              <div className="grid gap-3 sm:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[100px]" />)}</div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {presetRows.map((r) => <CourierCard key={r.name} {...r} />)}
-                {customRows.map((c) => <CourierCard key={c.id} name={c.provider} ini={c.provider.slice(0, 2).toUpperCase()} color="#3B4458" acct={c} />)}
+                {customRows.map((c) => <CourierCard key={c.id} name={c.provider} ini={c.provider.slice(0, 2).toUpperCase()} acct={c} />)}
               </div>
             )}
-          </section>
+          </SectionCard>
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-          <section className={card}>
-            <div className="mb-3.5">
-              <h2 className="font-dash-display text-lg font-bold">Checkout options</h2>
-              <p className="text-sm text-dash-muted">Built from your enabled zones.</p>
-            </div>
-            <label className="mb-3 flex flex-col gap-1.5 text-[13px] font-semibold">Sample cart subtotal
-              <input className={input} type="number" min={0} value={sampleCart} onChange={(e) => setSampleCart(e.target.value)} />
-            </label>
-            {loading ? <Skeleton className="h-24 rounded-[12px]" /> : checkout.length === 0 ? (
-              <p className="text-sm text-dash-muted">No active zones — customers cannot choose a delivery option.</p>
+          <SectionCard title="Checkout options" description="Built from your enabled zones.">
+            <FormField label="Sample cart subtotal" htmlFor="sample-cart" className="mb-3">
+              <Input id="sample-cart" className="w-full" type="number" min={0} value={sampleCart} onChange={(e) => setSampleCart(e.target.value)} />
+            </FormField>
+            {loading ? <Skeleton className="h-24" /> : checkout.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active zones — customers cannot choose a delivery option.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {checkout.map((o, i) => (
-                  <div key={i} className={cn("flex items-center gap-3 rounded-[10px] border p-3", i === 0 ? "border-dash-accent" : "border-dash-border")}>
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-dash-accent-soft text-dash-accent-fg">{o.express ? <Zap className="size-4" /> : <Truck className="size-4" />}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">{o.name}</div>
-                      <div className="truncate text-xs text-dash-muted">{o.time}</div>
-                    </div>
+                  <Item key={i} variant="outline" size="sm" className={cn("flex-nowrap", i === 0 && "border-primary")}>
+                    <ItemMedia variant="icon">{o.express ? <Zap /> : <Truck />}</ItemMedia>
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="block w-full truncate">{o.name}</ItemTitle>
+                      <ItemDescription className="truncate">{o.time}</ItemDescription>
+                    </ItemContent>
                     <strong className="tabular-nums">{o.price}</strong>
-                  </div>
+                  </Item>
                 ))}
               </div>
             )}
             {!loading && opts.freeOn && freeMin > 0 && (
-              <span className="mt-3 block text-xs text-dash-muted">
+              <span className="mt-3 block text-xs text-muted-foreground">
                 {freeApplies ? `Free delivery applied for a ${money(cart)} cart.` : `Add ${money(Math.max(0, freeMin - cart))} more for free delivery (free on ${money(freeMin)}+).`}
               </span>
             )}
-          </section>
+          </SectionCard>
 
-          <section className={card}>
-            <div className="mb-3.5">
-              <h2 className="font-dash-display text-lg font-bold">Packaging defaults</h2>
-              <p className="text-sm text-dash-muted">Used when booking couriers.</p>
-            </div>
+          <SectionCard title="Packaging defaults" description="Used when booking couriers.">
             <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Default weight (kg)
-                <input className={input} type="number" min={0} step={0.1} value={opts.weight} disabled={loading}
+              <FormField label={"Default weight (kg)"} htmlFor="pk-weight">
+                <Input id="pk-weight" className="w-full" type="number" min={0} step={0.1} value={opts.weight} disabled={loading}
                   onChange={(e) => { setOpts({ ...opts, weight: e.target.value }); setOptErr("") }} />
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Default package
-                <select className={input} value={opts.pkg} disabled={loading} onChange={(e) => setOpts({ ...opts, pkg: e.target.value })}>
-                  {PACKAGES.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </label>
+              </FormField>
+              <FormField label={"Default package"} htmlFor="pk-package">
+                <Select value={opts.pkg || undefined} disabled={loading} onValueChange={(v) => setOpts({ ...opts, pkg: v })}>
+                  <SelectTrigger id="pk-package" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PACKAGES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
             </div>
-          </section>
+          </SectionCard>
         </aside>
       </div>
 
-      <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-dash-border bg-dash-card px-[18px] py-3">
-        <span className={cn("text-sm", optErr ? "text-dash-danger" : dirty ? "text-dash-warn-fg" : "text-dash-muted")}>
+      <Card className="sticky bottom-0 flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <span className={cn("text-sm", optErr ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>
           {optErr || (dirty ? "You have unsaved changes." : "Zone changes save instantly; other rates apply to new orders only.")}
         </span>
         <div className="flex gap-2">
-          <button type="button" className={outlineBtn} disabled={!dirty} onClick={() => { setOpts(base); setOptErr("") }}>Discard</button>
-          <button type="button" className={primaryBtn} disabled={optSaving || !dirty} onClick={saveOpts}>{optSaving ? "Saving…" : "Save changes"}</button>
+          <Button type="button" variant="outline" disabled={!dirty} onClick={() => { setOpts(base); setOptErr("") }}>Discard</Button>
+          <Button type="button" disabled={optSaving || !dirty} onClick={saveOpts}>{optSaving ? "Saving…" : "Save changes"}</Button>
         </div>
-      </div>
+      </Card>
     </div>
   )
 }

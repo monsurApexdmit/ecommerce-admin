@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import inventoryApi, { type StockRow } from "@/lib/inventoryApi"
@@ -12,6 +16,17 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { StatTile } from "@/components/common/StatTile"
+import { EmptyState } from "@/components/common/EmptyState"
 
 const TYPES: { id: AdjustmentType; label: string; sub: string }[] = [
   { id: "increase", label: "+ Increase", sub: "Add units" },
@@ -25,9 +40,8 @@ const REASONS: Record<AdjustmentType, string[]> = {
 }
 const BIG_CHANGE = 10
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
 const sign = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0")
+const deltaVariant = (n: number) => (n > 0 ? "default" : n < 0 ? "destructive" : "secondary") as "default" | "destructive" | "secondary"
 
 interface Sku { key: string; productId: number; variantId: number | null; label: string; cost: number; byLoc: Record<number, number> }
 
@@ -156,145 +170,150 @@ export default function AdjustmentPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Stock adjustment</h1>
-          <p className="mt-1 text-sm text-dash-muted">Fix stock counts with a reason, so every change can be explained later.</p>
-        </div>
-        <button type="button" onClick={startCount} className={outlineBtn}>Start full stock count</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Stock adjustment"
+        description="Fix stock counts with a reason, so every change can be explained later."
+        actions={<Button type="button" variant="outline" onClick={startCount}>Start full stock count</Button>}
+      />
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full shrink-0 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[460px]">
-          <h2 className="font-dash-display text-lg font-bold">New adjustment</h2>
-          <p className="mb-4 text-[13px] text-dash-muted">Correct stock after a count, damage or loss. Every change is logged.</p>
-
+        <SectionCard
+          className="w-full shrink-0 xl:w-[460px]"
+          title="New adjustment"
+          description="Correct stock after a count, damage or loss. Every change is logged."
+        >
           {loadingForm ? (
-            <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
+            <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12" />)}</div>
           ) : (
             <div className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Warehouse
-                <select className={input} value={loc} onChange={(e) => { setLoc(e.target.value); setErr("") }}>
-                  {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Product
-                <select className={input} value={skuKey} onChange={(e) => { setSkuKey(e.target.value); setErr("") }}>
-                  <option value="">Select a product</option>
-                  {productOptions.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                </select>
-              </label>
+              <FormField label="Warehouse" htmlFor="adj-warehouse">
+                <Select value={loc || undefined} onValueChange={(v) => { setLoc(v); setErr("") }}>
+                  <SelectTrigger id="adj-warehouse" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Product" htmlFor="adj-product">
+                <Select value={skuKey || "__none"} onValueChange={(v) => { setSkuKey(v === "__none" ? "" : v); setErr("") }}>
+                  <SelectTrigger id="adj-product" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Select a product</SelectItem>
+                    {productOptions.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
 
-              <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-                Change type
-                <div role="radiogroup" aria-label="Adjustment type" className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">Change type</p>
+                <ChoiceCardGroup value={type} onValueChange={(v) => pickType(v as AdjustmentType)} aria-label="Adjustment type" className="grid-cols-3">
                   {TYPES.map((t) => (
-                    <button key={t.id} type="button" role="radio" aria-checked={type === t.id} onClick={() => pickType(t.id)}
-                      className={cn("flex flex-col items-center rounded-[10px] border-2 px-2 py-2.5 text-[13px] font-semibold",
-                        type === t.id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
-                      {t.label}
-                      <span className="text-[11px] font-normal opacity-80">{t.sub}</span>
-                    </button>
+                    <ChoiceCard key={t.id} value={t.id} title={t.label} description={t.sub} className="items-center text-center" />
                   ))}
-                </div>
+                </ChoiceCardGroup>
               </div>
 
               <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">{type === "set" ? "Counted quantity" : "Quantity"}
-                  <input type="number" min={0} className={input} value={qty} onChange={(e) => { setQty(Math.max(0, Math.floor(Number(e.target.value)) || 0)); setErr("") }} />
-                </label>
-                <div className="flex items-center gap-2 rounded-[10px] bg-dash-neutral-soft px-3 py-2 text-[13px]">
-                  <span className="flex flex-col"><span className="text-[11px] text-dash-muted">Now</span><strong className="tabular-nums">{before}</strong></span>
+                <FormField label={type === "set" ? "Counted quantity" : "Quantity"} htmlFor="adj-qty">
+                  <Input id="adj-qty" type="number" min={0} className="w-full" value={qty} onChange={(e) => { setQty(Math.max(0, Math.floor(Number(e.target.value)) || 0)); setErr("") }} />
+                </FormField>
+                <Card className="flex-row items-center gap-2 px-3 py-2 text-sm shadow-none">
+                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">Now</span><strong className="tabular-nums">{before}</strong></span>
                   <span aria-hidden>→</span>
-                  <span className="flex flex-col"><span className="text-[11px] text-dash-muted">After</span><strong className="tabular-nums">{after}</strong></span>
-                  <span className={cn("font-bold tabular-nums", diff > 0 ? "text-dash-success-fg" : diff < 0 ? "text-dash-danger-fg" : "text-dash-neutral-fg")}>{sign(diff)}</span>
-                </div>
+                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">After</span><strong className="tabular-nums">{after}</strong></span>
+                  <Badge variant={deltaVariant(diff)} className="tabular-nums">{sign(diff)}</Badge>
+                </Card>
               </div>
 
-              <div className="flex flex-col gap-1.5 text-[13px] font-semibold">
-                Reason
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">Reason</p>
                 <div className="flex flex-wrap gap-1.5">
                   {REASONS[type].map((r) => (
-                    <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(r)}
-                      className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold",
-                        reason === r ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                    <Button key={r} type="button" size="sm" aria-pressed={reason === r} onClick={() => setReason(r)}
+                      variant={reason === r ? "default" : "outline"}>
                       {r}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
 
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note
-                <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. 2 pieces torn during unpacking" />
-              </label>
+              <FormField label="Note" htmlFor="adj-note">
+                <Textarea id="adj-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. 2 pieces torn during unpacking" />
+              </FormField>
 
               {bigChange && (
-                <div className="rounded-[10px] bg-dash-warn-soft px-3 py-2.5 text-[13px] text-dash-warn-fg">
-                  This is a large change ({sign(diff)}). It will be flagged for owner review.
-                </div>
+                <Alert>
+                  <AlertDescription>This is a large change ({sign(diff)}). It will be flagged for owner review.</AlertDescription>
+                </Alert>
               )}
-              {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+              {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
 
-              <div className="flex items-center justify-between gap-3 border-t border-dash-border-soft pt-3">
-                <span className="text-[13px] text-dash-muted">Value impact <strong className="text-dash-ink tabular-nums">{valueImpact < 0 ? "−" : "+"}{formatCurrency(Math.abs(valueImpact))}</strong></span>
-                <button type="button" disabled={busy} onClick={apply} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+              <Separator />
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Value impact <strong className="text-foreground tabular-nums">{valueImpact < 0 ? "−" : "+"}{formatCurrency(Math.abs(valueImpact))}</strong></span>
+                <Button type="button" disabled={busy} onClick={apply}>
                   {busy ? "Applying…" : "Apply adjustment"}
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </section>
+        </SectionCard>
 
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-dash-display text-lg font-bold">Audit trail</h2>
-            <div className="flex gap-2">
-              <select aria-label="Filter by reason" value={reasonFilter} onChange={(e) => { setReasonFilter(e.target.value); setPage(1) }} className={cn(input, "h-10 w-[170px] font-semibold")}>
-                <option value="all">Reason: All</option>
-                {reasonOpts.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <button type="button" onClick={handleExport} className={cn(outlineBtn, "h-10")}><Download className="size-4" aria-hidden /> Export</button>
-            </div>
-          </div>
-
+        <SectionCard
+          className="w-full min-w-0 flex-1"
+          title="Audit trail"
+          actions={<>
+              <Select value={reasonFilter} onValueChange={(v) => { setReasonFilter(v); setPage(1) }}>
+                <SelectTrigger aria-label="Filter by reason" className="w-[170px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Reason: All</SelectItem>
+                  {reasonOpts.filter(Boolean).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          </>}
+        >
           <div className="mb-4 grid grid-cols-3 gap-2">
-            <div className="rounded-[10px] bg-dash-success-soft px-3 py-2.5 text-dash-success-fg"><div className="text-[11px]">Added (30d)</div><div className="font-dash-display text-lg font-bold tabular-nums">+{stats.added30d}</div></div>
-            <div className="rounded-[10px] bg-dash-danger-soft px-3 py-2.5 text-dash-danger-fg"><div className="text-[11px]">Removed (30d)</div><div className="font-dash-display text-lg font-bold tabular-nums">{stats.removed30d ? `−${stats.removed30d}` : "0"}</div></div>
-            <div className="rounded-[10px] bg-dash-neutral-soft px-3 py-2.5"><div className="text-[11px] text-dash-muted">Shrinkage value</div><div className="font-dash-display text-lg font-bold tabular-nums">{formatCurrency(stats.shrinkageValue30d)}</div></div>
+            <StatTile label="Added (30d)" value={`+${stats.added30d}`} />
+            <StatTile label="Removed (30d)" value={stats.removed30d ? `−${stats.removed30d}` : "0"} />
+            <StatTile label="Shrinkage value" value={formatCurrency(stats.shrinkageValue30d)} />
           </div>
 
           {logLoading ? (
-            <div className="space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+            <div className="space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>
           ) : log.length === 0 ? (
-            <div className="py-12 text-center text-sm text-dash-muted">No adjustments yet.</div>
+            <EmptyState title="No adjustments yet." />
           ) : (
             <div className="flex flex-col">
-              {log.map((g) => (
-                <div key={g.id} className="flex items-center gap-3 border-b border-dash-border-soft py-3 last:border-0">
-                  <span className={cn("flex h-9 min-w-[48px] items-center justify-center rounded-lg px-2 text-sm font-bold tabular-nums",
-                    g.delta > 0 ? "bg-dash-success-soft text-dash-success-fg" : g.delta < 0 ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-neutral-soft text-dash-neutral-fg")}>
-                    {sign(g.delta)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">
-                      <span className="mr-2 text-xs font-bold text-dash-muted">{g.number}</span>
-                      {g.productName}{g.variantName ? ` · ${g.variantName}` : ""}
-                      {g.flagged && <span className="ml-2 rounded-full bg-dash-warn-soft px-2 py-px text-[11px] font-bold text-dash-warn-fg">Flagged</span>}
-                    </div>
-                    <div className="truncate text-xs text-dash-muted">{g.locationName ?? "—"} · {g.reason}{g.note ? ` (${g.note})` : ""}{g.before !== null && g.after !== null ? ` · ${g.before} → ${g.after}` : ""}</div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-[13px]">{g.createdAt ? new Date(g.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}{g.createdAt ? ` · ${new Date(g.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</div>
-                    <div className="text-xs text-dash-muted">{g.createdBy ?? "—"}</div>
-                  </div>
+              {log.map((g, i) => (
+                <div key={g.id}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item size="sm" className="flex-nowrap px-0">
+                    <ItemMedia>
+                      <Badge variant={deltaVariant(g.delta)} className="min-w-12 justify-center tabular-nums">{sign(g.delta)}</Badge>
+                    </ItemMedia>
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="block w-full truncate">
+                        <span className="mr-2 text-xs font-bold text-muted-foreground">{g.number}</span>
+                        {g.productName}{g.variantName ? ` · ${g.variantName}` : ""}
+                        {g.flagged && <Badge variant="secondary" className="ml-2">Flagged</Badge>}
+                      </ItemTitle>
+                      <ItemDescription className="truncate">{g.locationName ?? "—"} · {g.reason}{g.note ? ` (${g.note})` : ""}{g.before !== null && g.after !== null ? ` · ${g.before} → ${g.after}` : ""}</ItemDescription>
+                    </ItemContent>
+                    <ItemActions className="flex-col items-end gap-0 text-right">
+                      <div className="text-sm">{g.createdAt ? new Date(g.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}{g.createdAt ? ` · ${new Date(g.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</div>
+                      <div className="text-xs text-muted-foreground">{g.createdBy ?? "—"}</div>
+                    </ItemActions>
+                  </Item>
                 </div>
               ))}
             </div>
           )}
 
           {!logLoading && total > 0 && (
-            <div className="mt-3 border-t border-dash-border-soft pt-3">
+            <div className="mt-3">
+              <Separator className="mb-3" />
               <PaginationControl
                 currentPage={page}
                 totalPages={Math.max(1, Math.ceil(total / perPage))}
@@ -305,7 +324,7 @@ export default function AdjustmentPage() {
               />
             </div>
           )}
-        </section>
+        </SectionCard>
       </div>
     </div>
   )

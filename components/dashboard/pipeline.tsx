@@ -1,17 +1,22 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import { ageLabel } from "./format"
 import { CardTitle, DashCard, SectionError, SectionSkeleton } from "./section"
 import { useDashboardSection } from "./use-dashboard-section"
 
 const LABEL = { pending: "Pending", confirmed: "Confirmed", packed: "Packed", shipped: "Shipped", delivered: "Delivered" } as const
+/** Indicator colour per stage (data colour on the shadcn Progress bar). */
 const COLOR = {
-  pending: "bg-dash-warn",
-  confirmed: "bg-dash-accent",
-  packed: "bg-dash-accent",
-  shipped: "bg-dash-accent",
-  delivered: "bg-dash-success",
+  pending: "[&>[data-slot=progress-indicator]]:bg-dash-warn",
+  confirmed: "[&>[data-slot=progress-indicator]]:bg-dash-accent",
+  packed: "[&>[data-slot=progress-indicator]]:bg-dash-accent",
+  shipped: "[&>[data-slot=progress-indicator]]:bg-dash-accent",
+  delivered: "[&>[data-slot=progress-indicator]]:bg-dash-success",
 } as const
 
 export function Pipeline() {
@@ -37,30 +42,35 @@ export function Pipeline() {
       <>
         {data.stages.map((s) => (
           <div key={s.key} className="flex flex-col gap-1.5">
-            <div className="flex justify-between text-[13px]">
-              <span className="font-semibold text-dash-ink">{LABEL[s.key]}</span>
-              <span className="text-dash-muted tabular-nums">{s.count} orders</span>
+            <div className="flex justify-between text-sm">
+              <span className="font-medium">{LABEL[s.key]}</span>
+              <span className="text-muted-foreground tabular-nums">{s.count} orders</span>
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-dash-neutral-soft">
-              <div className={`h-full rounded-full ${COLOR[s.key]}`} style={{ width: `${Math.round((s.count / max) * 100)}%`, minWidth: s.count > 0 ? 8 : 0 }} />
-            </div>
+            <Progress
+              value={Math.round((s.count / max) * 100)}
+              aria-label={`${LABEL[s.key]}: ${s.count} orders`}
+              className={cn("h-2.5 bg-muted", COLOR[s.key])}
+            />
           </div>
         ))}
         {bottleneck ? (
-          <div className="mt-auto rounded-[10px] bg-dash-warn-soft p-3.5 text-[13px] leading-snug text-dash-warn-fg">
-            <strong>Bottleneck:</strong> {bottleneck}
-          </div>
+          <Alert role="status" className="mt-auto">
+            <AlertDescription>
+              <p><strong className="text-foreground">Bottleneck:</strong> {bottleneck}</p>
+            </AlertDescription>
+          </Alert>
         ) : (
-          <div className="mt-auto rounded-[10px] bg-dash-success-soft p-3.5 text-[13px] text-dash-success-fg">
-            {data.open > 0 ? "Nothing is stuck in Pending — keep moving orders along." : "No open orders — nothing is waiting on you."}
-          </div>
+          <Alert role="status" className="mt-auto">
+            <AlertDescription>
+              {data.open > 0 ? "Nothing is stuck in Pending — keep moving orders along." : "No open orders — nothing is waiting on you."}
+            </AlertDescription>
+          </Alert>
         )}
-        <Link
-          href={pending > 0 ? "/dashboard/orders?status=Pending" : "/dashboard/orders"}
-          className="flex h-11 items-center justify-center rounded-[10px] bg-dash-ink text-sm font-semibold text-dash-bg"
-        >
-          {pending > 0 ? "Process pending orders" : "View all orders"}
-        </Link>
+        <Button asChild className="w-full">
+          <Link href={pending > 0 ? "/dashboard/orders?status=Pending" : "/dashboard/orders"}>
+            {pending > 0 ? "Process pending orders" : "View all orders"}
+          </Link>
+        </Button>
       </>
     )
   }

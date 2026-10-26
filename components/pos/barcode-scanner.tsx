@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Input } from '@/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
+import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -130,21 +131,20 @@ export function BarcodeScanner({
   return (
     <>
       {/* Scanner Input */}
-      <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-          <Barcode className="h-4 w-4" />
-        </div>
-        <Input
+      <InputGroup>
+        <InputGroupAddon>
+          <Barcode />
+        </InputGroupAddon>
+        <InputGroupInput
           ref={inputRef}
           type="text"
           placeholder="Scan barcode here... (or type barcode code)"
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="pl-10 py-2 text-sm"
           autoFocus
         />
-      </div>
+      </InputGroup>
 
       {/* Variant Selection Dialog */}
       <Dialog open={isDialogOpen && selectingVariant} onOpenChange={(open) => {
@@ -158,7 +158,7 @@ export function BarcodeScanner({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
+              <AlertCircle className="size-5 text-muted-foreground" />
               Select Variant
             </DialogTitle>
             <DialogDescription>
@@ -168,10 +168,10 @@ export function BarcodeScanner({
 
           {scannedProduct && (
             <div className="space-y-4">
-              <div className="rounded-lg border p-4">
-                <h3 className="font-semibold text-gray-900">{scannedProduct.name}</h3>
-                <p className="text-sm text-gray-600 mt-1">SKU: {scannedProduct.sku}</p>
-              </div>
+              <Card className="gap-1 p-4">
+                <h3 className="font-semibold">{scannedProduct.name}</h3>
+                <p className="text-sm text-muted-foreground">SKU: {scannedProduct.sku}</p>
+              </Card>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {scannedProduct.variants?.map((variant) => {
@@ -190,12 +190,12 @@ export function BarcodeScanner({
                         <span className="font-medium">{variant.name}</span>
                         <div className="flex gap-2 text-xs">
                           {Object.entries(variant.attributes || {}).map(([key, value]) => (
-                            <span key={key} className="text-gray-600">
+                            <span key={key} className="text-muted-foreground">
                               {key}: <span className="font-semibold">{value as string}</span>
                             </span>
                           ))}
                         </div>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-muted-foreground">
                           {formatCurrency(Number(variant.salePrice || variant.price || 0))}
                         </span>
                       </div>

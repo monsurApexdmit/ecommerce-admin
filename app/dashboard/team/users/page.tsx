@@ -7,30 +7,33 @@ import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { EmptyState } from "@/components/common/EmptyState"
 import { saasCompanyApi, type CompanyUser } from "@/lib/saasCompanyApi"
 import { staffRoleApi, type StaffRoleResponse } from "@/lib/staffApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
-import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 type Tab = "all" | "active" | "invited" | "inactive"
 const TABS: { value: Tab; label: string }[] = [
   { value: "all", label: "All" }, { value: "active", label: "Active" },
   { value: "invited", label: "Invited" }, { value: "inactive", label: "Inactive" },
 ]
-const STATUS_STYLE: Record<string, string> = {
-  active: "bg-dash-success-soft text-dash-success-fg",
-  invited: "bg-dash-warn-soft text-dash-warn-fg",
-  inactive: "bg-dash-neutral-soft text-dash-neutral-fg",
-}
 const STATUS_LABEL: Record<string, string> = { active: "Active", invited: "Invited", inactive: "Inactive" }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent disabled:opacity-60"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const linkBtn = "text-xs font-semibold text-dash-accent hover:underline"
 
-const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
 const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 
 interface FormState { email: string; fullName: string; phone: string; roleId: string }
@@ -204,167 +207,170 @@ export default function TeamUsersPage() {
   const resetFilters = () => { setQ(""); setTab("all"); setRoleF("all"); setPage(1) }
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Team Members</h1>
-          <p className="mt-1 text-sm text-dash-muted">
-            Manage your team ({seatsUsed}/{maxLabel}). People here can sign in to the admin; staff records for payroll live in{" "}
-            <Link href="/dashboard/staff" className="font-semibold text-dash-accent hover:underline">Staff</Link>.
-          </p>
-        </div>
-        {writable && <button type="button" onClick={openInvite} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white">+ Invite member</button>}
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Team Members"
+        description={<>
+          Manage your team ({seatsUsed}/{maxLabel}). People here can sign in to the admin; staff records for payroll live in{" "}
+          <Link href="/dashboard/staff" className="font-semibold text-primary hover:underline">Staff</Link>.
+        </>}
+        actions={writable && <Button type="button" onClick={openInvite}>+ Invite member</Button>}
+      />
 
       {limitHit && (
-        <div role="alert" className="rounded-[10px] bg-dash-warn-soft px-4 py-3 text-[13px] text-dash-warn-fg">
-          <strong>Team member limit reached.</strong> You have reached the maximum number of team members ({maxLabel}) for your {planName ?? "current"} plan.{" "}
-          <Link href="/dashboard/billing/plans" className="font-semibold underline">Upgrade your plan</Link> to add more.
-        </div>
+        <Alert>
+          <AlertTitle>Team member limit reached.</AlertTitle>
+          <AlertDescription>
+            <p>You have reached the maximum number of team members ({maxLabel}) for your {planName ?? "current"} plan.{" "}
+            <Link href="/dashboard/billing/plans" className="font-semibold underline">Upgrade your plan</Link> to add more.</p>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
               tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: counts[t.value] }))} />
           </div>
           <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+            <Label className="flex min-w-[220px] flex-1 items-center gap-2">
               <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search</span>
-              <input type="search" placeholder="Search name, email or phone…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            <select aria-label="Role" value={roleF} onChange={(e) => { setRoleF(e.target.value); setPage(1) }} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] font-semibold outline-none">
-              <option value="all">All roles</option>
-              {roles.some((r) => r.name.trim().toLowerCase() === "owner") ? null : <option value="owner">Owner</option>}
-              {roles.map((r) => <option key={r.id} value={r.name.trim().toLowerCase() === "owner" ? "owner" : r.id}>{r.name}</option>)}
-            </select>
+              <Input type="search" placeholder="Search name, email or phone…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
+                className="min-w-0 flex-1" />
+            </Label>
+            <Select value={String(roleF)} onValueChange={(val) => { setRoleF(val); setPage(1) }}>
+              <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All roles</SelectItem>
+                {roles.some((r) => r.name.trim().toLowerCase() === "owner") ? null : <SelectItem value="owner">Owner</SelectItem>}
+                {roles.map((r) => <SelectItem key={r.id} value={String(r.name.trim().toLowerCase() === "owner" ? "owner" : r.id)}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th className="py-3 pl-4 pr-2 font-semibold">Name</th><th className="px-2 py-3 font-semibold">Email</th><th className="px-2 py-3 font-semibold">Role</th>
-                  <th className="px-2 py-3 font-semibold">Status</th><th className="px-2 py-3 font-semibold">Joined / invited</th><th className="px-2 py-3 font-semibold">Last login</th>
-                  <th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-12 rounded" /></td></tr>) :
+            <Table className="min-w-[900px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead><TableHead>Joined / invited</TableHead><TableHead>Last login</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-12" /></TableCell></TableRow>) :
                   pageRows.length === 0 ? (
-                    <tr><td colSpan={7} className="py-14 text-center">
-                      <Users className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
+                    <TableRow><TableCell colSpan={7}>
                       {users.length === 0 ? (
-                        <>
-                          <p className="font-semibold">No team members yet</p>
-                          {writable && <button type="button" onClick={openInvite} className="mt-3 h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white">Invite first member</button>}
-                        </>
+                        <EmptyState icon={Users} title="No team members yet" className="p-4 md:p-6"
+                          action={writable ? <Button type="button" onClick={openInvite}>Invite first member</Button> : undefined} />
                       ) : (
-                        <>
-                          <p className="font-semibold">No team members match your filters.</p>
-                          <button type="button" onClick={resetFilters} className="mt-1 text-sm font-semibold text-dash-accent hover:underline">Clear filters</button>
-                        </>
+                        <EmptyState icon={Users} title="No team members match your filters." className="p-4 md:p-6"
+                          action={<Button type="button" variant="link" onClick={resetFilters}>Clear filters</Button>} />
                       )}
-                    </td></tr>
+                    </TableCell></TableRow>
                   ) : pageRows.map((u) => {
                     const own = isOwner(u), me = isMe(u), invited = u.status === "invited"
                     const roleEditable = writable && !own && !me
                     return (
-                      <tr key={rowKey(u)} className={editing && rowKey(editing) === rowKey(u) ? "bg-dash-accent-soft/40" : ""}>
-                        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                      <TableRow key={rowKey(u)} data-state={editing && rowKey(editing) === rowKey(u) ? "selected" : undefined}>
+                        <TableCell>
                           <div className="flex items-center gap-2.5">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-dash-accent-soft text-xs font-bold text-dash-accent-fg">{initials(u.fullName || u.email)}</span>
-                            <span className="flex min-w-0 flex-col"><span className="font-semibold">{u.fullName || "—"}</span>{me && <span className="text-xs text-dash-muted">You</span>}</span>
+                            <UserAvatar shape="square" name={u.fullName || u.email} className="size-9" />
+                            <span className="flex min-w-0 flex-col"><span className="font-medium">{u.fullName || "—"}</span>{me && <span className="text-xs text-muted-foreground">You</span>}</span>
                           </div>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3"><div>{u.email}</div><div className="text-xs text-dash-muted">{u.phone ?? ""}</div></td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                        </TableCell>
+                        <TableCell><div>{u.email}</div><div className="text-xs text-muted-foreground">{u.phone ?? ""}</div></TableCell>
+                        <TableCell>
                           {roleEditable ? (
-                            <select aria-label="Role" value={u.roleId ?? ""} onChange={(e) => changeRole(u, e.target.value)} className="h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-[13px] font-semibold outline-none">
-                              <option value="">Select role…</option>
-                              {assignable.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                              {u.roleId && !assignable.some((r) => r.id === u.roleId) && <option value={u.roleId}>{roleNameOf(u)}</option>}
-                            </select>
+                            <Select value={String(u.roleId ?? "") === "" ? "__none" : String(u.roleId ?? "")} onValueChange={(val) => changeRole(u, (val === "__none" ? "" : val))}>
+                              <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none">Select role…</SelectItem>
+                                {assignable.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+                                {u.roleId && !assignable.some((r) => r.id === u.roleId) && <SelectItem value={String(u.roleId)}>{roleNameOf(u)}</SelectItem>}
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            <span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-semibold">{roleNameOf(u)}</span>
+                            <Badge variant="secondary">{roleNameOf(u)}</Badge>
                           )}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", STATUS_STYLE[u.status] ?? STATUS_STYLE.inactive)}>{STATUS_LABEL[u.status] ?? u.status}</span>
-                          {invited && u.invitationExpired && <div className="mt-1 text-[11px] text-dash-danger-fg">Invitation expired</div>}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-dash-muted">{invited ? `Invited ${fmtD(u.invitedAt ?? u.joinedDate)}` : fmtD(u.joinedDate)}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-dash-muted">{u.lastLogin ? fmtD(u.lastLogin) : "Never"}</td>
-                        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={u.status} variant={u.status === "invited" ? "secondary" : undefined} label={STATUS_LABEL[u.status] ?? u.status} />
+                          {invited && u.invitationExpired && <div className="mt-1 text-xs text-destructive">Invitation expired</div>}
+                        </TableCell>
+                        <TableCell>{invited ? `Invited ${fmtD(u.invitedAt ?? u.joinedDate)}` : fmtD(u.joinedDate)}</TableCell>
+                        <TableCell>{u.lastLogin ? fmtD(u.lastLogin) : "Never"}</TableCell>
+                        <TableCell className="text-right">
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            {writable && invited && <button type="button" className={linkBtn} onClick={() => resend(u)}>Resend invite</button>}
-                            {writable && invited && <button type="button" className={cn(linkBtn, "text-dash-danger")} onClick={() => revoke(u)}>Revoke</button>}
-                            {writable && !own && !me && !invited && <button type="button" className={linkBtn} onClick={() => toggle(u)}>{u.status === "active" ? "Deactivate" : "Activate"}</button>}
-                            {writable && <button type="button" aria-label={`Edit ${u.fullName}`} className={linkBtn} onClick={() => openEdit(u)}>Edit</button>}
-                            {writable && !own && !me && !invited && <button type="button" aria-label={`Remove ${u.fullName}`} className={cn(linkBtn, "text-dash-danger")} onClick={() => remove(u)}>Remove</button>}
-                            {(own || me) && <span className="text-xs text-dash-muted">{own ? "Owner" : "Current user"}</span>}
+                            {writable && invited && <Button type="button" variant="link" size="sm" onClick={() => resend(u)}>Resend invite</Button>}
+                            {writable && invited && <Button type="button" variant="link" size="sm" className="text-destructive" onClick={() => revoke(u)}>Revoke</Button>}
+                            {writable && !own && !me && !invited && <Button type="button" variant="link" size="sm" onClick={() => toggle(u)}>{u.status === "active" ? "Deactivate" : "Activate"}</Button>}
+                            {writable && <Button type="button" variant="link" size="sm" aria-label={`Edit ${u.fullName}`} onClick={() => openEdit(u)}>Edit</Button>}
+                            {writable && !own && !me && !invited && <Button type="button" variant="link" size="sm" aria-label={`Remove ${u.fullName}`} className="text-destructive" onClick={() => remove(u)}>Remove</Button>}
+                            {(own || me) && <span className="text-xs text-muted-foreground">{own ? "Owner" : "Current user"}</span>}
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )
                   })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           {!loading && filtered.length > 0 && (
             <div className="p-4 pt-3"><PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(filtered.length / perPage))} itemsPerPage={perPage} totalItems={filtered.length}
               onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} /></div>
           )}
-        </section>
+        </Card>
 
         <aside className="flex w-full shrink-0 flex-col gap-3.5 xl:w-[400px]">
           {panel && (
-            <section aria-label="Member form" className="flex flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5">
-              <div>
-                <h2 className="font-dash-display text-lg font-bold">{editing ? "Edit team member" : "Invite team member"}</h2>
-                <p className="mt-1 text-xs text-dash-muted">
-                  {editing ? (ownEdit ? "The owner role cannot be changed." : editing.rowType === "invitation" ? "Change the name, email, phone or role of this pending invitation." : "Change the name, phone or role.") : "They are added as a pending invitation for your company."}
-                </p>
-                {err && <p role="alert" className="mt-2 rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-              </div>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Email *
-                <input type="email" className={input} value={form.email} disabled={!!editing && editing.rowType !== "invitation"} onChange={(e) => set("email", e.target.value)} placeholder="user@example.com" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Full name *
-                <input className={input} value={form.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder="John Doe" /></label>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Phone
-                <input className={input} value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="01XXX-XXXXXX" /></label>
+            <SectionCard
+              aria-label="Member form"
+              title={editing ? "Edit team member" : "Invite team member"}
+              description={editing ? (ownEdit ? "The owner role cannot be changed." : editing.rowType === "invitation" ? "Change the name, email, phone or role of this pending invitation." : "Change the name, phone or role.") : "They are added as a pending invitation for your company."}
+              contentClassName="flex flex-col gap-3.5"
+            >
+              {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+              <FormField label="Email *" htmlFor="team-email">
+                <Input id="team-email" type="email" value={form.email} disabled={!!editing && editing.rowType !== "invitation"} onChange={(e) => set("email", e.target.value)} placeholder="user@example.com" /></FormField>
+              <FormField label="Full name *" htmlFor="team-fullName">
+                <Input id="team-fullName" value={form.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder="John Doe" /></FormField>
+              <FormField label="Phone" htmlFor="team-phone">
+                <Input id="team-phone" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="01XXX-XXXXXX" /></FormField>
               {!ownEdit && (
-                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Role *
-                  <select className={input} value={form.roleId} onChange={(e) => set("roleId", e.target.value)}>
-                    <option value="">Select a role...</option>
-                    {assignable.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
-                </label>
+                <FormField label="Role *" htmlFor="team-role">
+                  <Select value={String(form.roleId) === "" ? "__none" : String(form.roleId)} onValueChange={(val) => set("roleId", (val === "__none" ? "" : val))}>
+                    <SelectTrigger id="team-role" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Select a role...</SelectItem>
+                      {assignable.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FormField>
               )}
               {!ownEdit && assignable.length === 0 && (
-                <p className="text-xs text-dash-warn-fg">No roles yet. <Link href="/dashboard/staff/roles" className="font-semibold underline">Create a role</Link> first, then invite the member.</p>
+                <p className="text-xs text-muted-foreground">No roles yet. <Link href="/dashboard/staff/roles" className="font-semibold underline">Create a role</Link> first, then invite the member.</p>
               )}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={closePanel} className={outlineBtn}>Cancel</button>
-                <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+                <Button type="button" variant="outline" onClick={closePanel}>Cancel</Button>
+                <Button type="button" disabled={saving} onClick={save}>
                   {saving ? "Saving…" : editing ? "Save changes" : "Send invitation"}
-                </button>
+                </Button>
               </div>
-            </section>
+            </SectionCard>
           )}
 
-          <section aria-label="Team roles" className="flex flex-col gap-3 rounded-[14px] border border-dash-border bg-dash-card p-5">
-            <h2 className="font-dash-display text-lg font-bold">Team roles</h2>
-            {loading ? <Skeleton className="h-24 rounded-lg" /> : guide.map((g) => (
+          <SectionCard aria-label="Team roles" title="Team roles" contentClassName="flex flex-col gap-3">
+            {loading ? <Skeleton className="h-24" /> : guide.map((g) => (
               <div key={g.key}>
-                <div className="text-[13px] font-semibold">{g.name} <span className="font-normal text-dash-muted">· {g.count} member{g.count === 1 ? "" : "s"}</span></div>
-                <div className="text-xs text-dash-muted">{g.desc}</div>
+                <div className="text-sm font-medium">{g.name} <span className="font-normal text-muted-foreground">· {g.count} member{g.count === 1 ? "" : "s"}</span></div>
+                <div className="text-xs text-muted-foreground">{g.desc}</div>
               </div>
             ))}
-            <p className="text-xs text-dash-muted">Edit what each role can do in <Link href="/dashboard/staff/roles" className="font-semibold text-dash-accent hover:underline">Roles &amp; access</Link>.</p>
-          </section>
+            <p className="text-xs text-muted-foreground">Edit what each role can do in <Link href="/dashboard/staff/roles" className="font-semibold text-primary hover:underline">Roles &amp; access</Link>.</p>
+          </SectionCard>
         </aside>
       </div>
     </div>

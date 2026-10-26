@@ -1,6 +1,7 @@
 "use client"
 
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { Separator } from "@/components/ui/separator"
 import { bucketLabel, compactMoney, currencySymbol, niceAxis, wholeMoney } from "./format"
 import { useDashboardFilters } from "./dashboard-context"
 import type { RangePreset } from "./dashboard-context"
@@ -81,7 +82,8 @@ export function RevenueChart() {
           </div>
         </div>
         {!hasData && <div className="mt-3"><EmptyNote>No sales in this period.</EmptyNote></div>}
-        <dl className="mt-5 grid gap-3 border-t border-dash-border-soft pt-4 [grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
+        <Separator className="mt-5" />
+        <dl className="grid gap-3 pt-4 [grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
           {[
             ["Avg order value", formatCurrency(f.aov)],
             ["Gross margin", f.grossMarginPct !== null ? `${f.grossMarginPct}%` : "—"],
@@ -89,8 +91,8 @@ export function RevenueChart() {
             ["Discounts given", formatCurrency(f.discounts)],
           ].map(([k, v]) => (
             <div key={k}>
-              <dt className="text-xs text-dash-muted">{k}</dt>
-              <dd className="mt-1 text-lg font-bold text-dash-ink tabular-nums">{v}</dd>
+              <dt className="text-xs text-muted-foreground">{k}</dt>
+              <dd className="mt-1 text-lg font-semibold tabular-nums">{v}</dd>
             </div>
           ))}
         </dl>
@@ -114,7 +116,7 @@ export function RevenueChart() {
             : undefined
         }
         action={
-          <div className="flex items-center gap-4 text-xs text-dash-muted">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-dash-accent" aria-hidden />Revenue</span>
             <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-dash-warn" aria-hidden />Gross profit</span>
           </div>

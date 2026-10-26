@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, Download, Hash, Layers, Pencil, Search, Trash2, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
@@ -15,37 +21,37 @@ import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { Toolbar } from "@/components/common/Toolbar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
 
 type Tab = "batch" | "serial"
 
-const SERIAL_STYLE: Record<string, string> = {
-  available: "bg-dash-success-soft text-dash-success-fg",
-  sold: "bg-dash-neutral-soft text-dash-neutral-fg",
-  returned: "bg-dash-accent-soft text-dash-accent-fg",
-  damaged: "bg-dash-danger-soft text-dash-danger-fg",
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
+
+const SERIAL_VARIANT: Record<string, BadgeVariant> = {
+  available: "default",
+  sold: "secondary",
+  returned: "outline",
+  damaged: "destructive",
 }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
 const today = () => new Date().toISOString().slice(0, 10)
 const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-      {label}{children}
-      {hint && <span className="text-xs font-normal text-dash-muted">{hint}</span>}
-    </label>
-  )
-}
-
-function expiryInfo(b: ProductBatch): { txt: string; cls: string } {
-  if (!b.expiryDate) return { txt: "OK", cls: "bg-dash-success-soft text-dash-success-fg" }
+function expiryInfo(b: ProductBatch): { txt: string; variant: BadgeVariant } {
+  if (!b.expiryDate) return { txt: "OK", variant: "default" }
   const days = Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / 864e5)
-  if (b.isExpired || days < 0) return { txt: `Expired ${Math.abs(days)}d ago`, cls: "bg-dash-danger-soft text-dash-danger-fg" }
-  if (b.isExpiringSoon || days <= 30) return { txt: `In ${days} days`, cls: "bg-dash-warn-soft text-dash-warn-fg" }
-  return { txt: "OK", cls: "bg-dash-success-soft text-dash-success-fg" }
+  if (b.isExpired || days < 0) return { txt: `Expired ${Math.abs(days)}d ago`, variant: "destructive" }
+  if (b.isExpiringSoon || days <= 30) return { txt: `In ${days} days`, variant: "secondary" }
+  return { txt: "OK", variant: "default" }
 }
 
 export default function SerialBatchPage() {
@@ -242,17 +248,15 @@ export default function SerialBatchPage() {
   const formTitle = editing ? (tab === "batch" ? "Edit batch" : "Edit serial") : tab === "batch" ? "Add batch / lot" : "Add serial numbers"
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Serial &amp; batch tracking</h1>
-          <p className="mt-1 text-sm text-dash-muted">Trace units one by one, or by batch with expiry dates — oldest stock sells first.</p>
-        </div>
-        <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title={<>Serial &amp; batch tracking</>}
+        description="Trace units one by one, or by batch with expiry dates — oldest stock sells first."
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+      />
 
       {!stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px]" />)}</div>
       ) : (
         <StatsCards stats={[
           { label: "Batches", value: batchCount, icon: <Layers className="size-4" />, color: "blue", hint: `${stats.batchProducts ?? 0} products batch-tracked` },
@@ -266,135 +270,142 @@ export default function SerialBatchPage() {
       )}
 
       {noRecords && (
-        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-dash-accent-soft px-[18px] py-3.5 text-dash-accent-fg">
-          <span className="min-w-[260px] flex-1 text-sm">
-            Serial and batch tracking is set per product. <strong>Nothing tracked yet</strong> — add a batch or serial numbers with the form on this page, or set tracking per product when adding or editing it.
-          </span>
-          <Link href="/dashboard/products" className="inline-flex h-10 items-center rounded-[10px] bg-dash-accent-fg px-3.5 text-[13px] font-semibold text-dash-accent-soft">Set up a product</Link>
-        </div>
+        <Alert role="status">
+          <AlertDescription className="flex flex-wrap items-center gap-3.5">
+            <span className="min-w-[260px] flex-1">
+              Serial and batch tracking is set per product. <strong className="text-foreground">Nothing tracked yet</strong> — add a batch or serial numbers with the form on this page, or set tracking per product when adding or editing it.
+            </span>
+            <Button asChild><Link href="/dashboard/products">Set up a product</Link></Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={changeTab} tabs={[
               { value: "batch", label: "Batches / lots", count: batchCount },
               { value: "serial", label: "Serial numbers", count: serialCount },
             ]} />
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden />
-              <span className="sr-only">Search</span>
-              <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search batch / serial number or product…"
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
-            <select aria-label="Status" value={statusF} onChange={(e) => { setStatusF(e.target.value); setPage(1) }} className={cn(input, "w-[190px] font-semibold")}>
-              <option value="all">Status: All</option>
-              {tab === "batch" ? (
-                <>
-                  <option value="ok">OK</option><option value="soon">Expiring in 30 days</option><option value="expired">Expired</option>
-                </>
-              ) : (
-                <>
-                  <option value="available">Available</option><option value="sold">Sold</option><option value="returned">Returned</option><option value="damaged">Damaged</option>
-                </>
-              )}
-            </select>
-          </div>
+          <Toolbar className="p-4">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Label htmlFor="sb-search" className="sr-only">Search</Label>
+              <Input id="sb-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search batch / serial number or product…"
+                className="pl-9" />
+            </div>
+            <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
+              <SelectTrigger aria-label="Status" className="w-[190px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Status: All</SelectItem>
+                {tab === "batch" ? (
+                  <>
+                    <SelectItem value="ok">OK</SelectItem><SelectItem value="soon">Expiring in 30 days</SelectItem><SelectItem value="expired">Expired</SelectItem>
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="available">Available</SelectItem><SelectItem value="sold">Sold</SelectItem><SelectItem value="returned">Returned</SelectItem><SelectItem value="damaged">Damaged</SelectItem>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </Toolbar>
 
-          <div className="overflow-x-auto">
+          <div>
             {tab === "batch" ? (
-              <table className="w-full min-w-[780px] border-collapse text-sm">
-                <thead>
-                  <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                    <th className="py-3 pl-4 pr-2 font-semibold">Batch</th><th className="px-2 py-3 font-semibold">Product</th>
-                    <th className="px-2 py-3 text-right font-semibold">Qty left</th><th className="px-2 py-3 font-semibold">Expiry</th>
-                    <th className="px-2 py-3 font-semibold">Received</th><th className="px-2 py-3 font-semibold">Sell order</th>
-                    <th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+              <Table className="min-w-[780px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Batch</TableHead><TableHead>Product</TableHead>
+                    <TableHead className="text-right">Qty left</TableHead><TableHead>Expiry</TableHead>
+                    <TableHead>Received</TableHead><TableHead>Sell order</TableHead>
+                    <TableHead className="pr-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={7} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>) :
                     batches.map((b) => {
                       const e = expiryInfo(b)
                       return (
-                        <tr key={b.id}>
-                          <td className="border-b border-dash-border-soft py-3 pl-4 pr-2 font-bold">{b.batchNumber}</td>
-                          <td className="border-b border-dash-border-soft px-2 py-3">
+                        <TableRow key={b.id}>
+                          <TableCell className="pl-4 font-bold">{b.batchNumber}</TableCell>
+                          <TableCell>
                             <div className="font-semibold">{b.productName}{b.variantName ? ` · ${b.variantName}` : ""}</div>
-                            <div className="text-xs text-dash-muted">{[b.locationName, b.notes].filter(Boolean).join(" · ") || "—"}</div>
-                          </td>
-                          <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
+                            <div className="text-xs text-muted-foreground">{[b.locationName, b.notes].filter(Boolean).join(" · ") || "—"}</div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             <div className="font-bold">{b.quantityRemaining}</div>
-                            <div className="text-xs text-dash-muted">of {Math.max(b.quantityReceived, b.quantityRemaining)} received</div>
-                          </td>
-                          <td className="border-b border-dash-border-soft px-2 py-3">
+                            <div className="text-xs text-muted-foreground">of {Math.max(b.quantityReceived, b.quantityRemaining)} received</div>
+                          </TableCell>
+                          <TableCell>
                             <div>{fmt(b.expiryDate)}</div>
-                            <span className={cn("rounded-full px-2 py-px text-[11px] font-bold", e.cls)}>{e.txt}</span>
-                          </td>
-                          <td className="border-b border-dash-border-soft px-2 py-3">
+                            <Badge variant={e.variant}>{e.txt}</Badge>
+                          </TableCell>
+                          <TableCell>
                             <div>{fmt(b.receivedDate)}</div>
-                            <div className="text-xs text-dash-muted">{b.purchaseOrderNumber || "—"}</div>
-                          </td>
-                          <td className="border-b border-dash-border-soft px-2 py-3 tabular-nums">{b.sellOrderLabel ?? "—"}</td>
-                          <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                            <div className="text-xs text-muted-foreground">{b.purchaseOrderNumber || "—"}</div>
+                          </TableCell>
+                          <TableCell className="tabular-nums">{b.sellOrderLabel ?? "—"}</TableCell>
+                          <TableCell className="pr-4">
                             <div className="flex justify-end gap-1">
-                              <button type="button" aria-label={`Edit ${b.batchNumber}`} className={iconBtn} onClick={() => editBatch(b)}><Pencil className="size-4" /></button>
-                              <button type="button" aria-label={`Delete ${b.batchNumber}`} className={iconBtn} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></button>
+                              <Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.batchNumber}`} onClick={() => editBatch(b)}><Pencil className="size-4" /></Button>
+                              <Button type="button" variant="outline" size="icon" aria-label={`Delete ${b.batchNumber}`} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></Button>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )
                     })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             ) : (
-              <table className="w-full min-w-[720px] border-collapse text-sm">
-                <thead>
-                  <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                    <th className="py-3 pl-4 pr-2 font-semibold">Serial no.</th><th className="px-2 py-3 font-semibold">Product</th>
-                    <th className="px-2 py-3 font-semibold">Warehouse</th><th className="px-2 py-3 font-semibold">Status</th>
-                    <th className="px-2 py-3 font-semibold">Received</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={6} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Serial no.</TableHead><TableHead>Product</TableHead>
+                    <TableHead>Warehouse</TableHead><TableHead>Status</TableHead>
+                    <TableHead>Received</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={6} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>) :
                     serials.map((s) => (
-                      <tr key={s.id}>
-                        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2 font-bold">{s.serialNumber}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 font-semibold">{s.productName}{s.variantName ? ` · ${s.variantName}` : ""}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">{s.locationName ?? "—"}</td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold capitalize", SERIAL_STYLE[s.status] ?? SERIAL_STYLE.sold)}>{s.status}</span>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                      <TableRow key={s.id}>
+                        <TableCell className="pl-4 font-bold">{s.serialNumber}</TableCell>
+                        <TableCell className="font-semibold">{s.productName}{s.variantName ? ` · ${s.variantName}` : ""}</TableCell>
+                        <TableCell>{s.locationName ?? "—"}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={s.status} variant={SERIAL_VARIANT[s.status] ?? SERIAL_VARIANT.sold} className="capitalize" />
+                        </TableCell>
+                        <TableCell>
                           <div>{fmt(s.receivedDate)}</div>
-                          <div className="text-xs text-dash-muted">{s.purchaseOrderNumber || "—"}</div>
-                        </td>
-                        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                          <div className="text-xs text-muted-foreground">{s.purchaseOrderNumber || "—"}</div>
+                        </TableCell>
+                        <TableCell className="pr-4">
                           <div className="flex justify-end gap-1">
-                            <button type="button" aria-label={`Edit ${s.serialNumber}`} className={iconBtn} onClick={() => editSerial(s)}><Pencil className="size-4" /></button>
-                            <button type="button" aria-label={`Delete ${s.serialNumber}`} className={iconBtn} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${s.serialNumber}`} onClick={() => editSerial(s)}><Pencil className="size-4" /></Button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Delete ${s.serialNumber}`} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </div>
 
           {!loading && rows.length === 0 && (
-            <div className="flex flex-col items-center gap-1 py-14 text-center">
-              {tab === "batch" ? <Layers className="size-8 text-dash-muted/50" aria-hidden /> : <Hash className="size-8 text-dash-muted/50" aria-hidden />}
-              <h3 className="font-semibold">{q || statusF !== "all" ? "Nothing matches" : tab === "batch" ? "No batches yet" : "No serial numbers yet"}</h3>
-              <p className="text-sm text-dash-muted">{q || statusF !== "all" ? "Try clearing the search or status." : "Use the form to add your first one."}</p>
-            </div>
+            <EmptyState
+              icon={tab === "batch" ? Layers : Hash}
+              title={q || statusF !== "all" ? "Nothing matches" : tab === "batch" ? "No batches yet" : "No serial numbers yet"}
+              description={q || statusF !== "all" ? "Try clearing the search or status." : "Use the form to add your first one."}
+            />
           )}
 
           {!loading && total > 0 && (
-            <div className="border-t border-dash-border-soft p-4 pt-3">
+            <>
+            <Separator />
+            <div className="p-4 pt-3">
               <PaginationControl
                 currentPage={page}
                 totalPages={Math.max(1, Math.ceil(total / perPage))}
@@ -404,72 +415,89 @@ export default function SerialBatchPage() {
                 onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
               />
             </div>
+            </>
           )}
-        </section>
+        </Card>
 
-        <aside aria-label="Add" className="flex w-full shrink-0 flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5 xl:w-[380px]">
-          <h2 className="font-dash-display text-lg font-bold">{formTitle}</h2>
-          {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
-          <Field label="Product *">
-            <select className={input} value={fProduct} onChange={(e) => { setFProduct(e.target.value); setFVariant("") }} disabled={editing?.type === "serial"}>
-              <option value="">Select a product</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ""}</option>)}
-            </select>
-          </Field>
+        <aside aria-label="Add" className="w-full shrink-0 xl:w-[380px]">
+        <SectionCard title={formTitle} contentClassName="flex flex-col gap-3.5">
+          {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+          <FormField label="Product *" htmlFor="sb-f-product">
+            <Select value={fProduct || "__none"} onValueChange={(v) => { setFProduct(v === "__none" ? "" : v); setFVariant("") }} disabled={editing?.type === "serial"}>
+              <SelectTrigger id="sb-f-product" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Select a product</SelectItem>
+                {products.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}{p.sku ? ` (${p.sku})` : ""}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
           {variants.length > 0 && (
-            <Field label="Variant *">
-              <select className={input} value={fVariant} onChange={(e) => setFVariant(e.target.value)} disabled={editing?.type === "serial"}>
-                <option value="">Select variant</option>
-                {variants.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-            </Field>
+            <FormField label="Variant *" htmlFor="sb-f-variant">
+              <Select value={fVariant || "__none"} onValueChange={(v) => setFVariant(v === "__none" ? "" : v)} disabled={editing?.type === "serial"}>
+                <SelectTrigger id="sb-f-variant" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Select variant</SelectItem>
+                  {variants.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
           )}
 
           {tab === "batch" ? (
             <>
               <div className="grid grid-cols-2 gap-2.5">
-                <Field label="Batch / lot no. *"><input className={input} value={fCode} onChange={(e) => setFCode(e.target.value)} placeholder="e.g. GM-2610" /></Field>
-                <Field label={editing ? "Qty left *" : "Quantity *"}><input type="number" min={editing ? 0 : 1} step={1} className={input} value={fQty} onChange={(e) => setFQty(e.target.value)} placeholder="0" /></Field>
+                <FormField label="Batch / lot no. *" htmlFor="sb-f-code"><Input id="sb-f-code" className="w-full" value={fCode} onChange={(e) => setFCode(e.target.value)} placeholder="e.g. GM-2610" /></FormField>
+                <FormField label={editing ? "Qty left *" : "Quantity *"} htmlFor="sb-f-qty"><Input id="sb-f-qty" type="number" min={editing ? 0 : 1} step={1} className="w-full" value={fQty} onChange={(e) => setFQty(e.target.value)} placeholder="0" /></FormField>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                <Field label="Manufactured"><input type="date" className={input} value={fMfg} onChange={(e) => setFMfg(e.target.value)} /></Field>
-                <Field label="Expires"><input type="date" className={input} value={fExpiry} onChange={(e) => setFExpiry(e.target.value)} /></Field>
+                <FormField label="Manufactured" htmlFor="sb-f-mfg"><Input id="sb-f-mfg" type="date" className="w-full" value={fMfg} onChange={(e) => setFMfg(e.target.value)} /></FormField>
+                <FormField label="Expires" htmlFor="sb-f-expiry"><Input id="sb-f-expiry" type="date" className="w-full" value={fExpiry} onChange={(e) => setFExpiry(e.target.value)} /></FormField>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                <Field label="PO number"><input className={input} value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></Field>
-                <Field label="Warehouse">
-                  <select className={input} value={fLoc} onChange={(e) => setFLoc(e.target.value)}>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
-                </Field>
+                <FormField label="PO number" htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></FormField>
+                <FormField label="Warehouse" htmlFor="sb-f-loc">
+                  <Select value={fLoc || undefined} onValueChange={setFLoc}>
+                    <SelectTrigger id="sb-f-loc" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormField>
               </div>
-              <Field label="Notes"><input className={input} value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></Field>
+              <FormField label="Notes" htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></FormField>
             </>
           ) : (
             <>
-              <Field label={editing ? "Serial number *" : "Serial numbers *"} hint={editing ? undefined : `${serialLines.length} serial${serialLines.length === 1 ? "" : "s"} · duplicates are skipped automatically`}>
-                <textarea rows={editing ? 1 : 5} className={cn(input, "h-auto py-2.5")} value={serialText} onChange={(e) => setSerialText(e.target.value)} placeholder="Scan or type one per line" />
-              </Field>
+              <FormField label={editing ? "Serial number *" : "Serial numbers *"} htmlFor="sb-f-serials" description={editing ? undefined : `${serialLines.length} serial${serialLines.length === 1 ? "" : "s"} · duplicates are skipped automatically`}>
+                <Textarea id="sb-f-serials" rows={editing ? 1 : 5} className="w-full" value={serialText} onChange={(e) => setSerialText(e.target.value)} placeholder="Scan or type one per line" />
+              </FormField>
               <div className="grid grid-cols-2 gap-2.5">
-                <Field label="Received"><input type="date" className={input} value={fReceived} onChange={(e) => setFReceived(e.target.value)} /></Field>
-                <Field label="PO number"><input className={input} value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></Field>
+                <FormField label="Received" htmlFor="sb-f-received"><Input id="sb-f-received" type="date" className="w-full" value={fReceived} onChange={(e) => setFReceived(e.target.value)} /></FormField>
+                <FormField label="PO number" htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></FormField>
               </div>
-              <Field label="Warehouse">
-                <select className={input} value={fLoc} onChange={(e) => setFLoc(e.target.value)}>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
-              </Field>
-              <Field label="Status">
-                <select className={input} value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
-                  <option value="available">Available</option><option value="sold">Sold</option><option value="returned">Returned</option><option value="damaged">Damaged</option>
-                </select>
-              </Field>
-              <Field label="Notes"><input className={input} value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></Field>
+              <FormField label="Warehouse" htmlFor="sb-f-loc">
+                <Select value={fLoc || undefined} onValueChange={setFLoc}>
+                    <SelectTrigger id="sb-f-loc" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+              </FormField>
+              <FormField label="Status" htmlFor="sb-f-status">
+                <Select value={fStatus} onValueChange={setFStatus}>
+                  <SelectTrigger id="sb-f-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="available">Available</SelectItem><SelectItem value="sold">Sold</SelectItem><SelectItem value="returned">Returned</SelectItem><SelectItem value="damaged">Damaged</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Notes" htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></FormField>
             </>
           )}
 
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={clearForm} className={outlineBtn}>Clear</button>
-            <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={clearForm}>Clear</Button>
+            <Button type="button" disabled={saving} onClick={save}>
               {saving ? "Saving…" : editing ? "Save changes" : tab === "batch" ? "Add batch" : `Add ${serialLines.length || ""} serial${serialLines.length === 1 ? "" : "s"}`.replace("  ", " ")}
-            </button>
+            </Button>
           </div>
+        </SectionCard>
         </aside>
       </div>
     </div>

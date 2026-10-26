@@ -1,13 +1,13 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useState, useEffect, useRef, useCallback, type ChangeEvent } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AlertCircle, CheckCircle2, Clock, Search, Ticket } from "lucide-react"
+import { AlertCircle, CheckCircle2, Circle, Clock, MessageSquare, Search, Ticket } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatsCards } from "@/components/ui/stats-card"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { subscribeToSupportCompany, subscribeToSupportTicket } from "@/lib/reverb"
 import supportApi, {
   type SupportTicket, type TicketStats, type TicketStatus, type TicketPriority, type TicketCategory,
@@ -15,22 +15,27 @@ import supportApi, {
 } from "@/lib/supportApi"
 import { getCompanyId } from "@/lib/utils/apiInterceptor"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const STATUS_LABEL: Record<TicketStatus, string> = { open: "Open", in_progress: "In Progress", resolved: "Resolved", closed: "Closed" }
-const STATUS_STYLE: Record<TicketStatus, string> = {
-  open: "bg-dash-accent-soft text-dash-accent-fg",
-  in_progress: "bg-dash-warn-soft text-dash-warn-fg",
-  resolved: "bg-dash-success-soft text-dash-success-fg",
-  closed: "bg-dash-neutral-soft text-dash-neutral-fg",
-}
 const PRIORITY_LABEL: Record<TicketPriority, string> = { high: "High", medium: "Medium", low: "Low" }
-const PRIORITY_DOT: Record<TicketPriority, string> = { high: "bg-dash-danger-fg", medium: "bg-amber-500", low: "bg-slate-300" }
+const PRIORITY_VARIANT: Record<TicketPriority, "destructive" | "secondary" | "outline"> = { high: "destructive", medium: "secondary", low: "outline" }
 const CATEGORY_LABEL: Record<TicketCategory, string> = { order: "Order", product: "Product", payment: "Payment", shipping: "Shipping", general: "General" }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const selectCls = "h-10 min-w-0 flex-1 rounded-[10px] border border-dash-border bg-dash-card px-2.5 text-[13px] outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:opacity-60"
-const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+const selectCls = "min-w-0 flex-1"
 
 function playNotificationSound() {
   try {
@@ -75,7 +80,7 @@ function AttachmentList({ attachments }: { attachments: SupportMessage["attachme
   return (
     <div className="mt-2 space-y-2">
       {attachments.map((a) => (
-        <div key={a.id} className="overflow-hidden rounded-[10px] border border-dash-border bg-dash-card text-dash-ink">
+        <Card key={a.id} className="gap-0 overflow-hidden py-0 shadow-none">
           {a.isImage ? (
             <a href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt={a.name} className="max-h-48 w-full object-cover" /></a>
           ) : a.isAudio ? (
@@ -84,12 +89,14 @@ function AttachmentList({ attachments }: { attachments: SupportMessage["attachme
               <audio controls className="w-full"><source src={a.url} type={a.mimeType} /></audio>
             </div>
           ) : (
-            <a href={a.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 p-3 text-xs hover:bg-dash-neutral-soft">
-              <span className="min-w-0"><span className="block truncate font-semibold">{a.name}</span><span className="text-dash-muted">{formatFileSize(a.sizeBytes)}</span></span>
-              <span className="font-semibold text-dash-accent">Open</span>
-            </a>
+            <Item asChild size="sm" className="rounded-none">
+              <a href={a.url} target="_blank" rel="noreferrer">
+                <ItemContent className="min-w-0 gap-0"><ItemTitle className="w-full truncate text-xs">{a.name}</ItemTitle><ItemDescription className="text-xs">{formatFileSize(a.sizeBytes)}</ItemDescription></ItemContent>
+                <ItemActions className="text-xs font-semibold text-primary">Open</ItemActions>
+              </a>
+            </Item>
           )}
-        </div>
+        </Card>
       ))}
     </div>
   )
@@ -232,72 +239,76 @@ function ConversationPanel({ ticketId, onChanged, onDeleted }: {
     return (
       <div className="flex flex-col gap-3 p-4">
         <Skeleton className="h-6 w-56" />
-        {[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-3/4" style={{ marginLeft: i % 2 ? "auto" : undefined }} />)}
+        {[0, 1, 2].map((i) => <Skeleton key={i} className={cn("h-12 w-3/4", i % 2 && "ml-auto")} />)}
       </div>
     )
   }
 
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-dash-border-soft p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 p-4">
         <div className="min-w-0 flex-1 basis-60">
-          <div className="text-xs text-dash-muted">{ticket.ticketNumber} · {CATEGORY_LABEL[ticket.category]} · opened {fmtDate(ticket.createdAt)}</div>
-          <h2 className="mt-0.5 break-words font-dash-display text-lg font-bold">{ticket.subject}</h2>
-          <div className="mt-0.5 text-[13px] text-dash-muted">{ticket.customerName ?? "Customer"}{ticket.customerEmail ? ` · ${ticket.customerEmail}` : ""}</div>
+          <div className="text-xs text-muted-foreground">{ticket.ticketNumber} · {CATEGORY_LABEL[ticket.category]} · opened {fmtDate(ticket.createdAt)}</div>
+          <h2 className="mt-0.5 break-words text-lg font-semibold">{ticket.subject}</h2>
+          <div className="mt-0.5 text-sm text-muted-foreground">{ticket.customerName ?? "Customer"}{ticket.customerEmail ? ` · ${ticket.customerEmail}` : ""}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select aria-label="Ticket status" value={ticket.status} onChange={(e) => changeStatus(e.target.value as TicketStatus)} className={selectCls}>
-            {(Object.keys(STATUS_LABEL) as TicketStatus[]).map((k) => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
-          </select>
-          <select aria-label="Ticket priority" value={ticket.priority} onChange={(e) => changePriority(e.target.value as TicketPriority)} className={selectCls}>
-            {(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((k) => <option key={k} value={k}>{PRIORITY_LABEL[k]}</option>)}
-          </select>
-          <button type="button" onClick={remove} className={`${outlineBtn} text-dash-danger-fg`}>Delete</button>
+          <Select value={ticket.status} onValueChange={(v) => changeStatus(v as TicketStatus)}>
+            <SelectTrigger aria-label="Ticket status" className={selectCls}><SelectValue /></SelectTrigger>
+            <SelectContent>{(Object.keys(STATUS_LABEL) as TicketStatus[]).map((k) => <SelectItem key={k} value={k}>{STATUS_LABEL[k]}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={ticket.priority} onValueChange={(v) => changePriority(v as TicketPriority)}>
+            <SelectTrigger aria-label="Ticket priority" className={selectCls}><SelectValue /></SelectTrigger>
+            <SelectContent>{(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((k) => <SelectItem key={k} value={k}>{PRIORITY_LABEL[k]}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button type="button" variant="destructive" onClick={remove}>Delete</Button>
         </div>
       </div>
+      <Separator />
 
-      <div className="flex max-h-[480px] flex-1 flex-col gap-2.5 overflow-y-auto bg-dash-bg p-4">
-        {ticket.messages.length === 0 && <p className="my-6 text-center text-sm text-dash-muted">No messages yet</p>}
+      <div className="flex max-h-[480px] flex-1 flex-col gap-2.5 overflow-y-auto bg-muted/50 p-4">
+        {ticket.messages.length === 0 && <EmptyState title="No messages yet" className="p-4 md:p-6" />}
         {ticket.messages.map((m) => {
           const mine = m.senderType === "staff"
           return (
-            <div key={m.id} className={`flex flex-col gap-0.5 ${mine ? "items-end" : "items-start"}`}>
-              <div className={`max-w-[80%] whitespace-pre-wrap break-words rounded-xl border px-3 py-2.5 text-sm ${mine ? "border-dash-accent bg-dash-accent text-white" : "border-dash-border bg-dash-card text-dash-ink"}`}>
+            <div key={m.id} className={cn("flex flex-col gap-0.5", mine ? "items-end" : "items-start")}>
+              <Card className={cn("max-w-[80%] gap-0 whitespace-pre-wrap break-words px-3 py-2.5 text-sm shadow-none", mine && "border-primary bg-primary text-primary-foreground")}>
                 {m.body}
                 <AttachmentList attachments={m.attachments} />
-              </div>
-              <div className="text-[11px] text-dash-muted">{mine ? (m.senderName || "Support Team") : (ticket.customerName || "Customer")} · {stamp(m.createdAt)}</div>
+              </Card>
+              <div className="text-xs text-muted-foreground">{mine ? (m.senderName || "Support Team") : (ticket.customerName || "Customer")} · {stamp(m.createdAt)}</div>
             </div>
           )
         })}
         <div ref={endRef} />
       </div>
+      <Separator />
 
-      <div className="flex flex-col gap-2 border-t border-dash-border-soft p-3.5">
+      <div className="flex flex-col gap-2 p-3.5">
         {closed ? (
-          <p className="text-[13px] text-dash-muted">This ticket is closed. Change the status to reply.</p>
+          <p className="text-sm text-muted-foreground">This ticket is closed. Change the status to reply.</p>
         ) : (
           <>
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {attachments.map((f, i) => (
-                  <span key={i} className="inline-flex items-center gap-1.5 rounded-lg border border-dash-border bg-dash-bg px-2 py-1 text-xs">
+                  <Badge key={i} variant="outline" className="gap-1.5 pr-0.5">
                     {f.name}
-                    <button type="button" aria-label="Remove attachment" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="text-dash-danger-fg">×</button>
-                  </span>
+                    <Button type="button" variant="ghost" size="icon-sm" className="size-5" aria-label="Remove attachment" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))}>×</Button>
+                  </Badge>
                 ))}
               </div>
             )}
-            <textarea rows={2} value={reply} aria-label="Reply" placeholder="Reply to customer… (Ctrl+Enter to send)"
+            <Textarea rows={2} value={reply} aria-label="Reply" placeholder="Reply to customer… (Ctrl+Enter to send)"
               onChange={(e) => setReply(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send() } }}
-              className="w-full resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm outline-none focus-visible:border-dash-accent" />
+              />
             <div className="flex flex-wrap items-center gap-2">
-              <input ref={fileRef} type="file" multiple hidden onChange={pickFiles} />
-              <button type="button" onClick={() => fileRef.current?.click()} className={outlineBtn}>Attach file</button>
-              <button type="button" onClick={toggleRecording} className={`${outlineBtn} ${recording ? "!border-dash-danger-fg !bg-dash-danger-fg text-white hover:!bg-dash-danger-fg" : ""}`}>{recording ? "Stop recording" : "Voice note"}</button>
+              <Input ref={fileRef} type="file" multiple hidden className="hidden" onChange={pickFiles} />
+              <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>Attach file</Button>
+              <Button type="button" variant={recording ? "destructive" : "outline"} onClick={toggleRecording}>{recording ? "Stop recording" : "Voice note"}</Button>
               <span className="flex-1" />
-              <button type="button" onClick={send} disabled={sending} className={primaryBtn}>{sending ? "Sending…" : "Send"}</button>
+              <Button type="button" onClick={send} disabled={sending}>{sending ? "Sending…" : "Send"}</Button>
             </div>
           </>
         )}
@@ -424,20 +435,18 @@ export default function SupportPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Customer Support</h1>
-          <p className="mt-1 text-sm text-dash-muted">Manage and respond to customer tickets</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={refresh} className={outlineBtn}>Refresh</button>
-          <button type="button" onClick={() => { setShowNew(true); setForm(blankForm()); setErr("") }} className={`${primaryBtn} !h-10 text-[13px]`}>+ New ticket</button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Customer Support"
+        description="Manage and respond to customer tickets"
+        actions={<>
+          <Button type="button" variant="outline" onClick={refresh}>Refresh</Button>
+          <Button type="button" onClick={() => { setShowNew(true); setForm(blankForm()); setErr("") }}>+ New ticket</Button>
+        </>}
+      />
 
       {!stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[92px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[92px]" />)}</div>
       ) : (
         <StatsCards stats={[
           { label: "Open", value: stats.open, icon: <AlertCircle className="size-4" />, color: "blue", onClick: () => { setFStatus("open"); setPage(1) }, active: fStatus === "open" },
@@ -448,83 +457,85 @@ export default function SupportPage() {
       )}
 
       {showNew && (
-        <section aria-label="New ticket" className="flex flex-col gap-3.5 rounded-[14px] border border-dash-border bg-dash-card p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-dash-display text-lg font-bold">New ticket</h2>
-            <button type="button" aria-label="Close" onClick={() => setShowNew(false)} className={outlineBtn}>Close</button>
-          </div>
-          {err && <p role="alert" className="rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+        <SectionCard
+          role="region"
+          aria-label="New ticket"
+          title="New ticket"
+          actions={<Button type="button" variant="outline" aria-label="Close" onClick={() => setShowNew(false)}>Close</Button>}
+          contentClassName="flex flex-col gap-3.5"
+        >
+          {err && <Alert variant="destructive" role="alert"><AlertDescription>{err}</AlertDescription></Alert>}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Customer name *
-              <input className={input} value={form.customer} onChange={(e) => setF("customer", e.target.value)} placeholder="e.g. Rahim Uddin" /></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Subject *
-              <input className={input} value={form.subject} onChange={(e) => setF("subject", e.target.value)} placeholder="Short summary of the issue" /></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Category
-              <select className={input} value={form.category} onChange={(e) => setF("category", e.target.value as TicketCategory)}>
-                {(Object.keys(CATEGORY_LABEL) as TicketCategory[]).map((k) => <option key={k} value={k}>{CATEGORY_LABEL[k]}</option>)}
-              </select></label>
-            <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Priority
-              <select className={input} value={form.priority} onChange={(e) => setF("priority", e.target.value as TicketPriority)}>
-                {(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((k) => <option key={k} value={k}>{PRIORITY_LABEL[k]}</option>)}
-              </select></label>
+            <FormField label="Customer name" required htmlFor="new-ticket-customer">
+              <Input id="new-ticket-customer" value={form.customer} onChange={(e) => setF("customer", e.target.value)} placeholder="e.g. Rahim Uddin" /></FormField>
+            <FormField label="Subject" required htmlFor="new-ticket-subject">
+              <Input id="new-ticket-subject" value={form.subject} onChange={(e) => setF("subject", e.target.value)} placeholder="Short summary of the issue" /></FormField>
+            <FormField label="Category" htmlFor="new-ticket-category">
+              <Select value={form.category} onValueChange={(v) => setF("category", v as TicketCategory)}>
+                <SelectTrigger id="new-ticket-category" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{(Object.keys(CATEGORY_LABEL) as TicketCategory[]).map((k) => <SelectItem key={k} value={k}>{CATEGORY_LABEL[k]}</SelectItem>)}</SelectContent>
+              </Select></FormField>
+            <FormField label="Priority" htmlFor="new-ticket-priority">
+              <Select value={form.priority} onValueChange={(v) => setF("priority", v as TicketPriority)}>
+                <SelectTrigger id="new-ticket-priority" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((k) => <SelectItem key={k} value={k}>{PRIORITY_LABEL[k]}</SelectItem>)}</SelectContent>
+              </Select></FormField>
           </div>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Description
-            <textarea rows={3} value={form.desc} onChange={(e) => setF("desc", e.target.value)} placeholder="Describe the problem"
-              className="resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent" /></label>
+          <FormField label="Description" htmlFor="new-ticket-desc">
+            <Textarea id="new-ticket-desc" rows={3} value={form.desc} onChange={(e) => setF("desc", e.target.value)} placeholder="Describe the problem" /></FormField>
           <div className="flex justify-end">
-            <button type="button" onClick={create} disabled={creating} className={primaryBtn}>{creating ? "Creating…" : "Create ticket"}</button>
+            <Button type="button" onClick={create} disabled={creating}>{creating ? "Creating…" : "Create ticket"}</Button>
           </div>
-        </section>
+        </SectionCard>
       )}
 
       <div className="flex flex-col items-start gap-4 lg:flex-row">
-        <section aria-label="Tickets" className="w-full min-w-0 rounded-[14px] border border-dash-border bg-dash-card lg:w-[380px] lg:shrink-0 xl:w-[420px]">
-          <div className="flex flex-col gap-2.5 border-b border-dash-border-soft p-3.5">
+        <Card role="region" aria-label="Tickets" className="w-full min-w-0 gap-0 py-0 lg:w-[380px] lg:shrink-0 xl:w-[420px]">
+          <div className="flex flex-col gap-2.5 p-3.5">
             <div role="tablist" aria-label="Ticket filter" className="flex gap-1.5">
               {([[false, "All"], [true, "Unread"]] as const).map(([v, label]) => (
-                <button key={label} type="button" role="tab" aria-selected={fUnread === v} onClick={() => { setFUnread(v); setPage(1) }}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold ${fUnread === v ? "bg-dash-accent text-white" : "border border-dash-border bg-dash-card hover:bg-dash-neutral-soft"}`}>
+                <Button key={label} type="button" size="sm" variant={fUnread === v ? "default" : "outline"} role="tab" aria-selected={fUnread === v} onClick={() => { setFUnread(v); setPage(1) }}>
                   {label}
-                  {v && (stats?.unread ?? 0) > 0 && <span className={`rounded-full px-1.5 text-[11px] ${fUnread === v ? "bg-white/25" : "bg-dash-accent-soft text-dash-accent-fg"}`}>{stats?.unread}</span>}
-                </button>
+                  {v && (stats?.unread ?? 0) > 0 && <Badge variant="secondary" className="h-5 min-w-5 rounded-full px-1">{stats?.unread}</Badge>}
+                </Button>
               ))}
             </div>
-            <label className="flex h-[42px] items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3 text-dash-muted">
-              <Search className="size-4" aria-hidden /><span className="sr-only">Search tickets</span>
-              <input type="search" placeholder="Search subject, customer or message…" value={q} onChange={(e) => setQ(e.target.value)}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input type="search" aria-label="Search tickets" placeholder="Search subject, customer or message…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-8" />
+            </div>
             <div className="flex gap-2">
-              <select aria-label="Status" value={fStatus} onChange={(e) => { setFStatus(e.target.value); setPage(1) }} className={selectCls}>
-                <option value="all">All Status</option>
-                {(Object.keys(STATUS_LABEL) as TicketStatus[]).map((k) => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
-              </select>
-              <select aria-label="Priority" value={fPriority} onChange={(e) => { setFPriority(e.target.value); setPage(1) }} className={selectCls}>
-                <option value="all">All Priority</option>
-                {(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((k) => <option key={k} value={k}>{PRIORITY_LABEL[k]}</option>)}
-              </select>
+              <Select value={fStatus} onValueChange={(v) => { setFStatus(v); setPage(1) }}>
+                <SelectTrigger aria-label="Status" className={selectCls}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All Status</SelectItem>{(Object.keys(STATUS_LABEL) as TicketStatus[]).map((k) => <SelectItem key={k} value={k}>{STATUS_LABEL[k]}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={fPriority} onValueChange={(v) => { setFPriority(v); setPage(1) }}>
+                <SelectTrigger aria-label="Priority" className={selectCls}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All Priority</SelectItem>{(Object.keys(PRIORITY_LABEL) as TicketPriority[]).map((k) => <SelectItem key={k} value={k}>{PRIORITY_LABEL[k]}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
+          <Separator />
           <div className="flex max-h-[640px] flex-col overflow-y-auto">
             {loading ? (
-              [1, 2, 3, 4].map((i) => <div key={i} className="border-b border-dash-border-soft p-3.5"><Skeleton className="h-16 w-full" /></div>)
+              [1, 2, 3, 4].map((i) => <div key={i} className="p-3.5"><Skeleton className="h-16 w-full" /></div>)
             ) : tickets.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-dash-muted">No tickets found</div>
+              <EmptyState title="No tickets found" className="p-4 md:p-6" />
             ) : tickets.map((t) => {
               const cur = t.id === selectedId
               return (
-                <button key={t.id} type="button" aria-current={cur} onClick={() => select(t.id)}
-                  className={`flex w-full flex-col gap-1.5 border-b border-l-[3px] border-b-dash-border-soft px-3.5 py-3 text-left ${cur ? "border-l-dash-accent bg-dash-accent-soft" : "border-l-transparent bg-dash-card hover:bg-dash-neutral-soft"}`}>
-                  <span className="flex justify-between gap-2 text-xs text-dash-muted"><span className="flex items-center gap-1.5">{t.adminUnread && <span aria-label="Unread" className="size-2 rounded-full bg-dash-accent" />}{t.ticketNumber}</span><span>{rel(t.updatedAt || t.createdAt)}</span></span>
-                  <span className={`break-words text-sm ${t.adminUnread ? "font-extrabold" : "font-bold"}`}>{t.subject}</span>
-                  <span className="text-xs text-dash-muted">{t.customerName || "Customer"} · {CATEGORY_LABEL[t.category]}</span>
+                <Button key={t.id} type="button" variant={cur ? "secondary" : "ghost"} aria-current={cur} onClick={() => select(t.id)}
+                  className="h-auto w-full flex-col items-stretch gap-1.5 whitespace-normal text-left font-normal">
+                  <span className="flex justify-between gap-2 text-xs text-muted-foreground"><span className="flex items-center gap-1.5">{t.adminUnread && <><Circle className="size-2 fill-primary text-primary" aria-hidden /><span className="sr-only">Unread</span></>}{t.ticketNumber}</span><span>{rel(t.updatedAt || t.createdAt)}</span></span>
+                  <span className={cn("break-words text-sm", t.adminUnread ? "font-extrabold" : "font-bold")}>{t.subject}</span>
+                  <span className="text-xs text-muted-foreground">{t.customerName || "Customer"} · {CATEGORY_LABEL[t.category]}</span>
                   <span className="flex flex-wrap items-center gap-1.5">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${STATUS_STYLE[t.status]}`}>{STATUS_LABEL[t.status]}</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-dash-muted"><span className={`size-2 rounded-full ${PRIORITY_DOT[t.priority]}`} />{PRIORITY_LABEL[t.priority]}</span>
-                    <span className="text-[11px] text-dash-muted">{t.messageCount ?? t.messages.length} msg</span>
-                    {t.adminUnread && <span className="rounded-full bg-dash-accent px-2 py-0.5 text-[11px] font-bold text-white">New</span>}
+                    <StatusBadge status={t.status} label={STATUS_LABEL[t.status]} />
+                    <Badge variant={PRIORITY_VARIANT[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
+                    <span className="text-xs text-muted-foreground">{t.messageCount ?? t.messages.length} msg</span>
+                    {t.adminUnread && <Badge>New</Badge>}
                   </span>
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -534,16 +545,16 @@ export default function SupportPage() {
                 onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
             </div>
           )}
-        </section>
+        </Card>
 
-        <section aria-label="Conversation" className="flex min-h-[420px] w-full min-w-0 flex-1 flex-col rounded-[14px] border border-dash-border bg-dash-card">
+        <Card role="region" aria-label="Conversation" className="min-h-[420px] w-full min-w-0 flex-1 gap-0 py-0">
           {selectedId === null ? (
-            <div className="m-auto px-4 py-10 text-center text-sm text-dash-muted">Select a ticket to start chatting</div>
+            <EmptyState icon={MessageSquare} title="Select a ticket to start chatting" />
           ) : (
             <ConversationPanel ticketId={selectedId} onChanged={handleChanged}
               onDeleted={() => { select(null); fetchTickets(true); fetchStats() }} />
           )}
-        </section>
+        </Card>
       </div>
     </div>
   )

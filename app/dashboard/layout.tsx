@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import type React from "react"
 import { Suspense } from "react"
 import { usePathname } from "next/navigation"
@@ -56,14 +57,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           <Suspense fallback={null}>
                       <SidebarProvider
                         data-app-shell=""
-                        className={`${displayFont.variable} ${bodyFont.variable} font-dash-body`}
+                        className={cn(displayFont.variable, bodyFont.variable, "font-dash-body")}
                       >
                         <AppSidebar />
                         <DashboardProvider>
-                        <SidebarInset>
+                        <SidebarInset className="min-w-0">
                           {/* POS draws its own top bar to maximise selling space */}
                           {pathname !== "/dashboard/pos" && <AppHeader />}
-                          <main className="app-canvas flex-1 flex flex-col min-h-0 overflow-hidden">
+                          <main className="app-canvas flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
                             <div className="page-in flex-1 min-h-0 overflow-auto p-4 lg:p-8 has-[[data-pos-page]]:p-0 has-[[data-pos-page]]:overflow-hidden">
                               {children}
                             </div>

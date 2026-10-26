@@ -1,14 +1,22 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Check } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { notificationPreferencesApi, type NotifChannel, type NotifPreferences, type NotifPreferencesResponse } from "@/lib/notificationPreferencesApi"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const CHANNELS: { key: NotifChannel; label: string }[] = [
   { key: "app", label: "You · app" },
@@ -17,8 +25,6 @@ const CHANNELS: { key: NotifChannel; label: string }[] = [
   { key: "cust", label: "Customer · SMS" },
 ]
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent"
-const card = "rounded-[14px] border border-dash-border bg-dash-card"
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export default function NotificationSettingsPage() {
@@ -94,135 +100,112 @@ export default function NotificationSettingsPage() {
   const balance = data?.smsBalance ?? 0
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div>
-        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Notifications</h1>
-        <p className="mt-1 text-sm text-dash-muted">Get told about what matters — and keep customers in the loop automatically.</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Notifications" description="Get told about what matters — and keep customers in the loop automatically." />
 
       {loading || !data || !draft ? (
         <div className="flex flex-wrap gap-4">
-          <Skeleton className="h-[480px] min-w-0 flex-[999_1_640px] rounded-[14px]" />
-          <Skeleton className="h-[480px] flex-[1_1_340px] rounded-[14px]" />
+          <Skeleton className="h-[480px] min-w-0 flex-[999_1_640px]" />
+          <Skeleton className="h-[480px] flex-[1_1_340px]" />
         </div>
       ) : (
         <>
           <div className="flex flex-wrap items-start gap-4">
-            <section className={cn(card, "min-w-0 flex-[999_1_640px]")}>
-              <div className="border-b border-dash-border px-5 py-[18px]">
-                <h2 className="font-dash-display text-lg font-bold">Who gets told what</h2>
-                <p className="mt-1 text-[13px] text-dash-muted">Tick how each event reaches you, your staff and your customers.</p>
-              </div>
+            <SectionCard
+              className="min-w-0 flex-[999_1_640px]"
+              title="Who gets told what"
+              description="Tick how each event reaches you, your staff and your customers."
+              contentClassName="px-0"
+            >
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-sm">
-                  <thead>
-                    <tr className="bg-dash-neutral-soft text-center text-xs text-dash-muted">
-                      <th className="px-5 py-2.5 text-left font-semibold">Event</th>
-                      {CHANNELS.map((c) => <th key={c.key} className="px-2 py-2.5 font-semibold">{c.label}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="min-w-[640px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Event</TableHead>
+                      {CHANNELS.map((c) => <TableHead key={c.key} className="text-center">{c.label}</TableHead>)}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {groups.map((g) => (
                       <GroupRows key={g.name} name={g.name}>
                         {g.rows.map((r) => (
-                          <tr key={r.key}>
-                            <td className="border-t border-dash-border px-5 py-2.5">
+                          <TableRow key={r.key}>
+                            <TableCell>
                               <div className="font-semibold">{r.name}</div>
-                              <div className="text-xs text-dash-muted">{r.sub}</div>
-                            </td>
+                              <div className="text-xs text-muted-foreground">{r.sub}</div>
+                            </TableCell>
                             {CHANNELS.map((c) => {
                               const na = r.na.includes(c.key)
                               const on = !na && !!draft.events[r.key]?.[c.key]
                               return (
-                                <td key={c.key} className="border-t border-dash-border px-2 py-2.5 text-center">
-                                  {na ? <span className="text-dash-border">—</span> : (
-                                    <button type="button" role="checkbox" aria-checked={on} aria-label={`${r.name} ${c.label}`} onClick={() => flip(r.key, c.key)}
-                                      className={cn("inline-flex size-[30px] items-center justify-center rounded-lg border-2 text-white", on ? "border-dash-accent bg-dash-accent" : "border-dash-border bg-dash-card")}>
-                                      {on && <Check className="size-4" strokeWidth={3} />}
-                                    </button>
+                                <TableCell key={c.key} className="text-center">
+                                  {na ? <span className="text-muted-foreground">—</span> : (
+                                    <Checkbox checked={on} aria-label={`${r.name} ${c.label}`} onCheckedChange={() => flip(r.key, c.key)} />
                                   )}
-                                </td>
+                                </TableCell>
                               )
                             })}
-                          </tr>
+                          </TableRow>
                         ))}
                       </GroupRows>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
-            </section>
+            </SectionCard>
 
             <aside className="flex max-w-full flex-[1_1_340px] flex-col gap-4">
-              <section className={cn(card, "flex flex-col gap-4 p-[22px]")}>
-                <div>
-                  <h2 className="font-dash-display text-lg font-bold">SMS balance</h2>
-                  <p className="mt-1 text-[13px] text-dash-muted">Used for customer and owner SMS.</p>
-                </div>
+              <SectionCard title="SMS balance" description="Used for customer and owner SMS." contentClassName="flex flex-col gap-4">
                 <div className="flex items-baseline gap-2">
-                  <span className="font-dash-display text-[30px] font-bold tabular-nums">{balance.toLocaleString("en-US")}</span>
-                  <span className="text-dash-muted">SMS left</span>
+                  <span className="text-3xl font-bold tabular-nums">{balance.toLocaleString("en-US")}</span>
+                  <span className="text-muted-foreground">SMS left</span>
                 </div>
-                <div className="h-2 rounded-full bg-dash-neutral-soft">
-                  <div className="h-full rounded-full bg-dash-success-fg" style={{ width: `${Math.max(0, Math.min(100, Math.round(balance / 10)))}%` }} />
-                </div>
+                <Progress value={Math.max(0, Math.min(100, Math.round(balance / 10)))} aria-label="SMS balance" />
                 {!data.smsProviderConnected && (
-                  <p className="text-xs text-dash-muted">No SMS gateway is connected yet, so this is your stored balance and no text messages are sent.</p>
+                  <p className="text-xs text-muted-foreground">No SMS gateway is connected yet, so this is your stored balance and no text messages are sent.</p>
                 )}
-                <button type="button" onClick={() => toast({ variant: "destructive", title: "SMS top-up isn't connected yet" })}
-                  className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+                <Button type="button" onClick={() => toast({ variant: "destructive", title: "SMS top-up isn't connected yet" })}>
                   Buy more SMS
-                </button>
-              </section>
+                </Button>
+              </SectionCard>
 
-              <section className={cn(card, "flex flex-col gap-4 p-[22px]")}>
-                <div>
-                  <h2 className="font-dash-display text-lg font-bold">Customer SMS preview</h2>
-                  <p className="mt-1 text-[13px] text-dash-muted">Order confirmed</p>
-                </div>
-                <div className="whitespace-pre-wrap rounded-[14px] rounded-bl-[4px] bg-dash-neutral-soft px-3.5 py-3 text-sm leading-normal">{message}</div>
-                <span className="text-xs text-dash-muted">{message.length} characters · {segs} SMS · {sale ? "from your latest sale" : "template preview"}</span>
-                <button type="button" onClick={() => setTplOpen((v) => !v)}
-                  className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">
+              <SectionCard title="Customer SMS preview" description="Order confirmed" contentClassName="flex flex-col gap-4">
+                <Card className="gap-0 whitespace-pre-wrap bg-muted px-3.5 py-3 text-sm shadow-none">{message}</Card>
+                <span className="text-xs text-muted-foreground">{message.length} characters · {segs} SMS · {sale ? "from your latest sale" : "template preview"}</span>
+                <Button type="button" variant="outline" onClick={() => setTplOpen((v) => !v)}>
                   {tplOpen ? "Hide template" : "Edit templates"}
-                </button>
+                </Button>
                 {tplOpen && (
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Message template
-                    <textarea rows={4} maxLength={500} value={draft.smsTemplate} onChange={(e) => patch({ smsTemplate: e.target.value })}
-                      className="resize-y rounded-[10px] border border-dash-border bg-dash-card px-3 py-2.5 text-sm font-normal outline-none focus-visible:border-dash-accent" />
-                    <span className="text-xs font-normal text-dash-muted">Use {"{customer}"}, {"{no}"}, {"{total}"} and {"{business}"}.</span>
-                  </label>
+                  <FormField label="Message template" htmlFor="notif-sms-template" description={<>Use {"{customer}"}, {"{no}"}, {"{total}"} and {"{business}"}.</>}>
+                    <Textarea id="notif-sms-template" rows={4} maxLength={500} value={draft.smsTemplate} onChange={(e) => patch({ smsTemplate: e.target.value })} />
+                  </FormField>
                 )}
-              </section>
+              </SectionCard>
 
-              <section className={cn(card, "flex flex-col gap-4 p-[22px]")}>
-                <div>
-                  <h2 className="font-dash-display text-lg font-bold">Quiet hours</h2>
-                  <p className="mt-1 text-[13px] text-dash-muted">No app or SMS alerts to you during these hours.</p>
-                </div>
+              <SectionCard title="Quiet hours" description="No app or SMS alerts to you during these hours.">
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">From
-                    <input type="time" className={input} value={draft.quietFrom} onChange={(e) => patch({ quietFrom: e.target.value })} />
-                  </label>
-                  <label className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold">To
-                    <input type="time" className={input} value={draft.quietTo} onChange={(e) => patch({ quietTo: e.target.value })} />
-                  </label>
+                  <FormField label="From" htmlFor="notif-quiet-from" className="min-w-0">
+                    <Input id="notif-quiet-from" type="time" value={draft.quietFrom} onChange={(e) => patch({ quietFrom: e.target.value })} />
+                  </FormField>
+                  <FormField label="To" htmlFor="notif-quiet-to" className="min-w-0">
+                    <Input id="notif-quiet-to" type="time" value={draft.quietTo} onChange={(e) => patch({ quietTo: e.target.value })} />
+                  </FormField>
                 </div>
-              </section>
+              </SectionCard>
             </aside>
           </div>
 
-          <div className={cn(card, "sticky bottom-0 z-10 flex flex-wrap items-center gap-2.5 px-[18px] py-3.5 shadow-[0_-6px_20px_rgba(14,21,37,0.06)]")}>
-            <span className={cn("text-[13px]", err ? "text-dash-danger-fg" : "text-dash-muted")}>
+          <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
+            <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>
               {err || (dirty ? "You have unsaved changes." : "All changes saved.")}
             </span>
             <div className="ml-auto flex gap-2">
-              <button type="button" onClick={discard} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-4 text-sm font-semibold hover:bg-dash-neutral-soft">Discard</button>
-              <button type="button" onClick={save} disabled={saving || !dirty} className="h-11 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white disabled:opacity-50">
+              <Button type="button" variant="outline" onClick={discard}>Discard</Button>
+              <Button type="button" onClick={save} disabled={saving || !dirty}>
                 {saving ? "Saving…" : "Save changes"}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </>
       )}
     </div>
@@ -232,9 +215,9 @@ export default function NotificationSettingsPage() {
 function GroupRows({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <>
-      <tr>
-        <td colSpan={5} className="border-t border-dash-border bg-dash-neutral-soft/50 px-5 pb-1.5 pt-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-dash-muted">{name}</td>
-      </tr>
+      <TableRow>
+        <TableCell colSpan={5} className="text-xs font-medium uppercase text-muted-foreground">{name}</TableCell>
+      </TableRow>
       {children}
     </>
   )

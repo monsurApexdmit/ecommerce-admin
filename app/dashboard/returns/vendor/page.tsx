@@ -1,10 +1,32 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Banknote, Download, Eye, Printer, Search, Truck, Undo2, Package, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Toolbar } from "@/components/common/Toolbar"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { StatusBadge, type StatusVariant } from "@/components/common/StatusBadge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatsCards } from "@/components/ui/stats-card"
 import { StatusTabs } from "@/components/ui/status-tabs"
@@ -29,17 +51,13 @@ const CREDITS: { id: "note" | "refund" | "replacement"; label: string; sub: stri
   { id: "replacement", label: "Replacement", sub: "New stock sent" },
 ]
 const CREDIT_LABEL: Record<string, string> = { note: "Credit note", refund: "Refund", replace: "Replacement", replacement: "Replacement" }
-const STATUS: Record<string, { label: string; cls: string; next?: string; nextLabel?: string }> = {
-  pending: { label: "Pending", cls: "bg-dash-warn-soft text-dash-warn-fg", next: "shipped", nextLabel: "Mark shipped" },
-  shipped: { label: "Shipped", cls: "bg-dash-accent-soft text-dash-accent-fg", next: "received", nextLabel: "Mark received" },
-  received: { label: "Received", cls: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300", next: "credited", nextLabel: "Mark credited" },
-  credited: { label: "Credited", cls: "bg-dash-success-soft text-dash-success-fg" },
+const STATUS: Record<string, { label: string; variant: StatusVariant; next?: string; nextLabel?: string }> = {
+  pending: { label: "Pending", variant: "secondary", next: "shipped", nextLabel: "Mark shipped" },
+  shipped: { label: "Shipped", variant: "secondary", next: "received", nextLabel: "Mark received" },
+  received: { label: "Received", variant: "outline", next: "credited", nextLabel: "Mark credited" },
+  credited: { label: "Credited", variant: "default" },
 }
 
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
 const creditEffectText = (type: string, amount: string, supplier: string) =>
   type === "refund" ? `${supplier || "The supplier"} refunds ${amount}; mark credited when the money arrives`
     : type === "replacement" || type === "replace" ? `${supplier || "The supplier"} sends replacement stock worth ${amount}; mark credited when it arrives`
@@ -266,20 +284,18 @@ export default function SupplierReturnsPage() {
   if (blocked) return blocked
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Supplier returns</h1>
-          <p className="mt-1 text-sm text-dash-muted">Send faulty or extra stock back and get credit for it.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-          <button type="button" onClick={openForm} className={primaryBtn}>New return</button>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
+      <PageHeader
+        title="Supplier returns"
+        description="Send faulty or extra stock back and get credit for it."
+        actions={<>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" onClick={openForm}>New return</Button>
+        </>}
+      />
 
       {loading && !stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px]" />)}</div>
       ) : stats ? (
         <StatsCards stats={[
           { label: "Supplier returns", value: stats.count, icon: <Undo2 className="size-4" />, color: "blue", hint: "All time" },
@@ -290,275 +306,294 @@ export default function SupplierReturnsPage() {
         ]} />
       ) : null}
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }} tabs={TABS.map(([v, label]) => ({ value: v, label, count: counts[v] }))} />
         </div>
-        <div className="flex flex-wrap items-end gap-2.5 p-4">
-          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search returns</span>
-            <input type="search" placeholder="Search return #, PO, supplier or reason…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-semibold text-dash-muted">From
-            <input type="date" className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none" value={fromD} onChange={(e) => { setFromD(e.target.value); setPage(1) }} />
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-semibold text-dash-muted">To
-            <input type="date" className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none" value={toD} onChange={(e) => { setToD(e.target.value); setPage(1) }} />
-          </label>
-          <button type="button" onClick={cycleSup} className={outlineBtn}>{supLabel} ▾</button>
-        </div>
+        <Toolbar className="items-end gap-2.5 p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Label htmlFor="vr-search" className="sr-only">Search returns</Label>
+            <Input id="vr-search" type="search" placeholder="Search return #, PO, supplier or reason…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="pl-9" />
+          </div>
+          <FormField label="From" htmlFor="vr-from" className="w-auto gap-1">
+            <Input id="vr-from" type="date" value={fromD} onChange={(e) => { setFromD(e.target.value); setPage(1) }} />
+          </FormField>
+          <FormField label="To" htmlFor="vr-to" className="w-auto gap-1">
+            <Input id="vr-to" type="date" value={toD} onChange={(e) => { setToD(e.target.value); setPage(1) }} />
+          </FormField>
+          <Button type="button" variant="outline" onClick={cycleSup}>{supLabel} ▾</Button>
+        </Toolbar>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th className="py-3 pl-4 pr-2 font-semibold">Return</th><th className="px-2 py-3 font-semibold">Supplier / PO</th>
-                <th className="px-2 py-3 font-semibold">Items &amp; reason</th><th className="px-2 py-3 text-right font-semibold">Value</th>
-                <th className="px-2 py-3 font-semibold">Status</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Next step</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={6} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-4">Return</TableHead><TableHead>Supplier / PO</TableHead>
+                <TableHead>Items &amp; reason</TableHead><TableHead className="text-right">Value</TableHead>
+                <TableHead>Status</TableHead><TableHead className="pr-4 text-right">Next step</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={6} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>) :
                 rows.length === 0 ? (
-                  <tr><td colSpan={6} className="py-14 text-center">
-                    <Undo2 className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">No supplier returns found</p>
-                    <p className="text-sm text-dash-muted">{hasFilter || tab !== "all" ? "Try clearing the filters." : "Create one with New return."}</p>
-                  </td></tr>
+                  <TableRow><TableCell colSpan={6}>
+                    <EmptyState icon={Undo2} title="No supplier returns found" description={hasFilter || tab !== "all" ? "Try clearing the filters." : "Create one with New return."} className="p-4 md:p-6" />
+                  </TableCell></TableRow>
                 ) : rows.map((r) => {
                   const s = STATUS[stKey(r)]
                   return (
-                    <tr key={r.id}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
-                        <button type="button" onClick={() => setDetail(r)} className="font-bold hover:underline">{r.returnNumber}</button>
-                        <div className="text-xs text-dash-muted">{fmt(r.returnDate ?? r.createdAt)}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <div className="font-semibold">{r.supplierName || "—"}</div>
-                        {r.poNumber ? <Link href="/dashboard/vendors/purchase-orders" className="text-xs font-semibold text-dash-accent hover:underline">{r.poNumber}</Link> : <span className="text-xs text-dash-muted">Not linked</span>}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
+                    <TableRow key={r.id}>
+                      <TableCell className="pl-4">
+                        <Button type="button" variant="link" className="h-auto p-0" onClick={() => setDetail(r)}>{r.returnNumber}</Button>
+                        <div className="text-xs text-muted-foreground">{fmt(r.returnDate ?? r.createdAt)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{r.supplierName || "—"}</div>
+                        {r.poNumber ? <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><Link href="/dashboard/vendors/purchase-orders">{r.poNumber}</Link></Button> : <span className="text-xs text-muted-foreground">Not linked</span>}
+                      </TableCell>
+                      <TableCell>
                         <div className="max-w-[240px] truncate">{r.itemsSummary}</div>
-                        <div className="text-xs text-dash-muted">{r.reason || "—"}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
-                        <div className="font-bold">{formatCurrency(r.amount)}</div>
-                        <div className="text-xs text-dash-muted">{CREDIT_LABEL[r.creditType] ?? "Credit note"}</div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3"><span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", s.cls)}>{s.label}</span></td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        <div className="text-xs text-muted-foreground">{r.reason || "—"}</div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <div className="font-semibold">{formatCurrency(r.amount)}</div>
+                        <div className="text-xs text-muted-foreground">{CREDIT_LABEL[r.creditType] ?? "Credit note"}</div>
+                      </TableCell>
+                      <TableCell><StatusBadge status={s.label} variant={s.variant} /></TableCell>
+                      <TableCell className="pr-4">
                         <div className="flex items-center justify-end gap-1">
-                          {s.next && <button type="button" disabled={busyId === r.id} onClick={() => advance(r)} className="mr-1 h-9 rounded-lg bg-dash-ink px-3 text-[13px] font-semibold text-dash-bg disabled:opacity-40">{s.nextLabel}</button>}
-                          <button type="button" aria-label="View return" className={iconBtn} onClick={() => setDetail(r)}><Eye className="size-4" /></button>
-                          <button type="button" aria-label="Print return note" className={iconBtn} onClick={() => printReturn(r)}><Printer className="size-4" /></button>
+                          {s.next && <Button type="button" size="sm" className="mr-1" disabled={busyId === r.id} onClick={() => advance(r)}>{s.nextLabel}</Button>}
+                          <Button type="button" variant="outline" size="icon" aria-label="View return" onClick={() => setDetail(r)}><Eye className="size-4" /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label="Print return note" onClick={() => printReturn(r)}><Printer className="size-4" /></Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {!loading && total > 0 && (
-          <div className="border-t border-dash-border-soft p-4 pt-3">
-            <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
-              onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
-          </div>
+          <>
+            <Separator />
+            <div className="p-4 pt-3">
+              <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
+                onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
+            </div>
+          </>
         )}
-        <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted tabular-nums">{formatCurrency(stats?.pendingCreditAmount ?? stats?.creditToReceive ?? 0)} credit still to receive</div>
-      </section>
+        <Separator />
+        <div className="px-4 py-3 text-xs text-muted-foreground tabular-nums">{formatCurrency(stats?.pendingCreditAmount ?? stats?.creditToReceive ?? 0)} credit still to receive</div>
+      </Card>
 
       {/* ---------------- New supplier return ---------------- */}
       <Dialog open={formOpen} onOpenChange={(o) => !o && setFormOpen(false)}>
-        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[980px]">
-          <div className="border-b border-dash-border-soft px-6 py-4">
-            <DialogTitle className="font-dash-display text-xl font-bold">New supplier return</DialogTitle>
-            <DialogDescription className="text-[13px]">Stock leaves {locName || "the location"} as soon as you create the return.</DialogDescription>
-          </div>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[980px]">
+          <DialogHeader>
+            <DialogTitle>New supplier return</DialogTitle>
+            <DialogDescription>Stock leaves {locName || "the location"} as soon as you create the return.</DialogDescription>
+          </DialogHeader>
 
-          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_320px]">
+          <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="flex min-w-0 flex-col gap-5">
               <fieldset className="flex flex-col gap-3">
-                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">1 · Supplier</legend>
-                <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Supplier *
+                <SectionTitle as="legend" className="mb-2">1 · Supplier</SectionTitle>
+                <FormField label="Supplier" required>
                   <div className="flex flex-wrap gap-1.5">
                     {vendors.filter((v) => v.status === "Active").map((v) => (
-                      <button key={v.id} type="button" aria-pressed={supId === String(v.id)} onClick={() => { setSupId(String(v.id)); setErr("") }}
-                        className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", supId === String(v.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{v.name}</button>
+                      <Button key={v.id} type="button" size="sm" variant={supId === String(v.id) ? "default" : "outline"} aria-pressed={supId === String(v.id)} onClick={() => { setSupId(String(v.id)); setErr("") }}>{v.name}</Button>
                     ))}
                   </div>
-                </div>
+                </FormField>
                 {supId && (
-                  <div className="flex flex-col gap-1.5 text-[13px] font-semibold">From purchase order
+                  <FormField label="From purchase order" description={pos.length === 0 ? "No received purchase orders for this supplier." : undefined}>
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" aria-pressed={poId === ""} onClick={() => setPoId("")} className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", poId === "" ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>Not linked</button>
+                      <Button type="button" size="sm" variant={poId === "" ? "default" : "outline"} aria-pressed={poId === ""} onClick={() => setPoId("")}>Not linked</Button>
                       {pos.map((p) => (
-                        <button key={p.id} type="button" aria-pressed={poId === String(p.id)} onClick={() => setPoId(String(p.id))}
-                          className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", poId === String(p.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{p.poNumber}</button>
+                        <Button key={p.id} type="button" size="sm" variant={poId === String(p.id) ? "default" : "outline"} aria-pressed={poId === String(p.id)} onClick={() => setPoId(String(p.id))}>{p.poNumber}</Button>
                       ))}
                     </div>
-                    {pos.length === 0 && <span className="text-xs font-normal text-dash-muted">No received purchase orders for this supplier.</span>}
-                  </div>
+                  </FormField>
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Return date *<input type="date" max={today()} className={input} value={retDate} onChange={(e) => setRetDate(e.target.value)} /></label>
-                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Shipment / tracking no. (optional)<input className={input} value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Courier or waybill number" /></label>
+                  <FormField label="Return date" required htmlFor="vr-date"><Input id="vr-date" type="date" max={today()} value={retDate} onChange={(e) => setRetDate(e.target.value)} /></FormField>
+                  <FormField label="Shipment / tracking no. (optional)" htmlFor="vr-tracking"><Input id="vr-tracking" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Courier or waybill number" /></FormField>
                 </div>
-                <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Taken from
+                <FormField label="Taken from">
                   <div className="flex flex-wrap gap-1.5">
                     {warehouses.map((w) => (
-                      <button key={w.id} type="button" aria-pressed={locId === String(w.id)} onClick={() => setLocId(String(w.id))}
-                        className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", locId === String(w.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{w.name}</button>
+                      <Button key={w.id} type="button" size="sm" variant={locId === String(w.id) ? "default" : "outline"} aria-pressed={locId === String(w.id)} onClick={() => setLocId(String(w.id))}>{w.name}</Button>
                     ))}
                   </div>
-                </div>
+                </FormField>
               </fieldset>
 
               <fieldset className="flex flex-col gap-3">
-                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">2 · Items going back</legend>
-                <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-                  <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search products</span>
-                  <input type="search" value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Search products in stock at this location…"
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-                </label>
-                {itemsLoading && items.length === 0 ? <Skeleton className="h-16 rounded-xl" /> : items.length === 0 ? (
-                  <span className="text-[13px] text-dash-muted">{supId ? "No products with stock here to return." : "Choose a supplier, then pick items."}</span>
+                <SectionTitle as="legend" className="mb-2">2 · Items going back</SectionTitle>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Label htmlFor="vr-product-search" className="sr-only">Search products</Label>
+                  <Input id="vr-product-search" type="search" value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Search products in stock at this location…"
+                    className="pl-9" />
+                </div>
+                {itemsLoading && items.length === 0 ? <Skeleton className="h-16" /> : items.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">{supId ? "No products with stock here to return." : "Choose a supplier, then pick items."}</span>
                 ) : (
-                  <div className="flex flex-col rounded-xl border border-dash-border">
-                    {items.map((i) => (
-                      <div key={i.key} className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 border-b border-dash-border-soft px-3 py-3 last:border-0 lg:grid-cols-[auto_1fr_auto_88px_150px_80px]">
-                        <input type="checkbox" checked={i.on} onChange={() => patch(i.key, { on: !i.on })} aria-label={`Return ${i.name}`} className="size-4" />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold">{i.name}</div>
-                          <div className="text-xs text-dash-muted">{i.receivedQty !== null ? `${i.receivedQty} received · ` : ""}cost {formatCurrency(i.cost)} · {i.stock} in stock</div>
+                  <Card className="gap-0 py-0">
+                    {items.map((i, idx) => (
+                      <Fragment key={i.key}>
+                        {idx > 0 && <Separator />}
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 px-3 py-3 lg:grid-cols-[auto_1fr_auto_88px_150px_80px]">
+                          <Checkbox checked={i.on} onCheckedChange={(v) => patch(i.key, { on: v === true })} aria-label={`Return ${i.name}`} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{i.name}</div>
+                            <div className="text-xs text-muted-foreground">{i.receivedQty !== null ? `${i.receivedQty} received · ` : ""}cost {formatCurrency(i.cost)} · {i.stock} in stock</div>
+                          </div>
+                          <ButtonGroup className="col-start-2 lg:col-start-auto">
+                            <Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => patch(i.key, { qty: Math.max(1, i.qty - 1), on: true })}>−</Button>
+                            <ButtonGroupText className="w-10 justify-center tabular-nums">{i.qty}</ButtonGroupText>
+                            <Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => patch(i.key, { qty: Math.min(i.stock, i.qty + 1), on: true })}>+</Button>
+                          </ButtonGroup>
+                          <Input type="number" min={0} step="0.01" aria-label="Unit cost" value={i.cost} onChange={(e) => patch(i.key, { cost: Number(e.target.value) || 0 })}
+                            className="col-start-2 tabular-nums lg:col-start-auto" />
+                          <Select value={i.reason} onValueChange={(v) => patch(i.key, { reason: v })}>
+                            <SelectTrigger aria-label="Reason" className="col-start-2 w-full lg:col-start-auto"><SelectValue /></SelectTrigger>
+                            <SelectContent>{REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <span className="col-start-2 text-right text-sm font-semibold tabular-nums lg:col-start-auto">{formatCurrency(i.qty * i.cost)}</span>
                         </div>
-                        <div className="col-start-2 flex items-center lg:col-start-auto">
-                          <button type="button" aria-label="Decrease quantity" onClick={() => patch(i.key, { qty: Math.max(1, i.qty - 1), on: true })} className="h-9 w-8 rounded-l-lg border border-dash-border">−</button>
-                          <span className="flex h-9 w-10 items-center justify-center border-y border-dash-border text-sm tabular-nums">{i.qty}</span>
-                          <button type="button" aria-label="Increase quantity" onClick={() => patch(i.key, { qty: Math.min(i.stock, i.qty + 1), on: true })} className="h-9 w-8 rounded-r-lg border border-dash-border">+</button>
-                        </div>
-                        <input type="number" min={0} step="0.01" aria-label="Unit cost" value={i.cost} onChange={(e) => patch(i.key, { cost: Number(e.target.value) || 0 })}
-                          className="col-start-2 h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-sm outline-none focus-visible:border-dash-accent lg:col-start-auto" />
-                        <select aria-label="Reason" value={i.reason} onChange={(e) => patch(i.key, { reason: e.target.value })} className="col-start-2 h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-xs lg:col-start-auto">
-                          {REASONS.map((r) => <option key={r}>{r}</option>)}
-                        </select>
-                        <span className="col-start-2 text-right text-sm font-bold tabular-nums lg:col-start-auto">{formatCurrency(i.qty * i.cost)}</span>
-                      </div>
+                      </Fragment>
                     ))}
-                  </div>
+                  </Card>
                 )}
               </fieldset>
 
-              <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Photos of the problem (optional)
-                <input type="file" accept="image/*,application/pdf" multiple aria-label="Attach photos"
-                  onChange={(e) => { const f = Array.from(e.target.files ?? []); setPhotos((p) => [...p, ...f].slice(0, 10)); e.target.value = "" }}
-                  className="block text-xs font-normal file:mr-3 file:h-9 file:rounded-lg file:border file:border-dash-border file:bg-dash-card file:px-3 file:text-[13px] file:font-semibold" />
+              <FormField label="Photos of the problem (optional)" htmlFor="vr-photos">
+                <Input id="vr-photos" type="file" accept="image/*,application/pdf" multiple aria-label="Attach photos"
+                  onChange={(e) => { const f = Array.from(e.target.files ?? []); setPhotos((p) => [...p, ...f].slice(0, 10)); e.target.value = "" }} />
                 {photos.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {photos.map((f, i) => (
-                      <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-full border border-dash-border bg-dash-bg px-3 py-1 text-xs font-medium">
+                      <Badge key={`${f.name}-${i}`} variant="outline" className="gap-1.5 pr-0.5">
                         {f.name}
-                        <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="font-bold text-dash-muted hover:text-dash-ink">×</button>
-                      </span>
+                        <Button type="button" variant="ghost" size="icon-sm" className="size-5" aria-label={`Remove ${f.name}`} onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))}>×</Button>
+                      </Badge>
                     ))}
                   </div>
                 )}
-              </div>
-              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note to supplier
-                <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Stitching open on 3 pieces, photos attached" />
-              </label>
+              </FormField>
+              <FormField label="Note to supplier" htmlFor="vr-note">
+                <Textarea id="vr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Stitching open on 3 pieces, photos attached" />
+              </FormField>
             </div>
 
-            <aside className="flex flex-col gap-3 rounded-xl border border-dash-border-soft bg-dash-bg p-4 lg:self-start">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">3 · What you get back</span>
-              <div role="radiogroup" aria-label="Credit type" className="flex flex-col gap-1.5">
-                {CREDITS.map((c) => (
-                  <button key={c.id} type="button" role="radio" aria-checked={credit === c.id} onClick={() => setCredit(c.id)}
-                    className={cn("flex flex-col rounded-[10px] border-2 px-3 py-2 text-left text-[13px] font-semibold", credit === c.id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
-                    {c.label}<span className="text-[11px] font-normal opacity-80">{c.sub}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-col gap-1.5 text-[13px]">
-                <div className="flex justify-between"><span className="text-dash-muted">{units} units at cost</span><span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span></div>
-                <div className="flex justify-between"><span className="text-dash-muted">Return transport</span><span className="font-semibold tabular-nums">{formatCurrency(0)}</span></div>
-                <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
-                  <span className="font-bold">{credit === "note" ? "Credit note" : credit === "refund" ? "Refund due" : "Replacement value"}</span>
-                  <span className="font-dash-display text-2xl font-bold tabular-nums">{formatCurrency(subtotal)}</span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1 rounded-[10px] bg-dash-card px-3 py-2.5 text-xs text-dash-muted">
-                <span className="font-semibold text-dash-ink">What happens</span>
-                <span>− {units} units leave {locName || "the location"} now</span>
-                <span>{creditEffect(credit, subtotal, vendors.find((v) => String(v.id) === supId)?.name ?? "")}</span>
-              </div>
-              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={printNote} onChange={() => setPrintNote((v) => !v)} className="size-4" />Print return note for driver</label>
-              {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+            <aside className="lg:self-start">
+              <Card className="gap-3 p-4">
+                <SectionTitle>3 · What you get back</SectionTitle>
+                <ChoiceCardGroup value={credit} onValueChange={(v) => setCredit(v as typeof credit)} aria-label="Credit type" className="gap-1.5">
+                  {CREDITS.map((c) => (
+                    <ChoiceCard key={c.id} value={c.id} title={c.label} description={c.sub} className="p-3" />
+                  ))}
+                </ChoiceCardGroup>
+                <InfoList>
+                  <InfoRow label={`${units} units at cost`} value={<span className="tabular-nums">{formatCurrency(subtotal)}</span>} />
+                  <InfoRow label="Return transport" value={<span className="tabular-nums">{formatCurrency(0)}</span>} />
+                  <Separator />
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-semibold">{credit === "note" ? "Credit note" : credit === "refund" ? "Refund due" : "Replacement value"}</span>
+                    <span className="text-2xl font-semibold tabular-nums">{formatCurrency(subtotal)}</span>
+                  </div>
+                </InfoList>
+                <Alert>
+                  <AlertTitle>What happens</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    <span>− {units} units leave {locName || "the location"} now</span>
+                    <span>{creditEffect(credit, subtotal, vendors.find((v) => String(v.id) === supId)?.name ?? "")}</span>
+                  </AlertDescription>
+                </Alert>
+                <Field orientation="horizontal">
+                  <Checkbox id="vr-print" checked={printNote} onCheckedChange={(v) => setPrintNote(v === true)} />
+                  <FieldLabel htmlFor="vr-print" className="font-normal">Print return note for driver</FieldLabel>
+                </Field>
+                {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+              </Card>
             </aside>
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-dash-border-soft px-6 py-4">
-            <button type="button" onClick={() => setFormOpen(false)} className={outlineBtn}>Cancel</button>
-            <button type="button" disabled={saving || picked.length === 0} onClick={submit} className={primaryBtn}>{saving ? "Saving…" : `Create return · ${formatCurrency(subtotal)}`}</button>
-          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={saving || picked.length === 0} onClick={submit}>{saving ? "Saving…" : `Create return · ${formatCurrency(subtotal)}`}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ---------------- Detail ---------------- */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
-        <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           {detail && (() => {
             const s = STATUS[stKey(detail)]
             return (
               <>
-                <div className="border-b border-dash-border-soft px-6 py-4">
-                  <DialogTitle className="font-dash-display text-xl font-bold">{detail.returnNumber}</DialogTitle>
-                  <DialogDescription className="text-[13px]">{fmt(detail.returnDate ?? detail.createdAt)} · {detail.supplierName} · {detail.poNumber ?? "Not linked"}</DialogDescription>
-                </div>
-                <div className="flex flex-col gap-3 p-6 text-sm">
-                  <div className="flex flex-col rounded-xl border border-dash-border">
+                <DialogHeader>
+                  <DialogTitle>{detail.returnNumber}</DialogTitle>
+                  <DialogDescription>{fmt(detail.returnDate ?? detail.createdAt)} · {detail.supplierName} · {detail.poNumber ?? "Not linked"}</DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-3 text-sm">
+                  <Card className="gap-0 py-0">
                     {detail.lines.map((l, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3 border-b border-dash-border-soft px-3 py-2.5 last:border-0">
-                        <span className="font-semibold">{l.name}</span>
-                        <span className="text-dash-muted tabular-nums">{l.quantity} × {formatCurrency(l.unitCost)}</span>
-                        <span className="font-bold tabular-nums">{formatCurrency(l.total)}</span>
-                      </div>
+                      <Fragment key={i}>
+                        {i > 0 && <Separator />}
+                        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                          <span className="font-medium">{l.name}</span>
+                          <span className="text-muted-foreground tabular-nums">{l.quantity} × {formatCurrency(l.unitCost)}</span>
+                          <span className="font-semibold tabular-nums">{formatCurrency(l.total)}</span>
+                        </div>
+                      </Fragment>
                     ))}
-                  </div>
-                  <div className="flex justify-between rounded-[10px] bg-dash-neutral-soft px-3.5 py-2.5"><span>Value ({CREDIT_LABEL[detail.creditType] ?? "Credit note"})</span><strong className="tabular-nums">{formatCurrency(detail.amount)}</strong></div>
-                  <div className="text-[13px] text-dash-muted">Status: <strong className="text-dash-ink">{s.label}</strong> · Return date: {fmt(detail.returnDate ?? detail.createdAt)} · Taken from: {detail.locationName ?? "—"}</div>
-                  <div className="text-[13px] text-dash-muted">Tracking: <span className="text-dash-ink">{detail.trackingNo || "—"}</span> · {timeline}</div>
-                  <div className="text-[13px] text-dash-muted">Reason: <span className="text-dash-ink">{detail.reason || "—"}</span></div>
-                  <div className="text-[13px] text-dash-muted">Note: <span className="text-dash-ink">{detail.note || "—"}</span></div>
+                  </Card>
+                  <Item variant="muted" size="sm">
+                    <ItemContent><ItemTitle>Value ({CREDIT_LABEL[detail.creditType] ?? "Credit note"})</ItemTitle></ItemContent>
+                    <ItemActions><strong className="tabular-nums">{formatCurrency(detail.amount)}</strong></ItemActions>
+                  </Item>
+                  <InfoList>
+                    <InfoRow label="Status" value={<StatusBadge status={s.label} variant={s.variant} />} />
+                    <InfoRow label="Return date" value={fmt(detail.returnDate ?? detail.createdAt)} />
+                    <InfoRow label="Taken from" value={detail.locationName ?? "—"} />
+                    <InfoRow label="Tracking" value={detail.trackingNo || "—"} />
+                    <InfoRow label="Timeline" value={timeline} />
+                    <InfoRow label="Reason" value={detail.reason || "—"} />
+                    <InfoRow label="Note" value={detail.note || "—"} />
+                  </InfoList>
                   <div className="flex flex-col gap-2">
-                    <div className="text-[13px] font-semibold">Photos ({detail.attachments?.length ?? 0})</div>
+                    <SectionTitle as="h4">Photos ({detail.attachments?.length ?? 0})</SectionTitle>
                     {(detail.attachments?.length ?? 0) > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {detail.attachments!.map((a) => (
                           <div key={a.id} className="relative">
-                            <a href={a.url} target="_blank" rel="noreferrer" className="flex size-20 items-center justify-center overflow-hidden rounded-lg border border-dash-border bg-dash-bg text-[11px] font-semibold text-dash-muted">
-                              {a.mime?.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-full object-cover" /> : "PDF"}
-                            </a>
-                            <button type="button" aria-label={`Remove ${a.name}`} disabled={photoBusy} onClick={() => removePhoto(detail, a.id)}
-                              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-dash-ink text-xs font-bold text-dash-bg disabled:opacity-40">×</button>
+                            <Button asChild variant="outline" className="size-20 overflow-hidden p-0 text-xs text-muted-foreground">
+                              <a href={a.url} target="_blank" rel="noreferrer">
+                                {a.mime?.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-full object-cover" /> : "PDF"}
+                              </a>
+                            </Button>
+                            <Button type="button" variant="secondary" size="icon-sm" aria-label={`Remove ${a.name}`} disabled={photoBusy} onClick={() => removePhoto(detail, a.id)}
+                              className="absolute -right-1.5 -top-1.5 size-5 rounded-full">×</Button>
                           </div>
                         ))}
                       </div>
                     )}
-                    <input type="file" accept="image/*,application/pdf" multiple disabled={photoBusy} aria-label="Add photos"
-                      onChange={(e) => { addPhotos(detail, Array.from(e.target.files ?? [])); e.target.value = "" }}
-                      className="block text-xs file:mr-3 file:h-9 file:rounded-lg file:border file:border-dash-border file:bg-dash-card file:px-3 file:text-[13px] file:font-semibold" />
+                    <Input type="file" accept="image/*,application/pdf" multiple disabled={photoBusy} aria-label="Add photos"
+                      onChange={(e) => { addPhotos(detail, Array.from(e.target.files ?? [])); e.target.value = "" }} />
                   </div>
-                  <div className="rounded-[10px] bg-dash-bg px-3 py-2 text-xs text-dash-muted">{creditEffect(detail.creditType, detail.amount, detail.supplierName)}</div>
+                  <Alert><AlertDescription className="text-xs">{creditEffect(detail.creditType, detail.amount, detail.supplierName)}</AlertDescription></Alert>
                 </div>
-                <div className="flex flex-wrap justify-end gap-2 border-t border-dash-border-soft px-6 py-4">
-                  {s.next && <button type="button" disabled={busyId === detail.id} onClick={() => advance(detail)} className={primaryBtn}>{s.nextLabel}</button>}
-                  <button type="button" onClick={() => printReturn(detail)} className={outlineBtn}><Printer className="size-4" aria-hidden /> Print</button>
-                  <button type="button" onClick={() => setDetail(null)} className={outlineBtn}>Close</button>
-                </div>
+                <DialogFooter className="flex-wrap">
+                  {s.next && <Button type="button" disabled={busyId === detail.id} onClick={() => advance(detail)}>{s.nextLabel}</Button>}
+                  <Button type="button" variant="outline" onClick={() => printReturn(detail)}><Printer className="size-4" aria-hidden /> Print</Button>
+                  <Button type="button" variant="outline" onClick={() => setDetail(null)}>Close</Button>
+                </DialogFooter>
               </>
             )
           })()}

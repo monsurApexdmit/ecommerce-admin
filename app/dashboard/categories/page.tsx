@@ -4,6 +4,21 @@ import type React from "react"
 import { useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, FolderTree, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { Toolbar } from "@/components/common/Toolbar"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { SwatchPicker } from "@/components/common/SwatchPicker"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,14 +42,6 @@ import { cn } from "@/lib/utils"
 
 interface Row { cat: Category; depth: number; hasChildren: boolean }
 
-const TINTS = [
-  "bg-dash-accent-soft text-dash-accent-fg",
-  "bg-dash-warn-soft text-dash-warn-fg",
-  "bg-dash-success-soft text-dash-success-fg",
-  "bg-dash-danger-soft text-dash-danger-fg",
-  "bg-dash-neutral-soft text-dash-neutral-fg",
-]
-
 const SWATCHES = [
   { name: "Blue", value: "#2449E8" },
   { name: "Purple", value: "#6D28D9" },
@@ -45,15 +52,6 @@ const SWATCHES = [
 
 const byOrder = (a: Category, b: Category) =>
   (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.category_name.localeCompare(b.category_name)
-
-const iconBtn =
-  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-const headBtn =
-  "inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const fieldLabel = "flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold"
-const fieldInput =
-  "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none placeholder:text-dash-muted focus-visible:border-dash-accent"
-const barBtn = "h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10"
 
 const emptyForm = { name: "", parent_id: "none", published: true, description: "", color: SWATCHES[0].value as string, image: "" as string, imageFile: null as File | null }
 
@@ -304,24 +302,21 @@ export default function CategoriesPage() {
   const total = flat.length
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Categories</h1>
-          <p className="mt-1 text-sm text-dash-muted">Organise products into groups and sub-groups.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setImportOpen(true)} className={headBtn}><Upload className="size-4" aria-hidden /> Import</button>
-          <button type="button" onClick={handleExport} className={headBtn}><Download className="size-4" aria-hidden /> Export</button>
-          <button type="button" onClick={() => openForm(null)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+      <PageHeader
+        title="Categories"
+        description="Organise products into groups and sub-groups."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> Import</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" onClick={() => openForm(null)}>
             <Plus className="size-4" aria-hidden /> Add category
-          </button>
-        </div>
-      </div>
+          </Button>
+        </>}
+      />
 
-      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+      <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(v) => { setTab(v); setCurrentPage(1) }} tabs={[
             { value: "all", label: "All", count: flat.length },
@@ -329,143 +324,135 @@ export default function CategoriesPage() {
             { value: "unpublished", label: "Unpublished", count: flat.length - publishedCount },
           ]} />
         </div>
-        <div className="flex flex-wrap items-center gap-2.5 p-4">
-          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-            <Search className="size-[18px]" aria-hidden />
-            <span className="sr-only">Search categories</span>
-            <input type="search" placeholder="Search name or description…" value={search} onChange={(e) => setSearch(e.target.value)}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
-          </label>
+        <Toolbar className="p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Label htmlFor="cat-search" className="sr-only">Search categories</Label>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input id="cat-search" type="search" placeholder="Search name or description…" value={search} onChange={(e) => setSearch(e.target.value)}
+              className="pl-9" />
+          </div>
           {search && (
-            <button type="button" onClick={() => setSearch("")} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+            <Button type="button" variant="ghost" onClick={() => setSearch("")}>
               <X className="size-4" aria-hidden /> Clear
-            </button>
+            </Button>
           )}
           {!flatMode && parentsWithKids.length > 0 && (
-            <button type="button" onClick={toggleExpandAll} className={headBtn}>{anyCollapsed ? "Expand all" : "Collapse all"}</button>
+            <Button type="button" variant="outline" onClick={toggleExpandAll}>{anyCollapsed ? "Expand all" : "Collapse all"}</Button>
           )}
-        </div>
+        </Toolbar>
 
-        {checked.size > 0 && (
-          <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
-            <span className="text-sm font-semibold">{checked.size} selected</span>
-            <button type="button" onClick={() => setPublished(selected, true)} className={barBtn}>Publish</button>
-            <button type="button" onClick={() => setPublished(selected, false)} className={barBtn}>Unpublish</button>
-            <button type="button" onClick={handleExport} className={barBtn}>Export selected</button>
-            <button type="button" onClick={() => setDeleteTargets(selected)} className="h-9 rounded-lg border border-red-400/50 px-3 text-[13px] font-semibold text-red-300 hover:bg-white/10">Delete</button>
-            <button type="button" onClick={() => setChecked(new Set())} className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">Clear</button>
-          </div>
-        )}
+        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Publish</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Unpublish</Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+        </BulkBar>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th scope="col" className="w-5 py-3 pl-4 pr-2"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all categories on this page" /></th>
-                <th scope="col" className="px-2 py-3 font-semibold">Category</th>
-                <th scope="col" className="px-2 py-3 text-right font-semibold">Products</th>
-                <th scope="col" className="px-2 py-3 font-semibold">Published</th>
-                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={5} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>)
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-14 text-center">
-                    <FolderTree className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                    <p className="font-semibold">{flatMode ? "No categories found" : "No categories yet"}</p>
-                    <p className="text-sm text-dash-muted">{flatMode ? "Try a different search or tab." : "Add your first category to group products."}</p>
-                  </td>
-                </tr>
-              ) : (
-                rows.map(({ cat: c, depth, hasChildren }) => {
-                  const kids = childrenOf.get(c.id)?.length ?? 0
-                  const rootId = (() => { let cur = c; while (cur.parent_id && byId.has(cur.parent_id)) cur = byId.get(cur.parent_id)!; return cur.id })()
-                  const tint = TINTS[Math.max(0, roots.findIndex((r) => r.id === rootId)) % TINTS.length]
-                  const parent = parentName(c)
-                  const sub = flatMode && parent ? `Sub-category of ${parent}` : depth > 0 ? `Sub-category of ${parent ?? "—"}` : kids > 0 ? `${kids} sub-categor${kids === 1 ? "y" : "ies"}` : "Top-level category"
-                  const ck = checked.has(c.id)
-                  return (
-                    <tr key={c.id} className={ck ? "bg-dash-bg" : ""}>
-                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
-                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.category_name}`} />
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <div className="flex items-center gap-2.5" style={{ paddingLeft: depth * 28 }}>
-                          {hasChildren && !flatMode ? (
-                            <button type="button" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
-                              aria-label={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}
-                              className="flex size-6 shrink-0 items-center justify-center rounded-md text-dash-muted hover:bg-dash-neutral-soft">
-                              {collapsed.has(c.id) ? <ChevronRight className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
-                            </button>
-                          ) : (
-                            <span aria-hidden className="w-6 shrink-0 text-center text-dash-muted">{depth > 0 ? "└" : ""}</span>
-                          )}
-                          <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", !c.color && tint)}
-                            style={c.color ? { backgroundColor: `${c.color}1F`, color: c.color } : undefined}>
-                            <FolderTree className="size-[18px]" aria-hidden />
-                          </span>
-                          <button type="button" onClick={() => openForm(c)} className="flex flex-col text-left">
-                            <span className="font-semibold">{c.category_name}</span>
-                            {c.description && <span className="line-clamp-1 max-w-[420px] text-xs text-dash-ink/80">{c.description}</span>}
-                            <span className="text-xs text-dash-muted">{sub}</span>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
-                        {c.products_count == null ? "—" : `${c.products_count} product${c.products_count === 1 ? "" : "s"}`}
-                      </td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <Switch checked={c.status} aria-label={`Published: ${c.category_name}`}
-                          onCheckedChange={(v) => setPublished([c], v)}
-                          className="data-[state=checked]:bg-dash-accent data-[state=unchecked]:bg-dash-neutral" />
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
-                        <div className="flex justify-end gap-1">
-                          {!flatMode && (() => {
-                            const sibs = c.parent_id && byId.has(c.parent_id) ? (childrenOf.get(c.parent_id) ?? []) : roots
-                            const idx = sibs.findIndex((s) => s.id === c.id)
-                            return (
-                              <>
-                                <button type="button" aria-label={`Move ${c.category_name} up`} disabled={idx <= 0} onClick={() => move(c, -1)} className={cn(iconBtn, "disabled:opacity-40")}><ArrowUp className="size-4" /></button>
-                                <button type="button" aria-label={`Move ${c.category_name} down`} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)} className={cn(iconBtn, "disabled:opacity-40")}><ArrowDown className="size-4" /></button>
-                              </>
-                            )
-                          })()}
-                          <button type="button" aria-label={`Edit ${c.category_name}`} onClick={() => openForm(c)} className={iconBtn}><Pencil className="size-4" /></button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button type="button" aria-label={`More actions for ${c.category_name}`} className={iconBtn}><MoreHorizontal className="size-4" /></button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openForm(c)}>Edit category</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setPublished([c], !c.status)}>{c.status ? "Unpublish" : "Publish"}</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-dash-danger focus:text-dash-danger" onClick={() => setDeleteTargets([c])}>
-                                <Trash2 className="size-4" aria-hidden /> Delete category
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all categories on this page" /></TableHead>
+              <TableHead scope="col">Category</TableHead>
+              <TableHead scope="col" className="text-right">Products</TableHead>
+              <TableHead scope="col">Published</TableHead>
+              <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={5} className="px-4"><Skeleton className="h-10 rounded" /></TableCell></TableRow>)
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <EmptyState icon={FolderTree} className="p-4 md:p-6"
+                    title={flatMode ? "No categories found" : "No categories yet"}
+                    description={flatMode ? "Try a different search or tab." : "Add your first category to group products."} />
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map(({ cat: c, depth, hasChildren }) => {
+                const kids = childrenOf.get(c.id)?.length ?? 0
+                const parent = parentName(c)
+                const sub = flatMode && parent ? `Sub-category of ${parent}` : depth > 0 ? `Sub-category of ${parent ?? "—"}` : kids > 0 ? `${kids} sub-categor${kids === 1 ? "y" : "ies"}` : "Top-level category"
+                const ck = checked.has(c.id)
+                return (
+                  <TableRow key={c.id} data-state={ck ? "selected" : undefined}>
+                    <TableCell className="pl-4">
+                      <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.category_name}`} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2.5" style={{ paddingLeft: depth * 28 }}>
+                        {hasChildren && !flatMode ? (
+                          <Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
+                            aria-label={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}
+                            className="shrink-0">
+                            {collapsed.has(c.id) ? <ChevronRight className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
+                          </Button>
+                        ) : (
+                          <span aria-hidden className="w-8 shrink-0 text-center text-muted-foreground">{depth > 0 ? "└" : ""}</span>
+                        )}
+                        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", !c.color && "bg-muted text-muted-foreground")}
+                          style={c.color ? { backgroundColor: `${c.color}1F`, color: c.color } : undefined}>
+                          <FolderTree className="size-[18px]" aria-hidden />
+                        </span>
+                        <Button type="button" variant="ghost" onClick={() => openForm(c)} className="h-auto flex-col items-start gap-0 p-0 text-left whitespace-normal hover:bg-transparent">
+                          <span className="font-semibold">{c.category_name}</span>
+                          {c.description && <span className="line-clamp-1 max-w-[420px] text-xs font-normal text-foreground/80">{c.description}</span>}
+                          <span className="text-xs font-normal text-muted-foreground">{sub}</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.products_count == null ? "—" : `${c.products_count} product${c.products_count === 1 ? "" : "s"}`}
+                    </TableCell>
+                    <TableCell>
+                      <Switch checked={c.status} aria-label={`Published: ${c.category_name}`}
+                        onCheckedChange={(v) => setPublished([c], v)} />
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <div className="flex justify-end gap-1">
+                        {!flatMode && (() => {
+                          const sibs = c.parent_id && byId.has(c.parent_id) ? (childrenOf.get(c.parent_id) ?? []) : roots
+                          const idx = sibs.findIndex((s) => s.id === c.id)
+                          return (
+                            <>
+                              <Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} up`} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button>
+                              <Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} down`} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button>
+                            </>
+                          )
+                        })()}
+                        <Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.category_name}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.category_name}`}><MoreHorizontal className="size-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openForm(c)}>Edit category</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setPublished([c], !c.status)}>{c.status ? "Unpublish" : "Publish"}</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>
+                              <Trash2 className="size-4" aria-hidden /> Delete category
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
 
-        <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted">
+        <Separator />
+        <div className="px-4 py-3 text-xs text-muted-foreground">
           {flatMode ? `${filteredList.length} of ${total}` : total} categor{total === 1 ? "y" : "ies"} · {roots.length} top-level
         </div>
         <div className="px-4 pb-4">
           <PaginationControl currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}
             itemsPerPage={itemsPerPage} onItemsPerPageChange={handleItemsPerPageChange} totalItems={units.length} />
         </div>
-      </section>
+      </Card>
 
       {/* Add / edit */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -475,15 +462,14 @@ export default function CategoriesPage() {
             <DialogDescription className="text-[13px] text-dash-muted">Group products so they are easy to find in POS.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
-            <label className={fieldLabel}>Name *
-              <input className={fieldInput} placeholder="e.g. Panjabi" value={form.name} autoFocus
+            <FormField label="Name" required htmlFor="cat-name" className="min-w-0">
+              <Input id="cat-name" placeholder="e.g. Panjabi" value={form.name} autoFocus
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") save() }} />
-            </label>
-            <div className={fieldLabel}>
-              <span id="cat-parent-label">Parent category</span>
+            </FormField>
+            <FormField label={<span id="cat-parent-label">Parent category</span>} htmlFor="cat-parent" className="min-w-0">
               <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
-                <SelectTrigger aria-labelledby="cat-parent-label" className="h-[42px] w-full rounded-[10px] border-dash-border bg-dash-card text-sm font-normal"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="cat-parent" aria-labelledby="cat-parent-label" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None (top level)</SelectItem>
                   {treeOrder.filter(({ cat }) => !blockedParents.has(cat.id)).map(({ cat, depth }) => (
@@ -493,49 +479,44 @@ export default function CategoriesPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <label className={fieldLabel}>Description
-              <textarea rows={2} className={`${fieldInput} h-auto py-2.5`} placeholder="Shown on the storefront category page" value={form.description}
+            </FormField>
+            <FormField label="Description" htmlFor="cat-description" className="min-w-0">
+              <Textarea id="cat-description" rows={2} placeholder="Shown on the storefront category page" value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </label>
-            <div className={fieldLabel}>
-              <span id="cat-color-label">Icon colour</span>
-              <div role="group" aria-labelledby="cat-color-label" className="flex gap-2">
-                {SWATCHES.map((sw) => (
-                  <button key={sw.value} type="button" aria-label={sw.name} aria-pressed={form.color === sw.value} title={sw.name}
-                    onClick={() => setForm({ ...form, color: sw.value })}
-                    className={cn("size-8 rounded-full border-2 border-transparent", form.color === sw.value && "ring-2 ring-dash-ink ring-offset-2 ring-offset-dash-card")}
-                    style={{ backgroundColor: sw.value }} />
-                ))}
-              </div>
-            </div>
-            <div className={fieldLabel}>
-              Image (optional)
-              <label className="flex h-20 cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed border-dash-border px-3 text-[13px] font-medium text-dash-muted hover:bg-dash-neutral-soft">
-                {form.imageFile || form.image ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={form.imageFile ? URL.createObjectURL(form.imageFile) : form.image} alt="" className="size-14 rounded-lg object-cover" />
-                    <span className="truncate">{form.imageFile?.name ?? "Current image — click to replace"}</span>
-                  </>
-                ) : "Drop an image or click to upload"}
-                <input type="file" accept="image/*" className="sr-only" onChange={(e) => setForm({ ...form, imageFile: e.target.files?.[0] ?? null })} />
-              </label>
-            </div>
-            <div className="flex items-center justify-between gap-4 rounded-xl border border-dash-border px-3.5 py-3">
-              <span className="flex flex-col">
-                <span id="cat-pub-label" className="text-sm font-semibold">Published</span>
-                <span className="text-xs text-dash-muted">Show this category in POS and online</span>
-              </span>
-              <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="cat-pub-label"
-                className="data-[state=checked]:bg-dash-accent data-[state=unchecked]:bg-dash-neutral" />
-            </div>
+            </FormField>
+            <FormField label={<span id="cat-color-label">Icon colour</span>} className="min-w-0">
+              <SwatchPicker size="sm" aria-label="Icon colour"
+                options={SWATCHES.map((sw) => ({ value: sw.value, label: sw.name, color: sw.value }))}
+                value={form.color} onValueChange={(v) => setForm({ ...form, color: v })} />
+            </FormField>
+            <FormField label="Image (optional)" htmlFor="cat-image" className="min-w-0">
+              <Button asChild variant="outline" className="h-20 w-full cursor-pointer gap-3 border-dashed">
+                <Label htmlFor="cat-image">
+                  {form.imageFile || form.image ? (
+                    <>
+                      <UserAvatar shape="square" src={form.imageFile ? URL.createObjectURL(form.imageFile) : form.image} alt="" name={form.name} className="size-14" />
+                      <span className="truncate">{form.imageFile?.name ?? "Current image — click to replace"}</span>
+                    </>
+                  ) : "Drop an image or click to upload"}
+                </Label>
+              </Button>
+              <Input id="cat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => setForm({ ...form, imageFile: e.target.files?.[0] ?? null })} />
+            </FormField>
+            <Item variant="outline" size="sm">
+              <ItemContent>
+                <ItemTitle id="cat-pub-label">Published</ItemTitle>
+                <ItemDescription>Show this category in POS and online</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="cat-pub-label" />
+              </ItemActions>
+            </Item>
           </div>
           <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
-            <button type="button" onClick={() => setFormOpen(false)} className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-[18px] text-sm font-semibold hover:bg-dash-neutral-soft">Cancel</button>
-            <button type="button" onClick={save} disabled={saving} className="h-11 rounded-[10px] bg-dash-accent px-[22px] text-sm font-bold text-white disabled:opacity-40">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={save} disabled={saving}>
               {saving ? "Saving…" : editing ? "Save changes" : "Add category"}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -547,9 +528,9 @@ export default function CategoriesPage() {
             <DialogTitle className="font-dash-display text-[22px] font-bold">Import categories</DialogTitle>
             <DialogDescription className="text-[13px] text-dash-muted">Upload a CSV with the columns Name, Parent (parent category name), Description and Published (Yes/No). Products is ignored. Existing names are skipped.</DialogDescription>
           </DialogHeader>
-          <label className={fieldLabel}>CSV file
-            <input type="file" accept=".csv" onChange={handleImport} className="text-sm font-normal file:mr-3 file:h-9 file:rounded-lg file:border file:border-dash-border file:bg-dash-card file:px-3 file:text-[13px] file:font-semibold" />
-          </label>
+          <FormField label="CSV file" htmlFor="cat-import-file" className="min-w-0">
+            <Input id="cat-import-file" type="file" accept=".csv" onChange={handleImport} />
+          </FormField>
         </DialogContent>
       </Dialog>
 
@@ -561,7 +542,7 @@ export default function CategoriesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-dash-danger text-white hover:bg-dash-danger-fg">
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>

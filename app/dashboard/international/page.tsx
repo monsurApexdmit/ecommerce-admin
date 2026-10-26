@@ -1,14 +1,19 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/spinner"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatTile } from "@/components/common/StatTile"
 import { Button } from "@/components/ui/button"
 import { settingsApi, type RegionalSettings } from "@/lib/settingsApi"
-import { DollarSign, Clock, Globe, Ruler, Calendar, Hash, Loader2 } from "lucide-react"
+import { DollarSign, Clock, Globe, Ruler, Calendar, Hash } from "lucide-react"
 import { toast } from "sonner"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const CURRENCY_LIST = [
   { code: "USD", name: "US Dollar" },
@@ -238,243 +243,192 @@ export default function InternationalPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+        <Spinner className="size-8" />
       </div>
     )
   }
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">International Settings</h1>
-        <p className="text-gray-600 mt-1">Configure regional settings, currency, timezone, and language for your store</p>
-      </div>
+      <PageHeader title="International Settings" description="Configure regional settings, currency, timezone, and language for your store" />
 
       {/* Currency Settings */}
-      <Card className="p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <DollarSign className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-xl font-bold text-gray-900">Currency</h2>
-        </div>
+      <SectionCard title={<span className="flex items-center gap-2"><DollarSign className="size-5 text-muted-foreground" />Currency</span>}>
 
         <div className="space-y-6">
           {/* Currency Code */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-            >
-              {CURRENCY_LIST.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code} - {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField label="Currency" htmlFor="intl-currency">
+            <Select value={String(currency)} onValueChange={(val) => setCurrency(val)}>
+              <SelectTrigger id="intl-currency" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {CURRENCY_LIST.map((c) => (
+                  <SelectItem key={c.code} value={String(c.code)}>
+                    {c.code} - {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
 
           {/* Symbol Position */}
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Symbol Position</label>
-              <select
-                value={currencySymbolPosition}
-                onChange={(e) => setCurrencySymbolPosition(e.target.value as "before" | "after")}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value="before">Before amount (e.g., $1,234.56)</option>
-                <option value="after">After amount (e.g., 1,234.56 $)</option>
-              </select>
-            </div>
+            <FormField label="Symbol Position" htmlFor="intl-symbol-position">
+              <Select value={String(currencySymbolPosition)} onValueChange={(val) => setCurrencySymbolPosition(val as "before" | "after")}>
+                <SelectTrigger id="intl-symbol-position" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="before">Before amount (e.g., $1,234.56)</SelectItem>
+                  <SelectItem value="after">After amount (e.g., 1,234.56 $)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
             {/* Decimal Separator */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Decimal Separator</label>
-              <select
-                value={currencyDecimalSeparator}
-                onChange={(e) => setCurrencyDecimalSeparator(e.target.value as "." | ",")}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value=".">Period (.)</option>
-                <option value=",">Comma (,)</option>
-              </select>
-            </div>
+            <FormField label="Decimal Separator" htmlFor="intl-decimal-separator">
+              <Select value={String(currencyDecimalSeparator)} onValueChange={(val) => setCurrencyDecimalSeparator(val as "." | ",")}>
+                <SelectTrigger id="intl-decimal-separator" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value=".">Period (.)</SelectItem>
+                  <SelectItem value=",">Comma (,)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
 
           {/* Thousands Separator */}
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Thousands Separator</label>
-              <select
-                value={currencyThousandsSeparator}
-                onChange={(e) => setCurrencyThousandsSeparator(e.target.value as any)}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value=",">Comma (,)</option>
-                <option value=".">Period (.)</option>
-                <option value=" ">Space</option>
-                <option value="">None</option>
-              </select>
-            </div>
+            <FormField label="Thousands Separator" htmlFor="intl-thousands-separator">
+              <Select value={String(currencyThousandsSeparator) === "" ? "__none" : String(currencyThousandsSeparator)} onValueChange={(val) => setCurrencyThousandsSeparator((val === "__none" ? "" : val) as any)}>
+                <SelectTrigger id="intl-thousands-separator" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value=",">Comma (,)</SelectItem>
+                  <SelectItem value=".">Period (.)</SelectItem>
+                  <SelectItem value=" ">Space</SelectItem>
+                  <SelectItem value="__none">None</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
             {/* Decimal Places */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Decimal Places</label>
-              <select
-                value={currencyDecimalPlaces}
-                onChange={(e) => setCurrencyDecimalPlaces(parseInt(e.target.value) as any)}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value="0">0 decimal places (e.g., 1,235)</option>
-                <option value="1">1 decimal place (e.g., 1,234.5)</option>
-                <option value="2">2 decimal places (e.g., 1,234.56)</option>
-              </select>
-            </div>
+            <FormField label="Decimal Places" htmlFor="intl-decimal-places">
+              <Select value={String(currencyDecimalPlaces)} onValueChange={(val) => setCurrencyDecimalPlaces(parseInt(val) as any)}>
+                <SelectTrigger id="intl-decimal-places" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0 decimal places (e.g., 1,235)</SelectItem>
+                  <SelectItem value="1">1 decimal place (e.g., 1,234.5)</SelectItem>
+                  <SelectItem value="2">2 decimal places (e.g., 1,234.56)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
         </div>
-      </Card>
+      </SectionCard>
 
       {/* Regional Settings */}
-      <Card className="p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Globe className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-xl font-bold text-gray-900">Regional Settings</h2>
-        </div>
+      <SectionCard title={<span className="flex items-center gap-2"><Globe className="size-5 text-muted-foreground" />Regional Settings</span>}>
 
         <div className="space-y-6">
           {/* Timezone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-            >
-              {TIMEZONE_LIST.map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField label="Timezone" htmlFor="intl-timezone">
+            <Select value={String(timezone)} onValueChange={(val) => setTimezone(val)}>
+              <SelectTrigger id="intl-timezone" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIMEZONE_LIST.map((tz) => (
+                  <SelectItem key={tz.value} value={String(tz.value)}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
 
           {/* Language */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-            >
-              {LANGUAGE_LIST.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField label="Language" htmlFor="intl-language">
+            <Select value={String(language)} onValueChange={(val) => setLanguage(val)}>
+              <SelectTrigger id="intl-language" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {LANGUAGE_LIST.map((lang) => (
+                  <SelectItem key={lang.code} value={String(lang.code)}>
+                    {lang.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
         </div>
-      </Card>
+      </SectionCard>
 
       {/* Units of Measurement */}
-      <Card className="p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Ruler className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-xl font-bold text-gray-900">Units of Measurement</h2>
-        </div>
+      <SectionCard title={<span className="flex items-center gap-2"><Ruler className="size-5 text-muted-foreground" />Units of Measurement</span>}>
 
         <div className="space-y-6">
           {/* Weight Unit */}
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Weight Unit</label>
-              <select
-                value={weightUnit}
-                onChange={(e) => setWeightUnit(e.target.value as any)}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value="kg">Kilogram (kg)</option>
-                <option value="lb">Pound (lb)</option>
-                <option value="g">Gram (g)</option>
-                <option value="oz">Ounce (oz)</option>
-              </select>
-            </div>
+            <FormField label="Weight Unit" htmlFor="intl-weight-unit">
+              <Select value={String(weightUnit)} onValueChange={(val) => setWeightUnit(val as any)}>
+                <SelectTrigger id="intl-weight-unit" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                  <SelectItem value="lb">Pound (lb)</SelectItem>
+                  <SelectItem value="g">Gram (g)</SelectItem>
+                  <SelectItem value="oz">Ounce (oz)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
             {/* Dimension Unit */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Dimension Unit</label>
-              <select
-                value={dimensionUnit}
-                onChange={(e) => setDimensionUnit(e.target.value as any)}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value="cm">Centimeter (cm)</option>
-                <option value="in">Inch (in)</option>
-                <option value="mm">Millimeter (mm)</option>
-              </select>
-            </div>
+            <FormField label="Dimension Unit" htmlFor="intl-dimension-unit">
+              <Select value={String(dimensionUnit)} onValueChange={(val) => setDimensionUnit(val as any)}>
+                <SelectTrigger id="intl-dimension-unit" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cm">Centimeter (cm)</SelectItem>
+                  <SelectItem value="in">Inch (in)</SelectItem>
+                  <SelectItem value="mm">Millimeter (mm)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
         </div>
-      </Card>
+      </SectionCard>
 
       {/* Date & Time Format */}
-      <Card className="p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Calendar className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-xl font-bold text-gray-900">Date & Time Format</h2>
-        </div>
+      <SectionCard title={<span className="flex items-center gap-2"><Calendar className="size-5 text-muted-foreground" />Date & Time Format</span>}>
 
         <div className="space-y-6">
           {/* Date Format */}
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
-              <select
-                value={dateFormat}
-                onChange={(e) => setDateFormat(e.target.value as any)}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value="MM/DD/YYYY">MM/DD/YYYY (01/15/2024)</option>
-                <option value="DD/MM/YYYY">DD/MM/YYYY (15/01/2024)</option>
-                <option value="YYYY-MM-DD">YYYY-MM-DD (2024-01-15)</option>
-              </select>
-            </div>
+            <FormField label="Date Format" htmlFor="intl-date-format">
+              <Select value={String(dateFormat)} onValueChange={(val) => setDateFormat(val as any)}>
+                <SelectTrigger id="intl-date-format" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MM/DD/YYYY">MM/DD/YYYY (01/15/2024)</SelectItem>
+                  <SelectItem value="DD/MM/YYYY">DD/MM/YYYY (15/01/2024)</SelectItem>
+                  <SelectItem value="YYYY-MM-DD">YYYY-MM-DD (2024-01-15)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
 
             {/* Time Format */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
-              <select
-                value={timeFormat}
-                onChange={(e) => setTimeFormat(e.target.value as any)}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-              >
-                <option value="12h">12-hour (2:30 PM)</option>
-                <option value="24h">24-hour (14:30)</option>
-              </select>
-            </div>
+            <FormField label="Time Format" htmlFor="intl-time-format">
+              <Select value={String(timeFormat)} onValueChange={(val) => setTimeFormat(val as any)}>
+                <SelectTrigger id="intl-time-format" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="12h">12-hour (2:30 PM)</SelectItem>
+                  <SelectItem value="24h">24-hour (14:30)</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
           </div>
         </div>
-      </Card>
+      </SectionCard>
 
       {/* Number Format Preview */}
-      <Card className="p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Hash className="w-5 h-5 text-emerald-600" />
-          <h2 className="text-xl font-bold text-gray-900">Number Format Preview</h2>
-        </div>
+      <SectionCard title={<span className="flex items-center gap-2"><Hash className="size-5 text-muted-foreground" />Number Format Preview</span>}>
 
-        <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-            <p className="text-sm text-gray-600 mb-2">Sample price: 1,234.56</p>
-            <p className="text-3xl font-bold text-emerald-600">{formatNumberPreview(1234.56)}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-            <p className="text-sm text-gray-600 mb-2">Sample price: 99.99</p>
-            <p className="text-3xl font-bold text-emerald-600">{formatNumberPreview(99.99)}</p>
-          </div>
+        <div className="grid gap-4">
+          <StatTile label="Sample price: 1,234.56" value={formatNumberPreview(1234.56)} />
+          <StatTile label="Sample price: 99.99" value={formatNumberPreview(99.99)} />
         </div>
-      </Card>
+      </SectionCard>
 
       {/* Save Button */}
       <div className="flex justify-end gap-3">
@@ -484,11 +438,10 @@ export default function InternationalPage() {
         <Button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-emerald-600 hover:bg-emerald-700"
         >
           {isSaving ? (
             <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Spinner />
               Saving...
             </>
           ) : (

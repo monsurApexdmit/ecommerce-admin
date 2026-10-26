@@ -1,10 +1,31 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Banknote, ClipboardList, Clock, Download, Pencil, Plus, Search, Trash2, Truck, Upload, Wallet } from "lucide-react"
+import { Banknote, ChevronDown, ClipboardList, Clock, Download, Pencil, Plus, Search, Trash2, Truck, Upload, Wallet } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Toolbar } from "@/components/common/Toolbar"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -55,25 +76,9 @@ const EMPTY_FORM: FormState = {
   description: "", notes: "", status: "Active",
 }
 
-const initials = (name: string) =>
-  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?"
-
-const statusChip = (s: string) =>
-  s === "Active" ? "bg-dash-success-soft text-dash-success-fg" : s === "Blocked" ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-neutral-soft text-dash-neutral-fg"
-
-const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
-const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
-
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-      {label}
-      {children}
-      {hint && <span className="text-xs font-normal text-dash-muted">{hint}</span>}
-    </label>
-  )
-}
+const NONE = "__none"
+const toSel = (v: string) => v || NONE
+const fromSel = (v: string) => (v === NONE ? "" : v)
 
 export default function SuppliersPage() {
   const { formatCurrency } = useCompanySettings()
@@ -195,6 +200,7 @@ export default function SuppliersPage() {
   }
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
+  const setSel = (k: keyof FormState) => (v: string) => setForm((f) => ({ ...f, [k]: fromSel(v) }))
 
   const save = async () => {
     if (!form.name.trim()) { setFormError("Supplier name is required."); return }
@@ -355,43 +361,43 @@ export default function SuppliersPage() {
   const place = (r: { district?: string | null; country?: string | null }) => [r.district, r.country].filter(Boolean).join(", ")
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Suppliers</h1>
-          <p className="mt-1 text-sm text-dash-muted">Who you buy from, what you owe them, and what is on order.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleImport} className={outlineBtn}><Upload className="size-4" aria-hidden /> Import</button>
-          <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
-          <Link href={poHref()} className={outlineBtn}>New purchase order</Link>
-          <button type="button" onClick={openNew} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+      <PageHeader
+        title="Suppliers"
+        description="Who you buy from, what you owe them, and what is on order."
+        actions={<>
+          <Button type="button" variant="outline" onClick={handleImport}><Upload className="size-4" aria-hidden /> Import</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button asChild variant="outline"><Link href={poHref()}>New purchase order</Link></Button>
+          <Button type="button" onClick={openNew}>
             <Plus className="size-4" aria-hidden /> Add supplier
-          </button>
-        </div>
-      </div>
+          </Button>
+        </>}
+      />
 
       {/* Owe banner */}
       {stats && stats.totalOwed > 0 && (
-        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-dash-danger-soft px-[18px] py-3.5 text-dash-danger-fg">
-          <Clock className="size-[22px] shrink-0" aria-hidden />
-          <span className="min-w-[260px] flex-1 text-sm">
-            <strong>You owe {owedSuppliers === 1 ? (rows.find((r) => r.owed > 0.005)?.name ?? "1 supplier") : `${owedSuppliers} suppliers`} {formatCurrency(stats.totalOwed)}.</strong>
-            {stats.oldestOverdue
-              ? ` ${stats.oldestOverdue.poNumber} was expected on ${new Date(stats.oldestOverdue.expectedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} and is still unpaid.`
-              : " No purchase order is past its expected date."}
-          </span>
-          <Link href="/dashboard/vendors/purchase-orders" className="inline-flex h-10 items-center rounded-[10px] bg-dash-danger-fg px-3.5 text-[13px] font-semibold text-dash-danger-soft">
-            Open purchase order
-          </Link>
-        </div>
+        <Alert variant="destructive">
+          <Clock aria-hidden />
+          <AlertDescription className="flex flex-wrap items-center gap-3.5">
+            <span className="min-w-[260px] flex-1">
+              <strong>You owe {owedSuppliers === 1 ? (rows.find((r) => r.owed > 0.005)?.name ?? "1 supplier") : `${owedSuppliers} suppliers`} {formatCurrency(stats.totalOwed)}.</strong>
+              {stats.oldestOverdue
+                ? ` ${stats.oldestOverdue.poNumber} was expected on ${new Date(stats.oldestOverdue.expectedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} and is still unpaid.`
+                : " No purchase order is past its expected date."}
+            </span>
+            <Button asChild variant="destructive" size="sm">
+              <Link href="/dashboard/vendors/purchase-orders">Open purchase order</Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* KPIs */}
       {loading || !stats ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px]" />)}
         </div>
       ) : (
         <StatsCards stats={[
@@ -412,7 +418,7 @@ export default function SuppliersPage() {
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         {/* List */}
-        <section className="w-full min-w-0 flex-1 rounded-[14px] border border-dash-border bg-dash-card">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs
               value={tab}
@@ -426,199 +432,203 @@ export default function SuppliersPage() {
               ]}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 p-4">
-            <label className="flex h-11 min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
-              <Search className="size-[18px]" aria-hidden />
-              <span className="sr-only">Search suppliers</span>
-              <input
+          <Toolbar className="gap-2.5 p-4">
+            <InputGroup className="min-w-[220px] flex-1">
+              <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+              <InputGroupInput
                 type="search"
+                aria-label="Search suppliers"
                 placeholder="Search supplier, contact, phone, TIN/BIN or description…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted"
               />
-            </label>
+            </InputGroup>
             <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
-              <SelectTrigger aria-label="Sort" className="h-11 w-[200px] rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Sort" className="w-[200px]"><SelectValue /></SelectTrigger>
               <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
             </Select>
-          </div>
+          </Toolbar>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-sm">
-              <thead>
-                <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                  <th scope="col" className="py-3 pl-4 pr-2 font-semibold">Supplier</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Contact</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Supplies</th>
-                  <th scope="col" className="px-2 py-3 text-right font-semibold">Purchased</th>
-                  <th scope="col" className="px-2 py-3 text-right font-semibold">You owe</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Terms</th>
-                  <th scope="col" className="px-2 py-3 font-semibold">Active</th>
-                  <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[860px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Supplier</TableHead>
+                  <TableHead scope="col">Contact</TableHead>
+                  <TableHead scope="col">Supplies</TableHead>
+                  <TableHead scope="col" className="text-right">Purchased</TableHead>
+                  <TableHead scope="col" className="text-right">You owe</TableHead>
+                  <TableHead scope="col">Terms</TableHead>
+                  <TableHead scope="col">Active</TableHead>
+                  <TableHead scope="col" className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {loading ? (
-                  [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>)
+                  [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-10" /></TableCell></TableRow>)
                 ) : pageRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-14 text-center">
-                      <Truck className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
-                      <p className="font-semibold">No suppliers found</p>
-                      <p className="text-sm text-dash-muted">{search || tab !== "all" ? "Try clearing the search or tab." : "Add your first supplier to start buying stock."}</p>
-                    </td>
-                  </tr>
+                  <TableRow>
+                    <TableCell colSpan={8}>
+                      <EmptyState icon={Truck} title="No suppliers found" description={search || tab !== "all" ? "Try clearing the search or tab." : "Add your first supplier to start buying stock."} className="p-4 md:p-6" />
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   pageRows.map((r) => {
                     const sel = r.id === selectedId
                     return (
-                      <tr key={r.id} className={sel ? "bg-dash-accent-soft/40" : ""}>
-                        <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
-                          <button type="button" onClick={() => select(r.id)} className="flex items-center gap-2.5 text-left">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-dash-accent-soft text-xs font-bold text-dash-accent-fg">{initials(r.name)}</span>
+                      <TableRow key={r.id} data-state={sel ? "selected" : undefined}>
+                        <TableCell>
+                          <Button type="button" variant="ghost" onClick={() => select(r.id)} className="h-auto justify-start gap-2.5 text-left">
+                            <UserAvatar name={r.name} shape="square" className="size-9" />
                             <span className="flex flex-col">
-                              <span className="font-semibold">
+                              <span className="font-medium">
                                 {r.name}
-                                {r.status !== "Active" && <span className={cn("ml-1.5 rounded-full px-2 py-px text-[11px] font-bold", statusChip(r.status))}>{r.status}</span>}
+                                {r.status !== "Active" && <StatusBadge status={r.status} className="ml-1.5" />}
                               </span>
-                              <span className="text-xs text-dash-muted">{place(r) || "—"}</span>
+                              <span className="text-xs font-normal text-muted-foreground">{place(r) || "—"}</span>
                             </span>
-                          </button>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                          </Button>
+                        </TableCell>
+                        <TableCell>
                           <div>{r.contactPerson || "—"}</div>
-                          <div className="text-xs text-dash-muted">{[r.phone, r.email].filter(Boolean).join(" · ") || "—"}</div>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
+                          <div className="text-xs text-muted-foreground">{[r.phone, r.email].filter(Boolean).join(" · ") || "—"}</div>
+                        </TableCell>
+                        <TableCell>
                           <div className="max-w-[200px] truncate">{r.itemsSummary || "—"}</div>
-                          <div className="text-xs text-dash-muted">Lead time {r.leadTimeDays ? `${r.leadTimeDays} days` : "—"}</div>
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3 text-right font-semibold tabular-nums">
+                          <div className="text-xs text-muted-foreground">Lead time {r.leadTimeDays ? `${r.leadTimeDays} days` : "—"}</div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
                           {formatCurrency(r.purchased)}
-                          <div className="text-xs font-normal text-dash-muted">{r.poCount} PO{r.poCount === 1 ? "" : "s"}</div>
-                        </td>
-                        <td className={cn("border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums", r.owed > 0.005 ? "text-dash-danger-fg" : "text-dash-muted")}>
+                          <div className="text-xs font-normal text-muted-foreground">{r.poCount} PO{r.poCount === 1 ? "" : "s"}</div>
+                        </TableCell>
+                        <TableCell className={cn("text-right tabular-nums", r.owed > 0.005 ? "text-destructive" : "text-muted-foreground")}>
                           {formatCurrency(r.owed)}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          {r.paymentTerms ? <span className="rounded-md bg-dash-neutral-soft px-2 py-[3px] text-xs font-semibold text-dash-neutral-fg">{r.paymentTerms}</span> : <span className="text-dash-muted">—</span>}
-                        </td>
-                        <td className="border-b border-dash-border-soft px-2 py-3">
-                          <button
-                            type="button" role="switch" aria-checked={r.status === "Active"} aria-label={`${r.name} active`}
-                            onClick={() => toggleActive(r)}
-                            className={cn("flex h-5 w-9 items-center rounded-full p-0.5 transition-colors disabled:opacity-40", r.status === "Active" ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}
-                          >
-                            <span className="size-4 rounded-full bg-white" />
-                          </button>
-                        </td>
-                        <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        </TableCell>
+                        <TableCell>
+                          {r.paymentTerms ? <Badge variant="secondary">{r.paymentTerms}</Badge> : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={r.status === "Active"} aria-label={`${r.name} active`}
+                            onCheckedChange={() => toggleActive(r)}
+                          />
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center justify-end gap-1">
-                            <Link href={poHref(r.id)} className="mr-1 text-[13px] font-semibold text-dash-accent hover:underline">New PO</Link>
-                            <button type="button" aria-label={`Record payment to ${r.name}`} className={iconBtn}
-                              onClick={() => { select(r.id); setPayOpen(true) }}><Banknote className="size-4" /></button>
-                            <button type="button" aria-label={`Edit ${r.name}`} className={iconBtn} onClick={() => openEdit(r)}><Pencil className="size-4" /></button>
-                            <button type="button" aria-label={`Delete ${r.name}`} className={iconBtn} onClick={() => setDeleteTarget(r)}><Trash2 className="size-4" /></button>
+                            <Button asChild variant="link" size="sm" className="mr-1"><Link href={poHref(r.id)}>New PO</Link></Button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Record payment to ${r.name}`}
+                              onClick={() => { select(r.id); setPayOpen(true) }}><Banknote className="size-4" /></Button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Pencil className="size-4" /></Button>
+                            <Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => setDeleteTarget(r)}><Trash2 className="size-4" /></Button>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )
                   })
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {!loading && visible.length > 0 && (
-            <div className="border-t border-dash-border-soft p-4 pt-3">
-              <PaginationControl
-                currentPage={page}
-                totalPages={Math.max(1, Math.ceil(visible.length / perPage))}
-                itemsPerPage={perPage}
-                totalItems={visible.length}
-                onPageChange={setPage}
-                onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
-              />
-            </div>
+            <>
+              <Separator />
+              <div className="p-4 pt-3">
+                <PaginationControl
+                  currentPage={page}
+                  totalPages={Math.max(1, Math.ceil(visible.length / perPage))}
+                  itemsPerPage={perPage}
+                  totalItems={visible.length}
+                  onPageChange={setPage}
+                  onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+                />
+              </div>
+            </>
           )}
-          <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted">Showing {visible.length} supplier{visible.length === 1 ? "" : "s"}</div>
-        </section>
+          <Separator />
+          <div className="px-4 py-3 text-xs text-muted-foreground">Showing {visible.length} supplier{visible.length === 1 ? "" : "s"}</div>
+        </Card>
 
         {/* Side panel */}
-        <aside aria-label="Supplier" className="w-full shrink-0 rounded-[14px] border border-dash-border bg-dash-card p-4 xl:w-[400px]">
-          <div role="tablist" aria-label="Panel" className="mb-4 flex gap-1 rounded-xl bg-dash-neutral-soft p-1">
-            {([["profile", "Supplier details"], ["form", editingId ? "Edit supplier" : "+ New supplier"]] as const).map(([id, label]) => (
-              <button
-                key={id} type="button" role="tab" aria-selected={panel === id}
-                onClick={() => (id === "form" && panel !== "form" ? openNew() : setPanel("profile"))}
-                className={cn("h-10 flex-1 rounded-[9px] text-[13px] font-semibold", panel === id ? "bg-dash-card shadow-sm" : "text-dash-muted hover:text-dash-ink")}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <aside aria-label="Supplier" className="w-full shrink-0 xl:w-[400px]">
+          <Card className="gap-4 p-4">
+          <Tabs value={panel} onValueChange={() => { /* handled per trigger below */ }}>
+            <TabsList aria-label="Panel" className="w-full">
+              {([["profile", "Supplier details"], ["form", editingId ? "Edit supplier" : "+ New supplier"]] as const).map(([id, label]) => (
+                <TabsTrigger
+                  key={id} value={id}
+                  onClick={() => (id === "form" && panel !== "form" ? openNew() : setPanel("profile"))}
+                >
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
           {panel === "profile" ? (
             profileLoading && !profile ? (
-              <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+              <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>
             ) : !profile || !selectedRow ? (
-              <p className="py-10 text-center text-sm text-dash-muted">{rows.length ? "Pick a supplier to see their details." : "No suppliers yet. Add one with the New supplier tab."}</p>
+              <EmptyState title={rows.length ? "Pick a supplier to see their details." : "No suppliers yet. Add one with the New supplier tab."} className="p-4 md:p-6" />
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3">
-                  <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-dash-accent-soft text-lg font-bold text-dash-accent-fg">{initials(profile.vendor.name)}</span>
+                  <UserAvatar name={profile.vendor.name} shape="square" className="size-12" />
                   <div className="min-w-0">
-                    <h2 className="font-dash-display text-lg font-bold leading-tight">
+                    <h2 className="text-lg font-semibold leading-tight">
                       {profile.vendor.name}{" "}
-                      <span className={cn("rounded-full px-2 py-px align-middle text-[11px] font-bold", statusChip(profile.vendor.status))}>{profile.vendor.status}</span>
+                      <StatusBadge status={profile.vendor.status} className="align-middle" />
                     </h2>
-                    <span className="text-[13px] text-dash-muted">{place(profile.vendor) || "—"}</span>
+                    <span className="text-sm text-muted-foreground">{place(profile.vendor) || "—"}</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    ["Purchased", formatCurrency(profile.purchased), ""],
-                    ["Open POs", String(profile.openPos), ""],
-                    ["You owe", formatCurrency(profile.owed), profile.owed > 0.005 ? "bg-dash-danger-soft text-dash-danger-fg" : ""],
-                    ["Total paid", formatCurrency(profile.totalPaid), ""],
-                    ["Products", String(profile.productCount), ""],
-                    ["Stock value", formatCurrency(profile.stockValue), ""],
-                  ].map(([l, v, cls]) => (
-                    <div key={l} className={cn("rounded-[10px] bg-dash-neutral-soft px-2.5 py-2", cls)}>
-                      <div className="text-[11px] opacity-80">{l}</div>
-                      <div className="text-[15px] font-bold tabular-nums">{v}</div>
-                    </div>
+                  {([
+                    ["Purchased", formatCurrency(profile.purchased), false],
+                    ["Open POs", String(profile.openPos), false],
+                    ["You owe", formatCurrency(profile.owed), profile.owed > 0.005],
+                    ["Total paid", formatCurrency(profile.totalPaid), false],
+                    ["Products", String(profile.productCount), false],
+                    ["Stock value", formatCurrency(profile.stockValue), false],
+                  ] as [string, string, boolean][]).map(([l, v, warn]) => (
+                    <Item key={l} variant="muted" size="sm" className={cn("px-2.5 py-2", warn && "text-destructive")}>
+                      <ItemContent className="gap-0">
+                        <ItemDescription className={cn("text-xs", warn && "text-destructive")}>{l}</ItemDescription>
+                        <ItemTitle className="tabular-nums">{v}</ItemTitle>
+                      </ItemContent>
+                    </Item>
                   ))}
                 </div>
 
                 <div className="flex gap-2">
-                  <Link href={poHref(profile.vendor.id)} className="flex h-11 flex-1 items-center justify-center rounded-[10px] bg-dash-accent text-[13px] font-semibold text-white">New purchase order</Link>
-                  <button type="button" onClick={() => { setPayOpen((v) => !v); setPayError("") }} className={cn(outlineBtn, "flex-1")}>Pay supplier</button>
+                  <Button asChild className="flex-1"><Link href={poHref(profile.vendor.id)}>New purchase order</Link></Button>
+                  <Button type="button" variant="outline" onClick={() => { setPayOpen((v) => !v); setPayError("") }} className="flex-1">Pay supplier</Button>
                 </div>
 
                 {payOpen && (
-                  <div className="flex flex-col gap-2.5 rounded-xl border border-dash-border bg-dash-bg p-3.5">
-                    <div className="text-sm font-bold">Record payment to {profile.vendor.name}</div>
-                    {payError && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{payError}</p>}
+                  <Card className="gap-2.5 p-3.5">
+                    <CardTitle className="text-sm">Record payment to {profile.vendor.name}</CardTitle>
+                    {payError && <Alert variant="destructive"><AlertDescription>{payError}</AlertDescription></Alert>}
                     <div className="grid grid-cols-2 gap-2.5">
-                      <Field label="Amount"><input type="number" min="0" step="any" className={input} value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" /></Field>
-                      <Field label="Method">
-                        <select className={input} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-                          {PAY_METHODS.map((m) => <option key={m}>{m}</option>)}
-                        </select>
-                      </Field>
+                      <FormField label="Amount" htmlFor="sup-pay-amount"><Input id="sup-pay-amount" type="number" min="0" step="any" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" /></FormField>
+                      <FormField label="Method" htmlFor="sup-pay-method">
+                        <Select value={payMethod} onValueChange={(v) => setPayMethod(v)}>
+                          <SelectTrigger id="sup-pay-method" className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </FormField>
                     </div>
-                    <Field label="Note"><input type="text" className={input} value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Optional" /></Field>
+                    <FormField label="Note" htmlFor="sup-pay-note"><Input id="sup-pay-note" type="text" value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Optional" /></FormField>
                     <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => setPayOpen(false)} className={outlineBtn}>Cancel</button>
-                      <button type="button" disabled={paying} onClick={savePayment} className="h-11 rounded-[10px] bg-dash-accent px-4 text-[13px] font-semibold text-white disabled:opacity-40">{paying ? "Saving…" : "Save payment"}</button>
+                      <Button type="button" variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
+                      <Button type="button" disabled={paying} onClick={savePayment}>{paying ? "Saving…" : "Save payment"}</Button>
                     </div>
-                  </div>
+                  </Card>
                 )}
 
-                <dl className="flex flex-col gap-2 border-t border-dash-border-soft pt-3 text-[13px]">
+                <Separator />
+                <InfoList>
                   {([
                     ["Supplies", selectedRow.itemsSummary],
                     ["Contact", profile.vendor.contactPerson],
@@ -632,134 +642,168 @@ export default function SuppliersPage() {
                     ["Description", profile.vendor.description],
                     ["Supplier since", (profile.vendor.createdAt || profile.vendor.created_at) ? new Date((profile.vendor.createdAt || profile.vendor.created_at) as string).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : ""],
                   ] as [string, string | null | undefined][]).map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-4">
-                      <dt className="shrink-0 text-dash-muted">{k}</dt>
-                      <dd className="text-right font-semibold">{v || "—"}</dd>
-                    </div>
+                    <InfoRow key={k} label={k} value={v || "—"} />
                   ))}
-                </dl>
+                </InfoList>
 
-                <section className="border-t border-dash-border-soft pt-3">
-                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Recent purchase orders</h3>
-                  {profile.recentPurchaseOrders.length === 0 ? <p className="text-[13px] text-dash-muted">No purchase orders yet.</p> : (
-                    <div className="flex flex-col">
-                      {profile.recentPurchaseOrders.map((o) => (
-                        <Link key={o.id} href="/dashboard/vendors/purchase-orders" className="flex items-start justify-between gap-3 border-b border-dash-border-soft py-2 last:border-0 hover:bg-dash-neutral-soft">
-                          <span className="flex min-w-0 flex-col">
-                            <span className="text-[13px] font-bold">{o.poNumber}</span>
-                            <span className="truncate text-xs text-dash-muted">{o.itemsSummary || "—"}</span>
-                          </span>
-                          <span className="flex shrink-0 flex-col items-end">
-                            <span className="text-[13px] font-bold tabular-nums">{formatCurrency(o.total)}</span>
-                            <span className={cn("text-xs font-semibold", o.isOverdue ? "text-dash-danger-fg" : o.paymentStatus === "paid" ? "text-dash-success-fg" : "text-dash-muted")}>
-                              {PO_STATUS[o.status] ?? o.status} · {o.isOverdue ? "overdue" : PAY_LABEL[o.paymentStatus] ?? o.paymentStatus}
-                            </span>
-                          </span>
-                        </Link>
+                <Separator />
+                <section>
+                  <SectionTitle className="mb-2">Recent purchase orders</SectionTitle>
+                  {profile.recentPurchaseOrders.length === 0 ? <p className="text-sm text-muted-foreground">No purchase orders yet.</p> : (
+                    <ItemGroup>
+                      {profile.recentPurchaseOrders.map((o, i) => (
+                        <Fragment key={o.id}>
+                          {i > 0 && <ItemSeparator />}
+                          <Item asChild size="sm" className="px-1">
+                            <Link href="/dashboard/vendors/purchase-orders">
+                              <ItemContent className="min-w-0">
+                                <ItemTitle>{o.poNumber}</ItemTitle>
+                                <ItemDescription className="truncate text-xs">{o.itemsSummary || "—"}</ItemDescription>
+                              </ItemContent>
+                              <ItemActions className="flex-col items-end gap-0">
+                                <span className="text-sm font-semibold tabular-nums">{formatCurrency(o.total)}</span>
+                                <span className={cn("text-xs font-medium", o.isOverdue ? "text-destructive" : o.paymentStatus === "paid" ? "text-emerald-600" : "text-muted-foreground")}>
+                                  {PO_STATUS[o.status] ?? o.status} · {o.isOverdue ? "overdue" : PAY_LABEL[o.paymentStatus] ?? o.paymentStatus}
+                                </span>
+                              </ItemActions>
+                            </Link>
+                          </Item>
+                        </Fragment>
                       ))}
-                    </div>
+                    </ItemGroup>
                   )}
                 </section>
 
-                <section className="border-t border-dash-border-soft pt-3">
-                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Products supplied</h3>
-                  {profile.products.length === 0 ? <p className="text-[13px] text-dash-muted">No products ordered from this supplier yet.</p> : (
-                    <div className="flex flex-col">
-                      {profile.products.map((g) => (
-                        <div key={g.productId} className="flex items-start justify-between gap-3 border-b border-dash-border-soft py-2 last:border-0">
-                          <span className="flex min-w-0 flex-col">
-                            <span className="truncate text-[13px] font-semibold">{g.name}</span>
-                            <span className="text-xs text-dash-muted">Last cost {formatCurrency(g.lastCost)}</span>
-                          </span>
-                          <span className="flex shrink-0 flex-col items-end">
-                            <span className="text-[13px] font-semibold tabular-nums">{g.stock} in stock</span>
-                            <span className="text-xs text-dash-muted tabular-nums">{formatCurrency(g.stockValue)}</span>
-                          </span>
-                        </div>
+                <Separator />
+                <section>
+                  <SectionTitle className="mb-2">Products supplied</SectionTitle>
+                  {profile.products.length === 0 ? <p className="text-sm text-muted-foreground">No products ordered from this supplier yet.</p> : (
+                    <ItemGroup>
+                      {profile.products.map((g, i) => (
+                        <Fragment key={g.productId}>
+                          {i > 0 && <ItemSeparator />}
+                          <Item size="sm" className="px-1">
+                            <ItemContent className="min-w-0">
+                              <ItemTitle className="truncate">{g.name}</ItemTitle>
+                              <ItemDescription className="text-xs">Last cost {formatCurrency(g.lastCost)}</ItemDescription>
+                            </ItemContent>
+                            <ItemActions className="flex-col items-end gap-0">
+                              <span className="text-sm font-medium tabular-nums">{g.stock} in stock</span>
+                              <span className="text-xs text-muted-foreground tabular-nums">{formatCurrency(g.stockValue)}</span>
+                            </ItemActions>
+                          </Item>
+                        </Fragment>
                       ))}
-                    </div>
+                    </ItemGroup>
                   )}
                 </section>
 
-                <section className="border-t border-dash-border-soft pt-3">
-                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">Payments made</h3>
-                  {profile.payments.length === 0 ? <p className="text-[13px] text-dash-muted">No payments recorded yet.</p> : (
-                    <div className="flex flex-col">
-                      {profile.payments.map((y) => (
-                        <div key={y.id} className="flex items-start justify-between gap-3 border-b border-dash-border-soft py-2 last:border-0">
-                          <span className="flex flex-col">
-                            <span className="text-[13px] font-semibold">{new Date(y.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-                            <span className="text-xs text-dash-muted">{[y.method, y.poNumber, y.note].filter(Boolean).join(" · ")}</span>
-                          </span>
-                          <span className="text-[13px] font-bold tabular-nums">{formatCurrency(y.amount)}</span>
-                        </div>
+                <Separator />
+                <section>
+                  <SectionTitle className="mb-2">Payments made</SectionTitle>
+                  {profile.payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments recorded yet.</p> : (
+                    <ItemGroup>
+                      {profile.payments.map((y, i) => (
+                        <Fragment key={y.id}>
+                          {i > 0 && <ItemSeparator />}
+                          <Item size="sm" className="px-1">
+                            <ItemContent>
+                              <ItemTitle>{new Date(y.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</ItemTitle>
+                              <ItemDescription className="text-xs">{[y.method, y.poNumber, y.note].filter(Boolean).join(" · ")}</ItemDescription>
+                            </ItemContent>
+                            <ItemActions><span className="text-sm font-semibold tabular-nums">{formatCurrency(y.amount)}</span></ItemActions>
+                          </Item>
+                        </Fragment>
                       ))}
-                    </div>
+                    </ItemGroup>
                   )}
                 </section>
               </div>
             )
           ) : (
             <div className="flex flex-col gap-3.5">
-              <div>
-                <h2 className="font-dash-display text-lg font-bold">{editingId ? "Edit supplier" : "New supplier"}</h2>
-                <p className="text-[13px] text-dash-muted">Only the name is required.</p>
-                {formError && <p role="alert" className="mt-2 rounded-[10px] bg-dash-danger-soft px-3 py-2 text-[13px] font-semibold text-dash-danger-fg">{formError}</p>}
+              <div className="flex flex-col gap-1">
+                <h2 className="text-lg font-semibold">{editingId ? "Edit supplier" : "New supplier"}</h2>
+                <p className="text-sm text-muted-foreground">Only the name is required.</p>
+                {formError && <Alert variant="destructive" className="mt-2"><AlertDescription>{formError}</AlertDescription></Alert>}
               </div>
-              <Field label="Supplier / company name *"><input className={input} value={form.name} onChange={set("name")} placeholder="e.g. Dhaka Textiles Ltd." /></Field>
+              <FormField label="Supplier / company name *" htmlFor="sup-name"><Input id="sup-name" value={form.name} onChange={set("name")} placeholder="e.g. Dhaka Textiles Ltd." /></FormField>
               <div className="grid grid-cols-2 gap-2.5">
-                <Field label="Contact person"><input className={input} value={form.contactPerson} onChange={set("contactPerson")} placeholder="e.g. Md. Rafiq" /></Field>
-                <Field label="Phone">
-                  <span className="flex h-[42px] items-center overflow-hidden rounded-[10px] border border-dash-border bg-dash-card focus-within:border-dash-accent">
-                    <span className="border-r border-dash-border px-2.5 text-sm text-dash-muted">+880</span>
-                    <input type="tel" className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-sm font-normal outline-none" value={form.phone} onChange={set("phone")} placeholder="17XX-XXXXXX" />
-                  </span>
-                </Field>
+                <FormField label="Contact person" htmlFor="sup-contact"><Input id="sup-contact" value={form.contactPerson} onChange={set("contactPerson")} placeholder="e.g. Md. Rafiq" /></FormField>
+                <FormField label="Phone" htmlFor="sup-phone">
+                  <InputGroup>
+                    <InputGroupAddon><InputGroupText>+880</InputGroupText></InputGroupAddon>
+                    <InputGroupInput id="sup-phone" type="tel" value={form.phone} onChange={set("phone")} placeholder="17XX-XXXXXX" />
+                  </InputGroup>
+                </FormField>
               </div>
-              <Field label="Email"><input type="email" className={input} value={form.email} onChange={set("email")} placeholder="supplier@example.com" /></Field>
-              <Field label="Address"><input className={input} value={form.address} onChange={set("address")} placeholder="Street, area" /></Field>
+              <FormField label="Email" htmlFor="sup-email"><Input id="sup-email" type="email" value={form.email} onChange={set("email")} placeholder="supplier@example.com" /></FormField>
+              <FormField label="Address" htmlFor="sup-address"><Input id="sup-address" value={form.address} onChange={set("address")} placeholder="Street, area" /></FormField>
               <div className="grid grid-cols-2 gap-2.5">
-                <Field label="District">
-                  <select className={input} value={form.district} onChange={set("district")}><option value="">—</option>{DISTRICTS.map((d) => <option key={d}>{d}</option>)}</select>
-                </Field>
-                <Field label="Country">
-                  <select className={input} value={form.country} onChange={set("country")}><option value="">—</option>{COUNTRIES.map((c) => <option key={c}>{c}</option>)}</select>
-                </Field>
+                <FormField label="District" htmlFor="sup-district">
+                  <Select value={toSel(form.district)} onValueChange={setSel("district")}>
+                    <SelectTrigger id="sup-district" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value={NONE}>—</SelectItem>{DISTRICTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormField>
+                <FormField label="Country" htmlFor="sup-country">
+                  <Select value={toSel(form.country)} onValueChange={setSel("country")}>
+                    <SelectTrigger id="sup-country" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value={NONE}>—</SelectItem>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormField>
               </div>
-              <details className="rounded-xl border border-dash-border-soft">
-                <summary className="cursor-pointer px-3.5 py-3 text-[13px] font-bold">Payment &amp; terms</summary>
-                <div className="flex flex-col gap-3 px-3.5 pb-3.5">
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <Field label="Payment terms">
-                      <select className={input} value={form.paymentTerms} onChange={set("paymentTerms")}><option value="">Not set</option>{TERMS.map((t) => <option key={t}>{t}</option>)}</select>
-                    </Field>
-                    <Field label="Lead time (days)"><input type="number" min="0" step="1" className={input} value={form.leadTimeDays} onChange={set("leadTimeDays")} placeholder="e.g. 5" /></Field>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <Field label="Opening balance (৳ you owe)"><input type="number" min="0" className={input} value={form.openingBalance} onChange={set("openingBalance")} placeholder="0.00" /></Field>
-                    <Field label="TIN / BIN"><input className={input} value={form.tin} onChange={set("tin")} placeholder="Optional" /></Field>
-                  </div>
-                  <Field label="Pay to">
-                    <select className={input} value={form.payTo} onChange={set("payTo")}><option value="">—</option>{PAY_TO.map((p) => <option key={p}>{p}</option>)}</select>
-                  </Field>
-                  <Field label="Account / wallet number"><input className={input} value={form.accountNumber} onChange={set("accountNumber")} placeholder="e.g. 01XXXXXXXXX" /></Field>
-                </div>
-              </details>
-              <Field label="Description"><input className={input} value={form.description} onChange={set("description")} placeholder="What they supply, in a line" /></Field>
-              <Field label="Notes">
-                <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={form.notes} onChange={set("notes")} placeholder="Minimum order, delivery days…" />
-              </Field>
-              <Field label="Status" hint="Only active suppliers can be picked on new purchase orders.">
-                <select className={input} value={form.status} onChange={set("status")}><option>Active</option><option>Inactive</option><option>Blocked</option></select>
-              </Field>
+              <Card className="gap-0 py-0">
+                <Collapsible>
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="ghost" className="group w-full justify-between">
+                      Payment &amp; terms
+                      <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="flex flex-col gap-3 px-3.5 pt-1 pb-3.5">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <FormField label="Payment terms" htmlFor="sup-terms">
+                        <Select value={toSel(form.paymentTerms)} onValueChange={setSel("paymentTerms")}>
+                          <SelectTrigger id="sup-terms" className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent><SelectItem value={NONE}>Not set</SelectItem>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </FormField>
+                      <FormField label="Lead time (days)" htmlFor="sup-lead"><Input id="sup-lead" type="number" min="0" step="1" value={form.leadTimeDays} onChange={set("leadTimeDays")} placeholder="e.g. 5" /></FormField>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <FormField label="Opening balance (৳ you owe)" htmlFor="sup-opening"><Input id="sup-opening" type="number" min="0" value={form.openingBalance} onChange={set("openingBalance")} placeholder="0.00" /></FormField>
+                      <FormField label="TIN / BIN" htmlFor="sup-tin"><Input id="sup-tin" value={form.tin} onChange={set("tin")} placeholder="Optional" /></FormField>
+                    </div>
+                    <FormField label="Pay to" htmlFor="sup-payto">
+                      <Select value={toSel(form.payTo)} onValueChange={setSel("payTo")}>
+                        <SelectTrigger id="sup-payto" className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value={NONE}>—</SelectItem>{PAY_TO.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </FormField>
+                    <FormField label="Account / wallet number" htmlFor="sup-account"><Input id="sup-account" value={form.accountNumber} onChange={set("accountNumber")} placeholder="e.g. 01XXXXXXXXX" /></FormField>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+              <FormField label="Description" htmlFor="sup-desc"><Input id="sup-desc" value={form.description} onChange={set("description")} placeholder="What they supply, in a line" /></FormField>
+              <FormField label="Notes" htmlFor="sup-notes">
+                <Textarea id="sup-notes" rows={2} value={form.notes} onChange={set("notes")} placeholder="Minimum order, delivery days…" />
+              </FormField>
+              <FormField label="Status" htmlFor="sup-status" description="Only active suppliers can be picked on new purchase orders.">
+                <Select value={form.status} onValueChange={setSel("status")}>
+                  <SelectTrigger id="sup-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Blocked">Blocked</SelectItem></SelectContent>
+                </Select>
+              </FormField>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setPanel("profile")} className={outlineBtn}>Cancel</button>
-                <button type="button" disabled={saving} onClick={save} className="h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40">
+                <Button type="button" variant="outline" onClick={() => setPanel("profile")}>Cancel</Button>
+                <Button type="button" disabled={saving} onClick={save}>
                   {saving ? "Saving…" : editingId ? "Save changes" : "Add supplier"}
-                </button>
+                </Button>
               </div>
             </div>
           )}
+          </Card>
         </aside>
       </div>
 
@@ -773,7 +817,7 @@ export default function SuppliersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} className={buttonVariants({ variant: "destructive" })}>Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

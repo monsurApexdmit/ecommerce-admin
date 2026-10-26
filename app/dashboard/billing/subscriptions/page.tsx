@@ -6,20 +6,29 @@ import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PaginationControl } from "@/components/ui/pagination-control"
-import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { saasBillingApi, type BillingUsage, type PaymentRecord, type Subscription } from "@/lib/saasBillingApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatusBadge, type StatusVariant } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const UNLIMITED = 999999
 const TAX_RATE = 0.1
 const TRIAL_DAYS = 10
 
-const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:cursor-not-allowed disabled:opacity-50"
-const primaryBtn = "inline-flex h-11 items-center justify-center rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
-const card = "rounded-[14px] border border-dash-border bg-dash-card"
 
 const REASONS = [
   { id: "", label: "Select a reason" },
@@ -105,12 +114,12 @@ export default function SubscriptionsPage() {
   const basePrice = isTrial ? 0 : sub?.periodPrice ?? sub?.price ?? 0
   const yearly = sub?.billingPeriod === "yearly"
 
-  const STATUS_PILL: Record<string, { label: string; cls: string; border: string }> = {
-    active: { label: "Active", cls: "bg-dash-success-soft text-dash-success-fg", border: "border-dash-success" },
-    trial: { label: "Trial", cls: "bg-dash-accent-soft text-dash-accent-fg", border: "border-dash-accent" },
-    cancelled: { label: "Cancelled", cls: "bg-dash-danger-soft text-dash-danger-fg", border: "border-dash-danger-soft" },
-    expired: { label: "Expired", cls: "bg-dash-neutral-soft text-dash-neutral-fg", border: "border-dash-border" },
-    past_due: { label: "Past due", cls: "bg-dash-warn-soft text-dash-warn-fg", border: "border-dash-warn" },
+  const STATUS_PILL: Record<string, { label: string; variant: StatusVariant }> = {
+    active: { label: "Active", variant: "default" },
+    trial: { label: "Trial", variant: "secondary" },
+    cancelled: { label: "Cancelled", variant: "destructive" },
+    expired: { label: "Expired", variant: "outline" },
+    past_due: { label: "Past due", variant: "secondary" },
   }
   const pill = STATUS_PILL[status]
 
@@ -122,10 +131,10 @@ export default function SubscriptionsPage() {
   ] : []
   const overAny = meters.some((m) => m.limit !== null && m.limit < UNLIMITED && m.limit > 0 && m.used > m.limit)
 
-  let note: { cls: string; text: string } | null = null
-  if (cancelled) note = { cls: "bg-dash-warn-soft text-dash-warn-fg", text: `Your subscription is cancelled. Access continues until ${fmtD(periodEnd)}.` }
-  else if (expired) note = { cls: "bg-dash-danger-soft text-dash-danger-fg", text: `Your subscription expired on ${fmtD(periodEnd)}. Renew to regain access.` }
-  else if (overAny) note = { cls: "bg-dash-warn-soft text-dash-warn-fg", text: "You are over a plan limit. Consider upgrading your plan." }
+  let note: { danger: boolean; text: string } | null = null
+  if (cancelled) note = { danger: false, text: `Your subscription is cancelled. Access continues until ${fmtD(periodEnd)}.` }
+  else if (expired) note = { danger: true, text: `Your subscription expired on ${fmtD(periodEnd)}. Renew to regain access.` }
+  else if (overAny) note = { danger: false, text: "You are over a plan limit. Consider upgrading your plan." }
 
   const switchOn = !!sub && sub.autoRenew && status === "active" && !isTrial
 
@@ -183,150 +192,147 @@ export default function SubscriptionsPage() {
   const cancelDisabled = !writable || cancelled || expired || isTrial
 
   return (
-    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Subscriptions</h1>
-          <p className="mt-1 text-sm text-dash-muted">Manage your subscription and billing details.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/billing/overview" className={outlineBtn}>Billing settings</Link>
-          <Link href="/dashboard/billing/plans" className={outlineBtn}>Browse plans</Link>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Subscriptions"
+        description="Manage your subscription and billing details."
+        actions={<>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/overview">Billing settings</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/plans">Browse plans</Link></Button>
+        </>}
+      />
 
       {loading ? (
-        <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]"><Skeleton className="h-[320px] rounded-[14px]" /><Skeleton className="h-[320px] rounded-[14px]" /></div>
+        <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]"><Skeleton className="h-[320px]" /><Skeleton className="h-[320px]" /></div>
       ) : sub ? (
         <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-          <div className={cn(card, "flex flex-col gap-4 border-2 p-6", pill.border)}>
+          <Card className="gap-4 p-6">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-dash-display text-2xl font-bold">{sub.planName} plan</h2>
-              <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", pill.cls)}>{pill.label}</span>
+              <h2 className="text-2xl font-bold">{sub.planName} plan</h2>
+              <StatusBadge status={status} variant={pill.variant} label={pill.label} />
             </div>
-            <div><strong className="font-dash-display text-4xl font-bold tabular-nums">{isTrial ? "Free" : money(basePrice)}</strong>{" "}
-              <span className="text-sm text-dash-muted">{isTrial ? "· 10-day trial" : yearly ? "/ year · billed yearly" : "/ month · billed monthly"}</span></div>
+            <div><strong className="text-4xl font-bold tabular-nums">{isTrial ? "Free" : money(basePrice)}</strong>{" "}
+              <span className="text-sm text-muted-foreground">{isTrial ? "· 10-day trial" : yearly ? "/ year · billed yearly" : "/ month · billed monthly"}</span></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div><div className="text-xs text-dash-muted">Current period</div>
+              <div><div className="text-xs text-muted-foreground">Current period</div>
                 <strong className="text-sm">{sub.currentPeriodStart ? `${fmtD(sub.currentPeriodStart)} → ${fmtD(periodEnd)}` : "—"}</strong></div>
-              <div><div className="text-xs text-dash-muted">{cancelled || expired || isTrial ? "Ends on" : "Next billing date"}</div>
+              <div><div className="text-xs text-muted-foreground">{cancelled || expired || isTrial ? "Ends on" : "Next billing date"}</div>
                 <strong className="text-sm">{fmtD(isTrial || cancelled || expired ? periodEnd : sub.nextBillingDate ?? periodEnd)}</strong></div>
             </div>
             {isTrial && status === "trial" && (
               <div>
-                <div className="mb-1 flex justify-between text-xs"><span className="font-semibold">Free trial</span><span className="text-dash-muted">{daysLeft} day{daysLeft === 1 ? "" : "s"} remaining</span></div>
-                <div className="h-2 overflow-hidden rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full bg-dash-accent" style={{ width: `${Math.min(100, Math.max(0, Math.round(((TRIAL_DAYS - daysLeft) / TRIAL_DAYS) * 100)))}%` }} /></div>
+                <div className="mb-1 flex justify-between text-xs"><span className="font-semibold">Free trial</span><span className="text-muted-foreground">{daysLeft} day{daysLeft === 1 ? "" : "s"} remaining</span></div>
+                <Progress aria-label="Free trial progress" value={Math.min(100, Math.max(0, Math.round(((TRIAL_DAYS - daysLeft) / TRIAL_DAYS) * 100)))} />
               </div>
             )}
-            <div className="flex items-center justify-between gap-4 rounded-[10px] bg-dash-bg px-4 py-3">
-              <span className="flex flex-col"><span className="text-sm font-semibold">Auto-renewal</span>
-                <span className="text-xs text-dash-muted">{isTrial ? "Not available during the free trial" : switchOn ? "Your subscription will automatically renew on the next billing date" : "Your subscription will expire and not renew automatically"}</span></span>
-              <button type="button" role="switch" aria-checked={switchOn} aria-label="Auto renewal" disabled={!writable || busy} onClick={flipAuto}
-                className={cn("flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 disabled:opacity-50", switchOn ? "justify-end bg-dash-accent" : "justify-start bg-dash-border")}><span className="size-4 rounded-full bg-white" /></button>
-            </div>
+            <Item variant="muted" size="sm">
+              <ItemContent>
+                <ItemTitle>Auto-renewal</ItemTitle>
+                <ItemDescription>{isTrial ? "Not available during the free trial" : switchOn ? "Your subscription will automatically renew on the next billing date" : "Your subscription will expire and not renew automatically"}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch checked={switchOn} aria-label="Auto renewal" disabled={!writable || busy} onCheckedChange={() => flipAuto()} />
+              </ItemActions>
+            </Item>
             <div className="flex flex-wrap gap-2">
-              <Link href="/dashboard/billing/plans" className={primaryBtn}>{isTrial || expired || cancelled ? "Choose a plan" : "Upgrade plan"}</Link>
-              {!isTrial && writable && <button type="button" disabled={busy} onClick={doRenew} className={outlineBtn}>{cancelled || expired ? "Reactivate" : "Renew now"}</button>}
-              <button type="button" disabled={cancelDisabled} onClick={() => setCancelOpen(true)} className={cn(outlineBtn, "text-dash-danger")}>{cancelled ? "Cancelled" : "Cancel subscription"}</button>
+              <Button asChild><Link href="/dashboard/billing/plans">{isTrial || expired || cancelled ? "Choose a plan" : "Upgrade plan"}</Link></Button>
+              {!isTrial && writable && <Button type="button" variant="outline" disabled={busy} onClick={doRenew}>{cancelled || expired ? "Reactivate" : "Renew now"}</Button>}
+              <Button type="button" variant="destructive" disabled={cancelDisabled} onClick={() => setCancelOpen(true)}>{cancelled ? "Cancelled" : "Cancel subscription"}</Button>
             </div>
-            {note && <div className={cn("rounded-[10px] px-4 py-3 text-[13px] font-semibold", note.cls)}>{note.text}</div>}
-          </div>
+            {note && <Alert variant={note.danger ? "destructive" : "default"}><AlertDescription>{note.text}</AlertDescription></Alert>}
+          </Card>
 
-          <div className={cn(card, "flex flex-col gap-4 p-6")}>
-            <h3 className="font-dash-display text-lg font-bold">Usage</h3>
-            {!usage ? <Skeleton className="h-40 rounded-lg" /> : meters.map((m) => {
+          <SectionCard title="Usage" contentClassName="flex flex-col gap-4">
+            {!usage ? <Skeleton className="h-40" /> : meters.map((m) => {
               const finite = m.limit !== null && m.limit > 0 && m.limit < UNLIMITED
               const over = finite && m.used > (m.limit as number)
               return (
                 <div key={m.label}>
-                  <div className="mb-1.5 flex items-baseline justify-between text-[13px]">
-                    <span className="font-semibold">{m.label}</span>
-                    <span className="text-dash-muted"><strong className="text-dash-ink tabular-nums">{m.used.toLocaleString("en-US")}</strong>{" "}
+                  <div className="mb-1.5 flex items-baseline justify-between text-sm">
+                    <span className="font-medium">{m.label}</span>
+                    <span className="text-muted-foreground"><strong className="text-foreground tabular-nums">{m.used.toLocaleString("en-US")}</strong>{" "}
                       {m.limit === null ? "this month" : finite ? `of ${(m.limit as number).toLocaleString("en-US")}` : "of unlimited"}</span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-dash-neutral-soft">
-                    <div className={cn("h-full rounded-full", over ? "bg-dash-danger" : "bg-dash-accent")} style={{ width: `${finite ? Math.min(100, Math.round((m.used / (m.limit as number)) * 100)) : 0}%` }} />
-                  </div>
+                  <Progress
+                    aria-label={`${m.label} usage`}
+                    value={finite ? Math.min(100, Math.round((m.used / (m.limit as number)) * 100)) : 0}
+                    className={cn(over && "*:data-[slot=progress-indicator]:bg-destructive")}
+                  />
                 </div>
               )
             })}
-          </div>
+          </SectionCard>
         </section>
       ) : (
-        <section className={cn(card, "flex flex-col items-start gap-2 p-6")}>
-          <h2 className="font-dash-display text-xl font-bold">No active subscription</h2>
-          <p className="text-sm text-dash-muted">You are currently on a trial. Choose a plan to start your subscription.</p>
-          <Link href="/dashboard/billing/plans" className={cn(primaryBtn, "mt-2")}>Browse plans</Link>
-        </section>
+        <SectionCard title="No active subscription" description="You are currently on a trial. Choose a plan to start your subscription.">
+          <Button asChild><Link href="/dashboard/billing/plans">Browse plans</Link></Button>
+        </SectionCard>
       )}
 
-      <section className={card}>
-        <div className="p-5 pb-3">
-          <h2 className="font-dash-display text-lg font-bold">Payment history</h2>
-          <p className="text-xs text-dash-muted">Invoices for every plan purchase and renewal.</p>
-        </div>
+      <SectionCard title="Payment history" description="Invoices for every plan purchase and renewal." contentClassName="px-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-sm">
-            <thead>
-              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
-                <th className="py-3 pl-5 pr-2 font-semibold">Date</th><th className="px-2 py-3 font-semibold">Invoice</th><th className="px-2 py-3 font-semibold">Plan</th>
-                <th className="px-2 py-3 font-semibold">Method</th><th className="px-2 py-3 font-semibold">Amount</th><th className="px-2 py-3 font-semibold">Status</th>
-                <th className="py-3 pl-2 pr-5 text-right font-semibold">Download</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || histLoading ? [1, 2, 3].map((i) => <tr key={i}><td colSpan={7} className="px-5 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+          <Table className="min-w-[760px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead><TableHead>Invoice</TableHead><TableHead>Plan</TableHead>
+                <TableHead>Method</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
+                <TableHead className="text-right">Download</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading || histLoading ? [1, 2, 3].map((i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-10" /></TableCell></TableRow>) :
                 payments.length === 0 ? (
-                  <tr><td colSpan={7} className="py-12 text-center text-sm text-dash-muted">No payment history yet</td></tr>
+                  <TableRow><TableCell colSpan={7}><EmptyState title="No payment history yet" className="p-4 md:p-6" /></TableCell></TableRow>
                 ) : payments.map((p) => {
                   const paid = p.status === "completed" || p.status === "paid"
                   const trialRow = p.amount === 0 && p.description === "Free trial"
                   return (
-                    <tr key={p.id}>
-                      <td className="border-b border-dash-border-soft py-3 pl-5 pr-2">{fmtD(p.paymentDate ?? p.createdAt)}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 font-semibold">{trialRow ? "Free trial" : p.invoiceNumber || "—"}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">{p.planName || p.description || "—"}{p.billingPeriod && <span className="text-xs text-dash-muted"> ({p.billingPeriod === "yearly" ? "Yearly" : "Monthly"})</span>}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">{METHODS[p.paymentMethod] ?? (p.paymentMethod || "—")}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3 tabular-nums">{trialRow ? "Free" : money(p.amount)}</td>
-                      <td className="border-b border-dash-border-soft px-2 py-3">
-                        <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", paid ? "bg-dash-success-soft text-dash-success-fg" : p.status === "failed" ? "bg-dash-danger-soft text-dash-danger-fg" : "bg-dash-warn-soft text-dash-warn-fg")}>
-                          {paid ? "Paid" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-5 text-right">
-                        {p.invoiceNumber && !trialRow && <button type="button" aria-label={`Download invoice ${p.invoiceNumber}`} onClick={() => download(p)} className="text-xs font-semibold text-dash-accent hover:underline">Download</button>}
-                      </td>
-                    </tr>
+                    <TableRow key={p.id}>
+                      <TableCell>{fmtD(p.paymentDate ?? p.createdAt)}</TableCell>
+                      <TableCell>{trialRow ? "Free trial" : p.invoiceNumber || "—"}</TableCell>
+                      <TableCell>{p.planName || p.description || "—"}{p.billingPeriod && <span className="text-xs text-muted-foreground"> ({p.billingPeriod === "yearly" ? "Yearly" : "Monthly"})</span>}</TableCell>
+                      <TableCell>{METHODS[p.paymentMethod] ?? (p.paymentMethod || "—")}</TableCell>
+                      <TableCell className="tabular-nums">{trialRow ? "Free" : money(p.amount)}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={p.status} variant={paid ? "default" : p.status === "failed" ? "destructive" : "secondary"}
+                          label={paid ? "Paid" : p.status.charAt(0).toUpperCase() + p.status.slice(1)} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {p.invoiceNumber && !trialRow && <Button type="button" variant="link" size="sm" aria-label={`Download invoice ${p.invoiceNumber}`} onClick={() => download(p)}>Download</Button>}
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         {total > 0 && (
-          <div className="p-4 pt-3"><PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
+          <div className="px-6 pt-3"><PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
             onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} /></div>
         )}
-      </section>
+      </SectionCard>
 
-      <section className={cn(card, "flex flex-col gap-4 p-6")}>
-        <h2 className="font-dash-display text-lg font-bold">FAQ</h2>
+      <SectionCard title="FAQ" contentClassName="flex flex-col gap-4">
         {FAQ.map(([qn, an]) => (
-          <div key={qn}><div className="text-sm font-semibold">{qn}</div><div className="text-[13px] text-dash-muted">{an}</div></div>
+          <div key={qn}><div className="text-sm font-semibold">{qn}</div><div className="text-sm text-muted-foreground">{an}</div></div>
         ))}
-      </section>
+      </SectionCard>
 
       <Dialog open={cancelOpen} onOpenChange={(o) => { if (!busy) setCancelOpen(o) }}>
-        <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
-          <DialogTitle className="font-dash-display text-xl font-bold">Cancel subscription</DialogTitle>
-          <DialogDescription className="text-[13px]">Are you sure you want to cancel your subscription? Your access will continue until {fmtD(periodEnd)}.</DialogDescription>
-          <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Reason for cancellation (optional)
-            <select value={reason} onChange={(e) => setReason(e.target.value)} className="h-[42px] rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal outline-none focus-visible:border-dash-accent">
-              {REASONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-          </label>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Cancel subscription</DialogTitle>
+          <DialogDescription>Are you sure you want to cancel your subscription? Your access will continue until {fmtD(periodEnd)}.</DialogDescription>
+          <FormField label="Reason for cancellation (optional)" htmlFor="cancel-reason">
+            <Select value={String(reason)} onValueChange={(val) => setReason(val)}>
+              <SelectTrigger id="cancel-reason" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REASONS.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
           <div className="flex justify-end gap-2">
-            <button type="button" disabled={busy} onClick={() => setCancelOpen(false)} className={outlineBtn}>Keep subscription</button>
-            <button type="button" disabled={busy} onClick={doCancel} className="h-11 rounded-[10px] bg-dash-danger px-4 text-sm font-semibold text-white disabled:opacity-40">{busy ? "Cancelling…" : "Cancel subscription"}</button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>Keep subscription</Button>
+            <Button type="button" variant="destructive" disabled={busy} onClick={doCancel}>{busy ? "Cancelling…" : "Cancel subscription"}</Button>
           </div>
         </DialogContent>
       </Dialog>

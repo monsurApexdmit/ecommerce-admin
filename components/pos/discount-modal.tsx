@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { FormField } from "@/components/common/FormField"
 import { Percent, DollarSign } from "lucide-react"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface DiscountModalProps {
@@ -59,32 +59,30 @@ export function DiscountModal({ open, onOpenChange, onApplyDiscount, currentSubt
                         </TabsList>
                     </Tabs>
 
-                    <div className="space-y-2">
-                        <Label>Discount Value</Label>
-                        <div className="relative">
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                {type === 'fixed' ? <DollarSign className="w-4 h-4" /> : <Percent className="w-4 h-4" />}
-                            </div>
-                            <Input
+                    <FormField
+                        label="Discount Value"
+                        htmlFor="pos-discount-value"
+                        description={value ? <span className="block text-right">Discount: <span className="font-medium text-foreground">-{formatCurrency(calculatedDiscount())}</span></span> : undefined}
+                    >
+                        <InputGroup>
+                            <InputGroupAddon>
+                                {type === 'fixed' ? <DollarSign /> : <Percent />}
+                            </InputGroupAddon>
+                            <InputGroupInput
+                                id="pos-discount-value"
                                 value={value}
                                 onChange={(e) => setValue(e.target.value)}
                                 type="number"
                                 placeholder={type === 'fixed' ? "0.00" : "0"}
-                                className="pl-9"
                                 autoFocus
                             />
-                        </div>
-                        {value && (
-                            <p className="text-sm text-gray-500 text-right">
-                                Discount: <span className="font-medium text-emerald-600">-{formatCurrency(calculatedDiscount())}</span>
-                            </p>
-                        )}
-                    </div>
+                        </InputGroup>
+                    </FormField>
                 </div>
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleApply} className="bg-emerald-600 hover:bg-emerald-700">Apply Discount</Button>
+                    <Button onClick={handleApply}>Apply Discount</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

@@ -4,6 +4,9 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { saasBillingApi } from "@/lib/saasBillingApi"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 
 const TRIAL_LENGTH_DAYS = 10
 
@@ -62,8 +65,8 @@ export function TrialCard() {
   const pct = Math.round((elapsed / TRIAL_LENGTH_DAYS) * 100)
 
   return (
-    <div
-      className="rounded-xl border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden"
+    <Card
+      className="gap-0 border-sidebar-border bg-sidebar-accent p-3 text-sidebar-accent-foreground shadow-none group-data-[collapsible=icon]:hidden"
       role="region"
       aria-label="Trial status"
     >
@@ -80,19 +83,11 @@ export function TrialCard() {
           : `${remaining} ${remaining === 1 ? "day" : "days"} remaining`}
       </p>
 
-      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-brand transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+      <Progress value={pct} aria-label="Trial elapsed" className="mt-2 h-1 bg-muted" />
 
-      <Link
-        href="/dashboard/billing/subscriptions"
-        className="mt-3 flex w-full items-center justify-center rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
-      >
-        Upgrade plan
-      </Link>
-    </div>
+      <Button asChild size="sm" className="mt-3 w-full">
+        <Link href="/dashboard/billing/subscriptions">Upgrade plan</Link>
+      </Button>
+    </Card>
   )
 }

@@ -1,10 +1,16 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Bell, Trash2, ExternalLink } from "lucide-react"
 import { useNotifications } from "@/contexts/notification-context"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -14,13 +20,13 @@ export function NotificationBell() {
 
   const recent = notifications.slice(0, 5)
 
-  const typeColors: Record<string, string> = {
-    order: 'bg-emerald-500',
-    stock_alert: 'bg-orange-500',
-    payment: 'bg-blue-500',
-    system: 'bg-gray-500',
-    support: 'bg-blue-500',
-    review: 'bg-amber-500',
+  const typeVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+    order: 'default',
+    stock_alert: 'destructive',
+    payment: 'secondary',
+    system: 'outline',
+    support: 'secondary',
+    review: 'secondary',
   }
   const typeLabels: Record<string, string> = {
     order: 'New Order',
@@ -64,84 +70,89 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={ref}>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="icon"
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notifications, ${unreadCount} unread`}
         aria-expanded={open}
-        className="shell-btn relative"
+        className="relative"
       >
         <Bell className="size-5" strokeWidth={2} aria-hidden />
         {unreadCount > 0 && (
-          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#B42318] px-1 text-[10px] font-bold text-white">
+          <Badge variant="destructive" className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full px-1">
             {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
+          </Badge>
         )}
-      </button>
+      </Button>
 
       {open && (
-        <div
+        <Card
           role="dialog"
           aria-label="Notifications"
-          className="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-xl"
+          className="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-1.5rem))] gap-0 overflow-hidden py-0 shadow-xl"
         >
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-3">
             <strong className="text-sm">Notifications</strong>
             <span className="flex items-center gap-3">
               {unreadCount > 0 && (
-                <button type="button" onClick={() => void markAllAsRead()} className="text-xs font-semibold text-brand-fg hover:underline">
+                <Button type="button" variant="link" size="sm" onClick={() => void markAllAsRead()}>
                   Mark all read
-                </button>
+                </Button>
               )}
               <span className="text-xs text-muted-foreground">{unreadCount ? `${unreadCount} unread` : "All caught up"}</span>
             </span>
           </div>
+          <Separator />
           <div className="max-h-96 divide-y divide-border overflow-y-auto">
             {recent.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">No notifications</div>
+              <EmptyState icon={Bell} title="No notifications" className="p-6 md:p-6" />
             ) : recent.map((n) => (
               <div
                 key={n.id}
-                className={`group flex items-start gap-3 p-3 transition-colors hover:bg-muted/60 ${!n.readAt ? "bg-brand-soft" : ""}`}
+                className={cn("group flex items-start gap-3 p-3 transition-colors hover:bg-muted/60", !n.readAt ? "bg-brand-soft" : "")}
               >
-                <span className={`mt-1.5 size-2 shrink-0 rounded-full ${!n.readAt ? "bg-brand" : "bg-transparent"}`} aria-hidden />
-                <button
+                <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", !n.readAt ? "bg-brand" : "bg-transparent")} aria-hidden />
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => void handleNotificationClick(n.id, n.actionUrl)}
-                  className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                  className="h-auto min-w-0 flex-1 items-start justify-start gap-3 whitespace-normal p-0 text-left font-normal hover:bg-transparent"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm leading-snug">{n.message}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium text-white ${typeColors[n.type] ?? "bg-gray-500"}`}>
+                      <Badge variant={typeVariant[n.type] ?? "outline"}>
                         {typeLabels[n.type] ?? n.type}
-                      </span>
+                      </Badge>
                       <span className="text-xs text-muted-foreground">{getRelativeTime(n.createdAt)}</span>
                       {n.actionUrl && (
                         <ExternalLink className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
                       )}
                     </div>
                   </div>
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   aria-label="Delete notification"
                   onClick={(e) => { e.stopPropagation(); void deleteNotification(n.id) }}
-                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-red-600"
+                  className="shrink-0"
                 >
                   <Trash2 className="size-3.5" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
-          <Link
-            href="/dashboard/notifications"
-            onClick={() => setOpen(false)}
-            className="block border-t border-border p-3 text-center text-sm font-semibold text-brand-fg hover:bg-muted/60"
-          >
-            Show all notifications
-          </Link>
-        </div>
+          <Separator />
+          <Button asChild variant="ghost" className="h-auto w-full rounded-none p-3">
+            <Link href="/dashboard/notifications" onClick={() => setOpen(false)}>
+              Show all notifications
+            </Link>
+          </Button>
+        </Card>
       )}
     </div>
   )
