@@ -154,8 +154,36 @@ export interface SellResponse {
   notes?: string;
   items?: SellItem[];
   shipments?: SellShipment[];
+  /** Order follow-up (confirmation call) summary */
+  followUpCount?: number;
+  lastFollowUpAt?: string | null;
+  lastFollowUpOutcome?: FollowUpOutcome | null;
+  nextFollowUpAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type FollowUpOutcome = 'confirmed' | 'no_answer' | 'call_later' | 'wrong_number' | 'customer_cancelled' | 'other';
+export type FollowUpChannel = 'call' | 'whatsapp' | 'sms' | 'other';
+
+export interface OrderFollowUp {
+  id: number;
+  sellId: number;
+  userId: number | null;
+  staffName: string | null;
+  outcome: FollowUpOutcome;
+  channel: FollowUpChannel;
+  note: string | null;
+  nextFollowUpAt: string | null;
+  createdAt: string;
+}
+
+export interface LogFollowUpData {
+  outcome: FollowUpOutcome;
+  channel?: FollowUpChannel;
+  note?: string;
+  /** ISO datetime; required (and in the future) for call_later */
+  nextFollowUpAt?: string;
 }
 
 export type SellTab = 'all' | 'pending' | 'confirmed' | 'packed' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
@@ -303,6 +331,8 @@ export const sellsApi = {
     customer?: string;
     start_date?: string;
     end_date?: string;
+    /** due = needs a confirmation call now; scheduled = call-back booked */
+    followUp?: 'due' | 'scheduled';
   }): Promise<SellListResponse> => {
     const response = await api.get('/sells', { params });
     // Backend returns either:
@@ -377,6 +407,18 @@ export const sellsApi = {
     const { notes, ...rest } = data;
     const response = await api.patch(`/sells/${id}/delivery`, { ...rest, note: notes ?? '' });
     return response.data;
+  },
+
+  /** Follow-up history of an order, newest first. */
+  getFollowUps: async (id: number): Promise<OrderFollowUp[]> => {
+    const response = await api.get(`/sells/${id}/follow-ups`);
+    return response.data?.data ?? [];
+  },
+
+  /** Log a follow-up; confirmed moves Pending→Processing, customer_cancelled cancels the order. */
+  logFollowUp: async (id: number, data: LogFollowUpData): Promise<{ followUp: OrderFollowUp; order: SellResponse }> => {
+    const response = await api.post(`/sells/${id}/follow-ups`, data);
+    return response.data.data;
   },
 
   delete: async (id: number): Promise<{ message: string }> => {

@@ -49,7 +49,7 @@ function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; 
   )
 }
 
-type Form = { id: number | null; name: string; type: "delivery" | "pickup"; areas: string; std: string; exp: string; time: string; desc: string; sort: string; icon: string; active: boolean }
+type Form = { id: number | null; name: string; type: "delivery" | "pickup"; std: string; time: string; desc: string; sort: string; icon: string; active: boolean }
 type Opts = { freeOn: boolean; freeMin: string; weight: string; pkg: string }
 type CForm = { id: number | null; provider: string; accountId: string; apiKey: string; locked: boolean }
 
@@ -110,34 +110,33 @@ export default function ShippingMethodsPage() {
   const money = (n: number) => formatCurrency(Number(n) || 0)
 
   // ---- shipping methods -------------------------------------------------
-  const openNew = () => { setForm({ id: null, name: "", type: "delivery", areas: "", std: "", exp: "", time: "", desc: "", sort: String(zones.length + 1), icon: "package", active: true }); setFormErr("") }
+  const openNew = () => { setForm({ id: null, name: "", type: "delivery", std: "", time: "", desc: "", sort: String(zones.length + 1), icon: "package", active: true }); setFormErr("") }
   const openEdit = (z: ShippingMethod) => {
-    setForm({ id: z.id, name: z.name, type: z.type === "pickup" ? "pickup" : "delivery", areas: z.areasCovered ?? "", std: String(z.price), exp: z.expressRate ? String(z.expressRate) : "", time: z.estimatedDays ?? "", desc: z.description ?? "", sort: String(z.sortOrder), icon: z.icon || "package", active: z.isActive })
+    setForm({ id: z.id, name: z.name, type: z.type === "pickup" ? "pickup" : "delivery", std: String(z.price), time: z.estimatedDays ?? "", desc: z.description ?? "", sort: String(z.sortOrder), icon: z.icon || "package", active: z.isActive })
     setFormErr("")
   }
   const patch = (p: Partial<Form>) => { setForm((f) => (f ? { ...f, ...p } : f)); setFormErr("") }
 
   const saveZone = async () => {
     if (!form) return
-    const name = form.name.trim(), std = Number(form.std), exp = Number(form.exp === "" ? 0 : form.exp)
-    if (!name) return setFormErr("Zone name is required.")
-    if (zones.some((z) => z.id !== form.id && z.name.toLowerCase() === name.toLowerCase())) return setFormErr("A zone with this name already exists.")
+    const name = form.name.trim(), std = Number(form.std)
+    if (!name) return setFormErr("Name is required.")
+    if (zones.some((z) => z.id !== form.id && z.name.toLowerCase() === name.toLowerCase())) return setFormErr("An option with this name already exists.")
     const pickup = form.type === "pickup"
-    if (!pickup && (form.std === "" || !isFinite(std) || std < 0)) return setFormErr("Standard rate must be 0 or more.")
-    if (!pickup && (!isFinite(exp) || exp < 0)) return setFormErr("Express rate must be 0 or more.")
+    if (!pickup && (form.std === "" || !isFinite(std) || std < 0)) return setFormErr("Delivery charge must be 0 or more.")
     if (form.sort !== "" && (!Number.isInteger(Number(form.sort)) || Number(form.sort) < 0)) return setFormErr("Sort order must be a whole number, 0 or more.")
     const body = {
-      name, type: form.type, areas_covered: form.areas.trim(), price: pickup ? 0 : std, express_rate: pickup ? 0 : exp, estimated_days: form.time.trim(),
+      name, type: form.type, price: pickup ? 0 : std, estimated_days: form.time.trim(),
       description: form.desc.trim(), icon: form.icon, sort_order: form.sort === "" ? zones.length + 1 : Number(form.sort), is_active: form.active,
     }
     setSaving(true)
     try {
-      if (form.id) { await shippingMethodApi.update(form.id, body); toast({ title: "Shipping method updated" }) }
-      else { await shippingMethodApi.create(body); toast({ title: "Shipping method added" }) }
+      if (form.id) { await shippingMethodApi.update(form.id, body); toast({ title: "Delivery option updated" }) }
+      else { await shippingMethodApi.create(body); toast({ title: "Delivery option added" }) }
       setForm(null)
       await load()
     } catch (e: any) {
-      setFormErr(e?.response?.data?.message || "Could not save shipping method")
+      setFormErr(e?.response?.data?.message || "Could not save delivery option")
     } finally {
       setSaving(false)
     }
@@ -152,14 +151,14 @@ export default function ShippingMethodsPage() {
   }
 
   const removeZone = async (z: ShippingMethod) => {
-    if (!window.confirm(`Delete shipping method "${z.name}"? It will be removed from checkout immediately.`)) return
+    if (!window.confirm(`Delete delivery option "${z.name}"? It will be removed from checkout immediately.`)) return
     setBusyId(z.id)
     try {
       await shippingMethodApi.delete(z.id)
-      toast({ title: "Shipping method deleted" })
+      toast({ title: "Delivery option deleted" })
       if (form?.id === z.id) setForm(null)
       await load()
-    } catch (e) { fail("Could not delete shipping method", e) }
+    } catch (e) { fail("Could not delete delivery option", e) }
     finally { setBusyId(null) }
   }
 
@@ -234,11 +233,11 @@ export default function ShippingMethodsPage() {
   const cart = Number(sampleCart) || 0
   const freeApplies = opts.freeOn && freeMin > 0 && cart >= freeMin
   const fee = (z: ShippingMethod, rate: number) => (z.type === "pickup" || freeApplies || !rate ? "Free" : money(rate))
-  const checkout: { name: string; time: string; price: string; express?: boolean }[] = []
-  active.forEach((z) => {
-    checkout.push({ name: z.type === "pickup" ? `${z.name} (pickup, no address needed)` : z.name, time: [z.estimatedDays, z.areasCovered].filter(Boolean).join(" · ") || "—", price: fee(z, z.price) })
-    if (z.type !== "pickup" && z.expressRate > 0) checkout.push({ name: `${z.name} — express`, time: z.estimatedDays || "—", price: fee(z, z.expressRate), express: true })
-  })
+  const checkout = active.map((z) => ({
+    name: z.type === "pickup" ? `${z.name} (pickup, no address needed)` : z.name,
+    time: [z.description, z.estimatedDays].filter(Boolean).join(" · ") || "—",
+    price: fee(z, z.price),
+  }))
 
   const presetRows = COURIERS.map(([name, ini]) => ({ name, ini, acct: couriers.find((c) => c.provider.toLowerCase() === name.toLowerCase()) }))
   const customRows = couriers.filter((c) => !COURIERS.some(([n]) => n.toLowerCase() === c.provider.toLowerCase()))
@@ -273,25 +272,25 @@ export default function ShippingMethodsPage() {
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
         title={<>Shipping &amp; delivery</>}
-        description="Delivery zones, rates, couriers and what customers see at checkout."
+        description="Delivery options, couriers and what customers see at checkout."
       />
 
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
           <SectionCard
-            title={<>Delivery zones &amp; shipping methods</>}
-            description="Shipping options shown to customers at checkout: price, estimated delivery and order."
-            actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> Add method</Button>}
+            title="Delivery options"
+            description="Customers pick one of these at checkout (e.g. Inside Dhaka / Outside Dhaka) and pay its fixed charge."
+            actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> Add option</Button>}
           >
             {form && (
               <Card className="mb-3.5 gap-3 p-4 shadow-none">
-                <strong>{form.id ? "Edit shipping method" : "New shipping method"}</strong>
+                <strong>{form.id ? "Edit delivery option" : "New delivery option"}</strong>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <FormField label={"Name *"} htmlFor="sm-name">
-                    <Input id="sm-name" className="w-full" value={form.name} onChange={(e) => patch({ name: e.target.value })} />
+                    <Input id="sm-name" className="w-full" value={form.name} placeholder={form.type === "pickup" ? "Pick up from store" : "Inside Dhaka"} onChange={(e) => patch({ name: e.target.value })} />
                   </FormField>
-                  <FormField label={"Zone type"} htmlFor="sm-type">
-                    <Select value={form.type} onValueChange={(v) => patch(v === "pickup" ? { type: "pickup", std: "0", exp: "" } : { type: "delivery" })}>
+                  <FormField label={"Type"} htmlFor="sm-type">
+                    <Select value={form.type} onValueChange={(v) => patch(v === "pickup" ? { type: "pickup", std: "0" } : { type: "delivery" })}>
                       <SelectTrigger id="sm-type" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="delivery">Delivery (ships to an address)</SelectItem>
@@ -299,20 +298,14 @@ export default function ShippingMethodsPage() {
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label={form.type === "pickup" ? "Pickup locations" : "Areas covered"} htmlFor="sm-areas">
-                    <Input id="sm-areas" className="w-full" value={form.areas} placeholder="e.g. Dhaka city corporation areas" onChange={(e) => patch({ areas: e.target.value })} />
-                  </FormField>
-                  <FormField label={"Price (standard rate) *"} htmlFor="sm-std">
+                  <FormField label={"Delivery charge *"} htmlFor="sm-std">
                     <Input id="sm-std" className="w-full" type="number" min={0} value={form.std} disabled={form.type === "pickup"} onChange={(e) => patch({ std: e.target.value })} />
-                  </FormField>
-                  <FormField label={"Express rate (0 = none)"} htmlFor="sm-exp">
-                    <Input id="sm-exp" className="w-full" type="number" min={0} value={form.exp} disabled={form.type === "pickup"} onChange={(e) => patch({ exp: e.target.value })} />
                   </FormField>
                   <FormField label={"Estimated delivery"} htmlFor="sm-time">
                     <Input id="sm-time" className="w-full" value={form.time} placeholder="1–2 days" onChange={(e) => patch({ time: e.target.value })} />
                   </FormField>
                   <FormField label={"Description"} htmlFor="sm-desc">
-                    <Input id="sm-desc" className="w-full" value={form.desc} onChange={(e) => patch({ desc: e.target.value })} />
+                    <Input id="sm-desc" className="w-full" value={form.desc} placeholder={form.type === "pickup" ? "Collect from our store" : "Delivery inside Dhaka city"} onChange={(e) => patch({ desc: e.target.value })} />
                   </FormField>
                   <FormField label={"Sort order"} htmlFor="sm-sort">
                     <Input id="sm-sort" className="w-full" type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
@@ -338,7 +331,7 @@ export default function ShippingMethodsPage() {
                 <Item variant="outline" size="sm" className="flex-nowrap bg-card">
                   {(() => { const I = iconOf(form.icon); return <ItemMedia variant="icon"><I /></ItemMedia> })()}
                   <ItemContent className="min-w-0">
-                    <ItemTitle className="block w-full truncate">{form.name.trim() || "Method name"}</ItemTitle>
+                    <ItemTitle className="block w-full truncate">{form.name.trim() || "Option name"}</ItemTitle>
                     <ItemDescription className="truncate">{form.desc.trim() || "Description"}</ItemDescription>
                   </ItemContent>
                   <ItemActions className="flex-col items-end gap-0">
@@ -349,7 +342,7 @@ export default function ShippingMethodsPage() {
                 {formErr && <p className="text-sm font-medium text-destructive">{formErr}</p>}
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
-                  <Button type="button" onClick={saveZone} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Add method"}</Button>
+                  <Button type="button" onClick={saveZone} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Add option"}</Button>
                 </div>
               </Card>
             )}
@@ -360,17 +353,17 @@ export default function ShippingMethodsPage() {
               <EmptyState
                 bordered
                 icon={Truck}
-                title="No shipping methods yet"
-                description="Add one to start charging for delivery."
-                action={<Button type="button" variant="outline" onClick={openNew}>Add first method</Button>}
+                title="No delivery options yet"
+                description="Example: “Inside Dhaka” at ৳60 and “Outside Dhaka” at ৳120 — customers pick one at checkout."
+                action={<Button type="button" variant="outline" onClick={openNew}>Add first option</Button>}
               />
             ) : (
               <div>
                 <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Zone</TableHead><TableHead>Sort</TableHead><TableHead>Standard</TableHead>
-                      <TableHead>Express</TableHead><TableHead>Time</TableHead><TableHead>On</TableHead><TableHead className="text-right">Actions</TableHead>
+                      <TableHead>Option</TableHead><TableHead>Sort</TableHead><TableHead>Charge</TableHead>
+                      <TableHead>Time</TableHead><TableHead>On</TableHead><TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -383,13 +376,12 @@ export default function ShippingMethodsPage() {
                               <UserAvatar shape="square" className={cn("size-9", !z.isActive && "opacity-60")} fallback={<I className="size-4" />} />
                               <div className="min-w-0">
                                 <div className={cn("truncate font-bold", !z.isActive && "text-muted-foreground")}>{z.name}{z.type === "pickup" && <Badge variant="secondary" className="ml-2 align-middle">Pickup</Badge>}</div>
-                                {(z.areasCovered || z.description) && <div className="max-w-[240px] truncate text-xs text-muted-foreground">{z.areasCovered || z.description}</div>}
+                                {z.description && <div className="max-w-[240px] truncate text-xs text-muted-foreground">{z.description}</div>}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="tabular-nums">{z.sortOrder}</TableCell>
                           <TableCell className="font-semibold tabular-nums">{z.price ? money(z.price) : "Free"}</TableCell>
-                          <TableCell className="tabular-nums">{z.expressRate ? money(z.expressRate) : "—"}</TableCell>
                           <TableCell>{z.estimatedDays || "—"}</TableCell>
                           <TableCell><Switch on={z.isActive} label={z.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === z.id} onClick={() => toggleZone(z)} /></TableCell>
                           <TableCell>
@@ -408,7 +400,7 @@ export default function ShippingMethodsPage() {
 
             <Alert role="note" className="mt-3.5">
               <AlertDescription>
-                <p><strong className="text-foreground">Display order.</strong> Methods are shown to customers ordered by Sort order (lowest first). Set the number when adding or editing a method.</p>
+                <p><strong className="text-foreground">Display order.</strong> Options are shown to customers ordered by Sort order (lowest first); the first one is preselected. Only active options appear at checkout.</p>
               </AlertDescription>
             </Alert>
 
@@ -465,17 +457,17 @@ export default function ShippingMethodsPage() {
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-          <SectionCard title="Checkout options" description="Built from your enabled zones.">
+          <SectionCard title="Checkout options" description="Built from your active delivery options.">
             <FormField label="Sample cart subtotal" htmlFor="sample-cart" className="mb-3">
               <Input id="sample-cart" className="w-full" type="number" min={0} value={sampleCart} onChange={(e) => setSampleCart(e.target.value)} />
             </FormField>
             {loading ? <Skeleton className="h-24" /> : checkout.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active zones — customers cannot choose a delivery option.</p>
+              <p className="text-sm text-muted-foreground">No active options — customers cannot choose a delivery option.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {checkout.map((o, i) => (
                   <Item key={i} variant="outline" size="sm" className={cn("flex-nowrap", i === 0 && "border-primary")}>
-                    <ItemMedia variant="icon">{o.express ? <Zap /> : <Truck />}</ItemMedia>
+                    <ItemMedia variant="icon"><Truck /></ItemMedia>
                     <ItemContent className="min-w-0">
                       <ItemTitle className="block w-full truncate">{o.name}</ItemTitle>
                       <ItemDescription className="truncate">{o.time}</ItemDescription>
@@ -513,7 +505,7 @@ export default function ShippingMethodsPage() {
 
       <Card className="sticky bottom-0 flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
         <span className={cn("text-sm", optErr ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>
-          {optErr || (dirty ? "You have unsaved changes." : "Zone changes save instantly; other rates apply to new orders only.")}
+          {optErr || (dirty ? "You have unsaved changes." : "Delivery option changes save instantly; other rates apply to new orders only.")}
         </span>
         <div className="flex gap-2">
           <Button type="button" variant="outline" disabled={!dirty} onClick={() => { setOpts(base); setOptErr("") }}>Discard</Button>

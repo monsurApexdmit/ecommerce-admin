@@ -2,7 +2,7 @@
 
 import { paymentApi } from "@/lib/paymentApi"
 import { useEffect, useState } from "react"
-import { MapPin, Pencil, Printer } from "lucide-react"
+import { MapPin, Pencil, Phone, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -16,6 +16,7 @@ import { InfoList, InfoRow } from "@/components/common/InfoList"
 import { SectionTitle } from "@/components/common/SectionTitle"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
+import { FollowUpDialog, FollowUpHistory, canFollowUp, useFollowUps } from "@/components/sales/order-follow-up"
 import { useToast } from "@/hooks/use-toast"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { cn } from "@/lib/utils"
@@ -96,6 +97,9 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
   const [formErr, setFormErr] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState<null | "cancel" | "delete">(null)
   const [reason, setReason] = useState("")
+  const [followUpOpen, setFollowUpOpen] = useState(false)
+  // History only for orders that show the Follow-ups section
+  const followUps = useFollowUps(saleProp && (canFollowUp(saleProp) || (Number(saleProp.followUpCount) || 0) > 0) ? saleProp.id : null)
 
   useEffect(() => { setSale(saleProp); setPayOpen(false); setEditOpen(false); setConfirm(null); setReason("") }, [saleProp])
 
@@ -273,6 +277,22 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
                 </Card>
               )}
 
+              {(canFollowUp(sale) || (Number(sale.followUpCount) || 0) > 0) && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <SectionTitle className="flex items-center gap-1.5">
+                      <Phone className="size-4" aria-hidden /> Follow-ups
+                    </SectionTitle>
+                    {canFollowUp(sale) && (
+                      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setFollowUpOpen(true)}>
+                        <Phone className="size-4" aria-hidden /> Follow up
+                      </Button>
+                    )}
+                  </div>
+                  <FollowUpHistory items={followUps.items} loading={followUps.loading} />
+                </div>
+              )}
+
               {editOpen && (
                 <Card className="gap-3 p-4 text-sm">
                   <SectionTitle>Edit delivery details &amp; note</SectionTitle>
@@ -423,6 +443,14 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
             </div>
           )
         })()}
+        <FollowUpDialog
+          order={followUpOpen ? sale : null}
+          onClose={() => setFollowUpOpen(false)}
+          onSaved={(next) => {
+            followUps.reload()
+            sellsApi.getById(next.id).then((r) => apply(r.data)).catch(() => apply(next))
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

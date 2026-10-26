@@ -1,16 +1,76 @@
 import type { SellResponse, SellItem } from "@/lib/sellsApi"
+import { settingsApi } from "@/lib/settingsApi"
+import { saasCompanyApi } from "@/lib/saasCompanyApi"
 import { getCachedReceiptPrefs } from "@/lib/receipt-prefs"
 
-const SELLER = {
-  name: "Admin",
-  addressLines: ["59 Station Rd, Purls Bridge", "United Kingdom"],
-  phone: "019 579 034",
-  email: "",
+/* ------------------------------------------------------------------ */
+/* Seller (company) details — loaded from settings + company profile   */
+/* ------------------------------------------------------------------ */
+
+export interface InvoiceSeller {
+  name: string
+  legalName?: string
+  logoUrl?: string
+  addressLines: string[]
+  phone?: string
+  email?: string
+  website?: string
+  bin?: string
+  licence?: string
 }
 
-const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
-const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
-const itemTotal = (item: SellItem) => item.total_price ?? item.totalPrice ?? (itemPrice(item) * item.quantity)
+let sellerCache: InvoiceSeller | null = null
+let sellerInflight: Promise<InvoiceSeller> | null = null
+
+/** Company details for invoices (cached; call `resetInvoiceSeller` after editing settings). */
+export function loadInvoiceSeller(): Promise<InvoiceSeller> {
+  if (sellerCache) return Promise.resolve(sellerCache)
+  sellerInflight ??= Promise.allSettled([settingsApi.getAll(), saasCompanyApi.getProfile()])
+    .then(([s, p]) => {
+      const all = s.status === "fulfilled" ? (s.value as any)?.data : undefined
+      const g = all?.general ?? {}
+      const b = all?.business ?? {}
+      const prof = p.status === "fulfilled" ? (p.value as any)?.data ?? {} : {}
+      const cityLine = [prof.city, prof.state, prof.zipCode].filter(Boolean).join(", ")
+      sellerCache = {
+        name: b.businessName || g.storeName || prof.name || "Your business",
+        legalName: g.legalName && g.legalName !== (b.businessName || g.storeName) ? g.legalName : undefined,
+        logoUrl: b.logoUrl || prof.logo || undefined,
+        addressLines: [prof.address || g.storeAddress, cityLine, prof.country].filter(Boolean) as string[],
+        phone: g.storePhone || prof.phone || undefined,
+        email: g.storeEmail || undefined,
+        website: b.website || prof.website || undefined,
+        bin: g.bin || undefined,
+        licence: g.licence || undefined,
+      }
+      return sellerCache
+    })
+    .finally(() => { sellerInflight = null })
+  return sellerInflight
+}
+
+export const resetInvoiceSeller = () => { sellerCache = null }
+
+if (typeof window !== "undefined") {
+  window.addEventListener("receipt-prefs-stale", resetInvoiceSeller)
+}
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                              */
+/* ------------------------------------------------------------------ */
+
+const num = (v: unknown) => {
+  const n = Number(v ?? 0)
+  return Number.isFinite(n) ? n : 0
+}
+const itemPrice = (item: SellItem) => num(item.unit_price ?? item.unitPrice ?? item.price)
+const itemDiscount = (item: SellItem) => num(item.discount)
+const itemTotal = (item: SellItem) =>
+  num(item.total_price ?? item.totalPrice ?? itemPrice(item) * item.quantity - itemDiscount(item))
+
+const esc = (v: unknown) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
 
 const ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
@@ -21,10 +81,8 @@ function spell(n: number): string {
   if (n < 20) return ONES[n]
   if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? " " + ONES[n % 10] : "")
   if (n < 1000) return ONES[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + spell(n % 100) : "")
-  for (const [limit, word] of [[1e9, "million"], [1e6, "thousand"]] as const) {
-    const unit = limit === 1e9 ? 1e6 : 1e3
-    if (n < limit) return spell(Math.floor(n / unit)) + " " + word + (n % unit ? " " + spell(n % unit) : "")
-  }
+  if (n < 1e6) return spell(Math.floor(n / 1e3)) + " thousand" + (n % 1e3 ? " " + spell(n % 1e3) : "")
+  if (n < 1e9) return spell(Math.floor(n / 1e6)) + " million" + (n % 1e6 ? " " + spell(n % 1e6) : "")
   return String(n)
 }
 
@@ -32,7 +90,18 @@ function amountInWords(amount: number): string {
   const whole = Math.floor(Math.abs(amount))
   const cents = Math.round((Math.abs(amount) - whole) * 100)
   const words = spell(whole)
-  return words.charAt(0).toUpperCase() + words.slice(1) + ` and ${String(cents).padStart(2, "0")}/100`
+  return words.charAt(0).toUpperCase() + words.slice(1) + (cents ? ` and ${String(cents).padStart(2, "0")}/100` : "") + " only"
+}
+
+const PAY_LABEL: Record<string, { label: string; tone: "ok" | "warn" | "bad" }> = {
+  paid: { label: "Paid", tone: "ok" },
+  partially_paid: { label: "Partly paid", tone: "warn" },
+  partial: { label: "Partly paid", tone: "warn" },
+  pending: { label: "Unpaid", tone: "warn" },
+  pending_payment: { label: "Unpaid", tone: "warn" },
+  shipping_deposit_paid: { label: "Deposit paid", tone: "warn" },
+  failed: { label: "Failed", tone: "bad" },
+  cancelled: { label: "Cancelled", tone: "bad" },
 }
 
 interface PrintCtx {
@@ -40,281 +109,281 @@ interface PrintCtx {
   taxId?: string | null
 }
 
-/**
- * Opens a print window with a two-copy A4 invoice (Customer + Merchant) for a
- * sale. Shared by the Orders and Sales pages.
- */
-export function printSaleInvoice(order: SellResponse, ctx: PrintCtx): void {
-  const formatCurrency = ctx.formatCurrency
-  const settings = { taxId: ctx.taxId ?? undefined }
-    const esc = (v: unknown) =>
-      String(v ?? "").replace(/[&<>"']/g, c =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
+/* ------------------------------------------------------------------ */
+/* Invoice HTML                                                         */
+/* ------------------------------------------------------------------ */
 
-    const money = (n: number) => formatCurrency(n)
+function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller): string {
+  const money = (n: number) => ctx.formatCurrency(n)
+  const o = order as SellResponse & Record<string, any>
+  const items = order.items ?? []
 
-    // ---- figures -------------------------------------------------------
-    const shippingCost = Number(fmt(order.shippingCost))
-    const discount = Number(fmt(order.discount))
-    const total = Number(order.amount)
-    const subtotal = total - shippingCost + discount
-    const deposit = Number(order.shippingDepositAmount ?? 0)
+  // ---- figures: total = lines − order discount + tax + delivery ----
+  const lineGross = items.reduce((s, it) => s + itemPrice(it) * it.quantity, 0)
+  const lineDisc = items.reduce((s, it) => s + itemDiscount(it), 0)
+  const subtotal = items.length ? items.reduce((s, it) => s + itemTotal(it), 0) : num(order.amount)
+  const discount = num(order.discount)
+  const delivery = num(order.shippingCost)
+  const total = num(order.amount)
+  const storedTax = o.taxAmount != null ? num(o.taxAmount) : null
+  const derivedTax = Math.max(0, total - (subtotal - discount + delivery))
+  const tax = storedTax ?? (derivedTax > 0.009 ? derivedTax : 0)
+  const taxRate = o.taxRate != null ? num(o.taxRate) : null
+  const paid = o.paidAmount != null ? num(o.paidAmount) : (order.paymentStatus === "paid" ? total : 0)
+  const due = o.dueAmount != null ? num(o.dueAmount) : Math.max(0, total - paid)
+  const cancelled = order.status === "Cancelled"
+  const pay = cancelled ? { label: "Cancelled", tone: "bad" as const }
+    : due <= 0.009 && total > 0 ? PAY_LABEL.paid
+    : PAY_LABEL[order.paymentStatus ?? ""] ?? (paid > 0 ? PAY_LABEL.partially_paid : PAY_LABEL.pending)
+  const showLineDisc = lineDisc > 0.009
 
-    // Split the total so the plate can set the cents smaller, like a cheque.
-    const totalWhole = Math.floor(Math.abs(total))
-    const totalCents = String(Math.round((Math.abs(total) - totalWhole) * 100)).padStart(2, "0")
-    // Currency symbol = whatever formatCurrency puts before the first digit.
-    const currencySymbol = money(0).replace(/[\d.,\s]/g, "") || "$"
+  // ---- dates ----
+  const issued = new Date(order.orderTime || (o.createdAt as string) || Date.now())
+  const issuedDate = issued.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+  const issuedTime = issued.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
 
-    // ---- payment state -------------------------------------------------
-    const ps = order.paymentStatus ?? ""
-    const paid = ps === "paid"
-    const payment =
-      paid ? { label: "Paid", note: "Settled in full" }
-      : ps === "shipping_deposit_paid" ? { label: "Deposit", note: "Shipping deposit received" }
-      : ps === "failed" || ps === "cancelled" ? { label: ps, note: "Payment unsuccessful" }
-      : ps === "pending_payment" ? { label: "Pending", note: "Awaiting payment" }
-      : ps ? { label: ps, note: "" }
-      : null
+  // ---- parties ----
+  const customerName = order.customerName || "Walk-in customer"
+  const receiver = order.shippingFullName || customerName
+  const shipLines = [
+    [order.shippingAddressLine1, order.shippingAddressLine2].filter(Boolean).join(", "),
+    [order.shippingCity, order.shippingState, order.shippingPostalCode].filter(Boolean).join(", "),
+    order.shippingCountry,
+  ].filter(Boolean) as string[]
+  const contact = [order.shippingPhone, order.shippingEmail].filter(Boolean) as string[]
+  const hasShipping = shipLines.length > 0
+  const courier = o.courier || o.carrier
+  const zone = o.zoneName
+  const txn = o.transactionId || order.paymentTransactionId
+  const location = o.locationName
 
-    const issued = new Date(order.orderTime)
-    const issuedDate = issued.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
-    const issuedTime = issued.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    const stampDate = [issued.getDate(), issued.getMonth() + 1, issued.getFullYear()]
-      .map((n, i) => (i < 2 ? String(n).padStart(2, "0") : String(n)))
-      .join(" &middot; ")
-
-    // ---- billed-to -----------------------------------------------------
-    const buyerName = order.shippingFullName || order.customerName || "Walk-in Customer"
-    const buyerLines = [
-      order.shippingAddressLine1
-        ? esc(order.shippingAddressLine1) + (order.shippingAddressLine2 ? ", " + esc(order.shippingAddressLine2) : "")
-        : "",
-      esc([order.shippingCity, order.shippingState, order.shippingPostalCode].filter(Boolean).join(", ")),
-      esc(order.shippingCountry ?? ""),
-      esc(order.shippingEmail ?? ""),
-      esc(order.shippingPhone ?? ""),
-    ].filter(Boolean)
-    const buyerSub = buyerLines.length ? buyerLines.join("<br />") : "Point of sale"
-
-    // ---- line items (table rows) --------------------------------------
-    const itemsRows = order.items?.length
-      ? order.items.map((item, i) => {
-          const children = item.bundleItems?.length
-            ? item.bundleItems.map(bi => `
-              <tr class="sub">
-                <td></td>
-                <td class="desc"><span class="branch">&#8627;</span>${esc(bi.productName)}</td>
-                <td class="num mono">${bi.qtyPerBundle}&times;${item.quantity}</td>
-                <td class="num mono">&mdash;</td>
-                <td class="num mono">&mdash;</td>
-              </tr>`).join("")
-            : ""
-          return `
-            <tr>
-              <td class="num mono">${String(i + 1).padStart(2, "0")}</td>
-              <td class="desc">${esc(item.productName)}${item.bundleItems?.length ? '<span class="tag">Bundle</span>' : ""}</td>
-              <td class="num mono">${item.quantity}</td>
-              <td class="num mono">${money(itemPrice(item))}</td>
-              <td class="num mono strong">${money(itemTotal(item))}</td>
-            </tr>${children}`
-        }).join("")
-      : `
+  // ---- line items ----
+  const rows = items.length
+    ? items.map((item, i) => {
+        const variant = (item as any).variantName || (item as any).variant_name
+        const sku = (item as any).sku
+        const subs = item.bundleItems?.length
+          ? `<div class="bundle">${item.bundleItems.map((bi) => `${esc(bi.productName)} &times;${bi.qtyPerBundle * item.quantity}`).join(" &middot; ")}</div>`
+          : ""
+        return `
         <tr>
-          <td class="num mono">01</td>
-          <td class="desc">${esc(order.customerName)}</td>
-          <td class="num mono">1</td>
-          <td class="num mono">${money(total)}</td>
-          <td class="num mono strong">${money(total)}</td>
+          <td class="c-no">${i + 1}</td>
+          <td class="c-item">
+            <div class="item-name">${esc(item.productName)}${item.bundleItems?.length ? ' <span class="tag">Bundle</span>' : ""}</div>
+            ${variant || sku ? `<div class="item-sub">${[variant, sku ? `SKU ${sku}` : ""].filter(Boolean).map(esc).join(" &middot; ")}</div>` : ""}
+            ${subs}
+          </td>
+          <td class="c-num">${item.quantity}</td>
+          <td class="c-num">${money(itemPrice(item))}</td>
+          ${showLineDisc ? `<td class="c-num">${itemDiscount(item) > 0 ? "&minus;" + money(itemDiscount(item)) : "&mdash;"}</td>` : ""}
+          <td class="c-num c-amt">${money(itemTotal(item))}</td>
         </tr>`
+      }).join("")
+    : `<tr><td class="c-no">1</td><td class="c-item"><div class="item-name">Sale ${esc(order.invoiceNo)}</div></td>
+         <td class="c-num">1</td><td class="c-num">${money(total)}</td>${showLineDisc ? "<td></td>" : ""}<td class="c-num c-amt">${money(total)}</td></tr>`
 
-    const sumRow = (label: string, value: string, cls = "") => `
-      <div class="sum-row ${cls}"><span>${label}</span><b class="mono">${value}</b></div>`
+  const totalRow = (label: string, value: string, cls = "") =>
+    `<tr class="${cls}"><td>${label}</td><td class="c-num">${value}</td></tr>`
 
-    const summaryHtml = `
-      ${sumRow("Subtotal", money(subtotal))}
-      ${sumRow("Shipping", money(shippingCost))}
-      ${discount > 0 ? sumRow("Discount", "-" + money(discount)) : ""}
-      ${deposit > 0 ? sumRow("Deposit paid", money(deposit)) : ""}
-      <div class="sum-total"><span>Total</span><b class="mono">${money(total)}</b></div>
-      ${deposit > 0 && order.paymentStatus === "shipping_deposit_paid"
-        ? `<div class="sum-note">Remaining on delivery: ${money(total - deposit)}</div>` : ""}`
+  const totals = [
+    totalRow("Subtotal", money(subtotal)),
+    discount > 0.009 ? totalRow(`Discount${order.couponCode ? ` (${esc(order.couponCode)})` : ""}`, "&minus;" + money(discount)) : "",
+    tax > 0.009 || (taxRate ?? 0) > 0 ? totalRow(`Tax${taxRate ? ` (${taxRate}%)` : ""}`, money(tax)) : "",
+    delivery > 0.009 ? totalRow("Delivery", money(delivery)) : "",
+    totalRow("Total", money(total), "grand"),
+    totalRow("Paid", money(paid)),
+    totalRow("Balance due", money(due), due > 0.009 ? "due" : "due settled"),
+  ].join("")
 
-    // One invoice copy. Rendered twice (customer + merchant) on a single A4.
-    const copy = (label: string) => `
-      <section class="copy">
-        <div class="copy-tag">${label}</div>
+  const notes = [
+    o.deliveryNote ? `<p><b>Delivery note:</b> ${esc(o.deliveryNote)}</p>` : "",
+    order.notes ? `<p>${esc(order.notes).replace(/\n/g, "<br />")}</p>` : "",
+  ].join("")
 
-        <header class="head">
-          <div class="issuer">
-            <div class="mark">${esc(SELLER.name.charAt(0).toUpperCase())}</div>
-            <div>
-              <div class="name">${esc(SELLER.name)}</div>
-              <div class="sub">
-                ${SELLER.addressLines.map(l => esc(l)).join(" &middot; ")}
-                &middot; ${esc(SELLER.phone)}${settings?.taxId ? " &middot; Tax ID " + esc(settings.taxId) : ""}
-              </div>
-            </div>
-          </div>
-          <div class="doc">
-            <div class="doc-word">INVOICE</div>
-            <div class="doc-no mono">#${esc(order.invoiceNo)}</div>
-          </div>
-        </header>
+  const footerMsg = getCachedReceiptPrefs()?.footer
+  const taxId = seller.bin || ctx.taxId || ""
+  const sellerInfo = [
+    ...seller.addressLines.map(esc),
+    [seller.phone, seller.email].filter(Boolean).map(esc).join(" &middot; "),
+    seller.website ? esc(seller.website) : "",
+  ].filter(Boolean).join("<br />")
+  const regs = [taxId ? `BIN/VAT: ${esc(taxId)}` : "", seller.licence ? `Trade licence: ${esc(seller.licence)}` : ""].filter(Boolean).join(" &middot; ")
 
-        <div class="meta">
-          <div class="meta-cell">
-            <span class="lbl">Bill to</span>
-            <span class="val">${esc(buyerName)}</span>
-            <span class="sub2">${buyerSub}</span>
-          </div>
-          <div class="meta-cell">
-            <span class="lbl">Date</span>
-            <span class="val">${esc(issuedDate)}</span>
-            <span class="sub2 mono">${esc(issuedTime)}</span>
-          </div>
-          <div class="meta-cell">
-            <span class="lbl">Payment</span>
-            <span class="val">${esc(order.method)}${payment ? ` &mdash; <span class="pay ${paid ? "ok" : "warn"}">${esc(payment.label)}</span>` : ""}</span>
-            ${order.paymentTransactionId ? `<span class="sub2 mono txn">Txn ${esc(order.paymentTransactionId)}</span>` : ""}
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th class="num" style="width:32px">#</th>
-              <th>Description</th>
-              <th class="num" style="width:48px">Qty</th>
-              <th class="num" style="width:82px">Unit</th>
-              <th class="num" style="width:90px">Amount</th>
-            </tr>
-          </thead>
-          <tbody>${itemsRows}</tbody>
-        </table>
-
-        <div class="foot">
-          <div class="terms">
-            <span class="lbl">Notes</span>
-            Goods once sold are subject to the return policy. Thank you for your business.
-          </div>
-          <div class="summary">${summaryHtml}</div>
-        </div>
-      </section>`
-
-    const prefs = getCachedReceiptPrefs()
-    const paper = prefs?.paper ?? "a4"
-    const pageCss = paper === "a4" ? "@page{size:A4;margin:10mm}" : `@page{size:${paper}mm auto;margin:3mm} .page{max-width:${paper === "58" ? 52 : 74}mm !important;zoom:.5}`
-    const footerHtml = prefs?.footer ? `<p style="text-align:center;font-size:11px;margin:10px 0 0">${esc(prefs.footer)}</p>` : ""
-    const printWindow = window.open("", "_blank")
-    if (!printWindow) return
-
-    printWindow.document.write(`
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Invoice ${esc(order.invoiceNo)} &mdash; ${esc(SELLER.name)}</title>
+<title>Invoice ${esc(order.invoiceNo)} — ${esc(seller.name)}</title>
 <style>
-  :root{
-    --ink:#111827; --muted:#6b7280; --faint:#9ca3af; --line:#e5e7eb; --line-2:#d1d5db;
-    --accent:#0f766e; --accent-soft:#ccfbf1; --ok:#047857; --ok-soft:#d1fae5;
-    --warn:#b45309; --warn-soft:#fef3c7;
-  }
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
-    font-size:12px;line-height:1.45;background:#f3f4f6;padding:16px}
-  .mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  @page { size: A4; margin: 14mm 14mm 16mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #111827;
+    font-size: 12px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sheet { width: 100%; max-width: 182mm; margin: 0 auto; }
+  @media screen { body { background: #f3f4f6; padding: 24px 0; } .sheet { background: #fff; padding: 14mm; box-shadow: 0 1px 4px rgba(0,0,0,.12); } }
+  .num, .c-num { font-variant-numeric: tabular-nums; }
 
-  /* Page = two copies stacked, cut line between */
-  .page{max-width:760px;margin:0 auto;background:#fff}
-  .cut{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:10px;
-    letter-spacing:.14em;text-transform:uppercase;padding:6px 22px}
-  .cut::before,.cut::after{content:"";flex:1;border-top:1.4px dashed var(--line-2)}
-  .cut svg{width:14px;height:14px}
+  /* header */
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .brand { display: flex; gap: 12px; align-items: flex-start; max-width: 60%; }
+  .logo { width: 52px; height: 52px; object-fit: contain; flex: none; }
+  .mark { width: 52px; height: 52px; border-radius: 10px; background: #111827; color: #fff; flex: none;
+    display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
+  .seller-name { font-size: 17px; font-weight: 700; line-height: 1.2; }
+  .seller-legal { font-size: 11px; color: #4b5563; }
+  .seller-info { font-size: 11px; color: #4b5563; margin-top: 4px; }
+  .regs { font-size: 10.5px; color: #4b5563; margin-top: 3px; }
+  .doc { text-align: right; }
+  .doc h1 { font-size: 28px; font-weight: 800; letter-spacing: .06em; line-height: 1; }
+  .doc table { margin: 10px 0 0 auto; border-collapse: collapse; font-size: 11.5px; }
+  .doc td { padding: 1px 0 1px 14px; text-align: right; }
+  .doc td:first-child { color: #6b7280; }
+  .doc td:last-child { font-weight: 600; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 10.5px; font-weight: 700; }
+  .pill.ok { background: #dcfce7; color: #166534; } .pill.warn { background: #fef3c7; color: #92400e; } .pill.bad { background: #fee2e2; color: #991b1b; }
+  hr { border: 0; border-top: 2px solid #111827; margin: 16px 0 14px; }
 
-  .copy{position:relative;padding:26px 30px 22px}
-  .copy-tag{position:absolute;top:20px;right:30px;font-size:9.5px;font-weight:700;
-    letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
-    background:var(--accent-soft);padding:3px 9px;border-radius:99px}
-
-  /* head */
-  .head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;
-    padding-bottom:14px;border-bottom:2px solid var(--ink)}
-  .issuer{display:flex;gap:11px;align-items:center}
-  .mark{width:34px;height:34px;border-radius:8px;background:var(--accent);color:#fff;flex:none;
-    display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700}
-  .name{font-size:14px;font-weight:700;letter-spacing:-.01em}
-  .sub{font-size:10.5px;color:var(--muted);margin-top:2px;max-width:360px}
-  .doc{text-align:right;padding-right:78px}
-  .doc-word{font-size:20px;font-weight:800;letter-spacing:.08em}
-  .doc-no{font-size:11px;color:var(--muted);margin-top:2px}
-
-  /* meta */
-  .meta{display:grid;grid-template-columns:1.5fr 1fr 1.2fr;gap:16px;padding:12px 0 14px;
-    border-bottom:1px solid var(--line)}
-  .meta-cell{display:flex;flex-direction:column;min-width:0}
-  .meta-cell .lbl{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
-  .meta-cell .val{font-size:12.5px;font-weight:600}
-  .meta-cell .sub2{font-size:10.5px;color:var(--muted);margin-top:1px;line-height:1.5}
-  .txn{word-break:break-all}
-  .pay{font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px}
-  .pay.ok{background:var(--ok-soft);color:var(--ok)}
-  .pay.warn{background:var(--warn-soft);color:var(--warn)}
+  /* parties */
+  .parties { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .party .lbl, .lbl { font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #6b7280; margin-bottom: 4px; }
+  .party .name { font-weight: 700; font-size: 12.5px; }
+  .party .lines { color: #374151; font-size: 11.5px; }
 
   /* items */
-  table{width:100%;border-collapse:collapse;margin-top:2px}
-  th{text-align:left;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--muted);padding:8px 8px;border-bottom:1px solid var(--line)}
-  th.num{text-align:right}
-  td{padding:8px;border-bottom:1px solid #f3f4f6;font-size:12px;vertical-align:top}
-  td.num{text-align:right}
-  td.desc{font-weight:500}
-  td.strong{font-weight:700}
-  .tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:3px;
-    background:var(--accent-soft);color:var(--accent);font-size:9px;font-weight:700;
-    letter-spacing:.06em;text-transform:uppercase}
-  .sub td{padding:4px 8px;border-bottom:1px solid #fafafa}
-  .sub .desc{font-weight:400;color:var(--muted);font-size:11px}
-  .branch{color:var(--faint);margin-right:5px}
+  table.items { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  .items thead th { background: #f3f4f6; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: #374151; padding: 8px 10px; text-align: left; border-top: 1px solid #d1d5db; border-bottom: 1px solid #d1d5db; }
+  .items th.c-num, .items td.c-num { text-align: right; white-space: nowrap; }
+  .items td { padding: 9px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  .items tr { page-break-inside: avoid; }
+  .c-no { width: 30px; color: #6b7280; }
+  .item-name { font-weight: 600; }
+  .item-sub, .bundle { font-size: 10.5px; color: #6b7280; }
+  .c-amt { font-weight: 600; }
+  .tag { font-size: 9px; font-weight: 700; text-transform: uppercase; background: #e5e7eb; padding: 1px 5px; border-radius: 3px; }
 
-  /* foot: notes + summary */
-  .foot{display:flex;justify-content:space-between;gap:28px;margin-top:14px}
-  .terms{flex:1;font-size:10.5px;color:var(--muted);max-width:320px}
-  .terms .lbl{display:block;font-size:9px;font-weight:700;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--faint);margin-bottom:4px}
-  .summary{width:230px}
-  .sum-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:var(--muted)}
-  .sum-row b{color:var(--ink);font-weight:500}
-  .sum-total{display:flex;justify-content:space-between;align-items:baseline;
-    margin-top:6px;padding-top:9px;border-top:2px solid var(--ink)}
-  .sum-total span{font-size:13px;font-weight:700}
-  .sum-total b{font-size:18px;font-weight:800;letter-spacing:-.02em}
-  .sum-note{margin-top:5px;font-size:10px;color:var(--warn);text-align:right}
+  /* totals */
+  .bottom { display: flex; justify-content: space-between; gap: 28px; margin-top: 16px; page-break-inside: avoid; }
+  .words { flex: 1; font-size: 11.5px; }
+  .words p { margin-bottom: 8px; color: #374151; }
+  table.totals { width: 270px; border-collapse: collapse; font-size: 12px; }
+  .totals td { padding: 5px 0; }
+  .totals td.c-num { text-align: right; }
+  .totals tr.grand td { border-top: 2px solid #111827; padding-top: 8px; font-size: 15px; font-weight: 800; }
+  .totals tr.due td { border-top: 1px solid #d1d5db; font-weight: 700; }
+  .totals tr.due:not(.settled) td { color: #b91c1c; }
 
-  ${pageCss}
-  @media print{
-    body{background:#fff;padding:0}
-    .page{max-width:none}
-    .copy{page-break-inside:avoid}
-    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  }
+  /* signatures + footer */
+  .sign { display: flex; justify-content: space-between; gap: 40px; margin-top: 56px; page-break-inside: avoid; }
+  .sign div { flex: 1; max-width: 220px; border-top: 1px solid #6b7280; padding-top: 6px; font-size: 11px; color: #4b5563; text-align: center; }
+  .foot { margin-top: 28px; padding-top: 10px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10.5px; color: #6b7280; }
+  .foot .msg { font-size: 12px; color: #111827; font-weight: 600; margin-bottom: 2px; }
 </style>
 </head>
 <body>
-  <div class="page">
-    ${copy("Customer Copy")}
-    <div class="cut" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M8 8 4 12l4 4M16 8l4 4-4 4M6 3l12 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Cut here
+<div class="sheet">
+  <div class="top">
+    <div class="brand">
+      ${seller.logoUrl ? `<img class="logo" src="${esc(seller.logoUrl)}" alt="" />` : `<div class="mark">${esc(seller.name.charAt(0).toUpperCase())}</div>`}
+      <div>
+        <div class="seller-name">${esc(seller.name)}</div>
+        ${seller.legalName ? `<div class="seller-legal">${esc(seller.legalName)}</div>` : ""}
+        ${sellerInfo ? `<div class="seller-info">${sellerInfo}</div>` : ""}
+        ${regs ? `<div class="regs">${regs}</div>` : ""}
+      </div>
     </div>
-    ${copy("Merchant Copy")}
-    ${footerHtml}
+    <div class="doc">
+      <h1>INVOICE</h1>
+      <table>
+        <tr><td>Invoice no.</td><td>${esc(order.invoiceNo)}</td></tr>
+        <tr><td>Date</td><td>${esc(issuedDate)}, ${esc(issuedTime)}</td></tr>
+        <tr><td>Status</td><td><span class="pill ${pay.tone}">${pay.label}</span></td></tr>
+        ${location ? `<tr><td>Location</td><td>${esc(location)}</td></tr>` : ""}
+      </table>
+    </div>
   </div>
+
+  <hr />
+
+  <div class="parties">
+    <div class="party">
+      <div class="lbl">Bill to</div>
+      <div class="name">${esc(customerName)}</div>
+      <div class="lines">${[...(hasShipping ? [] : contact)].map(esc).join("<br />") || (order.customerId ? "" : "Point of sale")}</div>
+    </div>
+    <div class="party">
+      <div class="lbl">Ship to</div>
+      ${hasShipping
+        ? `<div class="name">${esc(receiver)}</div><div class="lines">${[...shipLines, ...contact].map(esc).join("<br />")}</div>`
+        : `<div class="lines">Collected in store</div>`}
+    </div>
+    <div class="party">
+      <div class="lbl">Payment</div>
+      <div class="name">${esc(order.method || "—")}</div>
+      <div class="lines">${[txn ? `Txn: ${esc(txn)}` : "", courier ? `Courier: ${esc(courier)}` : "", zone ? `Zone: ${esc(zone)}` : ""].filter(Boolean).join("<br />")}</div>
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="c-no">#</th>
+        <th>Item</th>
+        <th class="c-num">Qty</th>
+        <th class="c-num">Unit price</th>
+        ${showLineDisc ? '<th class="c-num">Discount</th>' : ""}
+        <th class="c-num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+
+  <div class="bottom">
+    <div class="words">
+      <div class="lbl">Amount in words</div>
+      <p>${esc(amountInWords(total))}</p>
+      ${notes ? `<div class="lbl">Notes</div>${notes}` : ""}
+      ${showLineDisc ? `<p class="item-sub">Line discounts: &minus;${money(lineDisc)} (gross ${money(lineGross)})</p>` : ""}
+    </div>
+    <table class="totals">${totals}</table>
+  </div>
+
+  <div class="sign">
+    <div>Customer signature</div>
+    <div>Authorised signature</div>
+  </div>
+
+  <div class="foot">
+    <div class="msg">${esc(footerMsg || "Thank you for your business.")}</div>
+    Goods once sold are subject to our return policy. This is a computer-generated invoice.
+  </div>
+</div>
 </body>
-</html>
-    `)
-    printWindow.document.close()
-    printWindow.focus()
-    printWindow.setTimeout(() => printWindow.print(), 300)
+</html>`
+}
+
+/**
+ * Opens a print window with a standard single-copy A4 invoice for a sale.
+ * Shared by the Orders and Sales pages and the New sale form.
+ * The window opens immediately (so popup blockers allow it), then fills in once
+ * the company details are loaded (cached after the first print).
+ */
+export function printSaleInvoice(order: SellResponse, ctx: PrintCtx): void {
+  const w = window.open("", "_blank")
+  if (!w) return
+  w.document.write(`<!DOCTYPE html><title>Invoice ${esc(order.invoiceNo)}</title><p style="font-family:sans-serif;padding:24px;color:#6b7280">Preparing invoice…</p>`)
+
+  void loadInvoiceSeller()
+    .catch((): InvoiceSeller => ({ name: "Your business", addressLines: [] }))
+    .then((seller) => {
+      w.document.open()
+      w.document.write(invoiceHtml(order, ctx, seller))
+      w.document.close()
+      w.focus()
+      // wait for the logo before printing so it isn't missing on paper
+      const img = w.document.querySelector("img.logo") as HTMLImageElement | null
+      const go = () => w.setTimeout(() => w.print(), 150)
+      if (img && !img.complete) { img.onload = go; img.onerror = go } else go()
+    })
 }

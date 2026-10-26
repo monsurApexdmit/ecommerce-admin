@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
-  Banknote, CheckCircle2, Clock, Download, Eye, MoreHorizontal, Package, Plus, Printer, Search, ShoppingCart, Truck, X, XCircle,
+  Banknote, CheckCircle2, Clock, Download, Eye, MoreHorizontal, Package, Phone, PhoneCall, Plus, Printer, Search, ShoppingCart, Truck, X, XCircle,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -35,6 +35,7 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 import {
   SaleDetailDialog, SALE_PAY_VARIANT, salePayment,
 } from "@/components/sales/sale-detail-dialog"
+import { FollowUpDialog, canFollowUp, followUpSummary } from "@/components/sales/order-follow-up"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
 import { fetchSection } from "@/lib/dashboard/api"
 import { printSaleInvoice } from "@/lib/invoice-print"
@@ -121,6 +122,9 @@ export default function OrdersPage() {
   const [total, setTotal] = useState(0)
   const [stats, setStats] = useState<Stats | null>(null)
   const [tabCounts, setTabCounts] = useState<Partial<Record<Tab | "all", number>>>({})
+  const [followUpDue, setFollowUpDue] = useState<number | null>(null)
+  const [dueOnly, setDueOnly] = useState(false)
+  const [followUpTarget, setFollowUpTarget] = useState<SellResponse | null>(null)
   const [exporting, setExporting] = useState(false)
   const [oldestPending, setOldestPending] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -161,6 +165,7 @@ export default function OrdersPage() {
     }
     const pay = searchParams.get("pay")?.toLowerCase()
     if (pay && ["paid", "partial", "unpaid"].includes(pay)) { setPayFilter(pay as Pay); setPage(1) }
+    if (searchParams.get("followUp")?.toLowerCase() === "due") { setDueOnly(true); setPage(1) }
   }, [searchParams])
 
   const filterParams = useCallback(() => {
@@ -172,8 +177,9 @@ export default function OrdersPage() {
     if (methodFilter !== "all") params.method = methodFilter
     if (startDate) params.start_date = startDate
     if (endDate) params.end_date = endDate
+    if (dueOnly) params.followUp = "due"
     return params
-  }, [search, tab, source, payFilter, methodFilter, startDate, endDate])
+  }, [search, tab, source, payFilter, methodFilter, startDate, endDate, dueOnly])
 
   const fetchOrders = useCallback(async () => {
     const id = ++latestFetch.current
@@ -199,6 +205,7 @@ export default function OrdersPage() {
     const counts: Partial<Record<Tab, number>> = {}
     for (const t of TAB_VALUES) if (c[t.toLowerCase()] !== undefined) counts[t] = num(c[t.toLowerCase()])
     setTabCounts({ all: c.all !== undefined ? num(c.all) : undefined, ...counts })
+    setFollowUpDue(c.followUpDue !== undefined ? num(c.followUpDue) : null)
     setStats({
       total: num(k.totalOrders), last30: num(k.last30Days), due: num(k.dueToCollect), unpaid: num(k.unpaidCount),
       revenue: num(k.revenue), pending: num(k.pending), processing: num(k.confirmedOrPacked),
@@ -235,10 +242,10 @@ export default function OrdersPage() {
   if (blocked) return blocked
 
   const refresh = () => { fetchOrders(); fetchStats() }
-  const hasFilters = !!(search || source !== "all" || payFilter !== "all" || methodFilter !== "all" || startDate || endDate || tab !== "all")
+  const hasFilters = !!(search || source !== "all" || payFilter !== "all" || methodFilter !== "all" || startDate || endDate || tab !== "all" || dueOnly)
 
   const resetFilters = () => {
-    setSearch(""); setTab("all"); setSource("all"); setPayFilter("all"); setMethodFilter("all")
+    setSearch(""); setTab("all"); setSource("all"); setPayFilter("all"); setMethodFilter("all"); setDueOnly(false)
     setStartDate(""); setEndDate(""); setPage(1); setResetCount((n) => n + 1); setChecked(new Set())
   }
   const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setChecked(new Set()) }
@@ -500,6 +507,17 @@ export default function OrdersPage() {
             onChange={(a, b) => { setStartDate(a); setEndDate(b); setPage(1) }}
             className="flex flex-wrap items-center gap-2"
           />
+          <Button
+            type="button"
+            variant={dueOnly ? "default" : "outline"}
+            aria-pressed={dueOnly}
+            onClick={() => { setDueOnly((v) => !v); setPage(1); setChecked(new Set()) }}
+          >
+            <PhoneCall className="size-4" aria-hidden /> Follow-up due
+            {followUpDue !== null && (
+              <Badge variant={dueOnly ? "secondary" : followUpDue > 0 ? "destructive" : "outline"} className="tabular-nums">{followUpDue}</Badge>
+            )}
+          </Button>
           {hasFilters && (
             <Button type="button" variant="ghost" onClick={resetFilters}>
               <X className="size-4" aria-hidden /> Clear
@@ -577,6 +595,8 @@ export default function OrdersPage() {
                   const src = SOURCE_CHIP[o.source ?? "pos"] ?? SOURCE_CHIP.manual
                   const shipment = o.shipments?.find(isLiveShipment) ?? o.shipments?.[0]
                   const canShip = canShipOrder(o)
+                  const followable = canFollowUp(o)
+                  const fu = followable || (Number(o.followUpCount) || 0) > 0 ? followUpSummary(o) : null
                   const ck = checked.has(o.id)
                   return (
                     <TableRow key={o.id} data-state={ck ? "selected" : undefined}>
@@ -623,6 +643,11 @@ export default function OrdersPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {fu && (
+                          <div className={cn("mt-1 text-xs", fu.overdue ? "font-semibold text-destructive" : "text-muted-foreground")}>
+                            {fu.text}{fu.overdue ? " (overdue)" : ""}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         {shipment ? (
@@ -644,6 +669,11 @@ export default function OrdersPage() {
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
                           <WithTooltip content={`View ${o.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${o.invoiceNo}`} onClick={() => openDetail(o)}><Eye className="size-4" /></Button></WithTooltip>
+                          {followable && (
+                            <WithTooltip content="Follow up">
+                              <Button type="button" variant="outline" size="icon" aria-label="Follow up" onClick={() => setFollowUpTarget(o)}><Phone className="size-4" /></Button>
+                            </WithTooltip>
+                          )}
                           <WithTooltip content={`Print ${o.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${o.invoiceNo}`} onClick={() => printInvoice(o)}><Printer className="size-4" /></Button></WithTooltip>
                           {!["Cancelled", "Delivered", "Completed"].includes(stage) && (
                             <WithTooltip content="Cancel order">
@@ -689,6 +719,8 @@ export default function OrdersPage() {
       </Card>
 
       <SaleDetailDialog sale={selected} onClose={() => setSelected(null)} onPrint={printInvoice} onChanged={() => refresh()} onCreateShipment={(s) => createShipment(s.id)} />
+
+      <FollowUpDialog order={followUpTarget} onClose={() => setFollowUpTarget(null)} onSaved={() => refresh()} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
