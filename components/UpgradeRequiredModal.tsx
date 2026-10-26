@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 
 interface UpgradeRequiredModalProps {
@@ -69,14 +70,14 @@ export function UpgradeRequiredModal({
               <DialogTitle>{title}</DialogTitle>
             </div>
           </div>
-          <DialogDescription className="text-base text-gray-700 mt-2">
+          <DialogDescription className="mt-2">
             {getLimitMessage()}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h4 className="font-semibold text-amber-900 mb-2">Plan Comparison</h4>
-          <div className="space-y-2 text-sm text-amber-800">
+        <Alert>
+          <AlertTitle>Plan Comparison</AlertTitle>
+          <AlertDescription className="space-y-2">
             {limitType === "products" && (
               <>
                 <div>📦 Starter: 1,000 products</div>
@@ -98,17 +99,14 @@ export function UpgradeRequiredModal({
                 <div>🏢 Enterprise: Unlimited warehouses</div>
               </>
             )}
-          </div>
-        </div>
+          </AlertDescription>
+        </Alert>
 
         <DialogFooter className="flex gap-3 justify-end pt-4">
           <Button variant="outline" onClick={handleClose}>
             Keep Current Plan
           </Button>
-          <Button
-            onClick={handleUpgrade}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
+          <Button onClick={handleUpgrade}>
             Browse Plans
           </Button>
         </DialogFooter>

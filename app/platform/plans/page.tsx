@@ -1,9 +1,10 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 import { platformApi, PlatformPlan } from "@/lib/platformApi"
 import {
-  Loader, AlertCircle, Plus, Check, X, Zap, ChevronDown, ChevronUp,
+  AlertCircle, Plus, Check, X, Zap, ChevronDown, ChevronUp,
   Pencil, ToggleLeft, ToggleRight,
 } from "lucide-react"
 import {
@@ -11,6 +12,18 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 type FormData = {
   name: string
@@ -92,60 +105,58 @@ function PlanFormDialog({
 
         <div className="space-y-5 py-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Plan Name *</label>
-              <Input value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g., Professional" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Price ($/mo) *</label>
-              <Input type="number" min="0" step="0.01" value={form.price} onChange={e => set("price", e.target.value)} placeholder="e.g., 49.00" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
+            <FormField label="Plan Name *" htmlFor="plan-name">
+              <Input id="plan-name" value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g., Professional" />
+            </FormField>
+            <FormField label="Price ($/mo) *" htmlFor="plan-price">
+              <Input id="plan-price" type="number" min="0" step="0.01" value={form.price} onChange={e => set("price", e.target.value)} placeholder="e.g., 49.00" />
+            </FormField>
+            <FormField label="Description" htmlFor="plan-description" className="sm:col-span-2">
+              <Textarea
+                id="plan-description"
                 value={form.description}
                 onChange={e => set("description", e.target.value)}
                 placeholder="Short description of the plan"
                 rows={2}
-                className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                className="w-full"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Users</label>
-              <Input type="number" min="1" value={form.maxUsers} onChange={e => set("maxUsers", e.target.value)} placeholder="999999 = Unlimited" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Products</label>
-              <Input type="number" min="1" value={form.maxProducts} onChange={e => set("maxProducts", e.target.value)} placeholder="999999 = Unlimited" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Max Branches</label>
-              <Input type="number" min="1" value={form.maxBranches} onChange={e => set("maxBranches", e.target.value)} placeholder="999999 = Unlimited" />
-            </div>
+            </FormField>
+            <FormField label="Max Users" htmlFor="plan-max-users">
+              <Input id="plan-max-users" type="number" min="1" value={form.maxUsers} onChange={e => set("maxUsers", e.target.value)} placeholder="999999 = Unlimited" />
+            </FormField>
+            <FormField label="Max Products" htmlFor="plan-max-products">
+              <Input id="plan-max-products" type="number" min="1" value={form.maxProducts} onChange={e => set("maxProducts", e.target.value)} placeholder="999999 = Unlimited" />
+            </FormField>
+            <FormField label="Max Branches" htmlFor="plan-max-branches">
+              <Input id="plan-max-branches" type="number" min="1" value={form.maxBranches} onChange={e => set("maxBranches", e.target.value)} placeholder="999999 = Unlimited" />
+            </FormField>
           </div>
 
           <div className="flex items-center gap-6">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.isActive} onChange={e => set("isActive", e.target.checked)} className="w-4 h-4 accent-emerald-600 rounded" />
+            <Label className="cursor-pointer">
+              <Checkbox checked={form.isActive} onCheckedChange={v => set("isActive", v === true)} />
               Active (visible to users)
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.isFeatured} onChange={e => set("isFeatured", e.target.checked)} className="w-4 h-4 accent-emerald-600 rounded" />
+            </Label>
+            <Label className="cursor-pointer">
+              <Checkbox checked={form.isFeatured} onCheckedChange={v => set("isFeatured", v === true)} />
               Featured (Most Popular badge)
-            </label>
+            </Label>
           </div>
 
           {/* Features */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Features</label>
-            <div className="space-y-2 mb-3">
+          <FormField label="Features">
+            <div className="space-y-2 mb-1">
               {form.features.map((f, i) => (
-                <div key={i} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md">
-                  <span className="text-sm text-gray-700">{f}</span>
-                  <button onClick={() => removeFeature(i)} className="text-red-500 hover:text-red-700">
-                    <X size={15} />
-                  </button>
-                </div>
+                <Item key={i} variant="muted" size="sm" className="py-1 pr-1">
+                  <ItemContent>
+                    <ItemTitle className="font-normal">{f}</ItemTitle>
+                  </ItemContent>
+                  <ItemActions>
+                    <WithTooltip content="Remove feature"><Button variant="ghost" size="icon-sm" onClick={() => removeFeature(i)} aria-label="Remove feature">
+                      <X size={15} />
+                    </Button></WithTooltip>
+                  </ItemActions>
+                </Item>
               ))}
             </div>
             <div className="flex gap-2">
@@ -157,16 +168,16 @@ function PlanFormDialog({
               />
               <Button onClick={addFeature} variant="outline" className="whitespace-nowrap">Add</Button>
             </div>
-          </div>
+          </FormField>
 
-          <div className="flex gap-3 justify-end pt-4 border-t">
+          <Separator />
+          <div className="flex gap-3 justify-end">
             <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button
               onClick={() => onSave(form)}
               disabled={saving || !form.name || !form.price}
-              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {saving ? <><Loader className="w-4 h-4 mr-2 animate-spin" /> Saving…</> : <><Check className="w-4 h-4 mr-2" /> Save Plan</>}
+              {saving ? <><Spinner /> Saving…</> : <><Check className="w-4 h-4" /> Save Plan</>}
             </Button>
           </div>
         </div>
@@ -242,14 +253,15 @@ export default function PlansPage() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <Loader className="w-6 h-6 animate-spin text-emerald-600" />
+      <Spinner className="size-6" />
     </div>
   )
 
   if (error) return (
-    <div className="flex items-center gap-2 text-red-600 p-4 bg-red-50 rounded-xl">
-      <AlertCircle className="w-5 h-5" /> {error}
-    </div>
+    <Alert variant="destructive">
+      <AlertCircle />
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
   )
 
   return (
@@ -258,32 +270,25 @@ export default function PlansPage() {
       <div className="relative overflow-hidden pt-12 pb-8">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/10 to-teal-400/10 -z-10" />
         <div className="max-w-4xl mx-auto text-center px-4">
-          <div className="inline-block px-4 py-2 bg-emerald-100 rounded-full mb-3">
-            <p className="text-emerald-700 text-xs sm:text-sm font-semibold">💎 Subscription Plans</p>
-          </div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-3">
+          <Badge variant="secondary" className="mb-3">💎 Subscription Plans</Badge>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3">
             Manage Subscription Plans
           </h1>
-          <p className="text-base sm:text-lg text-gray-600 mb-6 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground mb-6 max-w-2xl mx-auto">
             Create and manage the plans available to companies on signup.
           </p>
-          <button
+          <Button
             onClick={() => { setShowCreate(true); setEditingPlan(null) }}
-            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow"
           >
             <Plus className="w-4 h-4" /> New Plan
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Plan cards */}
       <div className="max-w-5xl mx-auto px-4 space-y-4">
         {plans.length === 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
-            <AlertCircle className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
-            <p className="text-yellow-800 text-lg font-semibold">No plans yet</p>
-            <p className="text-yellow-700 mt-2">Click "New Plan" to create the first one.</p>
-          </div>
+          <EmptyState bordered icon={AlertCircle} title="No plans yet" description='Click "New Plan" to create the first one.' />
         )}
 
         {plans.map(plan => {
@@ -292,35 +297,33 @@ export default function PlansPage() {
           const visibleFeatures = isExpanded ? features : features.slice(0, 5)
 
           return (
-            <div
+            <Card
               key={plan.id}
-              className={`bg-white rounded-xl border p-6 transition-all ${
-                plan.isFeatured ? "border-emerald-300 shadow-md" : "border-gray-200"
-              } ${!plan.isActive ? "opacity-60" : ""}`}
+              className={cn("p-6", plan.isFeatured && "border-primary ring-1 ring-primary", !plan.isActive && "opacity-60")}
             >
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex-1 min-w-0">
                   {/* Name + badges */}
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h3 className="font-semibold text-gray-900 text-xl">{plan.name}</h3>
+                    <h3 className="font-semibold text-xl">{plan.name}</h3>
                     {plan.isFeatured && (
-                      <span className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-full font-medium">
-                        <Zap className="w-3 h-3" /> Most Popular
-                      </span>
+                      <Badge>
+                        <Zap /> Most Popular
+                      </Badge>
                     )}
                     {!plan.isActive && (
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
+                      <Badge variant="outline">Inactive</Badge>
                     )}
                   </div>
 
                   {plan.description && (
-                    <p className="text-sm text-gray-500 mb-3">{plan.description}</p>
+                    <p className="text-sm text-muted-foreground mb-3">{plan.description}</p>
                   )}
 
                   {/* Price + limits */}
-                  <div className="flex flex-wrap gap-5 text-sm text-gray-600 mb-3 items-baseline">
-                    <span className="font-bold text-2xl text-gray-900">
-                      ${plan.price}<span className="text-sm font-normal text-gray-400">/mo</span>
+                  <div className="flex flex-wrap gap-5 text-sm text-muted-foreground mb-3 items-baseline">
+                    <span className="font-bold text-2xl text-foreground">
+                      ${plan.price}<span className="text-sm font-normal text-muted-foreground">/mo</span>
                     </span>
                     <span>👥 {plan.maxUsers === 999999 || !plan.maxUsers ? "∞" : plan.maxUsers} users</span>
                     <span>📦 {plan.maxProducts === 999999 || !plan.maxProducts ? "∞" : plan.maxProducts?.toLocaleString()} products</span>
@@ -332,21 +335,23 @@ export default function PlansPage() {
                     <div>
                       <div className="flex flex-wrap gap-1.5">
                         {visibleFeatures.map((f, i) => (
-                          <span key={i} className="flex items-center gap-1 text-xs bg-gray-50 border border-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                            <Check className="w-3 h-3 text-emerald-500" /> {f}
-                          </span>
+                          <Badge key={i} variant="outline">
+                            <Check /> {f}
+                          </Badge>
                         ))}
                       </div>
                       {features.length > 5 && (
-                        <button
+                        <Button
+                          variant="link"
+                          size="sm"
                           onClick={() => toggleExpand(plan.id)}
-                          className="mt-2 text-emerald-600 text-xs font-medium flex items-center gap-1 hover:underline"
+                          className="mt-2"
                         >
                           {isExpanded
                             ? <><ChevronUp size={12} /> Show less</>
                             : <><ChevronDown size={12} /> +{features.length - 5} more</>
                           }
-                        </button>
+                        </Button>
                       )}
                     </div>
                   )}
@@ -354,32 +359,28 @@ export default function PlansPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() => setEditingPlan(plan)}
-                    className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
                   >
                     <Pencil className="w-3.5 h-3.5" /> Edit
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant={plan.isActive ? "destructive" : "outline"}
                     onClick={() => handleToggle(plan)}
                     disabled={togglingId === plan.id}
-                    className={`flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border transition-colors ${
-                      plan.isActive
-                        ? "text-red-600 border-red-200 hover:bg-red-50"
-                        : "text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                    }`}
                   >
                     {togglingId === plan.id
-                      ? <Loader className="w-3.5 h-3.5 animate-spin" />
+                      ? <Spinner />
                       : plan.isActive
                         ? <ToggleRight className="w-4 h-4" />
                         : <ToggleLeft className="w-4 h-4" />
                     }
                     {plan.isActive ? "Deactivate" : "Activate"}
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Card>
           )
         })}
       </div>

@@ -4,10 +4,17 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/spinner"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { FormField } from "@/components/common/FormField"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
 import { barcodeApi, type ProductWithBarcode } from "@/lib/barcodeApi"
-import { AlertCircle, Loader, Search, X } from "lucide-react"
+import { AlertCircle, Lightbulb, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface BarcodeScannerProps {
   onProductFound?: (product: ProductWithBarcode) => void
@@ -119,20 +126,16 @@ export default function BarcodeScanner({
   return (
     <div className="space-y-6">
       {/* Scanner Input */}
-      <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Barcode Scanner / Search
-            </label>
-            <p className="text-xs text-gray-600 mb-3">
-              Scan a barcode or enter it manually. Press Enter to search, Escape to clear.
-            </p>
-          </div>
-
+      <Card className="p-6">
+        <FormField
+          label="Barcode Scanner / Search"
+          htmlFor="barcode-scanner-input"
+          description="Scan a barcode or enter it manually. Press Enter to search, Escape to clear."
+        >
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <Input
+                id="barcode-scanner-input"
                 ref={inputRef}
                 type="text"
                 value={barcodeInput}
@@ -143,122 +146,93 @@ export default function BarcodeScanner({
                 className="pr-10"
               />
               {barcodeInput && (
-                <button
+                <WithTooltip content="Clear barcode"><Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Clear barcode"
                   onClick={() => setBarcodeInput("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
                 >
-                  <X className="w-4 h-4" />
-                </button>
+                  <X className="size-4" />
+                </Button></WithTooltip>
               )}
             </div>
 
             <Button
               onClick={() => handleSearch(barcodeInput)}
               disabled={loading || !barcodeInput.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
             >
               {loading ? (
                 <>
-                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  <Spinner />
                   Searching...
                 </>
               ) : (
                 <>
-                  <Search className="w-4 h-4 mr-2" />
+                  <Search className="size-4" />
                   Search
                 </>
               )}
             </Button>
           </div>
-        </div>
+        </FormField>
       </Card>
 
       {/* Error Message */}
       {error && (
-        <Card className="bg-red-50 border-red-200 p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-red-800">Search Failed</p>
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        </Card>
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Search Failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* Found Product */}
       {foundProduct && (
-        <Card className="p-6 bg-green-50 border-green-200">
-          <div className="space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Product Found</p>
-                <h3 className="text-2xl font-bold text-green-900">{foundProduct.name}</h3>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClear}
-                className="text-gray-600"
-              >
-                Clear
-              </Button>
+        <SectionCard
+          title={foundProduct.name}
+          description="Product Found"
+          actions={<Button variant="outline" size="sm" onClick={handleClear}>Clear</Button>}
+          contentClassName="space-y-4"
+        >
+          <InfoList className="grid-cols-2 gap-4 md:grid-cols-4">
+            <InfoRow layout="stacked" label="SKU" value={foundProduct.sku || "N/A"} />
+            <InfoRow layout="stacked" label="Barcode" value={<span className="font-mono">{foundProduct.barcode}</span>} />
+            <InfoRow layout="stacked" label="Stock" value={`${foundProduct.stock} units`} />
+            <InfoRow layout="stacked" label="Sale Price" value={formatCurrency(foundProduct.sale_price)} />
+          </InfoList>
+
+          {foundProduct.barcode_image_path && (
+            <div className="space-y-2">
+              <SectionTitle>Barcode Image</SectionTitle>
+              <Card className="items-center bg-white p-2">
+                <img
+                  src={foundProduct.barcode_image_path}
+                  alt="Barcode"
+                  className="max-h-20"
+                />
+              </Card>
             </div>
+          )}
 
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <div>
-                <p className="text-xs text-gray-600 font-semibold">SKU</p>
-                <p className="text-sm font-medium">{foundProduct.sku || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 font-semibold">Barcode</p>
-                <p className="text-sm font-mono font-medium text-blue-600">
-                  {foundProduct.barcode}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 font-semibold">Stock</p>
-                <p className="text-sm font-medium">{foundProduct.stock} units</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 font-semibold">Sale Price</p>
-                <p className="text-sm font-medium text-green-700">
-                  {formatCurrency(foundProduct.sale_price)}
-                </p>
-              </div>
-            </div>
-
-            {foundProduct.barcode_image_path && (
-              <div className="bg-white p-4 rounded border">
-                <p className="text-xs text-gray-600 font-semibold mb-2">Barcode Image</p>
-                <div className="flex justify-center bg-white p-2 rounded border border-gray-200">
-                  <img
-                    src={foundProduct.barcode_image_path}
-                    alt="Barcode"
-                    className="max-h-20"
-                  />
-                </div>
-              </div>
-            )}
-
-            {foundProduct.description && (
-              <div>
-                <p className="text-xs text-gray-600 font-semibold mb-1">Description</p>
-                <p className="text-sm text-gray-700">{foundProduct.description}</p>
-              </div>
-            )}
-          </div>
-        </Card>
+          {foundProduct.description && (
+            <InfoList>
+              <InfoRow layout="stacked" label="Description" value={<span className="font-normal">{foundProduct.description}</span>} />
+            </InfoList>
+          )}
+        </SectionCard>
       )}
 
       {/* Help Text */}
-      <Card className="p-4 bg-blue-50 border-blue-200">
-        <p className="text-xs text-blue-800">
-          <strong>💡 Tip:</strong> This component works with physical barcode scanners that emulate
+      <Alert>
+        <Lightbulb />
+        <AlertTitle>Tip</AlertTitle>
+        <AlertDescription>
+          This component works with physical barcode scanners that emulate
           keyboard input. Just ensure the scanner is connected and scan the barcode. The scanner
           will input the barcode and press Enter automatically.
-        </p>
-      </Card>
+        </AlertDescription>
+      </Alert>
     </div>
   )
 }

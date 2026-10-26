@@ -1,245 +1,330 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Download } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useWarehouse } from "@/contexts/warehouse-context"
-import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import inventoryApi, { type StockRow } from "@/lib/inventoryApi"
+import adjustmentApi, { type AdjustmentLogRow, type AdjustmentStats, type AdjustmentType } from "@/lib/adjustmentApi"
+import { exportToCSV } from "@/lib/export-import-utils"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
-import { transferApi, type LocationProduct, type LocationProductRaw } from "@/lib/transferApi"
-import { adjustmentApi, type AdjustmentType, type AdjustmentRow } from "@/lib/adjustmentApi"
-import { Plus, Minus, Equal, ArrowUpDown } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { StatTile } from "@/components/common/StatTile"
+import { EmptyState } from "@/components/common/EmptyState"
 
-// Flatten the per-location product list into selectable rows (product or variant),
-// each carrying its current stock at that location.
-function flatten(raw: LocationProductRaw[]): LocationProduct[] {
-  const rows: LocationProduct[] = []
-  for (const product of raw) {
-    if (product.variants && product.variants.length > 0) {
-      for (const v of product.variants) {
-        rows.push({ type: "variant", id: v.id, productId: product.id, productName: product.name, variantName: v.name, sku: v.sku, stock: v.stock })
-      }
-    } else {
-      rows.push({ type: "product", id: product.id, productId: product.id, productName: product.name, sku: product.sku, stock: product.stock })
-    }
-  }
-  return rows
-}
-
-const TYPES: { value: AdjustmentType; label: string; icon: any }[] = [
-  { value: "increase", label: "Increase", icon: Plus },
-  { value: "decrease", label: "Decrease", icon: Minus },
-  { value: "set", label: "Set to", icon: Equal },
+const TYPES: { id: AdjustmentType; label: string; sub: string }[] = [
+  { id: "increase", label: "+ Increase", sub: "Add units" },
+  { id: "decrease", label: "− Decrease", sub: "Remove units" },
+  { id: "set", label: "= Set to", sub: "After a count" },
 ]
+const REASONS: Record<AdjustmentType, string[]> = {
+  increase: ["Recount", "Received without PO", "Customer return", "Found", "Other"],
+  decrease: ["Recount", "Damaged", "Expired", "Theft / loss", "Gift / sample", "Own use", "Other"],
+  set: ["Recount", "Opening stock", "Other"],
+}
+const BIG_CHANGE = 10
 
-export default function StockAdjustmentPage() {
+const sign = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0")
+const deltaVariant = (n: number) => (n > 0 ? "default" : n < 0 ? "destructive" : "secondary") as "default" | "destructive" | "secondary"
+
+interface Sku { key: string; productId: number; variantId: number | null; label: string; cost: number; byLoc: Record<number, number> }
+
+export default function AdjustmentPage() {
+  const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
-  const { warehouses } = useWarehouse()
-
-  const [warehouse, setWarehouse] = useState("")
-  const [rawProducts, setRawProducts] = useState<LocationProductRaw[]>([])
-  const [productsLoading, setProductsLoading] = useState(false)
-  const [rowKey, setRowKey] = useState("")
-  const [type, setType] = useState<AdjustmentType>("increase")
-  const [quantity, setQuantity] = useState("")
-  const [reason, setReason] = useState("")
-  const [submitting, setSubmitting] = useState(false)
-
-  const [history, setHistory] = useState<AdjustmentRow[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-
   const blocked = useModuleGuard("Inventory")
 
-  const rows = flatten(rawProducts)
-  const selected = rows.find((r) => `${r.type}-${r.id}` === rowKey)
+  const [skus, setSkus] = useState<Sku[]>([])
+  const [locations, setLocations] = useState<{ id: number; name: string }[]>([])
+  const [loadingForm, setLoadingForm] = useState(true)
 
-  const loadHistory = () => {
-    setHistoryLoading(true)
-    adjustmentApi.getAll()
-      .then((res) => setHistory(res.data ?? []))
-      .catch(() => {})
-      .finally(() => setHistoryLoading(false))
+  const [loc, setLoc] = useState("")
+  const [skuKey, setSkuKey] = useState("")
+  const [type, setType] = useState<AdjustmentType>("decrease")
+  const [qty, setQty] = useState(1)
+  const [reason, setReason] = useState(REASONS.decrease[0])
+  const [note, setNote] = useState("")
+  const [err, setErr] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  const [log, setLog] = useState<AdjustmentLogRow[]>([])
+  const [reasonOpts, setReasonOpts] = useState<string[]>([])
+  const [stats, setStats] = useState<AdjustmentStats>({ added30d: 0, removed30d: 0, shrinkageValue30d: 0 })
+  const [total, setTotal] = useState(0)
+  const [logLoading, setLogLoading] = useState(true)
+  const [reasonFilter, setReasonFilter] = useState("all")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+
+  const loadForm = useCallback(async () => {
+    try {
+      const ov = await inventoryApi.getOverview()
+      setLocations(ov.locations)
+      const flat: StockRow[] = ov.items.flatMap((r) => (r.variants?.length ? r.variants : [r]))
+      setSkus(flat.map((r) => ({
+        key: `${r.type}-${r.id}`,
+        productId: r.productId,
+        variantId: r.type === "variant" ? r.id : null,
+        label: r.variantName ? `${r.name} · ${r.variantName}` : r.name,
+        cost: r.cost,
+        byLoc: Object.fromEntries(r.locations.map((l) => [l.locationId, l.quantity])),
+      })))
+      setLoc((cur) => cur || String((ov.locations.find((l) => l.isDefault) ?? ov.locations[0])?.id ?? ""))
+      setSkuKey((cur) => cur || (flat[0] ? `${flat[0].type}-${flat[0].id}` : ""))
+    } catch {
+      /* the form stays empty */
+    } finally {
+      setLoadingForm(false)
+    }
+  }, [])
+
+  const loadLog = useCallback(async () => {
+    setLogLoading(true)
+    try {
+      const res = await adjustmentApi.getLog({ page, per_page: perPage, reason: reasonFilter !== "all" ? reasonFilter : undefined })
+      setLog(res.data)
+      setStats(res.stats)
+      setTotal(res.total)
+      setReasonOpts(res.reasons)
+    } catch {
+      setLog([])
+    } finally {
+      setLogLoading(false)
+    }
+  }, [page, perPage, reasonFilter])
+
+  useEffect(() => { loadForm() }, [loadForm])
+  useEffect(() => { loadLog() }, [loadLog])
+
+  const sku = skus.find((s) => s.key === skuKey)
+  const before = sku ? sku.byLoc[Number(loc)] ?? 0 : 0
+  const after = type === "increase" ? before + qty : type === "decrease" ? Math.max(0, before - qty) : qty
+  const diff = after - before
+  const locName = locations.find((l) => String(l.id) === loc)?.name ?? ""
+  const bigChange = Math.abs(diff) >= BIG_CHANGE
+  const valueImpact = diff * (sku?.cost ?? 0)
+
+  const pickType = (t: AdjustmentType) => {
+    setType(t)
+    setReason((r) => (REASONS[t].includes(r) ? r : REASONS[t][0]))
+    setErr("")
   }
 
-  useEffect(() => { loadHistory() }, [])
+  const startCount = () => { setType("set"); setReason("Recount"); setQty(before); setErr("") }
 
-  // Load products (with current stock) when a warehouse is picked.
-  useEffect(() => {
-    if (!warehouse) { setRawProducts([]); return }
-    setProductsLoading(true)
-    setRowKey("")
-    transferApi.getProductsByLocation(Number(warehouse))
-      .then((res) => setRawProducts(res.data ?? []))
-      .catch(() => toast({ variant: "destructive", title: "Error", description: "Failed to load products" }))
-      .finally(() => setProductsLoading(false))
-  }, [warehouse]) // eslint-disable-line
+  const apply = async () => {
+    if (!sku) { setErr("Choose a product."); return }
+    if (!loc) { setErr("Choose a warehouse."); return }
+    if (type !== "set" && qty <= 0) { setErr("Enter a quantity greater than 0."); return }
+    if (type === "decrease" && qty > before) { setErr(`Only ${before} in stock at ${locName}.`); return }
+    if (diff === 0) { setErr("No quantity changed."); return }
+    if (reason === "Other" && !note.trim()) { setErr("Add a note explaining the reason."); return }
+    setBusy(true); setErr("")
+    try {
+      await adjustmentApi.create({
+        productId: sku.productId, variantId: sku.variantId, locationId: Number(loc),
+        type, quantity: qty, reason, note: note.trim() || undefined,
+      })
+      toast({ title: "Adjustment applied", description: `${sku.label}: ${before} → ${after}` })
+      setQty(1); setNote("")
+      await Promise.all([loadForm(), loadLog()])
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || "Could not apply the adjustment.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+
+  const handleExport = () => {
+    exportToCSV(
+      log.map((g) => ({
+        no: g.number, date: g.createdAt ?? "", product: g.productName + (g.variantName ? ` · ${g.variantName}` : ""), warehouse: g.locationName ?? "",
+        type: g.type, change: g.delta, before: g.before, after: g.after, reason: g.reason, note: g.note ?? "", by: g.createdBy ?? "",
+      })),
+      "stock-adjustments", ["no", "date", "product", "warehouse", "type", "change", "before", "after", "reason", "note", "by"],
+    )
+  }
+
+  const productOptions = useMemo(
+    () => skus.map((s) => ({ key: s.key, label: `${s.label} — ${s.byLoc[Number(loc)] ?? 0} in stock` })),
+    [skus, loc],
+  )
 
   if (blocked) return blocked
 
-  const currentStock = selected?.stock ?? 0
-  const qtyNum = Number(quantity) || 0
-  const projected =
-    type === "increase" ? currentStock + qtyNum
-    : type === "decrease" ? currentStock - qtyNum
-    : qtyNum
-
-  const canSubmit =
-    warehouse && selected && reason.trim() &&
-    (type === "set" ? qtyNum >= 0 : qtyNum >= 1) &&
-    !(type === "decrease" && qtyNum > currentStock)
-
-  const submit = async () => {
-    if (!selected || !warehouse) return
-    setSubmitting(true)
-    try {
-      const res = await adjustmentApi.create({
-        productId: selected.productId,
-        variantId: selected.type === "variant" ? selected.id : null,
-        locationId: Number(warehouse),
-        type,
-        quantity: qtyNum,
-        reason: reason.trim(),
-      })
-      toast({ title: "Stock adjusted", description: `${res.data.productName}: ${res.data.before} → ${res.data.after}` })
-      // Refresh product stock + history; reset the form fields.
-      transferApi.getProductsByLocation(Number(warehouse)).then((r) => setRawProducts(r.data ?? [])).catch(() => {})
-      loadHistory()
-      setQuantity(""); setReason("")
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Adjustment failed", description: err?.response?.data?.message || "Please try again" })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   return (
-    <div className="p-4 lg:p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <ArrowUpDown className="w-6 h-6 text-brand-fg" /> Stock Adjustment
-        </h1>
-        <p className="text-sm text-muted-foreground">Manually correct on-hand stock, with a reason and audit trail</p>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Stock adjustment"
+        description="Fix stock counts with a reason, so every change can be explained later."
+        actions={<Button type="button" variant="outline" onClick={startCount}>Start full stock count</Button>}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>New Adjustment</CardTitle>
-            <CardDescription>Pick a warehouse and product, then adjust its stock</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Warehouse</Label>
-              <Select value={warehouse} onValueChange={setWarehouse}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select warehouse" /></SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="flex flex-col items-start gap-5 xl:flex-row">
+        <SectionCard
+          className="w-full shrink-0 xl:w-[460px]"
+          title="New adjustment"
+          description="Correct stock after a count, damage or loss. Every change is logged."
+        >
+          {loadingForm ? (
+            <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <FormField label="Warehouse" htmlFor="adj-warehouse">
+                <Select value={loc || undefined} onValueChange={(v) => { setLoc(v); setErr("") }}>
+                  <SelectTrigger id="adj-warehouse" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Product" htmlFor="adj-product">
+                <Select value={skuKey || "__none"} onValueChange={(v) => { setSkuKey(v === "__none" ? "" : v); setErr("") }}>
+                  <SelectTrigger id="adj-product" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Select a product</SelectItem>
+                    {productOptions.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormField>
 
-            <div className="space-y-1.5">
-              <Label>Product / Variant</Label>
-              <Select value={rowKey} onValueChange={setRowKey} disabled={!warehouse || productsLoading}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={!warehouse ? "Select warehouse first" : productsLoading ? "Loading..." : rows.length ? "Select product" : "No products here"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {rows.map((r) => (
-                    <SelectItem key={`${r.type}-${r.id}`} value={`${r.type}-${r.id}`}>
-                      {r.productName}{r.variantName ? ` — ${r.variantName}` : ""} · stock {r.stock}
-                    </SelectItem>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">Change type</p>
+                <ChoiceCardGroup value={type} onValueChange={(v) => pickType(v as AdjustmentType)} aria-label="Adjustment type" className="grid-cols-3">
+                  {TYPES.map((t) => (
+                    <ChoiceCard key={t.id} value={t.id} title={t.label} description={t.sub} className="items-center text-center" />
                   ))}
+                </ChoiceCardGroup>
+              </div>
+
+              <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+                <FormField label={type === "set" ? "Counted quantity" : "Quantity"} htmlFor="adj-qty">
+                  <Input id="adj-qty" type="number" min={0} className="w-full" value={qty} onChange={(e) => { setQty(Math.max(0, Math.floor(Number(e.target.value)) || 0)); setErr("") }} />
+                </FormField>
+                <Card className="flex-row items-center gap-2 px-3 py-2 text-sm shadow-none">
+                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">Now</span><strong className="tabular-nums">{before}</strong></span>
+                  <span aria-hidden>→</span>
+                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">After</span><strong className="tabular-nums">{after}</strong></span>
+                  <Badge variant={deltaVariant(diff)} className="tabular-nums">{sign(diff)}</Badge>
+                </Card>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm font-medium">Reason</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {REASONS[type].map((r) => (
+                    <Button key={r} type="button" size="sm" aria-pressed={reason === r} onClick={() => setReason(r)}
+                      variant={reason === r ? "default" : "outline"}>
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <FormField label="Note" htmlFor="adj-note">
+                <Textarea id="adj-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. 2 pieces torn during unpacking" />
+              </FormField>
+
+              {bigChange && (
+                <Alert>
+                  <AlertDescription>This is a large change ({sign(diff)}). It will be flagged for owner review.</AlertDescription>
+                </Alert>
+              )}
+              {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
+
+              <Separator />
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Value impact <strong className="text-foreground tabular-nums">{valueImpact < 0 ? "−" : "+"}{formatCurrency(Math.abs(valueImpact))}</strong></span>
+                <Button type="button" disabled={busy} onClick={apply}>
+                  {busy ? "Applying…" : "Apply adjustment"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          className="w-full min-w-0 flex-1"
+          title="Audit trail"
+          actions={<>
+              <Select value={reasonFilter} onValueChange={(v) => { setReasonFilter(v); setPage(1) }}>
+                <SelectTrigger aria-label="Filter by reason" className="w-[170px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Reason: All</SelectItem>
+                  {reasonOpts.filter(Boolean).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {selected && (
-                <p className="text-xs text-muted-foreground">Current stock at this warehouse: <b className="text-foreground">{currentStock}</b></p>
-              )}
+              <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          </>}
+        >
+          <div className="mb-4 grid grid-cols-3 gap-2">
+            <StatTile label="Added (30d)" value={`+${stats.added30d}`} />
+            <StatTile label="Removed (30d)" value={stats.removed30d ? `−${stats.removed30d}` : "0"} />
+            <StatTile label="Shrinkage value" value={formatCurrency(stats.shrinkageValue30d)} />
+          </div>
+
+          {logLoading ? (
+            <div className="space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>
+          ) : log.length === 0 ? (
+            <EmptyState title="No adjustments yet." />
+          ) : (
+            <div className="flex flex-col">
+              {log.map((g, i) => (
+                <div key={g.id}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item size="sm" className="flex-nowrap px-0">
+                    <ItemMedia>
+                      <Badge variant={deltaVariant(g.delta)} className="min-w-12 justify-center tabular-nums">{sign(g.delta)}</Badge>
+                    </ItemMedia>
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="block w-full truncate">
+                        <span className="mr-2 text-xs font-bold text-muted-foreground">{g.number}</span>
+                        {g.productName}{g.variantName ? ` · ${g.variantName}` : ""}
+                        {g.flagged && <Badge variant="secondary" className="ml-2">Flagged</Badge>}
+                      </ItemTitle>
+                      <ItemDescription className="truncate">{g.locationName ?? "—"} · {g.reason}{g.note ? ` (${g.note})` : ""}{g.before !== null && g.after !== null ? ` · ${g.before} → ${g.after}` : ""}</ItemDescription>
+                    </ItemContent>
+                    <ItemActions className="flex-col items-end gap-0 text-right">
+                      <div className="text-sm">{g.createdAt ? new Date(g.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}{g.createdAt ? ` · ${new Date(g.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</div>
+                      <div className="text-xs text-muted-foreground">{g.createdBy ?? "—"}</div>
+                    </ItemActions>
+                  </Item>
+                </div>
+              ))}
             </div>
+          )}
 
-            <div className="space-y-1.5">
-              <Label>Adjustment Type</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {TYPES.map(({ value, label, icon: Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setType(value)}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                      type === value ? "border-brand bg-brand-soft text-brand-fg font-medium" : "border-border hover:bg-accent"
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" /> {label}
-                  </button>
-                ))}
-              </div>
+          {!logLoading && total > 0 && (
+            <div className="mt-3">
+              <Separator className="mb-3" />
+              <PaginationControl
+                currentPage={page}
+                totalPages={Math.max(1, Math.ceil(total / perPage))}
+                itemsPerPage={perPage}
+                totalItems={total}
+                onPageChange={setPage}
+                onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+              />
             </div>
-
-            <div className="space-y-1.5">
-              <Label>{type === "set" ? "Set stock to" : "Quantity"}</Label>
-              <Input type="number" min={type === "set" ? 0 : 1} value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
-              {selected && qtyNum > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  New stock: <b className={projected < 0 ? "text-destructive" : "text-foreground"}>{projected}</b>
-                  {type === "decrease" && qtyNum > currentStock && <span className="text-destructive"> — exceeds current stock</span>}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Reason</Label>
-              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Stock count correction, damaged goods, received shipment…" rows={2} />
-            </div>
-
-            <Button className="w-full bg-brand hover:brightness-110 text-brand-foreground" disabled={!canSubmit || submitting} onClick={submit}>
-              {submitting ? "Adjusting…" : "Apply Adjustment"}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* History */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Adjustments</CardTitle>
-            <CardDescription>Audit trail of stock changes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {historyLoading ? (
-              <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-            ) : history.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No adjustments yet.</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {history.map((h) => (
-                  <div key={h.id} className="flex items-center justify-between py-2.5 gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {h.productName}{h.variantName ? ` — ${h.variantName}` : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {h.locationName} · {h.notes}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className={`text-sm font-semibold ${h.quantity >= 0 ? "text-money-fg" : "text-destructive"}`}>
-                        {h.quantity >= 0 ? "+" : ""}{h.quantity}
-                      </span>
-                      <p className="text-[11px] text-muted-foreground">
-                        {h.createdAt ? new Date(h.createdAt).toLocaleDateString() : ""}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </SectionCard>
       </div>
     </div>
   )

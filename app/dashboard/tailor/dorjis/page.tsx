@@ -1,391 +1,294 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { Search, Plus, Edit2, Trash2, X, UserCheck } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
+import { Check, Clock, Download, Pencil, Search, Scissors, Trash2, Users } from "lucide-react"
+import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { FilterBar } from "@/components/common/Toolbar"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog"
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { tailorApi, TailorDorji } from "@/lib/tailorApi"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { useCompanySettings } from "@/contexts/company-settings-context"
+import { StatsCards } from "@/components/ui/stats-card"
+import { PaginationControl } from "@/components/ui/pagination-control"
 import { AccessDenied } from "@/components/ui/access-denied"
-import { useModuleGuard } from "@/hooks/use-module-guard"
-import { toast } from "sonner"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { tailorWorkshopApi, type DorjiRow, type DorjiStats, type Pagination, type TailorDorjiStatus } from "@/lib/tailorApi"
+import { exportToCSV } from "@/lib/export-import-utils"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
-const EMPTY_FORM = {
-  name: "", phone: "", address: "",
-  commission_type: "fixed" as "fixed" | "percentage",
-  commission_value: 0, status: "active" as "active" | "inactive", notes: "",
-}
-type DorjiForm = typeof EMPTY_FORM
+const SPECS = ["Shirt", "Panjabi", "Pant", "Pajama", "Jama", "Kurta", "Blouse", "Salwar Kameez", "Coat", "Embroidery"]
+const STATUS_LABEL: Record<TailorDorjiStatus, string> = { active: "Active", on_leave: "On leave", inactive: "Inactive" }
+type Comm = "fixed" | "percentage" | "salary"
+const COMMS: { id: Comm; label: string }[] = [
+  { id: "fixed", label: "Per piece" }, { id: "percentage", label: "% of stitching" }, { id: "salary", label: "Monthly salary" },
+]
 
-function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
-  const [input, setInput] = useState("")
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const addTag = (val: string) => {
-    const trimmed = val.trim().replace(/,$/, "").trim()
-    if (trimmed && !tags.includes(trimmed)) onChange([...tags, trimmed])
-    setInput("")
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault()
-      addTag(input)
-    } else if (e.key === "Backspace" && input === "" && tags.length > 0) {
-      onChange(tags.slice(0, -1))
-    }
-  }
-
-  const removeTag = (tag: string) => onChange(tags.filter(t => t !== tag))
-
-  return (
-    <div
-      className="min-h-9 flex flex-wrap gap-1.5 border border-gray-200 rounded-md px-2 py-1.5 cursor-text focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-transparent"
-      onClick={() => inputRef.current?.focus()}
-    >
-      {tags.map(tag => (
-        <span
-          key={tag}
-          className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full"
-        >
-          {tag}
-          <button type="button" onClick={() => removeTag(tag)} className="hover:text-purple-900">
-            <X className="w-3 h-3" />
-          </button>
-        </span>
-      ))}
-      <input
-        ref={inputRef}
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => { if (input.trim()) addTag(input) }}
-        placeholder={tags.length === 0 ? "Type and press Enter or comma..." : ""}
-        className="text-sm outline-none flex-1 min-w-20 bg-transparent"
-      />
-    </div>
-  )
+/** Bangladesh local digits (no +880 / leading 0) for the phone field; other numbers keep their digits. */
+const localPhone = (p: string) => {
+  const raw = (p || "").trim()
+  const digits = raw.replace(/\D/g, "")
+  if (raw.startsWith("+880") || digits.startsWith("880")) return digits.replace(/^880/, "")
+  return digits.replace(/^0+/, "")
 }
 
-export default function TailorDorjisPage() {
+interface FormState { name: string; phone: string; address: string; notes: string; spec: string[]; comm: Comm; commVal: string; cap: string; status: TailorDorjiStatus }
+const blank = (): FormState => ({ name: "", phone: "", address: "", notes: "", spec: [], comm: "fixed", commVal: "", cap: "", status: "active" })
+
+export default function DorjisPage() {
   const { canRead, canWrite, canDelete } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
 
-  const [dorjis, setDorjis] = useState<TailorDorji[]>([])
+  const [rows, setRows] = useState<DorjiRow[]>([])
+  const [stats, setStats] = useState<DorjiStats | null>(null)
+  const [pagination, setPagination] = useState<Pagination | null>(null)
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState("")
+  const [q, setQ] = useState("")
+  const [qD, setQD] = useState("")
+  const [statusF, setStatusF] = useState("all")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(12)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingDorji, setEditingDorji] = useState<TailorDorji | null>(null)
-  const [form, setForm] = useState<DorjiForm>(EMPTY_FORM)
-  const [speciality, setSpeciality] = useState<string[]>([])
+  const [form, setForm] = useState<FormState>(blank())
+  const [editing, setEditing] = useState<DorjiRow | null>(null)
+  const [err, setErr] = useState("")
   const [saving, setSaving] = useState(false)
 
-  const [deleteTarget, setDeleteTarget] = useState<TailorDorji | null>(null)
-  const [deleting, setDeleting] = useState(false)
+  useEffect(() => { const t = setTimeout(() => { setQD(q.trim()); setPage(1) }, 250); return () => clearTimeout(t) }, [q])
 
-  if (!canRead("TailorDorji")) return <AccessDenied />
-
-  const load = () => {
-    setLoading(true)
-    tailorApi.getDorjis({ limit: 100 })
-      .then(r => setDorjis(r.data?.data ?? r.data ?? []))
-      .catch(() => toast.error("Failed to load dorjis"))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { load() }, [])
-
-  const openAdd = () => {
-    setEditingDorji(null)
-    setForm(EMPTY_FORM)
-    setSpeciality([])
-    setModalOpen(true)
-  }
-
-  const openEdit = (d: TailorDorji) => {
-    setEditingDorji(d)
-    setForm({
-      name: d.name,
-      phone: d.phone,
-      address: d.address ?? "",
-      commission_type: d.commissionType,
-      commission_value: d.commissionValue,
-      status: d.status,
-      notes: d.notes ?? "",
-    })
-    setSpeciality(d.speciality ?? [])
-    setModalOpen(true)
-  }
-
-  const handleSave = async () => {
-    if (!form.name.trim()) { toast.error("Name required"); return }
-    if (!form.phone.trim()) { toast.error("Phone required"); return }
-    setSaving(true)
+  const load = useCallback(async () => {
     try {
-      const payload = {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        address: form.address || undefined,
-        speciality,
-        commissionType: form.commission_type,
-        commissionValue: form.commission_value,
-        status: form.status,
-        notes: form.notes || undefined,
-      }
-      if (editingDorji) {
-        await tailorApi.updateDorji(editingDorji.id, payload)
-        toast.success("Dorji updated")
-      } else {
-        await tailorApi.createDorji(payload)
-        toast.success("Dorji created")
-      }
-      setModalOpen(false)
-      load()
+      const r = await tailorWorkshopApi.getDorjiOverview({ search: qD || undefined, status: statusF !== "all" ? statusF : undefined, page, limit: perPage })
+      setRows(r.rows); setStats(r.stats); setPagination(r.pagination)
     } catch {
-      toast.error("Failed to save dorji")
+      toast.error("Failed to load dorjis")
+    } finally {
+      setLoading(false)
+    }
+  }, [qD, statusF, page, perPage])
+  useEffect(() => { load() }, [load])
+
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }))
+
+  const startEdit = (d: DorjiRow | null) => {
+    setEditing(d); setErr("")
+    setForm(d ? {
+      name: d.name, phone: localPhone(d.phone), address: d.address ?? "", notes: d.notes ?? "", spec: d.speciality, comm: d.commissionType,
+      commVal: d.commissionValue ? String(d.commissionValue) : "", cap: d.maxPieces ? String(d.maxPieces) : "", status: d.status,
+    } : blank())
+  }
+
+  const save = async () => {
+    const name = form.name.trim(), phone = form.phone.replace(/\D/g, "")
+    if (!name) { setErr("Name is required."); return }
+    if (!phone) { setErr("Phone is required."); return }
+    if (!/^[0-9]{6,15}$/.test(phone)) { setErr("Enter a valid phone number."); return }
+    if (form.commVal !== "" && Number(form.commVal) < 0) { setErr("Amount cannot be negative."); return }
+    if (form.cap !== "" && (Number(form.cap) < 0 || !Number.isInteger(Number(form.cap)))) { setErr("Max pieces must be a whole number."); return }
+    setSaving(true); setErr("")
+    try {
+      await tailorWorkshopApi.saveDorji(editing?.id ?? null, {
+        name, phone, address: form.address.trim(), notes: form.notes.trim(), speciality: form.spec,
+        commissionType: form.comm, commissionValue: Number(form.commVal) || 0, maxPieces: form.cap ? Number(form.cap) : null, status: form.status,
+      })
+      toast.success(editing ? "Dorji updated" : "Dorji added")
+      startEdit(null)
+      load()
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || "Could not save the dorji.")
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return
-    setDeleting(true)
-    try {
-      await tailorApi.deleteDorji(deleteTarget.id)
-      toast.success("Dorji deleted")
-      setDeleteTarget(null)
-      load()
-    } catch {
-      toast.error("Failed to delete dorji")
-    } finally {
-      setDeleting(false)
-    }
+  const toggleActive = async (d: DorjiRow) => {
+    const next: TailorDorjiStatus = d.status === "active" ? "inactive" : "active"
+    try { await tailorWorkshopApi.patchDorji(d.id, { status: next }); toast.success(`${d.name} ${next === "active" ? "activated" : "deactivated"}`); load() }
+    catch (e: any) { toast.error(e?.response?.data?.message || "Could not update") }
   }
 
-  const setField = <K extends keyof DorjiForm>(k: K, v: DorjiForm[K]) => setForm(f => ({ ...f, [k]: v }))
+  const remove = async (d: DorjiRow) => {
+    if (d.totalJobs) { toast.error(`${d.name} has ${d.totalJobs} assignment(s). Deactivate instead.`); return }
+    if (!window.confirm(`Delete dorji "${d.name}"?`)) return
+    try { await tailorWorkshopApi.deleteDorji(d.id); toast.success("Dorji deleted"); if (editing?.id === d.id) startEdit(null); load() }
+    catch (e: any) { toast.error(e?.response?.data?.message || "Could not delete") }
+  }
 
-  const filtered = dorjis.filter(d =>
-    !search ||
-    d.name.toLowerCase().includes(search.toLowerCase()) ||
-    d.phone.includes(search)
-  )
+  const handleExport = async () => {
+    try {
+      const all = await tailorWorkshopApi.getDorjiOverview({ search: qD || undefined, status: statusF !== "all" ? statusF : undefined, limit: 100 })
+      exportToCSV(all.rows.map((d) => ({
+        name: d.name, phone: localPhone(d.phone), address: d.address ?? "", skills: d.speciality.join(" / "), status: STATUS_LABEL[d.status],
+        commission: d.commissionType === "percentage" ? `${d.commissionValue}%` : d.commissionType === "salary" ? `Salary ${d.commissionValue}` : "Per piece",
+        rate: d.commissionType === "fixed" ? d.commissionValue : 0, inHand: d.piecesInHand, earnedMonth: d.earnedMonth, unpaid: d.unpaid, notes: d.notes ?? "",
+      })), "dorjis", ["name", "phone", "address", "skills", "status", "commission", "rate", "inHand", "earnedMonth", "unpaid", "notes"])
+    } catch { toast.error("Could not export") }
+  }
+
+  if (!canRead("TailorDorji")) return <AccessDenied />
+  const monthLbl = new Date().toLocaleDateString("en-US", { month: "short" })
+  const total = pagination?.total ?? 0
+  const cur = formatCurrency(0).replace(/[\d.,\s]/g, "")
+  const commLabel = form.comm === "fixed" ? `Amount per piece (${cur})` : form.comm === "percentage" ? "Percentage (%)" : `Salary per month (${cur})`
+  const commHint = form.comm === "fixed" ? "e.g. 120 for each shirt finished" : form.comm === "percentage" ? "Share of the stitching charge, not fabric" : "Fixed pay; jobs are tracked for workload only"
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900">Dorjis</h1>
-          <p className="text-sm text-gray-500">{dorjis.length} total</p>
-        </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Dorjis"
+        description="Your tailors — what they are good at, how busy they are, and what you owe them."
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+      />
+
+      {loading || !stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
+      ) : (
+        <StatsCards stats={[
+          { label: "Active dorjis", value: stats.active, icon: <Users className="size-4" />, color: "blue", hint: `${stats.onLeave} on leave` },
+          { label: "Pieces in hand", value: stats.piecesInHand, icon: <Scissors className="size-4" />, color: "purple", hint: `Capacity ${stats.capacity}` },
+          { label: "Unpaid commission", value: formatCurrency(stats.unpaid), icon: <Clock className="size-4" />, color: "yellow", hint: "For finished pieces" },
+          { label: "On-time rate", value: stats.onTimeRate === null ? "—" : `${stats.onTimeRate}%`, icon: <Check className="size-4" />, color: "green", hint: "Finished jobs" },
+        ]} />
+      )}
+
+      <FilterBar className="gap-2.5">
+        <InputGroup className="min-w-[260px] flex-1">
+          <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
+          <InputGroupInput type="search" aria-label="Search" placeholder="Search name, phone or speciality…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </InputGroup>
+        <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
+          <SelectTrigger aria-label="Status"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Status: All</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="on_leave">On leave</SelectItem><SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+      </FilterBar>
+
+      <div className="flex flex-col items-start gap-4 xl:flex-row">
+        <section className="grid w-full min-w-0 flex-1 grid-cols-1 gap-3.5 md:grid-cols-2 2xl:grid-cols-3">
+          {loading ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[300px]" />) :
+            rows.length === 0 ? (
+              <EmptyState bordered icon={Users} className="col-span-full" title="No dorjis found"
+                description={qD || statusF !== "all" ? "No dorjis match these filters." : "No dorjis yet. Add your first tailor using the form."} />
+            ) : rows.map((d) => {
+              const act = d.status === "active"
+              const lc = !act ? "[&>[data-slot=progress-indicator]]:bg-muted-foreground/50" : d.workloadPct >= 100 ? "[&>[data-slot=progress-indicator]]:bg-destructive" : d.workloadPct >= 75 ? "[&>[data-slot=progress-indicator]]:bg-amber-500" : "[&>[data-slot=progress-indicator]]:bg-teal-700"
+              const lt = !act ? "text-muted-foreground" : d.workloadPct >= 100 ? "text-destructive" : d.workloadPct >= 75 ? "text-amber-600" : "text-dash-success-fg"
+              const comm = d.commissionType === "percentage" ? `${d.commissionValue}% of stitching` : d.commissionType === "salary" ? `${formatCurrency(d.commissionValue)} / month` : `Per piece ${formatCurrency(d.commissionValue)}`
+              return (
+                <Card key={d.id} className={cn("gap-3 p-[18px]", editing?.id === d.id && "border-primary")}>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar name={d.name} className="size-[46px]" />
+                    <div className="min-w-0 flex-1"><div className="truncate text-base font-semibold">{d.name}</div><div className="truncate text-xs text-muted-foreground">{d.phone} · {comm}</div></div>
+                    <StatusBadge status={d.status} label={STATUS_LABEL[d.status]} />
+                  </div>
+                  {d.speciality.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">{d.speciality.map((s) => <Badge key={s} variant="secondary">{s}</Badge>)}</div>
+                  )}
+                  {d.notes && <div className="text-xs text-muted-foreground">{d.notes}</div>}
+                  <div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Workload · {d.activeOrders} active order(s)</span>
+                      <strong className={lt}>{d.piecesInHand}{d.maxPieces ? ` / ${d.maxPieces}` : ""} pieces</strong>
+                    </div>
+                    <Progress value={Math.min(100, Math.max(0, d.workloadPct))} aria-label={`${d.name} workload`} className={cn("mt-1.5", lc)} />
+                  </div>
+                  <InfoList className="grid-cols-3">
+                    <InfoRow layout="stacked" label={<span className="text-xs">Earned ({monthLbl})</span>}><span className="tabular-nums">{formatCurrency(d.earnedMonth)}</span></InfoRow>
+                    <InfoRow layout="stacked" label={<span className="text-xs">Unpaid</span>}><span className={cn("tabular-nums", d.unpaid ? "text-dash-warn-fg" : "")}>{formatCurrency(d.unpaid)}</span></InfoRow>
+                    <InfoRow layout="stacked" label={<span className="text-xs">On time</span>}>{d.onTimeRate === null ? "—" : `${d.onTimeRate}%`}</InfoRow>
+                  </InfoList>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex gap-1.5">
+                      {canWrite("TailorDorji") && <WithTooltip content={`Edit ${d.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${d.name}`} onClick={() => startEdit(d)}><Pencil className="size-4" /></Button></WithTooltip>}
+                      {canWrite("TailorDorji") && <Button type="button" variant="outline" onClick={() => toggleActive(d)} className="min-w-0 flex-1">{act ? "Deactivate" : "Activate"}</Button>}
+                      {canDelete("TailorDorji") && <WithTooltip content={`Delete ${d.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${d.name}`} onClick={() => remove(d)}><Trash2 className="size-4" /></Button></WithTooltip>}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button asChild variant="outline" className="min-w-0 flex-1"><Link href={`/dashboard/tailor/assignments?dorji=${d.id}`}>View jobs</Link></Button>
+                      <Button asChild className="min-w-0 flex-1"><Link href="/dashboard/tailor/payments">Pay&nbsp;{formatCurrency(d.unpaid)}</Link></Button>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          {!loading && total > 0 && (
+            <Card className="col-span-full p-4">
+              <PaginationControl currentPage={page} totalPages={pagination?.last_page ?? 1} itemsPerPage={perPage} totalItems={total}
+                onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
+            </Card>
+          )}
+        </section>
+
         {canWrite("TailorDorji") && (
-          <Button className="bg-purple-600 hover:bg-purple-700 gap-2" onClick={openAdd}>
-            <Plus className="w-4 h-4" /> Add Dorji
-          </Button>
+          <SectionCard title={editing ? "Edit dorji" : "Add dorji"} className="w-full shrink-0 xl:w-[380px]" contentClassName="flex flex-col gap-3.5">
+            {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField className="min-w-0" label="Name" required htmlFor="dorji-name"><Input id="dorji-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" /></FormField>
+              <FormField className="min-w-0" label="Phone" required htmlFor="dorji-phone">
+                <InputGroup>
+                  <InputGroupAddon><InputGroupText>+880</InputGroupText></InputGroupAddon>
+                  <InputGroupInput id="dorji-phone" type="tel" inputMode="numeric" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="17XX-XXXXXX" />
+                </InputGroup></FormField>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <SectionTitle as="p">Specialities</SectionTitle>
+              <div role="group" aria-label="Specialities" className="flex flex-wrap gap-1.5">
+                {[...SPECS, ...form.spec.filter((s) => !SPECS.includes(s))].map((s) => {
+                  const on = form.spec.includes(s)
+                  return (
+                    <Button key={s} type="button" aria-pressed={on} onClick={() => set("spec", on ? form.spec.filter((x) => x !== s) : [...form.spec, s])}
+                      variant={on ? "default" : "outline"} size="sm">
+                      {on ? "✓ " : "+ "}{s}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <SectionTitle as="p">How you pay</SectionTitle>
+              <SegmentedControl aria-label="Commission type" size="default" className="w-full" value={form.comm}
+                onValueChange={(v) => set("comm", v as Comm)} options={COMMS.map((o) => ({ value: o.id, label: o.label }))} />
+            </div>
+            <FormField label={commLabel} htmlFor="dorji-comm" description={commHint}>
+              <Input id="dorji-comm" type="number" min="0" value={form.commVal} onChange={(e) => set("commVal", e.target.value)} />
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField className="min-w-0" label="Max pieces at once" htmlFor="dorji-cap"><Input id="dorji-cap" type="number" min="0" value={form.cap} onChange={(e) => set("cap", e.target.value)} placeholder="e.g. 8" /></FormField>
+              <FormField className="min-w-0" label="Status" htmlFor="dorji-status">
+                <Select value={form.status} onValueChange={(v) => set("status", v as TailorDorjiStatus)}>
+                  <SelectTrigger id="dorji-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="on_leave">On leave</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+                </Select>
+              </FormField>
+            </div>
+            <FormField label="Address" htmlFor="dorji-address"><Input id="dorji-address" value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="Area, city" /></FormField>
+            <FormField label="Notes" htmlFor="dorji-notes"><Textarea id="dorji-notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Optional — e.g. only works mornings, rush jobs OK" /></FormField>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+              <Button type="button" onClick={save} disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add dorji"}</Button>
+            </div>
+          </SectionCard>
         )}
       </div>
-
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <Input
-          placeholder="Search by name or phone..."
-          className="pl-9"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Address</th>
-                <th className="px-4 py-3">Speciality</th>
-                <th className="px-4 py-3">Commission</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Active Orders</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-8" /></td></tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
-                    <UserCheck className="w-10 h-10 mx-auto mb-2 text-gray-200" />
-                    <p className="text-gray-400">No dorjis found</p>
-                  </td>
-                </tr>
-              ) : filtered.map(d => (
-                <tr key={d.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-semibold text-gray-900">{d.name}</td>
-                  <td className="px-4 py-3 text-gray-500">{d.phone}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-32 truncate">{d.address ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(d.speciality ?? []).length === 0 ? (
-                        <span className="text-gray-400">—</span>
-                      ) : (d.speciality ?? []).map(s => (
-                        <Badge key={s} className="bg-purple-100 text-purple-700 text-xs">{s}</Badge>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">
-                    {d.commissionType === "percentage" ? `${d.commissionValue}%` : formatCurrency(d.commissionValue)}
-                    <span className="text-gray-400 ml-1 text-xs">({d.commissionType})</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge className={d.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
-                      {d.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    {d.activeOrders != null ? (
-                      <Badge className={d.activeOrders > 0 ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-400"}>
-                        {d.activeOrders}
-                      </Badge>
-                    ) : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      {canWrite("TailorDorji") && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}>
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                      {canDelete("TailorDorji") && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => setDeleteTarget(d)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* ── ADD / EDIT MODAL ── */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingDorji ? "Edit Dorji" : "Add Dorji"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Name *</Label>
-                <Input placeholder="Full name" value={form.name} onChange={e => setField("name", e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Phone *</Label>
-                <Input placeholder="Phone number" value={form.phone} onChange={e => setField("phone", e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Address</Label>
-              <Input placeholder="Address (optional)" value={form.address} onChange={e => setField("address", e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Speciality</Label>
-              <TagInput tags={speciality} onChange={setSpeciality} />
-              <p className="text-[10px] text-gray-400 mt-1">Press Enter or comma to add a tag</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Commission Type</Label>
-                <Select value={form.commission_type} onValueChange={v => setField("commission_type", v as "fixed" | "percentage")}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fixed">Fixed</SelectItem>
-                    <SelectItem value="percentage">Percentage</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">
-                  Commission Value {form.commission_type === "percentage" ? "(%)" : "(amount)"}
-                </Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.commission_value}
-                  onChange={e => setField("commission_value", parseFloat(e.target.value) || 0)}
-                />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Status</Label>
-              <Select value={form.status} onValueChange={v => setField("status", v as "active" | "inactive")}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Notes</Label>
-              <Input placeholder="Optional notes..." value={form.notes} onChange={e => setField("notes", e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button>
-            <Button className="bg-purple-600 hover:bg-purple-700" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : editingDorji ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── DELETE CONFIRM ── */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Dorji</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

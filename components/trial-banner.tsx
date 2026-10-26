@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Clock, AlertTriangle } from "lucide-react"
 import { saasBillingApi } from "@/lib/saasBillingApi"
+import { Alert } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 
 /**
  * Always-visible bar shown across the dashboard while the company is on a free
@@ -55,10 +57,9 @@ export function TrialBanner() {
   const urgent = expired || (daysLeft !== null && daysLeft <= 3)
 
   return (
-    <div
-      className={`flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium ${
-        urgent ? "bg-red-600 text-white" : "bg-amber-500 text-white"
-      }`}
+    <Alert
+      variant={urgent ? "destructive" : "default"}
+      className="flex items-center justify-center gap-3 rounded-none border-x-0 border-t-0 px-4 py-2 font-medium"
     >
       {urgent ? (
         <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -70,12 +71,9 @@ export function TrialBanner() {
           ? "Your free trial has expired."
           : `You're on a free trial — ${daysLeft} ${daysLeft === 1 ? "day" : "days"} remaining.`}
       </span>
-      <Link
-        href="/dashboard/billing/subscriptions"
-        className="underline underline-offset-2 hover:no-underline font-semibold"
-      >
-        Upgrade now
-      </Link>
-    </div>
+      <Button asChild variant="link" size="sm" className="h-auto p-0">
+        <Link href="/dashboard/billing/subscriptions">Upgrade now</Link>
+      </Button>
+    </Alert>
   )
 }

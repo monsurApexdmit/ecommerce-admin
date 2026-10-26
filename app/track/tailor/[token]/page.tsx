@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 import { use } from "react"
 import { CheckCircle, Clock, Truck, Package, Scissors, AlertCircle, XCircle } from "lucide-react"
@@ -10,12 +11,13 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
   assigned:         { label: "Assigned to Tailor",icon: Package,       color: "#7c3aed", bg: "#ede9fe", step: 3 },
   cutting:          { label: "Cutting",           icon: Scissors,      color: "#0891b2", bg: "#e0f2fe", step: 4 },
   stitching:        { label: "Stitching",         icon: Scissors,      color: "#7c3aed", bg: "#ede9fe", step: 5 },
-  ready:            { label: "Ready for Pickup",  icon: CheckCircle,   color: "#16a34a", bg: "#dcfce7", step: 6 },
-  delivered:        { label: "Delivered",         icon: Truck,         color: "#059669", bg: "#d1fae5", step: 7 },
+  trial:            { label: "Trial",             icon: Scissors,      color: "#9333ea", bg: "#f3e8ff", step: 6 },
+  ready:            { label: "Ready for Pickup",  icon: CheckCircle,   color: "#16a34a", bg: "#dcfce7", step: 7 },
+  delivered:        { label: "Delivered",         icon: Truck,         color: "#059669", bg: "#d1fae5", step: 8 },
   cancelled:        { label: "Cancelled",         icon: XCircle,       color: "#dc2626", bg: "#fee2e2", step: 0 },
 }
 
-const STEPS = ["pending","measurement_taken","assigned","cutting","stitching","ready","delivered"]
+const STEPS = ["pending","measurement_taken","assigned","cutting","stitching","trial","ready","delivered"]
 
 interface TrackingData {
   order_number: string
@@ -116,14 +118,12 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
                   const active = i + 1 === currentStep
                   return (
                     <div key={s} className="flex flex-col items-center gap-1 flex-1">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
-                        done ? "bg-purple-600 border-purple-600 text-white" :
+                      <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors", done ? "bg-purple-600 border-purple-600 text-white" :
                         active ? "border-purple-600 text-purple-600 bg-white" :
-                        "border-gray-200 text-gray-300 bg-white"
-                      }`}>
+                        "border-gray-200 text-gray-300 bg-white")}>
                         {done && !active ? "✓" : i + 1}
                       </div>
-                      <span className={`text-[9px] font-semibold text-center leading-tight ${done ? "text-purple-600" : "text-gray-300"}`}>
+                      <span className={cn("text-[9px] font-semibold text-center leading-tight", done ? "text-purple-600" : "text-gray-300")}>
                         {STATUS_CONFIG[s]?.label.split(" ")[0]}
                       </span>
                     </div>
@@ -161,10 +161,8 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
             )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Payment Status</span>
-              <span className={`font-bold capitalize ${
-                data.payment_status === "paid" ? "text-green-600" :
-                data.payment_status === "partial" ? "text-yellow-600" : "text-red-600"
-              }`}>{data.payment_status}</span>
+              <span className={cn("font-bold capitalize", data.payment_status === "paid" ? "text-green-600" :
+                data.payment_status === "partial" ? "text-yellow-600" : "text-red-600")}>{data.payment_status}</span>
             </div>
           </div>
         </div>

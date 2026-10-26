@@ -7,9 +7,13 @@ export interface Attribute {
   id: string
   name: string
   displayName: string
-  option: "dropdown" | "radio"
+  option: "dropdown" | "radio" | "button" | "swatch"
   published: boolean
   values: string[]
+  /** label -> #RRGGBB, only for swatch attributes */
+  valueColors?: Record<string, string>
+  /** number of products using this attribute */
+  usedInProducts: number
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -19,7 +23,7 @@ interface AttributeContextType {
   attributes: Attribute[]
   isLoading: boolean
   error: string | null
-  addAttribute: (attribute: Omit<Attribute, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => Promise<void>
+  addAttribute: (attribute: Omit<Attribute, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'usedInProducts'>) => Promise<void>
   updateAttribute: (id: string, updates: Partial<Attribute>) => Promise<void>
   deleteAttribute: (id: string) => Promise<void>
   refreshAttributes: () => Promise<void>
@@ -33,13 +37,26 @@ function convertToAttribute(backendAttribute: any): Attribute {
     id: backendAttribute.id.toString(),
     name: backendAttribute.name,
     displayName: backendAttribute.displayName || backendAttribute.display_name,
-    option: (backendAttribute.optionType || backendAttribute.option_type) as "dropdown" | "radio",
+    option: (backendAttribute.optionType || backendAttribute.option_type) as Attribute["option"],
     published: backendAttribute.status,
-    values: backendAttribute.values ? backendAttribute.values.split(',').map(v => v.trim()).filter(v => v !== '') : [],
+    values: Array.isArray(backendAttribute.values)
+      ? backendAttribute.values.map((v: any) => (typeof v === 'string' ? v : v.label)).filter(Boolean)
+      : backendAttribute.values ? String(backendAttribute.values).split(',').map(v => v.trim()).filter(v => v !== '') : [],
+    valueColors: Array.isArray(backendAttribute.values)
+      ? Object.fromEntries(backendAttribute.values.filter((v: any) => v && typeof v === 'object' && v.color).map((v: any) => [v.label, v.color]))
+      : undefined,
+    usedInProducts: Number(backendAttribute.usedInProducts ?? 0),
     created_at: backendAttribute.created_at,
     updated_at: backendAttribute.updated_at,
     deleted_at: backendAttribute.deleted_at || null,
   }
+}
+
+// Swatch attributes carry a colour per value; everything else stays a comma list.
+function serializeValues(option: string, values: string[] | string, colors?: Record<string, string>) {
+  const list = typeof values === 'string' ? values.split(',').map((v) => v.trim()).filter(Boolean) : values
+  if (option === 'swatch' || (colors && Object.keys(colors).length)) return list.map((label) => ({ label, color: colors?.[label] ?? null }))
+  return list.join(',')
 }
 
 export function AttributeProvider({ children }: { children: React.ReactNode }) {
@@ -59,7 +76,7 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       if (err.response?.status !== 403) {
         console.error('Error fetching attributes:', err)
-        setError(err.response?.data?.error || 'Failed to fetch attributes')
+        setError(err.response?.data?.message || err.response?.data?.error || 'Failed to fetch attributes')
       }
     } finally {
       setIsLoading(false)
@@ -71,13 +88,13 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
     refreshAttributes()
   }, [])
 
-  const addAttribute = async (attribute: Omit<Attribute, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => {
+  const addAttribute = async (attribute: Omit<Attribute, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'usedInProducts'>) => {
     try {
       await attributeApi.create({
         name: attribute.name,
         displayName: attribute.displayName,
         optionType: attribute.option,
-        values: typeof attribute.values === 'string' ? attribute.values : attribute.values.join(','),
+        values: serializeValues(attribute.option, attribute.values, attribute.valueColors),
         status: attribute.published,
       })
 
@@ -85,7 +102,7 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
       await refreshAttributes()
     } catch (err: any) {
       console.error('Error creating attribute:', err)
-      throw new Error(err.response?.data?.error || 'Failed to create attribute')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to create attribute')
     }
   }
 
@@ -103,7 +120,7 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
         updateData.optionType = updates.option
       }
       if (updates.values !== undefined) {
-        updateData.values = typeof updates.values === 'string' ? updates.values : updates.values.join(',')
+        updateData.values = serializeValues(updates.option ?? (updates.valueColors ? 'swatch' : 'dropdown'), updates.values, updates.valueColors)
       }
       if (updates.published !== undefined) {
         updateData.status = updates.published
@@ -115,7 +132,7 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
       await refreshAttributes()
     } catch (err: any) {
       console.error('Error updating attribute:', err)
-      throw new Error(err.response?.data?.error || 'Failed to update attribute')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to update attribute')
     }
   }
 
@@ -127,7 +144,7 @@ export function AttributeProvider({ children }: { children: React.ReactNode }) {
       await refreshAttributes()
     } catch (err: any) {
       console.error('Error deleting attribute:', err)
-      throw new Error(err.response?.data?.error || 'Failed to delete attribute')
+      throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete attribute')
     }
   }
 

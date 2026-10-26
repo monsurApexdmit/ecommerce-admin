@@ -4,12 +4,21 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { productApi } from '@/lib/productApi'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PageHeader } from '@/components/common/PageHeader'
+import { SectionTitle } from '@/components/common/SectionTitle'
+import { InfoList, InfoRow } from '@/components/common/InfoList'
+import { EmptyState } from '@/components/common/EmptyState'
+import { WithTooltip } from '@/components/common/WithTooltip'
 import { useToast } from '@/hooks/use-toast'
 import { useCompanySettings } from '@/contexts/company-settings-context'
 import { useSaasAuth } from '@/contexts/saas-auth-context'
 import { AccessDenied } from '@/components/ui/access-denied'
 import { useModuleGuard } from '@/hooks/use-module-guard'
-import { Loader2, Download, Printer, ArrowLeft, Copy } from 'lucide-react'
+import { Download, Printer, ArrowLeft, Copy, Info } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
 
 interface Product {
@@ -288,9 +297,9 @@ export default function ProductBarcodePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-emerald-600" />
-          <p className="text-gray-600">Loading barcode...</p>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <Spinner className="size-8" />
+          <p className="text-muted-foreground">Loading barcode...</p>
         </div>
       </div>
     )
@@ -299,10 +308,7 @@ export default function ProductBarcodePage() {
   if (!product) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-red-600 mb-4 text-lg">Product not found</p>
-          <Button onClick={() => router.back()}>Go Back</Button>
-        </div>
+        <EmptyState title="Product not found" action={<Button onClick={() => router.back()}>Go Back</Button>} />
       </div>
     )
   }
@@ -310,126 +316,116 @@ export default function ProductBarcodePage() {
   const barcodeCode = product.barcode_code || product.barcode || `SKU-${product.sku}`
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-      <div className="max-w-3xl mx-auto">
+    <div className="p-6">
+      <div className="max-w-3xl mx-auto space-y-8">
         {/* Header */}
-        <div className="mb-8">
+        <div>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => router.back()}
-            className="mb-4 hover:bg-white"
+            className="mb-4"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="size-4" />
             Back to Products
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900">Product Barcode</h1>
-          <p className="text-gray-600 mt-2 text-lg">{product.name}</p>
+          <PageHeader title="Product Barcode" description={product.name} />
         </div>
 
         {/* Main Card */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <Card className="gap-0 overflow-hidden py-0">
           {/* Product Info Section */}
-          <div className="bg-gradient-to-r from-emerald-50 to-blue-50 p-8 border-b">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-gray-600 uppercase font-semibold">SKU</p>
-                <p className="text-lg font-bold text-gray-900 mt-1">{product.sku || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 uppercase font-semibold">Format</p>
-                <p className="text-lg font-bold text-gray-900 mt-1">Code 128</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 uppercase font-semibold">Stock</p>
-                <p className="text-lg font-bold text-gray-900 mt-1">{product.stock} units</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 uppercase font-semibold">Price</p>
-                <p className="text-lg font-bold text-emerald-600 mt-1">{formatCurrency(product.sale_price ?? product.salePrice ?? product.price ?? 0)}</p>
-              </div>
-            </div>
-          </div>
+          <CardContent className="p-8">
+            <InfoList className="grid-cols-2 gap-4 md:grid-cols-4">
+              <InfoRow layout="stacked" label="SKU" value={product.sku || 'N/A'} />
+              <InfoRow layout="stacked" label="Format" value="Code 128" />
+              <InfoRow layout="stacked" label="Stock" value={`${product.stock} units`} />
+              <InfoRow layout="stacked" label="Price" value={formatCurrency(product.sale_price ?? product.salePrice ?? product.price ?? 0)} />
+            </InfoList>
+          </CardContent>
+          <Separator />
 
           {/* Barcode Number Section */}
-          <div className="p-8 border-b">
-            <p className="text-sm text-gray-600 uppercase font-semibold mb-4">Barcode Code</p>
+          <CardContent className="space-y-4 p-8">
+            <SectionTitle>Barcode Code</SectionTitle>
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-900 rounded-lg p-4">
-                <p className="text-2xl font-mono font-bold text-white tracking-wider text-center break-all">
+              <Card className="flex-1 bg-muted p-4">
+                <p className="text-2xl font-mono font-bold tracking-wider text-center break-all">
                   {barcodeCode}
                 </p>
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleCopyBarcode}
-                className="h-12 w-12"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
+              </Card>
+              <WithTooltip content="Copy barcode">
+                <Button
+                  variant="outline"
+                  size="icon-lg"
+                  aria-label="Copy barcode"
+                  onClick={handleCopyBarcode}
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </WithTooltip>
             </div>
-          </div>
+          </CardContent>
+          <Separator />
 
           {/* Barcode Display Section */}
-          <div className="p-8 border-b">
-            <p className="text-sm text-gray-600 uppercase font-semibold mb-4">Barcode Display</p>
-            <div className="flex justify-center bg-gradient-to-b from-slate-50 to-white border-2 border-dashed border-slate-300 rounded-lg p-8 min-h-64">
-              {product.barcode_code || product.barcode ? (
-                <div className="flex items-center justify-center w-full">
-                  <svg ref={barcodeRef} className="max-w-full h-auto" />
-                </div>
-              ) : (
-                <div className="text-center">
-                  <p className="text-gray-500 mb-2">No barcode available</p>
-                  <p className="text-sm text-gray-400">Barcode will be generated when product is created</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <CardContent className="space-y-4 p-8">
+            <SectionTitle>Barcode Display</SectionTitle>
+            {product.barcode_code || product.barcode ? (
+              <Card className="min-h-64 items-center justify-center border-dashed bg-white p-8">
+                <svg ref={barcodeRef} className="max-w-full h-auto" />
+              </Card>
+            ) : (
+              <EmptyState bordered className="min-h-64" title="No barcode available" description="Barcode will be generated when product is created" />
+            )}
+          </CardContent>
+          <Separator />
 
           {/* Action Buttons */}
-          <div className="p-8 bg-gradient-to-r from-slate-50 to-white flex flex-wrap gap-3">
+          <CardFooter className="flex flex-wrap gap-3 p-8">
             <Button
               onClick={handlePrint}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              className="flex-1"
               disabled={!product.barcode_code && !product.barcode}
             >
-              <Printer className="h-4 w-4 mr-2" />
+              <Printer className="size-4" />
               Print Barcode
             </Button>
             <Button
               onClick={handleDownload}
               variant="outline"
-              className="flex-1 font-semibold"
+              className="flex-1"
               disabled={(!product.barcode_code && !product.barcode) || downloading}
             >
               {downloading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Spinner />
                   Downloading...
                 </>
               ) : (
                 <>
-                  <Download className="h-4 w-4 mr-2" />
+                  <Download className="size-4" />
                   Download SVG
                 </>
               )}
             </Button>
-          </div>
-        </div>
+          </CardFooter>
+        </Card>
 
         {/* Info Banner */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="font-bold text-blue-900 mb-3">ℹ️ Barcode Information</h3>
-          <ul className="text-sm text-blue-800 space-y-2">
-            <li>✓ <strong>Code 128:</strong> Industry-standard barcode format used worldwide</li>
-            <li>✓ <strong>Scannable:</strong> Works with any standard barcode scanner</li>
-            <li>✓ <strong>Print:</strong> Generate professional barcode labels ready for printing</li>
-            <li>✓ <strong>Download:</strong> Save as SVG for digital use, email, or reprinting</li>
-            <li>✓ <strong>Copy:</strong> Use the copy button to share barcode code with systems</li>
-          </ul>
-        </div>
+        <Alert>
+          <Info />
+          <AlertTitle>Barcode Information</AlertTitle>
+          <AlertDescription>
+            <ul className="space-y-2">
+              <li>✓ <strong>Code 128:</strong> Industry-standard barcode format used worldwide</li>
+              <li>✓ <strong>Scannable:</strong> Works with any standard barcode scanner</li>
+              <li>✓ <strong>Print:</strong> Generate professional barcode labels ready for printing</li>
+              <li>✓ <strong>Download:</strong> Save as SVG for digital use, email, or reprinting</li>
+              <li>✓ <strong>Copy:</strong> Use the copy button to share barcode code with systems</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
       </div>
     </div>
   )

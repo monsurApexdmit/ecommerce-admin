@@ -62,7 +62,7 @@ export interface CouponResponse {
   status: boolean;         // true = active, false = inactive/expired
   image: string | null;
   startDate: string;
-  endDate: string;
+  endDate: string | null;   // null = no end
   uploadedBy?: number | null;
   usageLimit?: number | null;
   usageLimitPerUser?: number | null;
@@ -72,6 +72,16 @@ export interface CouponResponse {
   applicableToCategories?: string | null;
   applicableToProducts?: string | null;
   freeShipping: boolean;
+  appliesTo?: 'all' | 'categories' | 'products';
+  categoryIds?: number[];
+  productIds?: number[];
+  channelPos?: boolean;
+  channelOnline?: boolean;
+  oncePerCustomer?: boolean;
+  used?: number;
+  revenue?: number;
+  /** Computed by the backend: disabled > used_up > scheduled > expired > active. `status` stays the on/off switch. */
+  phase?: 'active' | 'disabled' | 'used_up' | 'scheduled' | 'expired';
   stackable: boolean;
   autoApply: boolean;
   priority: number;
@@ -91,9 +101,17 @@ export interface CreateCouponData {
   discount: number;        // required, > 0
   status?: boolean;
   start_date?: string;     // RFC3339 e.g. "2026-01-01T00:00:00Z"
-  end_date?: string;       // RFC3339, must be after start_date
+  end_date?: string | null; // optional; the whole end day counts
   min_order_amount?: number;
-  usage_limit?: number;
+  usage_limit?: number | null;
+  usage_limit_per_user?: number | null;
+  max_discount?: number | null;
+  appliesTo?: 'all' | 'categories' | 'products';
+  categoryIds?: number[];
+  productIds?: number[];
+  channelPos?: boolean;
+  channelOnline?: boolean;
+  oncePerCustomer?: boolean;
 }
 
 export interface UpdateCouponData {
@@ -103,15 +121,24 @@ export interface UpdateCouponData {
   discount?: number;
   status?: boolean;
   start_date?: string;     // RFC3339
-  end_date?: string;       // RFC3339
+  end_date?: string | null; // null clears it ("No end")
   min_order_amount?: number;
-  usage_limit?: number;
+  usage_limit?: number | null;   // null = unlimited
+  usage_limit_per_user?: number | null;
+  max_discount?: number | null;  // null = no cap
+  appliesTo?: 'all' | 'categories' | 'products';
+  categoryIds?: number[];
+  productIds?: number[];
+  channelPos?: boolean;
+  channelOnline?: boolean;
+  oncePerCustomer?: boolean;
 }
 
 export const couponApi = {
   getAll: async (params?: {
     page?: number;
     limit?: number;
+    per_page?: number;
     search?: string;
   }): Promise<CouponListResponse> => {
     const response = await api.get('/coupons', { params });
@@ -222,9 +249,26 @@ export const couponApi = {
     return response.data;
   },
 
-  validate: async (code: string, orderAmount?: number): Promise<{ message: string; data: CouponResponse; discount: number }> => {
-    const response = await api.post('/coupons/validate', { code, order_amount: orderAmount });
-    return response.data;
+  validate: async (
+    code: string,
+    orderAmount?: number,
+    opts?: { channel?: 'pos' | 'online'; customerId?: number; items?: { productId: number; categoryId?: number }[] },
+  ): Promise<{ message: string; data: CouponResponse; discount: number }> => {
+    const response = await api.post('/coupons/validate', {
+      code,
+      order_amount: orderAmount,
+      channel: opts?.channel,
+      customerId: opts?.customerId,
+      items: opts?.items,
+    });
+    const body = response.data;
+    const result = body?.data ?? {};
+    return {
+      message: body?.message ?? '',
+      // the backend wraps the coupon next to the computed discount
+      data: (result.coupon ?? result) as CouponResponse,
+      discount: Number(result.discountAmount ?? result.discount ?? body?.discount ?? 0),
+    };
   },
 
   getByCode: async (code: string): Promise<{ message: string; data: CouponResponse }> => {

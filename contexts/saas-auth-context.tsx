@@ -27,6 +27,7 @@ export interface SaasAuthContextType {
 
   // Methods
   login: (email: string, password: string) => Promise<void>
+  pinLogin: (companyId: number, identifier: string, pin: string) => Promise<void>
   signup: (data: {
     companyName: string
     ownerFullName: string
@@ -49,6 +50,8 @@ export interface SaasAuthContextType {
   canRead: (module: string) => boolean
   canWrite: (module: string) => boolean
   canDelete: (module: string) => boolean
+  /** Sensitive actions set on the role (cost visibility, export, ...). Owners and admins can do all. */
+  canDo: (flag: 'cost' | 'discount' | 'refund' | 'export' | 'void') => boolean
   // Plan module check — true if module is included in current plan
   isPlanModule: (module: string) => boolean
 }
@@ -65,6 +68,7 @@ const SaasAuthContext = createContext<SaasAuthContextType>({
   trialEndDate: null,
   subscriptionEndDate: null,
   login: async () => {},
+  pinLogin: async () => {},
   signup: async () => {},
   logout: () => {},
   refreshUserData: async () => {},
@@ -77,6 +81,7 @@ const SaasAuthContext = createContext<SaasAuthContextType>({
   canRead: () => false,
   canWrite: () => false,
   canDelete: () => false,
+  canDo: () => true,
   isPlanModule: () => true,
 })
 
@@ -122,9 +127,18 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     initAuth()
   }, [pathname, router])
 
+  const pinLogin = async (companyId: number, identifier: string, pin: string) => {
+    const response = await saasAuthApi.pinLogin({ companyId, identifier, pin })
+    await completeLogin(response)
+  }
+
   const login = async (email: string, password: string) => {
+    const response = await saasAuthApi.login({ email, password })
+    await completeLogin(response)
+  }
+
+  const completeLogin = async (response: Awaited<ReturnType<typeof saasAuthApi.login>>) => {
     try {
-      const response = await saasAuthApi.login({ email, password })
 
       // Store auth data
       localStorage.setItem("token", response.data.token)
@@ -294,6 +308,12 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
   const canRead   = (module: string): boolean => hasPermission(module, 'read')
   const canWrite  = (module: string): boolean => hasPermission(module, 'write')
   const canDelete = (module: string): boolean => hasPermission(module, 'delete')
+  const canDo = (flag: 'cost' | 'discount' | 'refund' | 'export' | 'void'): boolean => {
+    if (!user) return false
+    if (user.role === 'owner' || user.role === 'admin') return true
+    const s = (user as any).sensitive
+    return s ? s[flag] !== false : true
+  }
 
   if (loading) {
     return (
@@ -318,6 +338,7 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     trialEndDate: company?.trialEndDate || null,
     subscriptionEndDate: company?.subscriptionEndDate || null,
     login,
+    pinLogin,
     signup,
     logout,
     refreshUserData,
@@ -330,6 +351,7 @@ export function SaasAuthProvider({ children }: { children: React.ReactNode }) {
     canRead,
     canWrite,
     canDelete,
+    canDo,
     isPlanModule,
   }
 

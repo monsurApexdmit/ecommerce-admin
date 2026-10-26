@@ -1,7 +1,12 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import {
   ShoppingCart,
   BarChart3,
@@ -31,6 +36,7 @@ import {
   TicketPercent,
   BadgeCheck,
 } from "lucide-react"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 function Navbar() {
@@ -45,9 +51,7 @@ function Navbar() {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100" : "bg-transparent"
-      }`}
+      className={cn("fixed top-0 left-0 right-0 z-50 transition-all duration-300", scrolled ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100" : "bg-transparent")}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -56,32 +60,29 @@ function Navbar() {
             <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className={`font-bold text-lg ${scrolled ? "text-gray-900" : "text-white"}`}>StockFlow</span>
+            <span className={cn("font-bold text-lg", scrolled ? "text-gray-900" : "text-white")}>StockFlow</span>
           </div>
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Features</a>
-            <a href="#modules" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Modules</a>
-            <a href="#pricing" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Pricing</a>
-            <a href="#testimonials" className={`text-sm hover:text-emerald-400 transition-colors ${scrolled ? "text-gray-600" : "text-white/80"}`}>Reviews</a>
+            <a href="#features" className={cn("text-sm hover:text-emerald-400 transition-colors", scrolled ? "text-gray-600" : "text-white/80")}>Features</a>
+            <a href="#modules" className={cn("text-sm hover:text-emerald-400 transition-colors", scrolled ? "text-gray-600" : "text-white/80")}>Modules</a>
+            <a href="#pricing" className={cn("text-sm hover:text-emerald-400 transition-colors", scrolled ? "text-gray-600" : "text-white/80")}>Pricing</a>
+            <a href="#testimonials" className={cn("text-sm hover:text-emerald-400 transition-colors", scrolled ? "text-gray-600" : "text-white/80")}>Reviews</a>
           </div>
 
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/auth/login" className={`text-sm font-medium transition-colors ${scrolled ? "text-gray-600 hover:text-gray-900" : "text-white/80 hover:text-white"}`}>Sign In</Link>
-            <Link
-              href="/auth/signup"
-              className="text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-            >
-              Start Free Trial
-            </Link>
+            <Link href="/auth/login" className={cn("text-sm font-medium transition-colors", scrolled ? "text-gray-600 hover:text-gray-900" : "text-white/80 hover:text-white")}>Sign In</Link>
+            <Button asChild>
+              <Link href="/auth/signup">Start Free Trial</Link>
+            </Button>
           </div>
 
           {/* Mobile menu */}
-          <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
-            {open ? <X className={`w-5 h-5 ${scrolled ? "text-gray-900" : "text-white"}`} /> : <Menu className={`w-5 h-5 ${scrolled ? "text-gray-900" : "text-white"}`} />}
-          </button>
+          <WithTooltip content="Toggle menu"><Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(!open)} aria-label="Toggle menu">
+            {open ? <X className={cn("w-5 h-5", scrolled ? "text-gray-900" : "text-white")} /> : <Menu className={cn("w-5 h-5", scrolled ? "text-gray-900" : "text-white")} />}
+          </Button></WithTooltip>
         </div>
       </div>
 
@@ -93,8 +94,12 @@ function Navbar() {
           <a href="#pricing" className="block text-sm text-gray-600 py-2" onClick={() => setOpen(false)}>Pricing</a>
           <a href="#testimonials" className="block text-sm text-gray-600 py-2" onClick={() => setOpen(false)}>Reviews</a>
           <div className="pt-2 flex flex-col gap-2">
-            <Link href="/auth/login" className="text-center text-sm border border-gray-300 rounded-lg py-2 font-medium">Sign In</Link>
-            <Link href="/auth/signup" className="text-center text-sm bg-emerald-600 text-white rounded-lg py-2 font-medium">Start Free Trial</Link>
+            <Button asChild variant="outline">
+              <Link href="/auth/login">Sign In</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/auth/signup">Start Free Trial</Link>
+            </Button>
           </div>
         </div>
       )}
@@ -117,10 +122,10 @@ function Hero() {
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 text-center">
-        <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 text-emerald-400 text-sm font-medium mb-8">
-          <BadgeCheck className="w-4 h-4" />
+        <Badge variant="secondary" className="mb-8">
+          <BadgeCheck />
           All-in-one inventory + storefront platform
-        </div>
+        </Badge>
 
         <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-white leading-tight tracking-tight mb-6">
           Run your entire{" "}
@@ -136,25 +141,22 @@ function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/auth/signup"
-            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-xl text-base transition-all hover:shadow-lg hover:shadow-emerald-500/25"
-          >
-            Start 10-Day Free Trial
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-          <a
-            href="#features"
-            className="flex items-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-300 font-medium px-8 py-4 rounded-xl text-base transition-all"
-          >
-            See all features
-          </a>
+          <Button asChild size="lg">
+            <Link href="/auth/signup">
+              Start 10-Day Free Trial
+              <ArrowRight />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <a href="#features">See all features</a>
+          </Button>
         </div>
 
         <p className="text-gray-500 text-sm mt-5">No credit card required · Cancel anytime</p>
 
         {/* Stats row */}
-        <div className="mt-20 grid grid-cols-2 sm:grid-cols-4 gap-8 border-t border-gray-800 pt-12">
+        <Separator className="mt-20 bg-gray-800" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 pt-12">
           {[
             { value: "30+", label: "Modules" },
             { value: "10-day", label: "Free trial" },
@@ -217,29 +219,26 @@ function Features() {
     <section id="features" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-full px-4 py-1.5 text-emerald-700 text-sm font-medium mb-4">
-            <Zap className="w-4 h-4" /> Core Features
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <Badge variant="secondary" className="mb-4">
+            <Zap /> Core Features
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Everything your business needs
           </h2>
-          <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
             From buying to selling to shipping — one platform handles the full lifecycle.
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((f) => (
-            <div
-              key={f.title}
-              className="group p-6 rounded-2xl border border-gray-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-50 transition-all duration-300"
-            >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${f.color}`}>
+            <Card key={f.title} className="gap-0 p-6">
+              <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center mb-4", f.color)}>
                 <f.icon className="w-6 h-6" />
               </div>
-              <h3 className="font-semibold text-gray-900 mb-2 text-lg">{f.title}</h3>
-              <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
-            </div>
+              <h3 className="font-semibold mb-2 text-lg">{f.title}</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
+            </Card>
           ))}
         </div>
       </div>
@@ -274,23 +273,20 @@ function Modules() {
     <section id="modules" className="py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">30+ built-in modules</h2>
-          <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">30+ built-in modules</h2>
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
             No plugins. No add-ons. Everything ships out of the box.
           </p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {modules.map((m) => (
-            <div
-              key={m.label}
-              className="flex flex-col items-center gap-3 p-4 bg-white rounded-xl border border-gray-100 hover:border-emerald-200 hover:shadow-md transition-all text-center"
-            >
+            <Card key={m.label} className="items-center gap-3 p-4 text-center">
               <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
                 <m.icon className="w-5 h-5 text-emerald-600" />
               </div>
-              <span className="text-xs font-medium text-gray-700 leading-tight">{m.label}</span>
-            </div>
+              <span className="text-xs font-medium leading-tight">{m.label}</span>
+            </Card>
           ))}
         </div>
       </div>
@@ -304,25 +300,24 @@ function DualApp() {
     <section className="py-24 bg-white overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Two apps. One ecosystem.
           </h2>
-          <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
             Your team manages inventory from the admin. Your customers shop from the storefront. Both sync in real time.
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
           {/* Admin card */}
-          <div className="relative rounded-3xl overflow-hidden border border-gray-200 bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-            <div className="relative">
+          <Card className="p-8">
+            <div>
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
                   <BarChart3 className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-widest">Admin Panel</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Admin Panel</p>
                   <p className="font-bold text-lg">StockFlow Dashboard</p>
                 </div>
               </div>
@@ -335,32 +330,30 @@ function DualApp() {
                   "Sales analytics & profit reports",
                   "Billing, subscriptions & team invites",
                 ].map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm text-gray-300">
-                    <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                  <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <Check className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
                     {item}
                   </li>
                 ))}
               </ul>
-              <Link
-                href="/auth/signup"
-                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors"
-              >
-                Open Admin Panel <ChevronRight className="w-4 h-4" />
-              </Link>
+              <Button asChild>
+                <Link href="/auth/signup">
+                  Open Admin Panel <ChevronRight />
+                </Link>
+              </Button>
             </div>
-          </div>
+          </Card>
 
           {/* Storefront card */}
-          <div className="relative rounded-3xl overflow-hidden border border-gray-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-8">
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-200/40 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl" />
-            <div className="relative">
+          <Card className="p-8">
+            <div>
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
                   <Store className="w-5 h-5 text-emerald-700" />
                 </div>
                 <div>
-                  <p className="text-xs text-emerald-600 font-medium uppercase tracking-widest">Storefront</p>
-                  <p className="font-bold text-gray-900 text-lg">Aura Shop</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Storefront</p>
+                  <p className="font-bold text-lg">Aura Shop</p>
                 </div>
               </div>
               <ul className="space-y-3 mb-8">
@@ -372,20 +365,19 @@ function DualApp() {
                   "Order tracking & support tickets",
                   "Fully branded with company colors & logo",
                 ].map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
+                  <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
                     <Check className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
                     {item}
                   </li>
                 ))}
               </ul>
-              <a
-                href="#pricing"
-                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors"
-              >
-                Get storefront access <ChevronRight className="w-4 h-4" />
-              </a>
+              <Button asChild>
+                <a href="#pricing">
+                  Get storefront access <ChevronRight />
+                </a>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </section>
@@ -473,62 +465,47 @@ function Pricing() {
     <section id="pricing" className="py-24 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Simple, transparent pricing</h2>
-          <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">Simple, transparent pricing</h2>
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
             All plans include a 10-day free trial. No credit card required.
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {plans.map((plan) => (
-            <div
+            <Card
               key={plan.name}
-              className={`relative rounded-2xl p-8 flex flex-col ${
-                plan.highlight
-                  ? "bg-gray-900 text-white shadow-2xl shadow-gray-900/20 ring-2 ring-emerald-500"
-                  : "bg-white border border-gray-200"
-              }`}
+              className={cn("relative", plan.highlight && "border-primary ring-1 ring-primary")}
             >
               {plan.highlight && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-4 py-1 rounded-full">
-                  MOST POPULAR
-                </div>
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">MOST POPULAR</Badge>
               )}
-              <div className="mb-6">
-                <p className={`font-semibold text-lg mb-1 ${plan.highlight ? "text-white" : "text-gray-900"}`}>
-                  {plan.name}
-                </p>
-                <p className={`text-sm mb-4 ${plan.highlight ? "text-gray-400" : "text-gray-500"}`}>{plan.desc}</p>
-                <div className="flex items-end gap-1">
-                  <span className={`text-4xl font-extrabold ${plan.highlight ? "text-white" : "text-gray-900"}`}>
-                    {plan.price}
-                  </span>
-                  <span className={`text-sm mb-1 ${plan.highlight ? "text-gray-400" : "text-gray-500"}`}>
-                    {plan.period}
-                  </span>
+              <CardHeader>
+                <CardTitle className="text-lg">{plan.name}</CardTitle>
+                <CardDescription>{plan.desc}</CardDescription>
+                <div className="flex items-end gap-1 pt-2">
+                  <span className="text-4xl font-extrabold">{plan.price}</span>
+                  <span className="text-sm mb-1 text-muted-foreground">{plan.period}</span>
                 </div>
-              </div>
+              </CardHeader>
 
-              <ul className="space-y-3 mb-8 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className={`flex items-center gap-2 text-sm ${plan.highlight ? "text-gray-300" : "text-gray-600"}`}>
-                    <Check className={`w-4 h-4 flex-shrink-0 ${plan.highlight ? "text-emerald-400" : "text-emerald-600"}`} />
-                    {f}
-                  </li>
-                ))}
-              </ul>
+              <CardContent className="flex-1">
+                <ul className="space-y-3">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
 
-              <Link
-                href="/auth/signup"
-                className={`text-center text-sm font-semibold px-6 py-3 rounded-xl transition-colors ${
-                  plan.highlight
-                    ? "bg-emerald-500 hover:bg-emerald-400 text-white"
-                    : "border border-gray-300 hover:border-emerald-500 hover:text-emerald-700 text-gray-700"
-                }`}
-              >
-                {plan.cta}
-              </Link>
-            </div>
+              <CardFooter>
+                <Button asChild className="w-full" variant={plan.highlight ? "default" : "outline"}>
+                  <Link href="/auth/signup">{plan.cta}</Link>
+                </Button>
+              </CardFooter>
+            </Card>
           ))}
         </div>
       </div>
@@ -563,24 +540,24 @@ function Testimonials() {
     <section id="testimonials" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Loved by business owners</h2>
-          <p className="text-gray-500 text-lg">Real feedback from real teams.</p>
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">Loved by business owners</h2>
+          <p className="text-muted-foreground text-lg">Real feedback from real teams.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {testimonials.map((t) => (
-            <div key={t.name} className="bg-gray-50 rounded-2xl p-8 border border-gray-100">
+            <Card key={t.name} className="gap-0 p-8">
               <div className="flex gap-1 mb-4">
                 {Array.from({ length: t.stars }).map((_, i) => (
                   <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                 ))}
               </div>
-              <p className="text-gray-700 text-sm leading-relaxed mb-6">"{t.body}"</p>
+              <p className="text-sm leading-relaxed mb-6">"{t.body}"</p>
               <div>
-                <p className="font-semibold text-gray-900 text-sm">{t.name}</p>
-                <p className="text-gray-500 text-xs">{t.role}</p>
+                <p className="font-semibold text-sm">{t.name}</p>
+                <p className="text-muted-foreground text-xs">{t.role}</p>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       </div>
@@ -600,19 +577,15 @@ function CTA() {
           Join businesses that run their inventory, POS, and storefront from one platform. Start free — no credit card needed.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/auth/signup"
-            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-xl text-base transition-all hover:shadow-lg hover:shadow-emerald-500/25"
-          >
-            Start 10-Day Free Trial
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-          <Link
-            href="/auth/login"
-            className="border border-gray-700 hover:border-gray-500 text-gray-300 font-medium px-8 py-4 rounded-xl text-base transition-all"
-          >
-            Sign In
-          </Link>
+          <Button asChild size="lg">
+            <Link href="/auth/signup">
+              Start 10-Day Free Trial
+              <ArrowRight />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link href="/auth/login">Sign In</Link>
+          </Button>
         </div>
         <p className="text-gray-600 text-sm mt-5">No credit card · No setup fee · Cancel anytime</p>
       </div>
@@ -666,7 +639,8 @@ function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <Separator className="mb-6 bg-gray-800" />
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs">© {new Date().getFullYear()} StockFlow. All rights reserved.</p>
           <p className="text-xs">Built with Next.js · Laravel · Tailwind CSS</p>
         </div>

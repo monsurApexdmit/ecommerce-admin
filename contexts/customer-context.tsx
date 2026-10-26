@@ -13,12 +13,24 @@ export interface Customer {
   state?: string
   zipCode?: string
   country?: string
-  customerType: 'retail' | 'wholesale'
+  customerType: 'retail' | 'wholesale' | 'vip'
   status: 'active' | 'inactive'
   totalOrders?: number
+  dueAmount?: number
   totalSpent?: number
   storeCredit?: number
   notes?: string
+  type?: 'individual' | 'business'
+  businessName?: string
+  licenceBin?: string
+  customerGroup?: 'retail' | 'wholesale' | 'vip'
+  creditLimit?: number
+  openingBalance?: number
+  birthday?: string | null
+  tags?: string[]
+  smsOptIn?: boolean
+  district?: string
+  area?: string
   createdAt: string
   updatedAt: string
 }
@@ -58,9 +70,21 @@ function convertToCustomer(c: CustomerResponse): Customer {
     customerType: c.customerType || 'retail',
     status: c.status || 'active',
     totalOrders: c.totalOrders || 0,
+    dueAmount: c.dueAmount || 0,
     totalSpent: c.totalSpent || 0,
     storeCredit: c.storeCredit || 0,
     notes: c.notes || '',
+    type: c.type,
+    businessName: c.businessName || '',
+    licenceBin: c.licenceBin || '',
+    customerGroup: c.customerGroup || c.customerType || 'retail',
+    creditLimit: c.creditLimit ?? 0,
+    openingBalance: c.openingBalance ?? 0,
+    birthday: c.birthday ?? null,
+    tags: c.tags || [],
+    smsOptIn: c.smsOptIn ?? false,
+    district: c.district || '',
+    area: c.area || '',
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
   }
@@ -106,6 +130,17 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
         status: customerData.status,
         notes: customerData.notes,
         storeCredit: customerData.storeCredit,
+        type: customerData.type,
+        businessName: customerData.businessName,
+        licenceBin: customerData.licenceBin,
+        customerGroup: customerData.customerGroup,
+        creditLimit: customerData.creditLimit,
+        openingBalance: customerData.openingBalance,
+        birthday: customerData.birthday,
+        tags: customerData.tags,
+        smsOptIn: customerData.smsOptIn,
+        district: customerData.district,
+        area: customerData.area,
       })
       await refreshCustomers()
     } catch (err: any) {
@@ -129,6 +164,9 @@ export function CustomerProvider({ children }: { children: React.ReactNode }) {
       if (updates.status !== undefined) updateData.status = updates.status
       if (updates.notes !== undefined) updateData.notes = updates.notes
       if (updates.storeCredit !== undefined) updateData.storeCredit = updates.storeCredit
+      for (const k of ['type', 'businessName', 'licenceBin', 'customerGroup', 'creditLimit', 'openingBalance', 'birthday', 'tags', 'smsOptIn', 'district', 'area'] as const) {
+        if (updates[k] !== undefined) updateData[k] = updates[k]
+      }
 
       await customerApi.update(parseInt(id), updateData)
       await refreshCustomers()

@@ -1,1108 +1,762 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { useToast } from "@/hooks/use-toast"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Search,
-  Eye,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  ShoppingBag,
-  Download,
-  Upload,
-  FilePen,
-  Trash2,
-  Plus,
-  MoreHorizontal,
-  Edit2,
-  Users,
-  UserCheck,
-  UserX,
-  Star,
-  Loader2,
-  X,
-  Check,
-} from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { CustomerAddress } from "@/lib/customerApi"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
-import { usePagination } from "@/hooks/use-pagination"
-import { PaginationControl } from "@/components/ui/pagination-control"
-import { StatusBadge } from "@/components/ui/status-badge"
-import { useCustomer, type Customer } from "@/contexts/customer-context"
-import { Checkbox } from "@/components/ui/checkbox"
+import { useSearchParams } from "next/navigation"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
+  AlertTriangle, Download, MoreHorizontal, Phone, Plus, RotateCcw, Search, Upload, Users, X, Banknote, Clock,
+} from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { StatsCards } from "@/components/ui/stats-card"
-import customerApi from "@/lib/customerApi"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Progress } from "@/components/ui/progress"
+import { ItemGroup, Item, ItemContent, ItemTitle, ItemDescription, ItemActions, ItemSeparator } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { StatTile } from "@/components/common/StatTile"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { CustomerFormDialog } from "@/components/customers/customer-form-dialog"
+import { customerApi, type CustomerResponse, type DuplicateGroup, type CustomerListParams } from "@/lib/customerApi"
+import { MergeDialog } from "@/components/customers/merge-dialog"
+import { GetPaymentForm } from "@/components/customers/get-payment-form"
+import { parseCSVRows, toCSV, downloadCSV } from "@/components/customers/csv"
+import { useCustomer } from "@/contexts/customer-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
-const emptyAddrForm = {
-  fullName: "", phone: "", addressLine1: "", addressLine2: "",
-  city: "", state: "", postalCode: "", country: "", addressType: "home", isDefault: false,
+type Tab = "all" | "inactive" | "loyal" | "risk" | "due" | "never" | "dup"
+type Stats = Awaited<ReturnType<typeof customerApi.getStats>>
+
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
+
+const GROUP_STYLE: Record<string, { label: string; variant: BadgeVariant }> = {
+  retail: { label: "Retail", variant: "outline" },
+  wholesale: { label: "Wholesale", variant: "secondary" },
+  vip: { label: "VIP", variant: "default" },
 }
 
-function CustomerAddressesPanel({ customerId, readonly = false }: { customerId: number; readonly?: boolean }) {
-  const { toast } = useToast()
-  const [addresses, setAddresses] = useState<CustomerAddress[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [form, setForm] = useState(emptyAddrForm)
+const groupOf = (c: CustomerResponse) => c.customerGroup ?? c.customerType ?? "retail"
+const hasSms = (c: CustomerResponse) =>
+  c.smsOptIn !== false && c.status !== "inactive" && (c.phone ?? "").replace(/\D/g, "").length >= 7
 
-  useEffect(() => {
-    setLoading(true)
-    customerApi.getAddresses(customerId)
-      .then(setAddresses)
-      .catch(() => toast({ variant: "destructive", title: "Error", description: "Failed to load addresses" }))
-      .finally(() => setLoading(false))
-  }, [customerId])
+const daysSince = (iso?: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null)
 
-  const reload = () =>
-    customerApi.getAddresses(customerId).then(setAddresses).catch(() => {})
-
-  const handleSave = async () => {
-    if (!form.fullName.trim() || !form.addressLine1.trim()) {
-      toast({ variant: "destructive", title: "Error", description: "Full name and address line 1 are required" })
-      return
-    }
-    try {
-      setSaving(true)
-      if (editingId) {
-        await customerApi.updateAddress(editingId, form)
-        toast({ title: "Success", description: "Address updated" })
-      } else {
-        await customerApi.createAddress({ ...form, customerId })
-        toast({ title: "Success", description: "Address added" })
-      }
-      await reload()
-      setShowForm(false)
-      setEditingId(null)
-      setForm(emptyAddrForm)
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.response?.data?.message || "Failed to save address" })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDelete = async (id: number) => {
-    try {
-      setDeletingId(id)
-      await customerApi.deleteAddress(id)
-      await reload()
-      toast({ title: "Success", description: "Address removed" })
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.response?.data?.message || "Failed to delete address" })
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  const handleSetDefault = async (id: number) => {
-    try {
-      await customerApi.setDefaultAddress(id)
-      await reload()
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to set default" })
-    }
-  }
-
-  const startEdit = (addr: CustomerAddress) => {
-    setForm({
-      fullName: addr.fullName,
-      phone: addr.phone ?? "",
-      addressLine1: addr.addressLine1,
-      addressLine2: addr.addressLine2 ?? "",
-      city: addr.city ?? "",
-      state: addr.state ?? "",
-      postalCode: addr.postalCode ?? "",
-      country: addr.country ?? "",
-      addressType: addr.addressType,
-      isDefault: addr.isDefault,
-    })
-    setEditingId(addr.id)
-    setShowForm(true)
-  }
-
-  if (loading) return (
-    <div className="space-y-3 py-2">
-      {[1, 2].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}
-    </div>
-  )
-
-  return (
-    <div className="space-y-4">
-      {!readonly && !showForm && (
-        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setForm(emptyAddrForm); setEditingId(null); setShowForm(true) }}>
-          <Plus className="w-4 h-4 mr-2" /> Add Address
-        </Button>
-      )}
-
-      {showForm && !readonly && (
-        <div className="border rounded-lg p-4 space-y-3 bg-gray-50">
-          <div className="flex items-center justify-between mb-1">
-            <p className="font-semibold text-sm">{editingId ? "Edit Address" : "New Address"}</p>
-            <button onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-400 hover:text-gray-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { key: "fullName", label: "Full Name *", placeholder: "John Doe", span: 2 },
-              { key: "phone", label: "Phone", placeholder: "+1 555 000 0000" },
-              { key: "addressType", label: "Type", type: "select" },
-              { key: "addressLine1", label: "Address Line 1 *", placeholder: "123 Main St", span: 2 },
-              { key: "addressLine2", label: "Address Line 2", placeholder: "Apt 4B", span: 2 },
-              { key: "city", label: "City", placeholder: "New York" },
-              { key: "state", label: "State", placeholder: "NY" },
-              { key: "postalCode", label: "ZIP", placeholder: "10001" },
-              { key: "country", label: "Country", placeholder: "United States" },
-            ].map((f) => (
-              <div key={f.key} className={f.span === 2 ? "col-span-2" : ""}>
-                <Label className="text-xs mb-1 block">{f.label}</Label>
-                {f.type === "select" ? (
-                  <select
-                    value={(form as any)[f.key]}
-                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    className="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="home">Home</option>
-                    <option value="work">Work</option>
-                    <option value="other">Other</option>
-                  </select>
-                ) : (
-                  <Input
-                    value={(form as any)[f.key]}
-                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="text-sm h-9"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setForm(prev => ({ ...prev, isDefault: !prev.isDefault }))}
-              className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${form.isDefault ? "bg-emerald-600 border-emerald-600" : "border-gray-300"}`}
-            >
-              {form.isDefault && <Check className="w-3 h-3 text-white" />}
-            </button>
-            <span className="text-sm text-gray-600">Set as default</span>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
-              {saving && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
-              {editingId ? "Update" : "Save"}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setEditingId(null) }}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
-      {addresses.length === 0 && !showForm ? (
-        <div className="text-center py-8 text-gray-500">
-          <MapPin className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-          <p className="text-sm">No addresses saved</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {addresses.map(addr => (
-            <div key={addr.id} className="border rounded-lg p-4 relative bg-white">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wide capitalize">{addr.addressType}</span>
-                    {addr.isDefault && <Badge className="bg-emerald-100 text-emerald-700 text-[10px] py-0 px-1.5">Default</Badge>}
-                  </div>
-                  <p className="font-semibold text-sm text-gray-900">{addr.fullName}</p>
-                  <p className="text-sm text-gray-600">{addr.addressLine1}</p>
-                  {addr.addressLine2 && <p className="text-sm text-gray-600">{addr.addressLine2}</p>}
-                  <p className="text-sm text-gray-600">{[addr.city, addr.state, addr.postalCode].filter(Boolean).join(", ")}</p>
-                  {addr.country && <p className="text-sm text-gray-600">{addr.country}</p>}
-                  {addr.phone && <p className="text-xs text-gray-500 mt-1">{addr.phone}</p>}
-                </div>
-                {!readonly && (
-                  <div className="flex flex-col gap-1 shrink-0">
-                    {!addr.isDefault && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-500 hover:text-emerald-600 px-2" onClick={() => handleSetDefault(addr.id)}>
-                        <Star className="w-3 h-3 mr-1" /> Default
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => startEdit(addr)}>
-                      <Edit2 className="w-3 h-3 mr-1" /> Edit
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs text-red-500 hover:text-red-600 px-2" onClick={() => handleDelete(addr.id)} disabled={deletingId === addr.id}>
-                      {deletingId === addr.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3 mr-1" />} Remove
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+function segmentOf(c: CustomerResponse): { text: string; variant: BadgeVariant } {
+  const orders = c.totalOrders ?? 0
+  const days = daysSince(c.lastOrderAt)
+  if (orders === 0) return { text: "No orders yet", variant: "outline" }
+  if (days !== null && days > 30) return { text: "At risk · 30+ days", variant: "destructive" }
+  if (orders >= 5) return { text: "Loyal", variant: "default" }
+  return { text: "Active", variant: "secondary" }
 }
 
 export default function CustomersPage() {
-  const { canRead } = useSaasAuth()
-  const router = useRouter()
-  const { toast } = useToast()
-  const { customers, isLoading, addCustomer, updateCustomer, deleteCustomer } = useCustomer()
   const { formatCurrency } = useCompanySettings()
-  const [stats, setStats] = useState<{
-    total: number
-    active: number
-    inactive: number
-    individuals: number
-    businesses: number
-  } | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
-  
-  // Filtering & Sorting State
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
-  const [sortOption, setSortOption] = useState<string>("default")
-  
-  // Bulk Actions State
-  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([])
-  const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
-  const [bulkAction, setBulkAction] = useState("")
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const { deleteCustomer, refreshCustomers } = useCustomer()
+  const { toast } = useToast()
+  const searchParams = useSearchParams()
 
-  // Form State
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
-    country: "",
-    customerType: "retail" as "retail" | "wholesale",
-    status: "active" as "active" | "inactive",
-    notes: ""
-  })
+  const [customers, setCustomers] = useState<CustomerResponse[]>([])
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Fetch stats
+  const [tab, setTab] = useState<Tab>("all")
+  const [search, setSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [groupFilter, setGroupFilter] = useState("all")
+  const [sort, setSort] = useState("recent")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [hideDupBanner, setHideDupBanner] = useState(false)
+
+  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const [openId, setOpenId] = useState<number | null>(null)
+  const [detail, setDetail] = useState<CustomerResponse | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [payOpen, setPayOpen] = useState(false)
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeGroups, setMergeGroups] = useState<DuplicateGroup[]>([])
+  const [mergeLoading, setMergeLoading] = useState(false)
+  const [mergeTitle, setMergeTitle] = useState("Review & merge duplicates")
+  const [tagOpen, setTagOpen] = useState(false)
+  const [tagDraft, setTagDraft] = useState("")
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<CustomerResponse | null>(null)
+  const [deleteTargets, setDeleteTargets] = useState<CustomerResponse[]>([])
+  const [deleting, setDeleting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const blocked = useModuleGuard("Customers")
+
+  const { canDo } = useSaasAuth()
+
+  const mayExport = canDo("export")
+
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setStatsLoading(true)
-        const statsData = await customerApi.getStats()
-        setStats(statsData)
-      } catch (err) {
-        console.error("Failed to fetch customer stats:", err)
-      } finally {
-        setStatsLoading(false)
-      }
-    }
+    const q = searchParams.get("customer") ?? searchParams.get("q") ?? searchParams.get("search")
+    if (q) { setSearch(q); setPage(1) }
+  }, [searchParams])
 
-    fetchStats()
+  const filterParams = useCallback((): CustomerListParams => ({
+    sort,
+    ...(search ? { search } : {}),
+    ...(tab === "inactive" ? { status: "inactive" } : tab !== "all" ? { segment: tab } : {}),
+    ...(typeFilter !== "all" ? { type: typeFilter } : {}),
+    ...(groupFilter !== "all" ? { group: groupFilter } : {}),
+  }), [sort, search, tab, typeFilter, groupFilter])
+
+  const fetchCustomers = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await customerApi.getAll({ page, limit: perPage, ...filterParams() })
+      setCustomers(res.data ?? [])
+      setTotal(res.total ?? 0)
+    } catch {
+      setCustomers([])
+    } finally {
+      setLoading(false)
+    }
+  }, [page, perPage, filterParams])
+
+  const fetchStats = useCallback(() => {
+    customerApi.getStats().then(setStats).catch(() => {})
   }, [])
 
-  const blocked = useModuleGuard('Customers')
+  useEffect(() => { fetchCustomers() }, [fetchCustomers])
+  useEffect(() => { fetchStats() }, [fetchStats])
+
+  // Keep a customer open in the side panel; default to the first row
+  useEffect(() => {
+    if (customers.length === 0) { setOpenId(null); return }
+    if (!customers.some((c) => c.id === openId)) setOpenId(customers[0].id)
+  }, [customers, openId])
+
+  const open = customers.find((c) => c.id === openId) ?? null
+
+  useEffect(() => {
+    setPayOpen(false)
+    if (!open) { setDetail(null); return }
+    let cancelled = false
+    setDetailLoading(true)
+    customerApi
+      .getById(open.id)
+      .then((r) => { if (!cancelled) setDetail(r.data) })
+      .catch(() => { if (!cancelled) setDetail(null) })
+      .finally(() => { if (!cancelled) setDetailLoading(false) })
+    return () => { cancelled = true }
+  }, [open?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (blocked) return blocked
 
-  // Filter Logic
-  const filteredCustomers = customers
-    .filter((customer) => {
-      const matchesSearch =
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.phone.includes(searchQuery)
-      
-      const matchesStatus = statusFilter === "all" || customer.status === statusFilter
-      const matchesType = typeFilter === "all" || customer.customerType === typeFilter
+  const refresh = () => {
+    fetchCustomers(); fetchStats(); refreshCustomers()
+    if (openId) customerApi.getById(openId).then((r) => setDetail(r.data)).catch(() => {})
+  }
+  const hasFilters = !!(search || typeFilter !== "all" || groupFilter !== "all" || tab !== "all")
+  const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setChecked(new Set()) }
+  const resetFilters = () => { setSearch(""); setTypeFilter("all"); setGroupFilter("all"); setTab("all"); setPage(1); setChecked(new Set()) }
 
-      return matchesSearch && matchesStatus && matchesType
-    })
-    .sort((a, b) => {
-      if (sortOption === "name-asc") return a.name.localeCompare(b.name)
-      if (sortOption === "name-desc") return b.name.localeCompare(a.name)
-      if (sortOption === "spent-high") return (b.totalSpent || 0) - (a.totalSpent || 0)
-      if (sortOption === "spent-low") return (a.totalSpent || 0) - (b.totalSpent || 0)
-      if (sortOption === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      if (sortOption === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      return 0
-    })
+  const allChecked = customers.length > 0 && customers.every((c) => checked.has(c.id))
+  const toggleAll = () => setChecked(allChecked ? new Set() : new Set(customers.map((c) => c.id)))
+  const toggleOne = (id: number) =>
+    setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const selected = customers.filter((c) => checked.has(c.id))
 
-  const {
-    currentItems: currentCustomers,
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    setCurrentPage,
-    handleItemsPerPageChange,
-  } = usePagination(filteredCustomers, 10)
-
-  const handleFilterChange = () => {
-    setCurrentPage(1)
+  const setActive = async (targets: CustomerResponse[], status: "active" | "inactive") => {
+    const results = await Promise.allSettled(targets.map((c) => customerApi.setStatus(c.id, status)))
+    const failed = results.filter((r) => r.status === "rejected").length
+    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${targets.length} could not be changed` })
+    else toast({ title: status === "active" ? "Marked active" : "Marked inactive", description: `${targets.length} customer${targets.length === 1 ? "" : "s"} updated` })
+    setChecked(new Set())
+    refresh()
   }
 
-  // Bulk Selection 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedCustomerIds(currentCustomers.map((c) => c.id))
-    } else {
-      setSelectedCustomerIds([])
+  const confirmDelete = async () => {
+    setDeleting(true)
+    const results = await Promise.allSettled(deleteTargets.map((c) => deleteCustomer(String(c.id))))
+    const failed = results.filter((r) => r.status === "rejected").length
+    const firstErr = results.find((r): r is PromiseRejectedResult => r.status === "rejected")
+    const reason = firstErr ? (firstErr.reason?.message || "") : ""
+    if (failed) toast({ variant: "destructive", title: "Some deletions failed", description: deleteTargets.length === 1 && reason ? reason : `${failed} of ${deleteTargets.length} could not be deleted${reason ? `: ${reason}` : ""}` })
+    else toast({ title: "Deleted", description: `${deleteTargets.length} customer${deleteTargets.length === 1 ? "" : "s"} removed` })
+    setDeleting(false)
+    setDeleteTargets([])
+    setChecked(new Set())
+    refresh()
+  }
+
+  const EXPORT_HEADERS = ["ID", "Name", "Type", "Company", "Phone", "Email", "Group", "Status", "Address", "City/District", "Area", "Postcode", "Country", "Credit limit", "Store credit", "Tags", "Orders", "Spent", "Due", "Last order", "Since"]
+
+  const exportRows = (rows: CustomerResponse[]) => {
+    if (!rows.length) { toast({ variant: "destructive", title: "Nothing to export" }); return }
+    const fmt = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : "")
+    downloadCSV("customers.csv", toCSV(EXPORT_HEADERS, rows.map((c) => [
+      c.id, c.name, c.type ?? "individual", c.businessName ?? "", c.phone ?? "", c.email ?? "", groupOf(c), c.status ?? "active",
+      c.address ?? "", c.district ?? c.city ?? "", c.area ?? c.state ?? "", c.zipCode ?? "", c.country ?? "",
+      Number(c.creditLimit) || 0, Number(c.storeCredit) || 0, (c.tags ?? []).join("; "),
+      c.totalOrders ?? 0, Number(c.totalSpent) || 0, Number(c.dueAmount) || 0, fmt(c.lastOrderAt), fmt(c.createdAt),
+    ])))
+    toast({ title: "Exported", description: `${rows.length} customer${rows.length === 1 ? "" : "s"}` })
+  }
+
+  /** Exports the selected rows, or every row matching the current filters across all pages */
+  const handleExport = async (onlySelected = false) => {
+    if (onlySelected && selected.length) return exportRows(selected)
+    try {
+      exportRows(await customerApi.getAllFiltered(filterParams()))
+    } catch {
+      toast({ variant: "destructive", title: "Export failed", description: "Could not load the customers" })
     }
   }
 
-  const handleSelectCustomer = (customerId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedCustomerIds([...selectedCustomerIds, customerId])
-    } else {
-      setSelectedCustomerIds(selectedCustomerIds.filter((id) => id !== customerId))
+  const copyNumbers = async (numbers: string[]) => {
+    if (!numbers.length) { toast({ variant: "destructive", title: "No numbers to copy", description: "No matching customers agreed to SMS offers." }); return }
+    const text = numbers.join(", ")
+    try {
+      await navigator.clipboard.writeText(text)
+      toast({ title: "Copied", description: `${numbers.length} number${numbers.length === 1 ? "" : "s"} copied for your SMS tool` })
+    } catch {
+      toast({ variant: "destructive", title: "Could not copy", description: "Clipboard is not available in this browser" })
     }
   }
 
-  // CRUD Handlers
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      address: "",
-      city: "",
-      state: "",
-      zipCode: "",
-      country: "",
-      customerType: "retail",
-      status: "active",
-      notes: ""
-    })
-    setEditingCustomer(null)
-  }
-
-  const handleAddEditOpen = (customer?: Customer) => {
-    if (customer) {
-      setEditingCustomer(customer)
-      setFormData({
-        name: customer.name,
-        email: customer.email,
-        phone: customer.phone,
-        address: customer.address || "",
-        city: customer.city || "",
-        state: customer.state || "",
-        zipCode: customer.zipCode || "",
-        country: customer.country || "",
-        customerType: customer.customerType,
-        status: customer.status,
-        notes: customer.notes || ""
+  const copySmsAll = async () => {
+    try {
+      const { numbers } = await customerApi.getSmsNumbers({
+        ...(search ? { search } : {}),
+        ...(groupFilter !== "all" ? { group: groupFilter } : {}),
+        ...(typeFilter !== "all" ? { type: typeFilter } : {}),
+        ...(tab === "inactive" ? { status: "inactive" } : tab !== "all" ? { segment: tab } : {}),
       })
-    } else {
-      resetForm()
+      await copyNumbers(numbers)
+    } catch {
+      toast({ variant: "destructive", title: "Could not load numbers" })
     }
-    setIsAddDialogOpen(true)
+  }
+  const copySmsSelected = () => copyNumbers(selected.filter(hasSms).map((c) => c.phone))
+
+  const applyTag = async () => {
+    const tag = tagDraft.trim()
+    if (!tag) return
+    try {
+      const r = await customerApi.bulkTag(selected.map((c) => c.id), tag)
+      toast({ title: "Tag added", description: `"${tag}" added to ${r.updated} customer${r.updated === 1 ? "" : "s"}` })
+      setTagOpen(false); setTagDraft(""); setChecked(new Set()); refresh()
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not add tag", description: e?.response?.data?.message || "Please try again" })
+    }
   }
 
-  const handleSaveCustomer = async () => {
-    if (!formData.name || !formData.phone) {
-      toast({ variant: "destructive", title: "Error", description: "Full name and phone number are required" })
-      return
-    }
+  const openDuplicates = async () => {
+    setMergeTitle("Review & merge duplicates")
+    setMergeOpen(true); setMergeLoading(true)
+    try { setMergeGroups(await customerApi.getDuplicates()) } catch { setMergeGroups([]) } finally { setMergeLoading(false) }
+  }
+  const openMergeSelected = () => {
+    if (selected.length < 2) { toast({ variant: "destructive", title: "Select at least two customers to merge" }); return }
+    setMergeTitle(`Merge ${selected.length} selected customers`)
+    setMergeGroups([{ key: "selected", reason: "phone", customers: selected }])
+    setMergeLoading(false)
+    setMergeOpen(true)
+  }
 
-    try {
-      if (editingCustomer) {
-        await updateCustomer(editingCustomer.id, formData)
-        toast({ title: "Success", description: "Customer updated successfully" })
-      } else {
-        await addCustomer(formData)
-        toast({ title: "Success", description: "Customer created successfully" })
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (ev) => {
+      const rows = parseCSVRows(String(ev.target?.result ?? ""))
+      const pick = (r: Record<string, string>, ...keys: string[]) => { for (const k of keys) if (r[k]) return r[k]; return "" }
+      const payload = rows.map((r) => ({
+        name: pick(r, "name"), phone: pick(r, "phone"), email: pick(r, "email"),
+        address: pick(r, "address"), city: pick(r, "city", "citydistrict", "district"), district: pick(r, "district", "citydistrict", "city"),
+        area: pick(r, "area"), country: pick(r, "country"),
+        type: /^(business|biz)$/i.test(pick(r, "type")) || pick(r, "company", "businessname") ? "business" : "individual",
+        businessName: pick(r, "businessname", "company"), licenceBin: pick(r, "licencebin", "licence", "bin"),
+        customerGroup: ["vip", "wholesale", "retail"].find((g) => g === pick(r, "customergroup", "group").toLowerCase()) ?? "retail",
+        creditLimit: Number(pick(r, "creditlimit")) || 0, openingBalance: Number(pick(r, "openingbalance")) || 0,
+        birthday: pick(r, "birthday"), tags: pick(r, "tags"), notes: pick(r, "notes"),
+      }))
+      // Pre-filter rows without name/phone; the backend also skips duplicate phones
+      const valid = payload.filter((r) => r.name.trim() && r.phone.trim())
+      const preSkipped = payload.length - valid.length
+      try {
+        const res = await customerApi.importRows(valid)
+        toast({ title: `Imported ${res.imported}, skipped ${res.skipped + preSkipped}`, description: res.skippedRows?.[0] ? `e.g. row ${res.skippedRows[0].row}: ${res.skippedRows[0].reason}` : undefined })
+        setImportOpen(false)
+        refresh()
+      } catch (err: any) {
+        toast({ variant: "destructive", title: "Import failed", description: err?.response?.data?.message || "Please check the file and try again" })
       }
-      setIsAddDialogOpen(false)
-      resetForm()
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.response?.data?.message || err.message || "Failed to save customer" })
     }
+    reader.readAsText(file)
   }
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteCustomer(id)
-      setSelectedCustomerIds(selectedCustomerIds.filter(sid => sid !== id))
-      toast({ title: "Success", description: "Customer deleted successfully" })
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.response?.data?.message || err.message || "Failed to delete customer" })
-    }
-  }
-
-  // Bulk Actions
-  const handleBulkDelete = async () => {
-    try {
-      await Promise.all(selectedCustomerIds.map(id => deleteCustomer(id)))
-      setSelectedCustomerIds([])
-      toast({ title: "Success", description: "Customers deleted successfully" })
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message || "Failed to delete customers" })
-    }
-  }
-
-  const handleBulkAction = async () => {
-    if (!bulkAction || selectedCustomerIds.length === 0) return
-
-    try {
-      if (bulkAction === "delete") {
-        await handleBulkDelete()
-      } else if (bulkAction === "active") {
-        await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "active" })))
-        toast({ title: "Success", description: "Customers activated successfully" })
-      } else if (bulkAction === "inactive") {
-        await Promise.all(selectedCustomerIds.map(id => updateCustomer(id, { status: "inactive" })))
-        toast({ title: "Success", description: "Customers deactivated successfully" })
-      }
-      setIsBulkActionDialogOpen(false)
-      setBulkAction("")
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message || "Bulk action failed" })
-    }
-  }
-
-  // Import/Export
-  const handleExport = () => {
-     const exportData = filteredCustomers.map((c) => ({
-      ...c,
-      full_address: `${c.address || ''}, ${c.city || ''}, ${c.state || ''} ${c.zipCode || ''}, ${c.country || ''}`
-    }))
-    
-    const headers = ["ID", "Name", "Email", "Phone", "Type", "Status", "Total Spent", "Total Orders", "Joined Date"]
-    // Simplified export for demo
-    const simplifiedData = exportData.map(c => ({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-      phone: c.phone,
-      type: c.customerType,
-      status: c.status,
-      total_spent: c.totalSpent || 0,
-      total_orders: c.totalOrders || 0,
-      joined: new Date(c.createdAt).toLocaleDateString()
-    }))
-
-    exportToCSV(simplifiedData, "customers", headers)
-  }
-
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
-      if (!file) return
-  
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const text = e.target?.result as string
-        const importedData = parseCSV(text)
-        
-        // Basic mapping - in a real app would need more validation
-        importedData.forEach(item => {
-           if (item.name && item.email) {
-             addCustomer({
-                name: item.name,
-                email: item.email,
-                phone: item.phone || "",
-                customerType: (item.type?.toLowerCase() === "wholesale" ? "wholesale" : "retail"),
-                status: "active",
-                address: item.address,
-                city: item.city,
-                state: item.state,
-                zipCode: item.zip_code,
-                country: item.country
-             })
-           }
-        })
-        setIsImportDialogOpen(false)
-      }
-      reader.readAsText(file)
-    }
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
-  }
+  const openForm = (c?: CustomerResponse | null) => { setEditing(c ?? null); setFormOpen(true) }
+  // `?add=1` (e.g. from Tailor > Measurements) opens the full customer form straight away.
+  useEffect(() => { if (searchParams.get("add") === "1") openForm(null) }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
-          <p className="text-gray-600 mt-1">Manage your customer base and view their activity</p>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      {/* Header */}
+      <PageHeader
+        title="Customers"
+        description="Who buys from you, how often, and who still owes you money."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="size-4" aria-hidden /> Import
+          </Button>
+          {mayExport && <Button type="button" variant="outline" onClick={() => handleExport()}>
+            <Download className="size-4" aria-hidden /> Export
+          </Button>}
+          <WithTooltip content="Copies the phone numbers of customers who agreed to SMS offers">
+            <Button type="button" variant="outline" onClick={copySmsAll}>
+              Copy SMS numbers
+            </Button>
+          </WithTooltip>
+          <Button type="button" onClick={() => openForm(null)}>
+            <Plus className="size-4" aria-hidden /> Add customer
+          </Button>
+        </>}
+      />
 
-      {statsLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} className="p-6">
-              <Skeleton className="h-4 w-20 mb-2" />
-              <Skeleton className="h-8 w-12" />
-            </Card>
-          ))}
+      {/* Duplicate banner */}
+      {stats && stats.duplicates > 0 && !hideDupBanner && (
+        <Alert>
+          <Users aria-hidden />
+          <AlertTitle>{stats.duplicates} customers share a phone number.</AlertTitle>
+          <AlertDescription>
+            <p>Merge them so order history and dues stay in one place.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={openDuplicates}>
+                Review &amp; merge
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setHideDupBanner(true)}>Dismiss</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* KPIs */}
+      {!stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px]" />)}
         </div>
-      ) : stats ? (
+      ) : (
         <StatsCards stats={[
-          { label: "Total Customers", value: stats.total, icon: <Users className="w-5 h-5" />, color: "blue" },
-          { label: "Active", value: stats.active, icon: <UserCheck className="w-5 h-5" />, color: "green" },
-          { label: "Inactive", value: stats.inactive, icon: <UserX className="w-5 h-5" />, color: "red" },
-          { label: "Individuals", value: stats.individuals, icon: <Users className="w-5 h-5" />, color: "purple" },
-          { label: "Businesses", value: stats.businesses, icon: <ShoppingBag className="w-5 h-5" />, color: "yellow" },
+          { label: "Total customers", value: stats.total, icon: <Users className="size-4" />, color: "blue", hint: `${stats.addedThisMonth} added this month · ${stats.inactive} inactive` },
+          { label: "Repeat buyers", value: `${stats.repeatRatePct}%`, icon: <RotateCcw className="size-4" />, color: "green",
+            hint: `${stats.repeatBuyers} of ${stats.withOrders} bought 2+ times` },
+          { label: "Customers owe you", value: formatCurrency(stats.totalDue), icon: <Clock className="size-4" />, color: "red",
+            hint: `${stats.owing} customer${stats.owing === 1 ? "" : "s"} with dues`, onClick: () => changeTab("due"), active: tab === "due" },
+          { label: "Avg lifetime value", value: formatCurrency(stats.avgLifetimeValue), icon: <Banknote className="size-4" />, color: "yellow", hint: "Customers with orders" },
+          { label: "At risk", value: stats.atRisk, icon: <AlertTriangle className="size-4" />, color: "yellow", hint: "No order in 30+ days",
+            onClick: () => changeTab("risk"), active: tab === "risk" },
         ]} />
-      ) : null}
+      )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div></div>
-        <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setIsImportDialogOpen(true)}>
-              <Upload className="w-4 h-4 mr-2" />
-              Import
-            </Button>
-            <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-orange-600 border-orange-200 bg-orange-50"
-                onClick={() => setIsBulkActionDialogOpen(true)}
-                disabled={selectedCustomerIds.length === 0}
-            >
-              <FilePen className="w-4 h-4 mr-2" />
-              Bulk Action
-            </Button>
-            <Button onClick={() => handleAddEditOpen()} size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Customer
-            </Button>
-        </div>
-      </div>
-
-      <Card className="p-6">
-        <div className="flex flex-col xl:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search customers by name, email, or phone..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
-                handleFilterChange()
-              }}
-              className="pl-10"
+      <div className="flex flex-wrap items-start gap-4">
+        {/* List */}
+        <Card className="min-w-0 flex-[999_1_640px] gap-0 py-0">
+          <div className="px-4">
+            <StatusTabs
+              value={tab}
+              onChange={changeTab}
+              tabs={[
+                { value: "all", label: "All", count: stats?.total },
+                { value: "inactive", label: "Inactive", count: stats?.inactive },
+                { value: "loyal", label: "Loyal", count: stats?.loyal },
+                { value: "risk", label: "At risk", count: stats?.atRisk },
+                { value: "due", label: "Owe money", count: stats?.owing },
+                { value: "never", label: "No orders", count: stats?.never },
+                { value: "dup", label: "Duplicates", count: stats?.duplicates },
+              ]}
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
-             <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); handleFilterChange() }}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-             </Select>
-
-             <Select value={typeFilter} onValueChange={(val) => { setTypeFilter(val); handleFilterChange() }}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="retail">Retail</SelectItem>
-                  <SelectItem value="wholesale">Wholesale</SelectItem>
-                </SelectContent>
-             </Select>
-
-             <Select value={sortOption} onValueChange={(val) => { setSortOption(val); handleFilterChange() }}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Sort By" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-                  <SelectItem value="name-desc">Name (Z-A)</SelectItem>
-                  <SelectItem value="spent-high">Total Spent (High)</SelectItem>
-                  <SelectItem value="spent-low">Total Spent (Low)</SelectItem>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
-                </SelectContent>
-             </Select>
-             
-             <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchQuery("")
-                  setStatusFilter("all")
-                  setTypeFilter("all")
-                  setSortOption("default")
-                  handleFilterChange()
-                }}
-              >
-                Reset
+          <div className="flex flex-wrap items-center gap-2.5 p-4">
+            <div className="relative min-w-[240px] flex-1">
+              <Label htmlFor="customer-search" className="sr-only">Search customers</Label>
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input id="customer-search" type="search" placeholder="Search name, phone or email…" value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                className="pl-8" />
+            </div>
+            <Select value={groupFilter} onValueChange={(v) => { setGroupFilter(v); setPage(1) }}>
+              <SelectTrigger aria-label="Customer group" className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Group: All</SelectItem>
+                <SelectItem value="retail">Retail</SelectItem>
+                <SelectItem value="wholesale">Wholesale</SelectItem>
+                <SelectItem value="vip">VIP</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1) }}>
+              <SelectTrigger aria-label="Customer type" className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Type: All</SelectItem>
+                <SelectItem value="individual">Individual</SelectItem>
+                <SelectItem value="business">Business</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1) }}>
+              <SelectTrigger aria-label="Sort" className="w-[170px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Sort: Recent</SelectItem>
+                <SelectItem value="name">Sort: Name</SelectItem>
+                <SelectItem value="spent">Sort: Most spent</SelectItem>
+                <SelectItem value="orders">Sort: Most orders</SelectItem>
+                <SelectItem value="due">Sort: Highest due</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasFilters && (
+              <Button type="button" variant="ghost" onClick={resetFilters}>
+                <X className="size-4" aria-hidden /> Clear
               </Button>
+            )}
           </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="text-left py-3 px-4">
-                  <Checkbox 
-                     checked={currentCustomers.length > 0 && selectedCustomerIds.length === currentCustomers.length}
-                     onCheckedChange={handleSelectAll}
-                  />
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Orders</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Spent</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading
-                ? Array.from({ length: 5 }).map((_, index) => (
-                    <tr key={index} className="border-b last:border-0">
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-4" /></td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="h-10 w-10 rounded-full" />
-                          <div className="space-y-1">
-                            <Skeleton className="h-4 w-24" />
-                            <Skeleton className="h-3 w-16" />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4"><div className="space-y-1"><Skeleton className="h-4 w-32" /><Skeleton className="h-4 w-24" /></div></td>
-                      <td className="py-3 px-4"><Skeleton className="h-5 w-16" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-8" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-6 w-16" /></td>
-                      <td className="py-3 px-4 text-right"><Skeleton className="h-8 w-8 ml-auto" /></td>
-                    </tr>
-                  ))
-                : currentCustomers.map((customer) => (
-                    <tr key={customer.id} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                         <Checkbox 
-                            checked={selectedCustomerIds.includes(customer.id)}
-                            onCheckedChange={(checked) => handleSelectCustomer(customer.id, !!checked)}
-                         />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarFallback className="bg-emerald-100 text-emerald-700 font-medium">
-                              {getInitials(customer.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-gray-900">{customer.name}</p>
-                            <p className="text-xs text-gray-500">Since {new Date(customer.createdAt).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="space-y-1">
-                          <p className="text-sm text-gray-600 flex items-center gap-2">
-                            <Mail className="w-3 h-3" />
-                            {customer.email}
-                          </p>
-                          <p className="text-sm text-gray-600 flex items-center gap-2">
-                            <Phone className="w-3 h-3" />
-                            {customer.phone || "N/A"}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                         <Badge variant="outline" className="capitalize">{customer.customerType}</Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Link
-                          href={`/dashboard/orders?customer=${encodeURIComponent(customer.name)}`}
-                          className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
-                        >
-                          {customer.totalOrders || 0}
-                        </Link>
-                      </td>
-                      <td className="py-3 px-4">
-                        <p className="font-semibold text-gray-900">{formatCurrency(customer.totalSpent || 0)}</p>
-                      </td>
-                      <td className="py-3 px-4">
-                         <StatusBadge status={customer.status === "active" ? "Active" : "Inactive"} />
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                         <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => { setSelectedCustomer(customer); setIsDetailsOpen(true); }} title="View details">
-                               <Eye className="w-4 h-4 text-gray-500" />
-                            </Button>
+          <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "active")}>Mark active</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "inactive")}>Mark inactive</Button>
+              <Button type="button" variant="outline" size="sm" onClick={openMergeSelected}>Merge</Button>
+              <Button type="button" variant="outline" size="sm" onClick={copySmsSelected}>Copy SMS numbers</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setTagOpen(true)}>Add tag</Button>
+              {mayExport && <Button type="button" variant="outline" size="sm" onClick={() => handleExport(true)}>Export selected</Button>}
+              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+          </BulkBar>
+
+          <Table className="min-w-[820px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col" className="w-5"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></TableHead>
+                  <TableHead scope="col">Customer</TableHead>
+                  <TableHead scope="col">Contact</TableHead>
+                  <TableHead scope="col">Group</TableHead>
+                  <TableHead scope="col" className="text-right">Orders</TableHead>
+                  <TableHead scope="col" className="text-right">Spent</TableHead>
+                  <TableHead scope="col" className="text-right">Due</TableHead>
+                  <TableHead scope="col">Last order</TableHead>
+                  <TableHead scope="col" className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-10" /></TableCell></TableRow>)
+                ) : customers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="whitespace-normal">
+                      <EmptyState
+                        icon={Users}
+                        title="No customers found"
+                        description={hasFilters ? "Try clearing the filters." : "Add your first customer to get started."}
+                        className="p-4 md:p-6"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  customers.map((c) => {
+                    const grp = GROUP_STYLE[groupOf(c)] ?? GROUP_STYLE.retail
+                    const seg = segmentOf(c)
+                    const due = Number(c.dueAmount) || 0
+                    const ck = checked.has(c.id)
+                    return (
+                      <TableRow key={c.id} data-state={ck || c.id === openId ? "selected" : undefined}>
+                        <TableCell>
+                          <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.name}`} />
+                        </TableCell>
+                        <TableCell>
+                          <Button type="button" variant="ghost" onClick={() => setOpenId(c.id)} className="h-auto justify-start gap-2.5 text-left">
+                            <UserAvatar name={c.name} className="size-9 shrink-0" />
+                            <span className="flex flex-col">
+                              <span className="flex items-center gap-1.5 font-semibold">
+                                {c.name}
+                                {c.status === "inactive" && <Badge variant="outline">Inactive</Badge>}
+                                {c.duplicatePhone && <Badge variant="secondary">Duplicate?</Badge>}
+                              </span>
+                              <span className="text-xs text-muted-foreground">{c.type === "business" ? `${c.businessName || "Business"} · ` : ""}Since {new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                            </span>
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div>{c.phone || "—"}</div>
+                          <div className="text-xs text-muted-foreground">{c.email || "—"}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={grp.variant}>{grp.label}</Badge>
+                          {c.type === "business" && <Badge variant="outline" className="ml-1">Business</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{c.totalOrders ?? 0}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatCurrency(Number(c.totalSpent) || 0)}</TableCell>
+                        <TableCell className={cn("text-right tabular-nums", due > 0 && "text-destructive")}>
+                          {due > 0 ? formatCurrency(due) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div>{c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</div>
+                          <Badge variant={seg.variant} className="mt-0.5">{seg.text}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            {c.phone ? (
+                              <WithTooltip content={`Call ${c.name}`}><Button asChild variant="outline" size="icon"><a href={`tel:${c.phone}`} aria-label={`Call ${c.name}`}><Phone className="size-4" /></a></Button></WithTooltip>
+                            ) : (
+                              <Button type="button" variant="outline" size="icon" disabled aria-hidden tabIndex={-1}><Phone className="size-4" /></Button>
+                            )}
+                            <WithTooltip content={`New sale for ${c.name}`}><Button asChild variant="outline" size="icon"><Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={`New sale for ${c.name}`}><Plus className="size-4" /></Link></Button></WithTooltip>
                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
+                              <WithTooltip content={`More actions for ${c.name}`}><DropdownMenuTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.name}`}><MoreHorizontal className="size-4" /></Button>
+                              </DropdownMenuTrigger></WithTooltip>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleAddEditOpen(customer)}>
-                                  <Edit2 className="mr-2 h-4 w-4" /> Edit
+                                <DropdownMenuItem onClick={() => openForm(c)}>Edit customer</DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href={`/dashboard/orders?customer=${encodeURIComponent(c.name)}`}>View orders</Link></DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setActive([c], c.status === "active" ? "inactive" : "active")}>
+                                  {c.status === "active" ? "Mark inactive" : "Mark active"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(customer.id)}>
-                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>Delete customer</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
-                         </div>
-                      </td>
-                    </tr>
-                  ))}
-            </tbody>
-          </table>
-        </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+          </Table>
 
-        {filteredCustomers.length === 0 && !isLoading && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No customers found matching your criteria.</p>
-          </div>
-        )}
-      </Card>
+          {!loading && customers.length > 0 && (
+            <>
+            <Separator />
+            <div className="p-4 pt-3">
+              <PaginationControl
+                currentPage={page}
+                totalPages={Math.max(1, Math.ceil(total / perPage))}
+                itemsPerPage={perPage}
+                totalItems={total}
+                onPageChange={setPage}
+                onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+              />
+            </div>
+            </>
+          )}
+        </Card>
 
-      <PaginationControl
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-        itemsPerPage={itemsPerPage}
-        onItemsPerPageChange={handleItemsPerPageChange}
-        totalItems={filteredCustomers.length}
+        {/* Detail panel */}
+        <aside aria-label="Customer details" className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
+          <Card className="gap-0 py-0">
+          {!open ? (
+            <EmptyState title={loading ? "Loading…" : "Select a customer to see their profile."} className="p-6 md:p-6" />
+          ) : (() => {
+            const v: CustomerResponse = detail && detail.id === open.id ? { ...open, ...detail } : open
+            const due = Number(v.dueAmount) || 0
+            const grp = GROUP_STYLE[groupOf(v)] ?? GROUP_STYLE.retail
+            const addr = [v.address, v.area || v.state, v.district || v.city, v.zipCode, v.country].filter(Boolean).join(", ")
+            const limit = Number(v.creditLimit) || 0
+            const used = Number(v.creditUsed ?? due) || 0
+            const pct = Math.round(v.creditUsedPercent ?? (limit > 0 ? (used / limit) * 100 : 0))
+            const recent = v.recentOrders ?? []
+            const rows: [string, string][] = [
+              ["Phone", v.phone || "—"],
+              ["Email", v.email || "—"],
+              ...(v.type === "business" ? [["Business", v.businessName || "—"], ["Licence / BIN", v.licenceBin || "—"]] as [string, string][] : []),
+              ["Birthday", v.birthday ? new Date(v.birthday).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"],
+              ["SMS offers", v.smsOptIn === false ? "Opted out" : "Opted in"],
+              ["Address", addr || "—"],
+              ["Store credit", formatCurrency(Number(v.storeCredit) || 0)],
+            ]
+            const miniTile = "gap-1 p-2.5 [&_.text-2xl]:text-lg"
+            return (
+              <>
+                <div className="flex flex-col gap-3.5 p-[18px]">
+                  <div className="flex items-center gap-3">
+                    <UserAvatar name={v.name} className="size-[52px] shrink-0" />
+                    <div className="min-w-0">
+                      <h2 className="flex items-center gap-2 truncate text-lg font-semibold">
+                        {v.name}
+                        {v.status === "inactive" && <Badge variant="outline">Inactive</Badge>}
+                      </h2>
+                      <span className="text-sm text-muted-foreground">
+                        {grp.label}{v.type === "business" ? " · Business" : ""} · since {new Date(v.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <StatTile label="Orders" value={v.totalOrders ?? 0} className={miniTile} />
+                    <StatTile label="Spent" value={formatCurrency(Number(v.totalSpent) || 0).replace(/\.00$/, "")} className={miniTile} />
+                    <StatTile label="Due" value={formatCurrency(due).replace(/\.00$/, "")} className={cn(miniTile, due > 0 && "border-destructive/50 text-destructive")} />
+                  </div>
+                  {limit > 0 && (
+                    <div>
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-muted-foreground">Credit limit {formatCurrency(limit)}</span>
+                        <span className={cn("font-semibold", pct >= 80 && "text-destructive")}>Credit used ({pct}%)</span>
+                      </div>
+                      <Progress
+                        value={Math.min(pct, 100)}
+                        aria-label="Credit used"
+                        className={cn(pct >= 80 && "[&>[data-slot=progress-indicator]]:bg-destructive")}
+                      />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button asChild><Link href={`/dashboard/sales?new=1&customer=${v.id}`}>New sale</Link></Button>
+                    <WithTooltip content={due <= 0 ? "Nothing due" : undefined}>
+                      <span tabIndex={due <= 0 ? 0 : undefined} className="grid">
+                        <Button type="button" variant="outline" disabled={due <= 0} onClick={() => setPayOpen((o) => !o)} aria-expanded={payOpen}>Get payment</Button>
+                      </span>
+                    </WithTooltip>
+                    <Button type="button" variant="outline" onClick={() => openForm(v)}>Edit</Button>
+                  </div>
+                  {payOpen && due > 0 && (
+                    <GetPaymentForm customerId={v.id} due={due} onCancel={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); refresh() }} />
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button type="button" variant="outline" onClick={() => setActive([v], v.status === "inactive" ? "active" : "inactive")}>
+                      {v.status === "inactive" ? "Mark active" : "Mark inactive"}
+                    </Button>
+                    <Button type="button" variant="destructive" onClick={() => setDeleteTargets([v])}>Delete</Button>
+                  </div>
+                </div>
+
+                <Separator />
+                <div className="p-[18px]">
+                  <SectionTitle className="mb-2.5">Contact</SectionTitle>
+                  <InfoList className="gap-3">
+                    {rows.map(([k, val]) => <InfoRow key={k} label={k} value={val} />)}
+                  </InfoList>
+                  {(v.tags?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 py-1.5">
+                      {v.tags!.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
+                    </div>
+                  )}
+                  {v.notes && <Card className="mt-2 p-2.5 text-sm text-muted-foreground shadow-none">{v.notes}</Card>}
+                </div>
+
+                <Separator />
+                <div className="p-[18px]">
+                  <SectionTitle className="mb-2.5">Recent orders</SectionTitle>
+                  {detailLoading && !detail ? (
+                    <Skeleton className="h-12" />
+                  ) : recent.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No orders yet.</p>
+                  ) : (
+                    <ItemGroup>
+                      {recent.slice(0, 5).map((o, i) => (
+                        <div key={o.id} role="listitem">
+                          {i > 0 && <ItemSeparator />}
+                          <Item size="sm" className="px-0">
+                            <ItemContent>
+                              <ItemTitle>#{o.invoiceNo}</ItemTitle>
+                              <ItemDescription>{new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</ItemDescription>
+                            </ItemContent>
+                            <ItemActions className="flex-col items-end gap-1">
+                              <span className="text-sm font-semibold tabular-nums">{formatCurrency(Number(o.amount))}</span>
+                              <StatusBadge status={o.status} />
+                            </ItemActions>
+                          </Item>
+                        </div>
+                      ))}
+                    </ItemGroup>
+                  )}
+                  {recent.length > 0 && (
+                    <Button asChild variant="link" className="mt-2 h-auto p-0">
+                      <Link href={`/dashboard/orders?customer=${encodeURIComponent(v.name)}`}>View all orders →</Link>
+                    </Button>
+                  )}
+                </div>
+              </>
+            )
+          })()}
+          </Card>
+        </aside>
+      </div>
+
+      <CustomerFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        customer={editing}
+        onSaved={refresh}
+        onOpenExisting={(phone) => { setSearch(phone); setTab("all"); setPage(1) }}
       />
 
-      {/* Details Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} groups={mergeGroups} loading={mergeLoading} title={mergeTitle}
+        onMerged={() => { setChecked(new Set()); refresh() }} />
+
+      <Dialog open={tagOpen} onOpenChange={setTagOpen}>
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Customer Details</DialogTitle>
-            <DialogDescription>Customer profile and activity overview.</DialogDescription>
+            <DialogTitle>Add tag</DialogTitle>
+            <DialogDescription>Adds a tag to {selected.length} selected customer{selected.length === 1 ? "" : "s"}.</DialogDescription>
           </DialogHeader>
-
-          {selectedCustomer && (
-            <div className="space-y-4">
-              <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                <Avatar className="w-16 h-16 border-2 border-white shadow-sm">
-                  <AvatarFallback className="bg-emerald-100 text-emerald-700 font-semibold text-xl">
-                    {getInitials(selectedCustomer.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900">{selectedCustomer.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <StatusBadge status={selectedCustomer.status === "active" ? "Active" : "Inactive"} />
-                        <Badge variant="secondary" className="capitalize">{selectedCustomer.customerType}</Badge>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => { setIsDetailsOpen(false); handleAddEditOpen(selectedCustomer) }}>
-                      <Edit2 className="w-4 h-4 mr-2" /> Edit Profile
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <Tabs defaultValue="info">
-                <TabsList className="w-full">
-                  <TabsTrigger value="info" className="flex-1">Info & Stats</TabsTrigger>
-                  <TabsTrigger value="addresses" className="flex-1">Addresses</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="info" className="pt-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="p-4">
-                      <h4 className="font-semibold mb-3 flex items-center gap-2"><Mail className="w-4 h-4" /> Contact Info</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="grid grid-cols-3">
-                          <span className="text-gray-500">Email:</span>
-                          <span className="col-span-2 font-medium break-all">{selectedCustomer.email}</span>
-                        </div>
-                        <div className="grid grid-cols-3">
-                          <span className="text-gray-500">Phone:</span>
-                          <span className="col-span-2 font-medium">{selectedCustomer.phone || "-"}</span>
-                        </div>
-                      </div>
-                    </Card>
-
-                    <Card className="p-4">
-                      <h4 className="font-semibold mb-3 flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> Statistics</h4>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Total Orders:</span>
-                          <span className="font-medium">{selectedCustomer.totalOrders || 0}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Total Spent:</span>
-                          <span className="font-medium text-emerald-600">{formatCurrency(selectedCustomer.totalSpent || 0)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Store Credit:</span>
-                          <span className="font-medium">{formatCurrency(selectedCustomer.storeCredit || 0)}</span>
-                        </div>
-                      </div>
-                    </Card>
-
-                    <Card className="p-4 md:col-span-2">
-                      <h4 className="font-semibold mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> Other Info</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Joined:</span>
-                          <span className="font-medium">{new Date(selectedCustomer.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Last Updated:</span>
-                          <span className="font-medium">{new Date(selectedCustomer.updatedAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                      {selectedCustomer.notes && (
-                        <div className="mt-3 pt-3 border-t">
-                          <p className="text-xs text-gray-500 mb-1">Notes:</p>
-                          <p className="text-sm italic">{selectedCustomer.notes}</p>
-                        </div>
-                      )}
-                    </Card>
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <Button
-                      onClick={() => { setIsDetailsOpen(false); router.push(`/dashboard/orders?customer=${encodeURIComponent(selectedCustomer.name)}`) }}
-                      className="bg-emerald-600 hover:bg-emerald-700"
-                    >
-                      View All Orders
-                    </Button>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="addresses" className="pt-4">
-                  <CustomerAddressesPanel customerId={Number(selectedCustomer.id)} readonly />
-                </TabsContent>
-              </Tabs>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      
-      {/* Add/Edit Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingCustomer ? "Edit Customer" : "Add New Customer"}</DialogTitle>
-            <DialogDescription>Fill in the details below. Required fields are marked with *</DialogDescription>
-          </DialogHeader>
-
-          <Tabs defaultValue="profile">
-            <TabsList className="w-full">
-              <TabsTrigger value="profile" className="flex-1">Profile</TabsTrigger>
-              {editingCustomer && (
-                <TabsTrigger value="addresses" className="flex-1">Addresses</TabsTrigger>
-              )}
-            </TabsList>
-
-            <TabsContent value="profile" className="pt-4">
-              <div className="grid gap-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name *</Label>
-                    <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="John Doe" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="john@example.com" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number *</Label>
-                    <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+1 (555) 000-0000" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Customer Type</Label>
-                    <Select value={formData.customerType} onValueChange={(val: "retail" | "wholesale") => setFormData({ ...formData, customerType: val })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="retail">Retail</SelectItem>
-                        <SelectItem value="wholesale">Wholesale</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="address">Street Address</Label>
-                  <Input id="address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="123 Main St" />
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="space-y-2 col-span-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input id="city" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input id="state" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zip">Zip Code</Label>
-                    <Input id="zip" value={formData.zipCode} onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Input id="country" value={formData.country} onChange={(e) => setFormData({ ...formData, country: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={formData.status} onValueChange={(val: "active" | "inactive") => setFormData({ ...formData, status: val })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Additional notes about the customer..." />
-                </div>
-              </div>
-
-              <DialogFooter className="mt-6">
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleSaveCustomer} className="bg-emerald-600 hover:bg-emerald-700">
-                  {editingCustomer ? "Save Changes" : "Add Customer"}
-                </Button>
-              </DialogFooter>
-            </TabsContent>
-
-            {editingCustomer && (
-              <TabsContent value="addresses" className="pt-4">
-                <CustomerAddressesPanel customerId={Number(editingCustomer.id)} />
-              </TabsContent>
-            )}
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Bulk Action Dialog */}
-      <Dialog open={isBulkActionDialogOpen} onOpenChange={setIsBulkActionDialogOpen}>
-        <DialogContent>
-             <DialogHeader>
-                <DialogTitle>Bulk Actions</DialogTitle>
-                <DialogDescription>
-                    Apply action to {selectedCustomerIds.length} selected customers.
-                </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-                <Label className="mb-2 block">Select Action</Label>
-                <Select value={bulkAction} onValueChange={setBulkAction}>
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose action..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="active">Set Status to Active</SelectItem>
-                        <SelectItem value="inactive">Set Status to Inactive</SelectItem>
-                        <SelectItem value="delete" className="text-red-600">Delete Customers</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <DialogFooter>
-                 <Button variant="outline" onClick={() => setIsBulkActionDialogOpen(false)}>Cancel</Button>
-                 <Button 
-                    onClick={handleBulkAction} 
-                    disabled={!bulkAction}
-                    className={bulkAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}
-                 >
-                    Apply
-                 </Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-       {/* Import Dialog */}
-       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import Customers</DialogTitle>
-            <DialogDescription>
-              Upload a CSV file to import customers. The CSV should have headers: Name, Email, Phone, Address, etc.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid w-full max-w-sm items-center gap-1.5">
-               <Label htmlFor="csv_upload">CSV File</Label>
-               <Input id="csv_upload" type="file" accept=".csv" onChange={handleImport} />
-            </div>
-          </div>
+          <Input autoFocus aria-label="Tag" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder="e.g. Eid campaign"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyTag() } }} />
           <DialogFooter>
-             <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Close</Button>
+            <Button type="button" variant="outline" onClick={() => setTagOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={applyTag} disabled={!tagDraft.trim()}>Add tag</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import customers</DialogTitle>
+            <DialogDescription>Upload a CSV with columns: name, phone (required), email, type (individual or business), business name, group (retail, wholesale or VIP), credit limit, opening balance, birthday, tags, address, district, area, country. Rows without a name or phone, and duplicate phone numbers, are skipped.</DialogDescription>
+          </DialogHeader>
+          <Input ref={fileRef} type="file" accept=".csv" aria-label="CSV file" onChange={handleImport} />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].name : `${deleteTargets.length} customers`}?</AlertDialogTitle>
+            <AlertDialogDescription>Their past orders stay in your records. This can’t be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

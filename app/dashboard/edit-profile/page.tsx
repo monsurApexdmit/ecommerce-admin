@@ -1,14 +1,16 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { User, Mail, Lock, Camera, Save } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import Swal from "sweetalert2"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function EditProfilePage() {
   const { user } = useSaasAuth()
@@ -101,55 +103,44 @@ export default function EditProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Edit Profile</h1>
-        <p className="text-gray-600 mt-1">Update your personal information and security settings</p>
-      </div>
+      <PageHeader title="Edit Profile" description="Update your personal information and security settings" />
 
       <div className="grid grid-cols-1 gap-6">
         {/* Profile Information */}
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <User className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold">Profile Information</h2>
-              <p className="text-sm text-gray-600">Update your account details and public profile</p>
-            </div>
-          </div>
+        <SectionCard
+          title={<span className="flex items-center gap-2"><User className="size-4 text-muted-foreground" />Profile Information</span>}
+          description="Update your account details and public profile"
+        >
 
           <form onSubmit={handleSaveProfile} className="space-y-6">
             <div className="flex flex-col md:flex-row gap-8 items-start">
               <div className="flex flex-col items-center gap-4">
                 <div className="relative group">
-                  <Avatar className="w-32 h-32 border-4 border-white shadow-lg">
-                    <AvatarImage src={avatar} alt="Profile" />
-                    <AvatarFallback className="text-4xl bg-emerald-100 text-emerald-700">AD</AvatarFallback>
-                  </Avatar>
-                  <button 
-                    type="button" 
+                  <UserAvatar className="size-32" src={avatar} alt="Profile" fallback="AD" />
+                  <WithTooltip content="Change profile photo"><Button
+                    type="button"
+                    size="icon-sm"
                     onClick={triggerFileInput}
-                    className="absolute bottom-0 right-0 p-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 transition-colors shadow-sm"
+                    aria-label="Change profile photo"
+                    className="absolute bottom-0 right-0 rounded-full"
                   >
                     <Camera className="w-4 h-4" />
-                  </button>
-                  <input 
-                    type="file" 
+                  </Button></WithTooltip>
+                  <Input
+                    type="file"
                     ref={fileInputRef}
                     className="hidden" 
                     accept="image/*"
                     onChange={handleImageUpload}
                   />
                 </div>
-                <p className="text-sm text-gray-500">Allowed *.jpeg, *.jpg, *.png, *.gif</p>
+                <p className="text-sm text-muted-foreground">Allowed *.jpeg, *.jpg, *.png, *.gif</p>
               </div>
 
               <div className="flex-1 space-y-4 w-full">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                <FormField label="Full Name" htmlFor="name">
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="name"
                       value={name}
@@ -158,12 +149,11 @@ export default function EditProfilePage() {
                       placeholder="Enter your full name"
                     />
                   </div>
-                </div>
+                </FormField>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
+                <FormField label="Email Address" htmlFor="email">
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="email"
                       type="email"
@@ -173,43 +163,34 @@ export default function EditProfilePage() {
                       placeholder="Enter your email"
                     />
                   </div>
-                </div>
+                </FormField>
 
-                <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
+                <FormField label="Role" htmlFor="role">
                   <Input
                     id="role"
                     value={userRole}
                     readOnly
-                    className="bg-gray-50 text-gray-700"
                   />
-                </div>
+                </FormField>
 
                 <div className="pt-2">
-                  <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={isLoading}>
+                  <Button type="submit" disabled={isLoading}>
                     {isLoading ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>
               </div>
             </div>
           </form>
-        </Card>
+        </SectionCard>
 
         {/* Security Settings */}
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-              <Lock className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold">Security</h2>
-              <p className="text-sm text-gray-600">Change your password</p>
-            </div>
-          </div>
+        <SectionCard
+          title={<span className="flex items-center gap-2"><Lock className="size-4 text-muted-foreground" />Security</span>}
+          description="Change your password"
+        >
 
           <form onSubmit={handleUpdatePassword} className="max-w-xl space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
+            <FormField label="Current Password" htmlFor="currentPassword">
               <Input
                 id="currentPassword"
                 type="password"
@@ -217,10 +198,9 @@ export default function EditProfilePage() {
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="Enter current password"
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
+            <FormField label="New Password" htmlFor="newPassword">
               <Input
                 id="newPassword"
                 type="password"
@@ -228,10 +208,9 @@ export default function EditProfilePage() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password (min. 8 characters)"
               />
-            </div>
+            </FormField>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+            <FormField label="Confirm New Password" htmlFor="confirmPassword">
               <Input
                 id="confirmPassword"
                 type="password"
@@ -239,15 +218,15 @@ export default function EditProfilePage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm new password"
               />
-            </div>
+            </FormField>
 
             <div className="pt-2">
-              <Button type="submit" variant="outline" className="border-emerald-600 text-emerald-600 hover:bg-emerald-50" disabled={isLoading}>
+              <Button type="submit" variant="outline" disabled={isLoading}>
                 Update Password
               </Button>
             </div>
           </form>
-        </Card>
+        </SectionCard>
       </div>
     </div>
   )

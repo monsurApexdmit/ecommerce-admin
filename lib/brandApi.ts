@@ -44,7 +44,11 @@ export interface BrandResponse {
   id: number;
   brandName: string;
   logo: string | null;
+  website?: string | null;
+  description?: string | null;
   status: boolean;
+  productsCount?: number | null;
+  stockValue?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -52,14 +56,16 @@ export interface BrandResponse {
 export interface CreateBrandData {
   brandName: string;
   logo?: string;
+  website?: string;
+  description?: string;
   status?: boolean;
 }
 
 export const brandApi = {
-  getAll: async (params?: { search?: string; status?: string; limit?: number }): Promise<{ data: BrandResponse[]; total: number }> => {
+  getAll: async (params?: { search?: string; status?: string; limit?: number }): Promise<{ data: BrandResponse[]; total: number; noBrandCount: number }> => {
     const res = await api.get('/brands', { params });
     const d = res.data?.data ?? {};
-    return { data: d.data ?? [], total: d.total ?? 0 };
+    return { data: d.data ?? [], total: d.total ?? 0, noBrandCount: d.no_brand_count ?? 0 };
   },
 
   simple: async (): Promise<BrandResponse[]> => {

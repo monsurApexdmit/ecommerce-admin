@@ -6,10 +6,12 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { FormField } from "@/components/common/FormField"
 import { Card } from "@/components/ui/card"
 import { Eye, EyeOff } from "lucide-react"
 import { saasAuthApi } from "@/lib/saasAuthApi"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -60,13 +62,12 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Inventory Admin</h1>
-          <p className="text-sm text-gray-600 mt-2">Sign in to your account</p>
+          <h1 className="text-2xl font-bold">Inventory Admin</h1>
+          <p className="text-sm text-muted-foreground mt-2">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <FormField label="Email" htmlFor="email">
             <Input
               id="email"
               type="email"
@@ -74,12 +75,10 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-11"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+          <FormField label="Password" htmlFor="password">
             <div className="relative">
               <Input
                 id="password"
@@ -88,27 +87,32 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-11 pr-10"
+                className="pr-10"
               />
-              <button
+              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
+              </Button></WithTooltip>
             </div>
-          </div>
+          </FormField>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
-          <Button type="submit" className="w-full h-11 bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in..." : "Sign In"}
           </Button>
 
-          <div className="text-center text-sm text-gray-600">
+          <div className="text-center text-sm text-muted-foreground">
             <p>Demo credentials:</p>
             <p className="font-mono text-xs mt-1">jane.smith@startup.io / StartupPass123!</p>
           </div>

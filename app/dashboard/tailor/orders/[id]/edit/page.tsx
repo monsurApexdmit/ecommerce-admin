@@ -1,515 +1,172 @@
 "use client"
 
-import { use, useEffect, useState, useCallback } from "react"
+import { Fragment, use, useEffect, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, Trash2, User, Ruler, Package, ChevronRight } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { tailorApi, TailorFabric, TailorMeasurement, TailorCustomer, TailorOrder, PRODUCT_TYPES } from "@/lib/tailorApi"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { Textarea } from "@/components/ui/textarea"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { PayBadge, StageBadge, apiError, fmtDate } from "@/components/tailor/order-ui"
+import { tailorApi, tailorOrdersApi, type TailorOrderDetail } from "@/lib/tailorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
-import { toast } from "sonner"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { cn } from "@/lib/utils"
 
-interface OrderItem {
-  productType: string
-  fabricId: string
-  fabricQuantity: number
-  fabricUnitPrice: number
-  measurementId: string
-  notes: string
-}
+const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 
-const emptyItem = (): OrderItem => ({
-  productType: "",
-  fabricId: "none",
-  fabricQuantity: 1,
-  fabricUnitPrice: 0,
-  measurementId: "none",
-  notes: "",
-})
-
-const TODAY_STR = new Date().toISOString().split("T")[0]
-
+/**
+ * Edit the commercial header of an order. Garments, fabric and measurements are fixed once the order
+ * is placed (fabric stock has already been deducted); the API only accepts these header fields.
+ */
 export default function EditTailorOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { formatCurrency: fc } = useCompanySettings()
   const { canWrite } = useSaasAuth()
-  const { formatCurrency } = useCompanySettings()
   const router = useRouter()
+  const blocked = useModuleGuard("TailorOrders")
 
-  if (!canWrite("TailorOrders")) return <AccessDenied />
-
-  // Load state
+  const [o, setO] = useState<TailorOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [order, setOrder] = useState<TailorOrder | null>(null)
-
-  // Fabrics
-  const [fabrics, setFabrics] = useState<TailorFabric[]>([])
-  const [fabricSearch, setFabricSearch] = useState<string[]>([])
-
-  // Customer section
-  const [selectedCustomer, setSelectedCustomer] = useState<TailorCustomer | null>(null)
-  const [measurements, setMeasurements] = useState<TailorMeasurement[]>([])
-
-  // Items
-  const [items, setItems] = useState<OrderItem[]>([emptyItem()])
-
-  // Charges & dates
-  const [orderDate, setOrderDate] = useState(TODAY_STR)
+  const [loadError, setLoadError] = useState("")
   const [deliveryDate, setDeliveryDate] = useState("")
-  const [stitchingCharge, setStitchingCharge] = useState(0)
-  const [extraCharge, setExtraCharge] = useState(0)
+  const [stitching, setStitching] = useState(0)
+  const [extra, setExtra] = useState(0)
   const [discount, setDiscount] = useState(0)
-
-  // Notes
   const [notes, setNotes] = useState("")
-
-  // Submission
-  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState("")
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    Promise.all([
-      tailorApi.getOrder(+id),
-      tailorApi.getFabrics({ limit: 200, status: "active" }),
-    ])
-      .then(([orderRes, fabricsRes]) => {
-        const o: TailorOrder = orderRes.data?.data ?? orderRes.data
-        const list: TailorFabric[] = fabricsRes.data?.data?.data ?? fabricsRes.data?.data ?? []
-
-        setOrder(o)
-        setFabrics(list)
-
-        // Pre-populate customer
-        if (o.customer) {
-          setSelectedCustomer(o.customer)
-        }
-
-        // Load measurements for customer
-        if (o.customerId) {
-          tailorApi.getMeasurementsByCustomer(o.customerId)
-            .then(mr => setMeasurements(mr.data?.data ?? mr.data ?? []))
-            .catch(() => {})
-        }
-
-        // Pre-populate items
-        const mappedItems: OrderItem[] = (o.items ?? []).map(i => ({
-          productType: i.productType,
-          fabricId: i.fabricId ? String(i.fabricId) : "none",
-          fabricQuantity: i.fabricQuantity,
-          fabricUnitPrice: i.fabricUnitPrice,
-          measurementId: i.measurementId ? String(i.measurementId) : "none",
-          notes: i.notes ?? "",
-        }))
-        const initialItems = mappedItems.length > 0 ? mappedItems : [emptyItem()]
-        setItems(initialItems)
-        setFabricSearch(Array(initialItems.length).fill(""))
-
-        // Pre-populate header fields
-        setOrderDate(o.orderDate ?? TODAY_STR)
-        setDeliveryDate(o.deliveryDate ?? "")
-        setStitchingCharge(o.stitchingCharge ?? 0)
-        setExtraCharge(o.extraCharge ?? 0)
-        setDiscount(o.discount ?? 0)
-        setNotes(o.notes ?? "")
+    tailorOrdersApi.detail(Number(id))
+      .then((d) => {
+        setO(d)
+        setDeliveryDate(d.deliveryDate ?? "")
+        setStitching(d.charges.stitching || d.charges.stitchingOrderLevel)
+        setExtra(d.charges.extra); setDiscount(d.charges.discount); setNotes(d.notes ?? "")
       })
-      .catch(err => {
-        setLoadError(err?.response?.data?.message ?? "Failed to load order")
-      })
+      .catch((e) => setLoadError(apiError(e, "Failed to load order")))
       .finally(() => setLoading(false))
   }, [id])
 
-  const updateItem = useCallback((idx: number, field: keyof OrderItem, value: string | number) => {
-    setItems(prev => {
-      const next = [...prev]
-      if (field === "fabricId") {
-        const fab = fabrics.find(f => String(f.id) === value)
-        next[idx] = {
-          ...next[idx],
-          fabricId: value as string,
-          fabricUnitPrice: fab ? fab.sellingPrice : next[idx].fabricUnitPrice,
-        }
-      } else {
-        next[idx] = { ...next[idx], [field]: value }
-      }
-      return next
-    })
-  }, [fabrics])
+  if (blocked) return blocked
+  if (!canWrite("TailorOrders")) return <div className="p-6 text-sm text-muted-foreground">You do not have permission to edit tailor orders.</div>
 
-  const addItem = () => {
-    setItems(prev => [...prev, emptyItem()])
-    setFabricSearch(prev => [...prev, ""])
-  }
+  const back = `/dashboard/tailor/orders?view=${id}`
+  const fabric = o?.charges.fabric ?? 0
+  const urgent = o?.charges.urgent ?? 0
+  const total = Math.max(0, stitching + fabric + urgent + extra - discount)
 
-  const removeItem = (idx: number) => {
-    if (items.length === 1) return
-    setItems(prev => prev.filter((_, i) => i !== idx))
-    setFabricSearch(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const fabricTotal = items.reduce((sum, it) => sum + it.fabricQuantity * it.fabricUnitPrice, 0)
-  const grandTotal = fabricTotal + stitchingCharge + extraCharge - discount
-
-  const handleSubmit = async () => {
-    if (items.some(it => !it.productType)) { toast.error("All items need a product type"); return }
-
-    setSubmitting(true)
+  const save = async () => {
+    if (!o) return
+    if (o.orderDate && deliveryDate && deliveryDate < o.orderDate) return setErr("Delivery date cannot be before the order date.")
+    if (discount > stitching + fabric + urgent + extra) return setErr("Discount cannot be more than the order subtotal.")
+    setSaving(true); setErr("")
     try {
-      const payload = {
-        delivery_date: deliveryDate || undefined,
-        stitching_charge: stitchingCharge,
-        extra_charge: extraCharge,
-        discount,
-        notes: notes || undefined,
-      }
-      await tailorApi.updateOrder(+id, payload)
-      toast.success("Order updated successfully")
-      router.push(`/dashboard/tailor/orders/${id}`)
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Failed to update order")
-    } finally {
-      setSubmitting(false)
+      await tailorApi.updateOrder(o.id, {
+        delivery_date: deliveryDate || undefined, stitching_charge: stitching, extra_charge: extra, discount, notes: notes || undefined,
+      })
+      toast.success("Order updated")
+      router.push(back)
+    } catch (e) {
+      setErr(apiError(e, "Failed to update order"))
+      setSaving(false)
     }
   }
 
-  const customerResolved = selectedCustomer !== null
-  const effectiveMeasurements = measurements
-
-  if (loading) {
-    return (
-      <div className="p-6 max-w-3xl mx-auto space-y-6">
-        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
-        {[1, 2, 3].map(n => (
-          <div key={n} className="h-40 bg-gray-100 rounded-xl animate-pulse" />
-        ))}
-      </div>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <div className="p-6 max-w-3xl mx-auto">
-        <div className="border border-red-200 bg-red-50 rounded-xl p-6 text-center space-y-3">
-          <p className="text-red-700 font-semibold">{loadError}</p>
-          <Button variant="outline" onClick={() => router.push(`/dashboard/tailor/orders/${id}`)}>
-            Back to Order
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6 pb-16">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.push(`/dashboard/tailor/orders/${id}`)}
-          className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-black text-gray-900">Edit Order #{order?.orderNumber}</h1>
-          <p className="text-sm text-gray-500">Update order details below</p>
-        </div>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title={`Edit order${o ? ` ${o.orderNumber}` : ""}`}
+        description="Adjust delivery, charges and notes. Garments and fabric are locked once the order is placed."
+      />
 
-      {/* SECTION 1 — Customer */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <User className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Customer</h2>
-        </div>
+      {loading ? (
+        <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}</div>
+      ) : loadError || !o ? (
+        <Card className="items-start gap-4 p-5">
+          <p className="font-medium text-destructive">{loadError || "Order not found."}</p>
+          <Button asChild variant="outline"><Link href="/dashboard/tailor/orders">Back to orders</Link></Button>
+        </Card>
+      ) : (
+        <div className="grid items-start gap-5 lg:grid-cols-[1fr_340px]">
+          <div className="flex min-w-0 flex-col gap-5">
+            <Card className="gap-4 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-lg font-semibold">{o.customer?.name ?? "—"}</span>
+                <span className="text-sm text-muted-foreground">{o.customer?.phone}</span>
+                <StageBadge stage={o.stage} /><PayBadge status={o.paymentStatus} />
+              </div>
+              <ItemGroup>
+                {o.items.map((it, idx) => (
+                  <Fragment key={it.id}>
+                    {idx > 0 && <ItemSeparator />}
+                    <Item size="sm" className="items-start px-0">
+                      <ItemContent>
+                        <ItemTitle>{it.productType} ×{it.quantity}</ItemTitle>
+                        <ItemDescription className="text-xs">{it.fabricSource === "shop" && it.fabric ? `${it.fabric.name} · ${it.fabricQuantity} ${it.fabric.unit}` : "Customer fabric"}</ItemDescription>
+                      </ItemContent>
+                      <ItemActions className="text-sm font-semibold tabular-nums">{fc(it.lineTotal)}</ItemActions>
+                    </Item>
+                  </Fragment>
+                ))}
+              </ItemGroup>
+            </Card>
 
-        {/* Selected customer (read-only in edit mode) */}
-        {customerResolved && (
-          <div className="border border-purple-200 bg-purple-50 rounded-lg p-4 flex items-start justify-between gap-3">
-            <div className="space-y-0.5">
-              <Badge className="bg-purple-100 text-purple-700 mb-1">Selected</Badge>
-              <p className="font-semibold text-gray-900">{selectedCustomer.name}</p>
-              <p className="text-sm text-gray-500">{selectedCustomer.phone}</p>
-              {selectedCustomer.address && <p className="text-sm text-gray-500">{selectedCustomer.address}</p>}
+            <Card className="gap-4 p-5">
+              <SectionTitle as="h2">Delivery</SectionTitle>
+              <FormField label="Delivery date" htmlFor="e-delivery" className="max-w-[240px]" description={`Ordered ${fmtDate(o.orderDate)}`}>
+                <Input id="e-delivery" type="date" value={deliveryDate} onChange={(e) => { setDeliveryDate(e.target.value); setErr("") }} />
+              </FormField>
+              <FormField label="Order notes" htmlFor="e-notes">
+                <Textarea id="e-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything the shop should remember about this order" />
+              </FormField>
+            </Card>
+          </div>
+
+          <SectionCard title="Charges" className="lg:sticky lg:top-4" contentClassName="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 text-sm">
+              <FormField orientation="horizontal" className="justify-between gap-3" label="Stitching" htmlFor="e-stitch">
+                <Input id="e-stitch" type="number" min={0} className="w-28 text-right" value={stitching} onChange={(e) => setStitching(Math.max(0, num(e.target.value)))} />
+              </FormField>
+              <InfoList>
+                <InfoRow label="Fabric"><span className="tabular-nums">{fc(fabric)}</span></InfoRow>
+                {urgent > 0 && <InfoRow label="Urgent charge"><span className="tabular-nums">{fc(urgent)}</span></InfoRow>}
+              </InfoList>
+              <FormField orientation="horizontal" className="justify-between gap-3" label="Extra charge" htmlFor="e-extra">
+                <Input id="e-extra" type="number" min={0} className="w-28 text-right" value={extra} onChange={(e) => setExtra(Math.max(0, num(e.target.value)))} />
+              </FormField>
+              <FormField orientation="horizontal" className="justify-between gap-3" label="Discount" htmlFor="e-disc">
+                <Input id="e-disc" type="number" min={0} className="w-28 text-right" value={discount} onChange={(e) => setDiscount(Math.max(0, num(e.target.value)))} />
+              </FormField>
+              <Separator />
+              <div className="flex items-baseline justify-between">
+                <span className="font-semibold">Total</span><span className="text-2xl font-semibold tabular-nums">{fc(total)}</span>
+              </div>
+              <InfoList>
+                <InfoRow label="Paid"><span className="tabular-nums">{fc(o.paidAmount)}</span></InfoRow>
+                <InfoRow label="Due"><span className="tabular-nums">{fc(Math.max(0, total - o.paidAmount))}</span></InfoRow>
+              </InfoList>
             </div>
-          </div>
-        )}
-
-        {/* Measurements */}
-        {customerResolved && effectiveMeasurements.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Ruler className="w-3.5 h-3.5" /> Existing Measurements
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {effectiveMeasurements.map(m => (
-                <div key={m.id} className="border rounded-lg p-3 bg-gray-50 text-xs space-y-0.5">
-                  <p className="font-semibold text-gray-800 capitalize">{m.productType?.replace(/_/g, " ")}</p>
-                  <p className="text-gray-400 text-[10px]">{new Date(m.measuredAt).toLocaleDateString()}</p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-gray-600 mt-1">
-                    {m.chest && <span>Chest: {m.chest}</span>}
-                    {m.waist && <span>Waist: {m.waist}</span>}
-                    {m.hip && <span>Hip: {m.hip}</span>}
-                    {m.shoulder && <span>Shoulder: {m.shoulder}</span>}
-                    {m.sleeve && <span>Sleeve: {m.sleeve}</span>}
-                    {m.length && <span>Length: {m.length}</span>}
-                    {m.neck && <span>Neck: {m.neck}</span>}
-                    {m.inseam && <span>Inseam: {m.inseam}</span>}
-                    {m.bottomLength && <span>Bottom L: {m.bottomLength}</span>}
-                    {m.pajamaWaist && <span>Paj. Waist: {m.pajamaWaist}</span>}
-                    {m.pajamaLength && <span>Paj. Length: {m.pajamaLength}</span>}
-                  </div>
-                  {m.notes && <p className="text-gray-400 italic mt-1">{m.notes}</p>}
-                </div>
-              ))}
+            {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
+            <div className="flex gap-2">
+              <Button asChild variant="outline" className="flex-1"><Link href={back}>Cancel</Link></Button>
+              <Button type="button" disabled={saving} onClick={save} className="flex-1">{saving ? "Saving…" : "Save changes"}</Button>
             </div>
-          </div>
-        )}
-      </Card>
-
-      {/* SECTION 2 — Order Items */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-purple-600" />
-            <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Order Items</h2>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50"
-            onClick={addItem}
-          >
-            <Plus className="w-3.5 h-3.5" /> Add Item
-          </Button>
+          </SectionCard>
         </div>
-
-        {items.map((item, idx) => {
-          const filteredFabrics = fabrics.filter(f =>
-            !fabricSearch[idx] || f.name.toLowerCase().includes(fabricSearch[idx].toLowerCase())
-          )
-          const subtotal = item.fabricQuantity * item.fabricUnitPrice
-          const itemMeasurements = effectiveMeasurements.filter(
-            m => !item.productType || m.productType === item.productType
-          )
-
-          return (
-            <div key={idx} className="border rounded-lg p-4 space-y-3 bg-gray-50 relative">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-gray-500">Item {idx + 1}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-purple-700">{formatCurrency(subtotal)}</span>
-                  {items.length > 1 && (
-                    <button
-                      onClick={() => removeItem(idx)}
-                      className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Product Type *</Label>
-                  <Select value={item.productType} onValueChange={v => updateItem(idx, "productType", v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select type..." /></SelectTrigger>
-                    <SelectContent>
-                      {PRODUCT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Measurement (optional)</Label>
-                  <Select
-                    value={item.measurementId}
-                    onValueChange={v => updateItem(idx, "measurementId", v)}
-                    disabled={!customerResolved}
-                  >
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {itemMeasurements.map(m => (
-                        <SelectItem key={m.id} value={String(m.id)}>
-                          {m.productType} — {new Date(m.measuredAt).toLocaleDateString()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Fabric</Label>
-                <Input
-                  placeholder="Search fabric..."
-                  value={fabricSearch[idx] ?? ""}
-                  onChange={e => setFabricSearch(prev => {
-                    const next = [...prev]
-                    next[idx] = e.target.value
-                    return next
-                  })}
-                  className="mb-1.5"
-                />
-                <Select value={item.fabricId} onValueChange={v => updateItem(idx, "fabricId", v)}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select fabric..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No fabric</SelectItem>
-                    {filteredFabrics.map(f => (
-                      <SelectItem key={f.id} value={String(f.id)}>
-                        {f.name} — stock: {f.stockQuantity} {f.unit}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Quantity</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.5"
-                    value={item.fabricQuantity}
-                    onChange={e => updateItem(idx, "fabricQuantity", parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Unit Price</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={item.fabricUnitPrice}
-                    onChange={e => updateItem(idx, "fabricUnitPrice", parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Item Notes</Label>
-                <Input
-                  placeholder="Optional notes for this item..."
-                  value={item.notes}
-                  onChange={e => updateItem(idx, "notes", e.target.value)}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </Card>
-
-      {/* SECTION 3 — Charges & Dates */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <ChevronRight className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Charges & Dates</h2>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Order Date</Label>
-            <Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} disabled />
-          </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Delivery Date</Label>
-            <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Stitching Charge</Label>
-            <Input
-              type="number"
-              min={0}
-              value={stitchingCharge}
-              onChange={e => setStitchingCharge(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Extra Charge</Label>
-            <Input
-              type="number"
-              min={0}
-              value={extraCharge}
-              onChange={e => setExtraCharge(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Discount</Label>
-            <Input
-              type="number"
-              min={0}
-              value={discount}
-              onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-        </div>
-
-        {/* Order summary */}
-        <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Fabric Total</span>
-            <span>{formatCurrency(fabricTotal)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Stitching</span>
-            <span>+ {formatCurrency(stitchingCharge)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Extra</span>
-            <span>+ {formatCurrency(extraCharge)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Discount</span>
-            <span>− {formatCurrency(discount)}</span>
-          </div>
-          <div className="flex justify-between font-bold text-gray-900 border-t pt-2 mt-1">
-            <span>Grand Total</span>
-            <span className="text-purple-700">{formatCurrency(grandTotal)}</span>
-          </div>
-        </div>
-      </Card>
-
-      {/* SECTION 4 — Notes */}
-      <Card className="p-5 space-y-3">
-        <div className="flex items-center gap-2 mb-1">
-          <ChevronRight className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Notes</h2>
-          <Badge className="bg-gray-100 text-gray-500 text-xs">optional</Badge>
-        </div>
-        <textarea
-          placeholder="Order-level notes..."
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          rows={3}
-          className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
-        />
-      </Card>
-
-      {/* Submit */}
-      <div className="flex items-center justify-between pt-2">
-        <Button
-          variant="outline"
-          onClick={() => router.push(`/dashboard/tailor/orders/${id}`)}
-          disabled={submitting}
-        >
-          Cancel
-        </Button>
-        <Button
-          className="bg-purple-600 hover:bg-purple-700 min-w-36 gap-2"
-          onClick={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? "Saving..." : "Save Changes"}
-        </Button>
-      </div>
+      )}
     </div>
   )
 }

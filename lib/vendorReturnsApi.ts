@@ -117,7 +117,101 @@ export interface CreateVendorReturnData {
   }[];
 }
 
+
+export interface ReturnAttachment { id: number; name: string; mime: string | null; size: number; url: string }
+
+export interface SupplierReturnRow {
+  id: number
+  returnNumber: string
+  returnDate: string | null
+  createdAt: string
+  vendorId: number
+  supplierName: string
+  purchaseOrderId: number | null
+  poNumber: string | null
+  itemsSummary: string
+  lines: { name: string; quantity: number; unitCost: number; total: number }[]
+  reason: string | null
+  amount: number
+  creditType: 'note' | 'refund' | 'replacement' | string
+  status: 'pending' | 'shipped' | 'received' | 'credited' | string
+  locationId: number | null
+  locationName: string | null
+  trackingNo: string | null
+  shippedAt: string | null
+  receivedAt: string | null
+  creditedAt: string | null
+  note: string | null
+  attachments?: ReturnAttachment[]
+}
+
+export interface SupplierReturnStats {
+  count: number
+  pendingCount: number
+  shippedCount: number
+  creditToReceive: number
+  creditReceived: number
+  mostReturnedTo: { name: string; count: number } | null
+  suppliers?: { id: number; name: string }[]
+  pendingCreditAmount: number
+}
+
+export interface ReturnableItem {
+  productId: number
+  variantId: number | null
+  name: string
+  sku: string
+  stock: number
+  lastCost: number
+  receivedQty: number | null
+}
+
+export interface CreateSupplierReturn {
+  vendorId: number
+  purchaseOrderId?: number
+  locationId: number
+  returnDate: string
+  trackingNo?: string
+  creditType: 'note' | 'refund' | 'replacement'
+  note?: string
+  items: { productId: number; variantId?: number | null; quantity: number; unitCost: number; reason: string }[]
+}
+
 export const vendorReturnsApi = {
+  getLog: async (params?: Record<string, any>): Promise<{
+    data: SupplierReturnRow[]; total: number; lastPage: number
+    counts: Record<'all' | 'pending' | 'shipped' | 'received' | 'credited', number>
+    stats: SupplierReturnStats
+  }> => {
+    const res = await api.get('/vendor-returns', { params })
+    const raw = res.data.data
+    const rows = Array.isArray(raw) ? raw : raw?.data ?? []
+    const meta = res.data.meta ?? raw?.meta ?? {}
+    return { data: rows, total: meta.total ?? rows.length, lastPage: meta.last_page ?? 1, counts: meta.counts ?? {}, stats: meta.stats ?? {} }
+  },
+  getReturnableItems: async (params: { location_id: number; vendor_id?: number; po_id?: number; search?: string }): Promise<ReturnableItem[]> => {
+    const res = await api.get('/vendor-returns/returnable-items', { params })
+    return res.data.data ?? []
+  },
+  createReturn: async (data: CreateSupplierReturn): Promise<SupplierReturnRow> => {
+    const res = await api.post('/vendor-returns', data)
+    return res.data.data
+  },
+  uploadPhotos: async (id: number, files: File[]): Promise<SupplierReturnRow> => {
+    const fd = new FormData()
+    files.forEach((f) => fd.append('files[]', f))
+    const res = await api.post(`/vendor-returns/${id}/attachments`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    return res.data.data
+  },
+  removePhoto: async (id: number, attachmentId: number): Promise<SupplierReturnRow> => {
+    const res = await api.delete(`/vendor-returns/${id}/attachments/${attachmentId}`)
+    return res.data.data
+  },
+  advance: async (id: number, status: string): Promise<SupplierReturnRow> => {
+    const res = await api.patch(`/vendor-returns/${id}/status`, { status })
+    return res.data.data
+  },
+
   getAll: async (params?: {
     page?: number;
     limit?: number;
@@ -127,7 +221,11 @@ export const vendorReturnsApi = {
   }): Promise<VendorReturnListResponse> => {
     const response = await api.get('/vendor-returns', { params });
     // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
-    const laravelData = response.data.data || {};
+    const rawData = response.data.data;
+    const meta = response.data.meta || {};
+    const laravelData = Array.isArray(rawData)
+      ? { data: rawData, total: meta.total, per_page: meta.per_page, current_page: meta.current_page }
+      : rawData || {};
     return {
       message: response.data.message || '',
       data: laravelData.data || [],

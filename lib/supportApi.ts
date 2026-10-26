@@ -72,6 +72,9 @@ export interface SupportTicket {
   customerEmail: string | null;
   resolvedAt: string | null;
   createdAt: string;
+  updatedAt?: string | null;
+  messageCount?: number;
+  adminUnread?: boolean;
   messages: SupportMessage[];
 }
 
@@ -81,6 +84,7 @@ export interface TicketStats {
   resolved: number;
   closed: number;
   total: number;
+  unread?: number;
 }
 
 export interface TicketListResponse {
@@ -109,12 +113,28 @@ function buildSupportFormData(payload: SupportReplyPayload) {
   return formData;
 }
 
+export interface CreateTicketPayload {
+  customer_name: string;
+  subject: string;
+  category?: TicketCategory;
+  priority?: TicketPriority;
+  description?: string;
+  customer_id?: number;
+  customer_email?: string;
+}
+
 export const supportApi = {
+  create: async (payload: CreateTicketPayload): Promise<SupportTicket> => {
+    const res = await api.post('/support/tickets', payload);
+    return res.data.data;
+  },
+
   getAll: async (params?: {
     status?: TicketStatus | 'all';
     priority?: TicketPriority | 'all';
     category?: TicketCategory | 'all';
     search?: string;
+    unread?: boolean;
     per_page?: number;
     page?: number;
   }): Promise<TicketListResponse> => {

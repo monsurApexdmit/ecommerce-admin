@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Check, Printer, Gift, Clock } from "lucide-react"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Check, Printer, Clock } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
+import { Separator } from "@/components/ui/separator"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { settingsApi } from "@/lib/settingsApi"
 
@@ -114,93 +116,56 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
-        <VisuallyHidden asChild>
-          <DialogTitle>Order Confirmed</DialogTitle>
-        </VisuallyHidden>
-        {/* Success Header with Gradient */}
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 pt-8 pb-6 px-6 text-center relative overflow-hidden">
-          {/* Background decoration */}
-          <div className="absolute inset-0 opacity-10">
-            <Gift className="absolute top-2 left-4 w-8 h-8 text-white rotate-12" />
-            <Gift className="absolute bottom-2 right-4 w-8 h-8 text-white -rotate-12" />
-          </div>
-
-          {/* Animated checkmark */}
-          <div className="relative z-10 flex justify-center mb-4">
-            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center animate-in zoom-in duration-500">
-              <Check className="w-11 h-11 text-white" strokeWidth={2.5} />
-            </div>
-          </div>
-
-          <h2 className="text-3xl font-black text-white mb-1">Order Confirmed!</h2>
-          <p className="text-emerald-100 text-sm">Your payment has been processed successfully</p>
-        </div>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="items-center text-center sm:text-center">
+          <UserAvatar className="mb-2 size-16 animate-in zoom-in duration-500" fallback={<Check className="size-8" strokeWidth={2.5} />} />
+          <DialogTitle className="text-2xl">Order Confirmed!</DialogTitle>
+          <DialogDescription>Your payment has been processed successfully</DialogDescription>
+        </DialogHeader>
 
         {/* Invoice and Details */}
-        <div className="px-6 py-6 space-y-5">
+        <div className="space-y-5">
           {/* Invoice Badge */}
           {orderDetails?.invoiceNo && (
             <div className="flex justify-center">
-              <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-4 py-2 text-sm font-semibold">
-                Invoice #<span className="font-mono ml-1">{orderDetails.invoiceNo}</span>
+              <Badge variant="secondary">
+                Invoice #<span className="font-mono">{orderDetails.invoiceNo}</span>
               </Badge>
             </div>
           )}
 
           {/* Order Summary Card */}
           {orderDetails && (
-            <Card className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-              <div className="space-y-3">
+            <Card className="p-4">
+              <InfoList className="gap-3">
                 {/* Customer */}
-                {orderDetails.customer && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Customer</span>
-                    <span className="font-semibold text-gray-900">{orderDetails.customer}</span>
-                  </div>
-                )}
+                {orderDetails.customer && <InfoRow label="Customer" value={orderDetails.customer} className="items-center" />}
 
                 {/* Items Count */}
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Items</span>
-                  <span className="font-semibold text-gray-900">{orderDetails.cart.length} item{orderDetails.cart.length !== 1 ? 's' : ''}</span>
-                </div>
+                <InfoRow label="Items" value={`${orderDetails.cart.length} item${orderDetails.cart.length !== 1 ? 's' : ''}`} className="items-center" />
 
                 {/* Order Time */}
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    Ordered
-                  </span>
-                  <span className="font-semibold text-gray-900 text-xs">{new Date().toLocaleTimeString()}</span>
-                </div>
-              </div>
+                <InfoRow
+                  label={<span className="flex items-center gap-2"><Clock className="size-4" />Ordered</span>}
+                  value={<span className="text-xs">{new Date().toLocaleTimeString()}</span>}
+                  className="items-center"
+                />
+              </InfoList>
             </Card>
           )}
 
           {/* Price Breakdown */}
           {orderDetails && (
-            <Card className="p-4 border border-gray-200">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-900">{formatCurrency(orderDetails.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">{taxLabelText}</span>
-                  <span className="text-gray-900">{formatCurrency(orderDetails.tax)}</span>
-                </div>
+            <Card className="p-4">
+              <InfoList>
+                <InfoRow label="Subtotal" value={<span className="font-normal">{formatCurrency(orderDetails.subtotal)}</span>} />
+                <InfoRow label={taxLabelText} value={<span className="font-normal">{formatCurrency(orderDetails.tax)}</span>} />
                 {orderDetails.discount > 0 && (
-                  <div className="flex justify-between text-emerald-600">
-                    <span className="font-medium">Discount</span>
-                    <span className="font-medium">-{formatCurrency(orderDetails.discount)}</span>
-                  </div>
+                  <InfoRow label="Discount" value={`-${formatCurrency(orderDetails.discount)}`} />
                 )}
-                <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
-                  <span className="font-bold text-gray-900">Total Amount</span>
-                  <span className="text-2xl font-black text-emerald-600">{formatCurrency(orderDetails.total)}</span>
-                </div>
-              </div>
+                <Separator />
+                <InfoRow label={<span className="font-bold text-foreground">Total Amount</span>} value={<span className="text-2xl font-bold">{formatCurrency(orderDetails.total)}</span>} className="items-center" />
+              </InfoList>
             </Card>
           )}
 
@@ -209,15 +174,17 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
             {orderDetails && (
               <Button
                 variant="outline"
-                className="w-full gap-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 h-11 font-semibold"
+                size="lg"
+                className="w-full"
                 onClick={handlePrint}
               >
-                <Printer className="w-4 h-4" />
+                <Printer />
                 Print Receipt
               </Button>
             )}
             <Button
-              className="w-full bg-emerald-600 hover:bg-emerald-700 h-12 text-base font-bold shadow-lg shadow-emerald-200"
+              size="lg"
+              className="w-full"
               onClick={onClose}
             >
               Complete & Start New Order

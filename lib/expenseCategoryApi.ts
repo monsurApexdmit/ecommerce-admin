@@ -57,8 +57,28 @@ export interface ExpenseCategoryResponse {
   companyId: number;
   name: string;
   description: string | null;
+  color?: string | null;
+  monthlyBudget?: number | null;
+  type?: string;
+  status?: boolean;
+  /** True for the payroll-managed Salaries category (cannot be renamed, deactivated or deleted). */
+  system?: boolean;
+  spentThisMonth?: number;
+  countThisMonth?: number;
+  allTimeSpent?: number;
+  allTimeCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExpenseCategoryStats {
+  activeCount: number;
+  inactiveCount: number;
+  monthTotal: number;
+  monthCount: number;
+  budgetTotal: number;
+  budgetUsedPct: number | null;
+  overBudgetCount: number;
 }
 
 export interface ExpenseCategoryListResponse {
@@ -77,14 +97,31 @@ export interface ExpenseCategoryListResponse {
 export interface CreateExpenseCategoryData {
   name: string;
   description?: string;
+  color?: string;
+  monthlyBudget?: number | null;
+  type?: string;
+  status?: boolean;
 }
 
 export interface UpdateExpenseCategoryData {
   name?: string;
   description?: string;
+  color?: string;
+  monthlyBudget?: number | null;
+  type?: string;
+  status?: boolean;
 }
 
 export const expenseCategoryApi = {
+  /** Categories with this-month / all-time spend and budget stats. */
+  getOverview: async (params?: { search?: string; include_inactive?: boolean }): Promise<{ data: ExpenseCategoryResponse[]; stats: ExpenseCategoryStats }> => {
+    const response = await api.get('/expense-categories/', { params: { limit: 500, ...params } });
+    const raw = response.data.data;
+    const rows = Array.isArray(raw) ? raw : raw?.data ?? [];
+    const meta = response.data.meta ?? raw?.meta ?? {};
+    return { data: rows, stats: meta.stats ?? { activeCount: 0, inactiveCount: 0, monthTotal: 0, monthCount: 0, budgetTotal: 0, budgetUsedPct: null, overBudgetCount: 0 } };
+  },
+
   /**
    * Get all expense categories
    */

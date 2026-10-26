@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import type React from "react"
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { Card } from "@/components/ui/card"
@@ -8,11 +9,18 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Search, Upload, Download, Edit2, Trash2, Plus, Loader2, FilePen } from "lucide-react"
+import { Search, Upload, Download, Edit2, Trash2, Plus, FilePen } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { Badge } from "@/components/ui/badge"
+import { Spinner } from "@/components/ui/spinner"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { StatTile } from "@/components/common/StatTile"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { exportToCSV } from "@/lib/export-import-utils"
 
 export interface Column {
@@ -302,12 +310,10 @@ export function ListPage({
   return (
     <div className="space-y-6 w-full min-w-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-          {description && <p className="text-gray-600 mt-1">{description}</p>}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title={title}
+        description={description}
+        actions={(onExport || onImport || enableCheckboxes || onAddClick) ? <>
           {onExport && (
             <Button onClick={handleExport} variant="outline" size="sm">
               <Download size={16} className="mr-2" />
@@ -324,7 +330,6 @@ export function ListPage({
             <Button
               variant="outline"
               size="sm"
-              className="text-orange-600 border-orange-200 bg-orange-50"
               onClick={() => {
                 if (selectedIds.length === 0) return
                 setBulkActionDialog({ open: true, showSelector: true })
@@ -342,9 +347,8 @@ export function ListPage({
                 const deleteAction = bulkActions.find(a => a.id === "delete")
                 if (deleteAction) handleBulkAction(deleteAction)
               }}
-              variant="outline"
+              variant="destructive"
               size="sm"
-              className="text-red-600 border-red-200"
               disabled={selectedIds.length === 0}
             >
               <Trash2 size={16} className="mr-2" />
@@ -352,33 +356,26 @@ export function ListPage({
             </Button>
           )}
           {onAddClick && (
-            <Button onClick={onAddClick} size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={onAddClick} size="sm">
               <Plus size={16} className="mr-2" />
               {addButtonLabel}
             </Button>
           )}
-        </div>
-      </div>
+        </> : undefined}
+      />
 
       {/* Stats Cards */}
       {stats && stats.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((stat, idx) => (
-            <Card key={idx} className="p-4">
-              {statsLoading ? (
+          {stats.map((stat, idx) =>
+            statsLoading ? (
+              <Card key={idx} className="p-4">
                 <Skeleton className="h-20" />
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600 text-sm font-medium">{stat.label}</span>
-                    <div className="text-emerald-600">{stat.icon}</div>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  {stat.subtext && <p className="text-xs text-gray-500">{stat.subtext}</p>}
-                </div>
-              )}
-            </Card>
-          ))}
+              </Card>
+            ) : (
+              <StatTile key={idx} className="p-4" label={stat.label} value={stat.value} icon={stat.icon} hint={stat.subtext} />
+            ),
+          )}
         </div>
       )}
 
@@ -387,7 +384,7 @@ export function ListPage({
         <div className="flex flex-col xl:flex-row gap-4">
           {/* Search Bar */}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" size={18} />
             <Input
               placeholder={searchPlaceholder}
               value={searchQuery}
@@ -447,80 +444,79 @@ export function ListPage({
             ))}
           </div>
         ) : currentData.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="text-gray-500 text-sm">{emptyMessage}</p>
-          </div>
+          <EmptyState title={emptyMessage} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead className="bg-muted border-b border-border sticky top-0 z-10">
-                <tr>
+            <Table>
+              <TableHeader className="sticky top-0 z-10">
+                <TableRow>
                   {enableCheckboxes && (
-                    <th className="px-4 py-3 w-12 whitespace-nowrap">
+                    <TableHead className="w-12">
                       <Checkbox
                         checked={isAllSelected}
                         onCheckedChange={handleSelectAll}
                       />
-                    </th>
+                    </TableHead>
                   )}
                   {columns.map(col => (
-                    <th
+                    <TableHead
                       key={col.key}
-                      className={`px-4 py-3 text-left text-sm font-semibold text-foreground whitespace-nowrap ${col.width || "min-w-[150px]"}`}
+                      className={cn(col.width || "min-w-[150px]")}
                     >
                       {col.label}
-                    </th>
+                    </TableHead>
                   ))}
                   {actions.length > 0 && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-foreground w-20 whitespace-nowrap sticky right-0 bg-muted">
+                    <TableHead className="w-20 sticky right-0 bg-background">
                       Actions
-                    </th>
+                    </TableHead>
                   )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {currentData.map(item => (
-                  <tr
+                  <TableRow
                     key={item.id}
-                    className={`hover:bg-muted/40 transition-colors ${rowClassName?.(item) || ""}`}
+                    className={cn(rowClassName?.(item))}
                   >
                     {enableCheckboxes && (
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <TableCell>
                         <Checkbox
                           checked={selectedIds.includes(item.id)}
                           onCheckedChange={(checked) => handleSelectItem(item.id, checked)}
                         />
-                      </td>
+                      </TableCell>
                     )}
                     {columns.map(col => (
-                      <td key={`${item.id}-${col.key}`} className="px-4 py-3 text-sm text-foreground whitespace-nowrap">
+                      <TableCell key={`${item.id}-${col.key}`}>
                         {col.render ? col.render(item[col.key], item) : item[col.key]}
-                      </td>
+                      </TableCell>
                     ))}
                     {actions.length > 0 && (
-                      <td className="px-4 py-3 sticky right-0 bg-card">
+                      <TableCell className="sticky right-0 bg-card">
                         <div className="flex gap-1 justify-center">
                           {actions
                             .filter(a => !a.show || a.show(item))
                             .map(action => (
-                              <Button
-                                key={action.id}
-                                onClick={() => action.onClick(item)}
-                                variant={action.variant || "ghost"}
-                                size="sm"
-                                title={action.label}
-                                className={action.className}
-                              >
-                                {action.icon}
-                              </Button>
+                              <WithTooltip key={action.id} content={action.label}>
+                                <Button
+                                  onClick={() => action.onClick(item)}
+                                  variant={action.variant || "ghost"}
+                                  size="sm"
+                                  aria-label={action.label}
+                                  className={action.className}
+                                >
+                                  {action.icon}
+                                </Button>
+                              </WithTooltip>
                             ))}
                         </div>
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Card>
@@ -545,9 +541,9 @@ export function ListPage({
             <DialogDescription>Upload a CSV file to import {title.toLowerCase()}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-900">CSV File</label>
+            <FormField label="CSV File" htmlFor="listpage-import-file" description="Upload a CSV file with the required columns">
               <Input
+                id="listpage-import-file"
                 type="file"
                 accept=".csv"
                 onChange={(e) => {
@@ -571,10 +567,7 @@ export function ListPage({
                   }
                 }}
               />
-              <p className="text-sm text-gray-500">
-                Upload a CSV file with the required columns
-              </p>
-            </div>
+            </FormField>
           </div>
           <DialogFooter>
             <Button
@@ -597,8 +590,7 @@ export function ListPage({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-900">Select Action</label>
+            <FormField label="Select Action" htmlFor="listpage-bulk-action">
               <Select
                 onValueChange={(actionId) => {
                   const action = bulkActions.find(a => a.id === actionId)
@@ -607,7 +599,7 @@ export function ListPage({
                   }
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="listpage-bulk-action">
                   <SelectValue placeholder="Choose an action..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -618,7 +610,7 @@ export function ListPage({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
           </div>
           <DialogFooter>
             <Button
@@ -656,7 +648,7 @@ export function ListPage({
             >
               {bulkLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner />
                   Processing...
                 </>
               ) : (

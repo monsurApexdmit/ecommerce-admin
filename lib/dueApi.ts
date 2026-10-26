@@ -109,7 +109,96 @@ export interface VendorDueListResponse {
   };
 }
 
+export type DueParty = 'customers' | 'vendors';
+
+export interface DuePartyRow {
+  partyId: number;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  docs: number;
+  due: number;
+  oldestDate: string | null;
+  ageDays: number;
+  lastPaymentDate: string | null;
+  paidSoFar: number;
+  hasPartial: boolean;
+  lastDocNos: string[];
+  walkIn?: boolean;
+  // customers
+  group?: string | null;
+  lastReminder?: { channel: string | null; at: string | null } | null;
+  // suppliers
+  dueDate?: string | null;
+  dueInDays?: number | null;
+  overdue?: boolean;
+  statuses?: string[];
+}
+
+export interface DueAgingBucket { key: 0 | 1 | 2 | 3; label: string; amount: number; count: number }
+
+export interface DueSummaryData {
+  rows: DuePartyRow[];
+  aging: DueAgingBucket[];
+  stats: Record<string, number>;
+  total?: number;
+}
+
+export interface DueDocument {
+  documentType: 'sell' | 'purchase_order' | 'opening_balance';
+  documentId: number | null;
+  no: string;
+  date: string;
+  ageDays: number;
+  total: number;
+  paid: number;
+  due: number;
+  status?: string | null;
+  dueDate?: string | null;
+}
+
+export interface DueHistoryItem {
+  id: number | string;
+  partyName: string;
+  reference: string | null;
+  notes: string | null;
+  date: string;
+  method: string;
+  amount: number;
+  documentNo?: string | null;
+}
+
 export const dueApi = {
+  getSummary: async (party: DueParty, params?: { search?: string; payment?: string; bucket?: number; sort?: 'age' | 'amount' | 'name'; page?: number; per_page?: number }): Promise<DueSummaryData> => {
+    const response = await api.get(`/dues/${party}/summary`, { params: { per_page: 500, ...params } });
+    const d = response.data.data ?? {};
+    return { rows: d.rows ?? [], aging: d.aging ?? [], stats: d.stats ?? {}, total: response.data.meta?.total ?? d.total };
+  },
+
+  getDocuments: async (party: DueParty, id: number): Promise<{ party: { id: number; name: string; phone?: string | null }; documents: DueDocument[] }> => {
+    const response = await api.get(`/dues/${party}/${id}/documents`);
+    const d = response.data.data ?? {};
+    return { party: d.party ?? { id, name: '' }, documents: d.documents ?? d.docs ?? [] };
+  },
+
+  settle: async (party: DueParty, id: number, body: {
+    amount: number; method: string; date?: string; reference?: string; notes?: string; documentIds?: { type: string; id: number | null }[];
+  }): Promise<{ allocations: { documentType: string; documentId: number | null; no: string; amount: number }[] }> => {
+    const response = await api.post(party === 'customers' ? `/dues/customers/${id}/collect` : `/dues/vendors/${id}/pay`, body);
+    return response.data.data ?? { allocations: [] };
+  },
+
+  getHistory: async (direction: 'in' | 'out', limit = 15): Promise<DueHistoryItem[]> => {
+    const response = await api.get('/dues/history', { params: { direction, limit } });
+    return response.data.data ?? [];
+  },
+
+  /** preview=true only builds the message; nothing is logged. Otherwise the reminder event is recorded (nothing is sent). */
+  remind: async (id: number, channel: 'SMS' | 'WhatsApp' | 'Copy', preview = false): Promise<{ message: string; lastReminder?: { channel: string | null; at: string | null } | null }> => {
+    const response = await api.post(`/dues/customers/${id}/remind`, { channel, preview });
+    return response.data.data ?? { message: '' };
+  },
+
   /**
    * Get customers who owe money (paginated)
    */

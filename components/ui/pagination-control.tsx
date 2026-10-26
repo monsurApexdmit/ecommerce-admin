@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils"
 import type React from "react"
 import {
     Pagination,
@@ -112,10 +113,9 @@ export function PaginationControl({
                                     <Button
                                         variant={page === currentPage ? "default" : "ghost"}
                                         size="sm"
-                                        className={`h-8 w-8 p-0 rounded text-xs font-medium ${page === currentPage
+                                        className={cn("h-8 w-8 p-0 rounded text-xs font-medium", page === currentPage
                                             ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                                            }`}
+                                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900")}
                                         onClick={(e) => {
                                             e.preventDefault()
                                             onPageChange(page)

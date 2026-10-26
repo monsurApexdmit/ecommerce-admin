@@ -1,13 +1,20 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { FormField } from "@/components/common/FormField"
 import { saasAuthApi } from "@/lib/saasAuthApi"
-import { AlertCircle, Loader, Lock, Eye, EyeOff, CheckCircle, ArrowLeft } from "lucide-react"
+import { AlertCircle, Lock, Eye, EyeOff, CheckCircle, ArrowLeft } from "lucide-react"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -49,9 +56,9 @@ export default function ResetPasswordPage() {
   }, [password])
 
   const getPasswordStrengthColor = () => {
-    if (passwordStrength < 40) return "bg-red-500"
-    if (passwordStrength < 70) return "bg-yellow-500"
-    return "bg-emerald-500"
+    if (passwordStrength < 40) return "[&>[data-slot=progress-indicator]]:bg-red-500"
+    if (passwordStrength < 70) return "[&>[data-slot=progress-indicator]]:bg-yellow-500"
+    return "[&>[data-slot=progress-indicator]]:bg-emerald-500"
   }
 
   const getPasswordStrengthLabel = () => {
@@ -117,32 +124,32 @@ export default function ResetPasswordPage() {
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Invalid Reset Link</h1>
-            <p className="text-gray-600 mt-2">
+            <h1 className="text-2xl font-bold">Invalid Reset Link</h1>
+            <p className="text-muted-foreground mt-2">
               This password reset link is invalid or has expired.
             </p>
           </div>
 
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-            <p className="text-sm text-red-900">
-              💡 <strong>What to do:</strong> Password reset links expire after 1 hour. Request a new reset
-              link to continue.
-            </p>
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>
+              <p>
+                💡 <strong>What to do:</strong> Password reset links expire after 1 hour. Request a new reset
+                link to continue.
+              </p>
+            </AlertDescription>
+          </Alert>
 
-          <Link href="/auth/forgot-password">
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
-              Request New Reset Link
-            </Button>
-          </Link>
+          <Button asChild className="w-full">
+            <Link href="/auth/forgot-password">Request New Reset Link</Link>
+          </Button>
 
           <div className="mt-4">
-            <Link href="/auth/login">
-              <Button variant="outline" className="w-full">
-                <ArrowLeft className="w-4 h-4 mr-2" />
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/auth/login">
+                <ArrowLeft className="w-4 h-4" />
                 Back to Login
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </Card>
       </div>
@@ -157,22 +164,22 @@ export default function ResetPasswordPage() {
             <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Password Reset</h1>
-            <p className="text-gray-600 mt-2">Your password has been successfully reset.</p>
+            <h1 className="text-2xl font-bold">Password Reset</h1>
+            <p className="text-muted-foreground mt-2">Your password has been successfully reset.</p>
           </div>
 
-          <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4 mb-6">
-            <p className="text-sm text-emerald-900">
-              ✅ <strong>Success:</strong> You can now sign in with your new password. Redirecting to
-              login page...
-            </p>
-          </div>
+          <Alert className="mb-6">
+            <AlertDescription>
+              <p>
+                ✅ <strong>Success:</strong> You can now sign in with your new password. Redirecting to
+                login page...
+              </p>
+            </AlertDescription>
+          </Alert>
 
-          <Link href="/auth/login">
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
-              Go to Login
-            </Button>
-          </Link>
+          <Button asChild className="w-full">
+            <Link href="/auth/login">Go to Login</Link>
+          </Button>
         </Card>
       </div>
     )
@@ -182,27 +189,26 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800 p-4">
       <Card className="w-full max-w-md p-8">
         <div className="mb-8">
-          <Link href="/auth/login" className="text-emerald-600 hover:text-emerald-700 flex items-center gap-2 mb-6 text-sm font-medium">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Login
-          </Link>
+          <Button asChild variant="link" className="mb-6 px-0">
+            <Link href="/auth/login">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Login
+            </Link>
+          </Button>
 
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Reset Password</h1>
-          <p className="text-gray-600">Create a new password for your account.</p>
+          <h1 className="text-3xl font-bold mb-2">Reset Password</h1>
+          <p className="text-muted-foreground">Create a new password for your account.</p>
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6 flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              New Password
-            </label>
+          <FormField label="New Password" htmlFor="password">
             <div className="relative">
               <Input
                 id="password"
@@ -212,35 +218,34 @@ export default function ResetPasswordPage() {
                 placeholder="Enter new password"
                 disabled={loading}
               />
-              <button
+              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              </Button></WithTooltip>
             </div>
 
             {password && (
               <div className="mt-2">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-gray-600">Password Strength</span>
-                  <span className="text-xs font-medium text-gray-600">{getPasswordStrengthLabel()}</span>
+                  <span className="text-xs font-medium text-muted-foreground">Password Strength</span>
+                  <span className="text-xs font-medium text-muted-foreground">{getPasswordStrengthLabel()}</span>
                 </div>
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${getPasswordStrengthColor()}`}
-                    style={{ width: `${passwordStrength}%` }}
-                  ></div>
-                </div>
+                <Progress
+                  value={passwordStrength}
+                  aria-label="Password strength"
+                  className={cn("bg-muted", getPasswordStrengthColor())}
+                />
               </div>
             )}
-          </div>
+          </FormField>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-              Confirm Password
-            </label>
+          <FormField label="Confirm Password" htmlFor="confirmPassword">
             <div className="relative">
               <Input
                 id="confirmPassword"
@@ -250,56 +255,60 @@ export default function ResetPasswordPage() {
                 placeholder="Confirm new password"
                 disabled={loading}
               />
-              <button
+              <WithTooltip content={showConfirmPassword ? "Hide password" : "Show password"}><Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              </Button></WithTooltip>
             </div>
 
             {password && confirmPassword && password === confirmPassword && (
-              <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+              <p className="text-xs text-emerald-600 flex items-center gap-1">
                 ✓ Passwords match
               </p>
             )}
-          </div>
+          </FormField>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-            <p className="text-xs text-blue-900">
-              🔒 <strong>Password Requirements:</strong>
+          <Alert>
+            <AlertDescription className="text-xs">
+              <p>🔒 <strong>Password Requirements:</strong></p>
               <ul className="mt-2 space-y-1">
                 <li>• At least 8 characters long</li>
                 <li>• Mix of uppercase and lowercase letters</li>
                 <li>• At least one number</li>
               </ul>
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
 
           <Button
             type="submit"
             disabled={loading || !password || !confirmPassword || password !== confirmPassword}
-            className="w-full bg-emerald-600 hover:bg-emerald-700"
+            className="w-full"
           >
             {loading ? (
               <>
-                <Loader className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner />
                 Resetting...
               </>
             ) : (
               <>
-                <Lock className="w-4 h-4 mr-2" />
+                <Lock className="w-4 h-4" />
                 Reset Password
               </>
             )}
           </Button>
         </form>
 
-        <div className="mt-6 pt-6 border-t">
-          <p className="text-sm text-gray-600 text-center">
+        <Separator className="mt-6" />
+        <div className="pt-6">
+          <p className="text-sm text-muted-foreground text-center">
             Remember your password?{" "}
-            <Link href="/auth/login" className="text-emerald-600 hover:text-emerald-700 font-medium">
+            <Link href="/auth/login" className="text-primary hover:underline font-medium">
               Sign in here
             </Link>
           </p>

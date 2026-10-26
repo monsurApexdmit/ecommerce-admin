@@ -62,6 +62,7 @@ export interface SellItem {
   unitPrice?: number;
   total_price?: number;
   totalPrice?: number;
+  discount?: number;
   createdAt?: string;
   updatedAt?: string;
   bundleItems?: { productId: number; productName: string; qtyPerBundle: number; totalQty: number }[] | null;
@@ -75,6 +76,9 @@ export interface SellShipment {
   shippingMethod?: string;
   status: string;
   estimatedDelivery?: string;
+  courier?: string | null;
+  zone?: string | null;
+  codAmount?: number | null;
   shippingCost?: number;
   weight?: number;
   dimensions?: string;
@@ -126,9 +130,21 @@ export interface SellResponse {
   couponId?: number;
   couponCode?: string;
   shippingCost?: number;
-  status: 'Pending' | 'Processing' | 'Delivered';
+  status: 'Pending' | 'Processing' | 'Delivered' | 'Cancelled';
   paymentStatus?: string;
+  paidAmount?: number;
+  dueAmount?: number;
+  shippingMethodName?: string;
+  source?: 'pos' | 'storefront' | 'manual' | null;
   paymentTransactionId?: string | null;
+  transactionId?: string | null;
+  zoneName?: string | null;
+  courier?: string | null;
+  deliveryNote?: string | null;
+  taxRate?: number | null;
+  taxAmount?: number | null;
+  locationId?: number | null;
+  locationName?: string | null;
   shippingDepositAmount?: number | null;
   shippingDepositTransactionId?: string | null;
   fulfillmentStatus?: string;
@@ -138,8 +154,43 @@ export interface SellResponse {
   notes?: string;
   items?: SellItem[];
   shipments?: SellShipment[];
+  /** Order follow-up (confirmation call) summary */
+  followUpCount?: number;
+  lastFollowUpAt?: string | null;
+  lastFollowUpOutcome?: FollowUpOutcome | null;
+  nextFollowUpAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type FollowUpOutcome = 'confirmed' | 'no_answer' | 'call_later' | 'wrong_number' | 'customer_cancelled' | 'other';
+export type FollowUpChannel = 'call' | 'whatsapp' | 'sms' | 'other';
+
+export interface OrderFollowUp {
+  id: number;
+  sellId: number;
+  userId: number | null;
+  staffName: string | null;
+  outcome: FollowUpOutcome;
+  channel: FollowUpChannel;
+  note: string | null;
+  nextFollowUpAt: string | null;
+  createdAt: string;
+}
+
+export interface LogFollowUpData {
+  outcome: FollowUpOutcome;
+  channel?: FollowUpChannel;
+  note?: string;
+  /** ISO datetime; required (and in the future) for call_later */
+  nextFollowUpAt?: string;
+}
+
+export type SellTab = 'all' | 'pending' | 'confirmed' | 'packed' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
+export type SellTabCounts = Record<SellTab, number>;
+export interface SellKpis {
+  totalOrders: number; last30Days: number; pending: number; confirmedOrPacked: number;
+  shipped: number; delivered: number; revenue: number; dueToCollect: number; unpaidCount: number;
 }
 
 export interface SellListResponse {
@@ -148,6 +199,10 @@ export interface SellListResponse {
   total?: number;
   page?: number;
   limit?: number;
+  /** Count and revenue total of every sale matching the filters (not just this page) */
+  summary?: { count: number; total: number };
+  /** Raw `meta` from the list endpoint: per-tab counts and KPI stats (see PHASE2_API_CONTRACT.md) */
+  meta?: Record<string, any>;
 }
 
 export interface SellStatsResponse {
@@ -161,6 +216,11 @@ export interface SellStatsResponse {
     pendingOrders: number;
     processingOrders: number;
     deliveredOrders: number;
+    packedOrders?: number;
+    totalDue?: number;
+    unpaidCount?: number;
+    shippedOrders?: number;
+    cancelledOrders?: number;
   };
 }
 
@@ -181,13 +241,32 @@ export interface CreateSellData {
   shippingCountry?: string;
   method: string;
   source?: 'pos' | 'storefront' | 'manual';
+  /** Warehouse / branch the sale was made from */
+  locationId?: number;
+  /** Open register shift this sale belongs to */
+  registerSessionId?: number;
+  paymentTransactionId?: string;
+  transactionId?: string;
+  zoneName?: string;
+  deliveryNote?: string;
+  /** Tax is stored as sent; amount already includes it */
+  taxRate?: number;
+  taxAmount?: number;
   amount: number;
   discount?: number;
+  /** Discount excluding the coupon's; the backend recomputes the coupon part */
+  manualDiscount?: number;
   couponId?: number;
   couponCode?: string;
   shippingCost?: number;
-  status?: 'Pending' | 'Processing' | 'Delivered';
+  shippingMethod?: string;
+  status?: 'Pending' | 'Processing' | 'Packed' | 'Shipped' | 'Delivered';
+  /** Courier for delivered orders; the backend creates a linked shipment */
+  courier?: string;
   note?: string;
+  notes?: string;
+  /** Amount received now. When sent, the sale starts with a recorded payment and a paid/due balance. */
+  paidAmount?: number;
   items: {
     productId: number;
     variantId?: number;
@@ -199,6 +278,8 @@ export interface CreateSellData {
     price: number;
     unitPrice?: number;
     unit_price?: number;
+    /** Per-line discount amount */
+    discount?: number;
   }[];
 }
 
@@ -212,18 +293,46 @@ export interface UpdateSellData {
   shippingCost?: number;
   status?: 'Pending' | 'Processing' | 'Delivered';
   notes?: string;
+  note?: string;
+  shippingFullName?: string;
+  shippingPhone?: string;
+  shippingAddressLine1?: string;
+  shippingAddressLine2?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPostalCode?: string;
+  shippingCountry?: string;
+}
+
+/** Editable delivery details of an order (receiver, phone, address, note). */
+export interface UpdateDeliveryDetailsData {
+  shippingFullName: string;
+  shippingPhone: string;
+  shippingAddressLine1: string;
+  notes?: string;
+  deliveryNote?: string;
+  zoneName?: string;
+  courier?: string;
+  transactionId?: string;
 }
 
 export const sellsApi = {
   getAll: async (params?: {
     page?: number;
     limit?: number;
+    per_page?: number;
     search?: string;
     status?: string;
     method?: string;
     source?: string;
+    payment?: string;
+    fulfillment?: string;
+    customer_id?: number;
+    customer?: string;
     start_date?: string;
     end_date?: string;
+    /** due = needs a confirmation call now; scheduled = call-back booked */
+    followUp?: 'due' | 'scheduled';
   }): Promise<SellListResponse> => {
     const response = await api.get('/sells', { params });
     // Backend returns either:
@@ -232,7 +341,7 @@ export const sellsApi = {
     const data = response.data.data || [];
     const isArray = Array.isArray(data);
     const sellsData = isArray ? data : (data.data || []);
-    const paginationData = isArray ? {} : data;
+    const paginationData = isArray ? (response.data.meta?.pagination ? { total: response.data.meta.pagination.total, current_page: response.data.meta.pagination.page, per_page: response.data.meta.pagination.per_page } : {}) : data;
 
     return {
       message: response.data.message || '',
@@ -240,11 +349,13 @@ export const sellsApi = {
       total: paginationData.total || sellsData.length || 0,
       page: paginationData.current_page || 1,
       limit: paginationData.per_page || 10,
+      summary: response.data.meta?.summary,
+      meta: response.data.meta,
     };
   },
 
-  getStats: async (): Promise<SellStatsResponse> => {
-    const response = await api.get('/sells/stats');
+  getStats: async (params?: { source?: string }): Promise<SellStatsResponse> => {
+    const response = await api.get('/sells/stats', { params });
     return response.data;
   },
 
@@ -280,9 +391,34 @@ export const sellsApi = {
     return response.data;
   },
 
-  updateStatus: async (id: number, status: SellResponse['status']): Promise<{ message: string; data: SellResponse }> => {
-    const response = await api.patch(`/sells/${id}/status`, { status });
+  updateStatus: async (id: number, status: SellResponse['status'], reason?: string): Promise<{ message: string; data: SellResponse }> => {
+    const response = await api.patch(`/sells/${id}/status`, reason ? { status, reason } : { status });
     return response.data;
+  },
+
+  /** Mark an open order packed or shipped (shipped links/creates a shipment), or put it back to unfulfilled. */
+  updateFulfillment: async (id: number, fulfillment: 'packed' | 'shipped' | 'unfulfilled'): Promise<{ message: string; data: SellResponse }> => {
+    const response = await api.patch(`/sells/${id}/fulfillment`, { fulfillment });
+    return response.data;
+  },
+
+  /** Edit receiver, phone, address and note (PATCH /sells/{id}/delivery; 422 when Cancelled/Delivered). */
+  updateDeliveryDetails: async (id: number, data: UpdateDeliveryDetailsData): Promise<{ message: string; data: SellResponse }> => {
+    const { notes, ...rest } = data;
+    const response = await api.patch(`/sells/${id}/delivery`, { ...rest, note: notes ?? '' });
+    return response.data;
+  },
+
+  /** Follow-up history of an order, newest first. */
+  getFollowUps: async (id: number): Promise<OrderFollowUp[]> => {
+    const response = await api.get(`/sells/${id}/follow-ups`);
+    return response.data?.data ?? [];
+  },
+
+  /** Log a follow-up; confirmed moves Pending→Processing, customer_cancelled cancels the order. */
+  logFollowUp: async (id: number, data: LogFollowUpData): Promise<{ followUp: OrderFollowUp; order: SellResponse }> => {
+    const response = await api.post(`/sells/${id}/follow-ups`, data);
+    return response.data.data;
   },
 
   delete: async (id: number): Promise<{ message: string }> => {

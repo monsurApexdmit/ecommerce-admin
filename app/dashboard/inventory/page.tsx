@@ -1,402 +1,447 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { Search, ArrowRightLeft, Printer, QrCode, Package, Eye, AlertTriangle, Download, Upload } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import Link from "next/link"
+import { ArrowLeftRight, BarChart3, Banknote, Boxes, ClipboardList, Download, Eye, Pencil, Search, Upload, X, AlertTriangle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useWarehouse } from "@/contexts/warehouse-context"
-import Link from "next/link"
-import { PaginationControl } from "@/components/ui/pagination-control"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { inventoryApi, type InventoryItem } from "@/lib/inventoryApi"
 import { StatsCards } from "@/components/ui/stats-card"
-import productApi from "@/lib/productApi"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
-import { useModuleGuard } from "@/hooks/use-module-guard"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import inventoryApi, { type StockHealth, type StockOverview, type StockRow } from "@/lib/inventoryApi"
+import adjustmentApi from "@/lib/adjustmentApi"
 import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
-import { toast } from "sonner"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/common/PageHeader"
+import { Toolbar } from "@/components/common/Toolbar"
+import { BulkBar } from "@/components/common/BulkBar"
+import { FormField } from "@/components/common/FormField"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { WithTooltip } from "@/components/common/WithTooltip"
+import { EmptyState } from "@/components/common/EmptyState"
 
-const ITEMS_PER_PAGE = 10
+type Tab = "all" | "attention" | "ok" | "low" | "out" | "over"
+
+const HEALTH: Record<StockHealth, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  ok: { label: "Healthy", variant: "default" },
+  low: { label: "Low", variant: "secondary" },
+  out: { label: "Out of stock", variant: "destructive" },
+  over: { label: "Overstock", variant: "outline" },
+}
+const QUICK_REASONS = ["Correction", "Damaged", "Lost", "Found", "Stock count"]
+
 
 export default function InventoryPage() {
-  const { canRead } = useSaasAuth()
-  const { warehouses } = useWarehouse()
-  const [items, setItems] = useState<InventoryItem[]>([])
-  const [stats, setStats] = useState<{
-    total: number
-    published: number
-    unpublished: number
-  } | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE)
+  return <Suspense fallback={null}><InventoryInner /></Suspense>
+}
 
-  const rowKey = (item: InventoryItem) =>
-    item.type === 'variant' ? `v-${item.id}` : `p-${item.id}`
+function InventoryInner() {
+  const searchParams = useSearchParams()
+  const { formatCurrency } = useCompanySettings()
+  const { toast } = useToast()
+  const blocked = useModuleGuard("Inventory")
 
-  const fetchInventory = useCallback(async () => {
+  const [data, setData] = useState<StockOverview | null>(null)
+  const [loading, setLoading] = useState(true)
+  const stockParam = searchParams.get("stock")
+  const [tab, setTab] = useState<Tab>((["attention", "ok", "low", "out", "over"] as const).find((t) => t === stockParam) ?? "all")
+  const [search, setSearch] = useState("")
+  const [debounced, setDebounced] = useState("")
+  const [loc, setLoc] = useState("all")
+  const [cat, setCat] = useState("all")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+
+  const [adj, setAdj] = useState<StockRow | null>(null)
+  const [adjLoc, setAdjLoc] = useState("")
+  const [adjQty, setAdjQty] = useState("")
+  const [adjReason, setAdjReason] = useState(QUICK_REASONS[0])
+  const [adjErr, setAdjErr] = useState("")
+  const [adjBusy, setAdjBusy] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const load = useCallback(async () => {
     try {
-      setIsLoading(true)
-      const params: Record<string, any> = {}
-      if (searchQuery) params.search = searchQuery
-      if (selectedWarehouse !== "all") params.warehouse_id = Number(selectedWarehouse)
-      const res = await inventoryApi.getAll(params)
-      setItems(res.data ?? [])
-    } catch (err) {
-      console.error("Failed to fetch inventory:", err)
+      setData(await inventoryApi.getOverview({
+        search: debounced || undefined,
+        location_id: loc !== "all" ? Number(loc) : undefined,
+        category_id: cat !== "all" ? Number(cat) : undefined,
+      }))
+    } catch {
+      setData(null)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [searchQuery, selectedWarehouse])
+  }, [debounced, loc, cat])
 
-  useEffect(() => {
-    setCurrentPage(1)
-    fetchInventory()
-  }, [fetchInventory])
+  useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setStatsLoading(true)
-        const statsData = await productApi.getStats()
-        setStats(statsData)
-      } catch (err) {
-        console.error("Failed to fetch product stats:", err)
-      } finally {
-        setStatsLoading(false)
-      }
+  const rows = useMemo(() => {
+    const all = data?.items ?? []
+    if (tab === "all") return all
+    return all.filter((r) => (tab === "attention" ? r.health === "low" || r.health === "out" : r.health === tab))
+  }, [data, tab])
+
+  const pageRows = rows.slice((page - 1) * perPage, page * perPage)
+  const locations = data?.locations ?? []
+  const shownLocations = loc === "all" ? locations : locations.filter((l) => String(l.id) === loc)
+  const key = (r: StockRow) => `${r.type}-${r.id}`
+  const selectable = (r: StockRow) => r.type === "product" || !!r.productId
+  const allChecked = rows.length > 0 && rows.every((r) => checked.has(key(r)))
+  const toggleAll = () => setChecked(allChecked ? new Set() : new Set(rows.map(key)))
+  const toggleOne = (k: string) => setChecked((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const selectedRows = rows.filter((r) => checked.has(key(r)))
+
+  const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setChecked(new Set()) }
+
+  const openAdjust = (r: StockRow) => {
+    const def = locations.find((l) => l.isDefault) ?? locations[0]
+    setAdj(r)
+    setAdjLoc(loc !== "all" ? loc : def ? String(def.id) : "")
+    setAdjQty("")
+    setAdjReason(QUICK_REASONS[0])
+    setAdjErr("")
+  }
+  const onAdjLoc = (v: string) => {
+    setAdjLoc(v)
+    setAdjQty("")
+    setAdjErr("")
+  }
+  const currentQty = adj?.locations.find((l) => String(l.locationId) === adjLoc)?.quantity ?? 0
+
+  const applyAdjust = async () => {
+    if (!adj) return
+    const qty = Number(adjQty)
+    if (!adjLoc) { setAdjErr("Choose a location."); return }
+    if (adjQty.trim() === "" || !Number.isInteger(qty) || qty < 0) { setAdjErr("Enter a whole number, 0 or more."); return }
+    if (qty === currentQty) { setAdjErr("Quantity is unchanged."); return }
+    setAdjBusy(true); setAdjErr("")
+    try {
+      await adjustmentApi.create({
+        productId: adj.productId,
+        variantId: adj.type === "variant" ? adj.id : null,
+        locationId: Number(adjLoc),
+        type: "set",
+        quantity: qty,
+        reason: adjReason,
+      })
+      toast({ title: "Stock adjusted", description: `${adj.name}${adj.variantName ? ` · ${adj.variantName}` : ""}: ${currentQty} → ${qty}` })
+      setAdj(null)
+      load()
+    } catch (e: any) {
+      setAdjErr(e?.response?.data?.message || "Could not adjust the stock.")
+    } finally {
+      setAdjBusy(false)
     }
-
-    fetchStats()
-  }, [])
-
-  // Client-side pagination
-  const totalItems = items.length
-  const totalPages = Math.ceil(totalItems / itemsPerPage)
-  const currentRows = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
-    return items.slice(start, start + itemsPerPage)
-  }, [items, currentPage, itemsPerPage])
-
-  const blocked = useModuleGuard('Inventory')
-  if (blocked) return blocked
-
-  const handleSelectRow = (key: string) => {
-    const next = new Set(selectedRows)
-    next.has(key) ? next.delete(key) : next.add(key)
-    setSelectedRows(next)
   }
 
-  const handleExportInventory = () => {
-    const headers = ["Product", "Variant", "SKU", "Barcode", "Type", "Total Stock"]
-    const data = items.map(item => ({
-      product: item.productName,
-      variant: item.variantName ?? "",
-      sku: item.sku ?? "",
-      barcode: item.barcode ?? "",
-      type: item.type,
-      total_stock: item.stock,
-    }))
-    exportToCSV(data, "inventory", headers)
-    toast.success(`Exported ${data.length} inventory items`)
+  const handleExport = () => {
+    const flat = rows.flatMap((r) => (r.variants?.length ? r.variants : [r]))
+    exportToCSV(
+      flat.map((r) => ({
+        name: r.name, variant: r.variantName ?? "", sku: r.sku, barcode: r.barcode ?? "", category: r.categoryName ?? "",
+        ...Object.fromEntries(locations.map((l) => [l.name, r.locations.find((x) => x.locationId === l.id)?.quantity ?? 0])),
+        onHand: r.onHand, reserved: r.reserved, available: r.available, reorderAt: r.reorderPoint, health: HEALTH[r.health].label, unitCost: r.cost, value: r.value,
+      })),
+      "stock-overview",
+      ["name", "variant", "sku", "barcode", "category", ...locations.map((l) => l.name), "onHand", "reserved", "available", "reorderAt", "health", "unitCost", "value"],
+    )
+    toast({ title: `Exported ${flat.length} SKUs` })
   }
 
-  const handleImportInventory = () => {
-    const input = document.createElement("input")
-    input.type = "file"
-    input.accept = ".csv"
-    input.onchange = async (e: any) => {
+  const handleImport = () => {
+    const el = document.createElement("input")
+    el.type = "file"
+    el.accept = ".csv"
+    el.onchange = (e: any) => {
       const file = e.target.files?.[0]
       if (!file) return
       const reader = new FileReader()
       reader.onload = async (ev) => {
-        try {
-          const rows = parseCSV(ev.target?.result as string)
-          let updated = 0
-          for (const row of rows) {
-            const stock = Number(row.total_stock)
-            const productId = items.find(i => i.sku === row.sku?.trim())?.productId
-            if (!productId || isNaN(stock)) continue
-            try {
-              await productApi.update(productId, { stock })
-              updated++
-            } catch { /* skip invalid */ }
-          }
-          toast.success(`Updated ${updated} items from CSV`)
-          fetchInventory()
-        } catch {
-          toast.error("Failed to parse CSV")
+        const parsed = parseCSV(ev.target?.result as string)
+        const bySku = new Map<string, StockRow>()
+        ;(data?.items ?? []).forEach((r) => (r.variants?.length ? r.variants : [r]).forEach((x) => x.sku && bySku.set(x.sku.toLowerCase(), x)))
+        let done = 0
+        let skipped = 0
+        let unchanged = 0
+        for (const row of parsed) {
+          const sku = (row.sku ?? "").trim().toLowerCase()
+          const raw = row.total_stock ?? row["total stock"] ?? row["on hand"] ?? row.onhand ?? row.onHand ?? row.stock ?? row.quantity ?? row.qty ?? ""
+          const qty = String(raw).trim() === "" ? NaN : Number(raw)
+          const target = bySku.get(sku)
+          const where = locations.find((l) => l.name.toLowerCase() === (row.location ?? row.warehouse ?? "").toLowerCase())
+            ?? locations.find((l) => String(l.id) === loc)
+            ?? locations.find((l) => l.isDefault)
+            ?? locations[0]
+          if (!target || !where || !Number.isInteger(qty) || qty < 0) { skipped++; continue }
+          if ((target.locations.find((x) => x.locationId === where.id)?.quantity ?? 0) === qty) { unchanged++; continue }
+          try {
+            await adjustmentApi.create({
+              productId: target.productId, variantId: target.type === "variant" ? target.id : null,
+              locationId: where.id, type: "set", quantity: qty, reason: "Stock count",
+            })
+            done++
+          } catch { skipped++ }
         }
+        toast({ title: `Updated ${done} SKU${done === 1 ? "" : "s"}`, description: [skipped ? `${skipped} row${skipped === 1 ? "" : "s"} skipped (unknown SKU, bad quantity or error)` : "", unchanged ? `${unchanged} unchanged` : "", !skipped && !unchanged ? "CSV needs sku and total_stock columns (location optional)" : ""].filter(Boolean).join(" · ") })
+        load()
       }
       reader.readAsText(file)
     }
-    input.click()
+    el.click()
   }
 
-  const handleSelectAll = () => setSelectedRows(new Set(currentRows.map(rowKey)))
-  const handleDeselectAll = () => setSelectedRows(new Set())
+  if (blocked) return blocked
 
-  const handlePrintSelectedBarcodes = () => {
-    const selected = items.filter(item => selectedRows.has(rowKey(item)))
-    if (selected.length === 0) {
-      alert("Please select at least one product to print")
-      return
-    }
+  const s = data?.stats
+  const reorderHref = `/dashboard/vendors/purchase-orders?new=1&items=${encodeURIComponent(
+    selectedRows.map((r) => `${r.productId}:${Math.max(r.reorderPoint * 2 - r.onHand, 1)}`).join(","),
+  )}`
 
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      alert("Please allow popups to print barcodes")
-      return
-    }
-
-    const barcodeHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Print Barcodes</title>
-          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-          <style>
-            body { margin: 0; padding: 20px; font-family: system-ui, -apple-system, sans-serif; }
-            .barcode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 20px; }
-            .barcode-item { border: 2px dashed #ccc; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; aspect-ratio: 3/2; page-break-inside: avoid; }
-            .product-name { font-weight: bold; font-size: 14px; margin-bottom: 8px; text-align: center; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            .variant-name { font-size: 12px; color: #666; margin-bottom: 8px; }
-            .sku { font-size: 12px; margin-top: 4px; }
-            @media print { body { padding: 0; } .barcode-grid { padding: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="barcode-grid">
-            ${selected.map((item, index) => `
-              <div class="barcode-item">
-                <div class="product-name">${item.productName}</div>
-                ${item.variantName ? `<div class="variant-name">${item.variantName}</div>` : ''}
-                <svg id="barcode-${index}"></svg>
-                <div class="sku">${item.sku}</div>
-              </div>
-            `).join('')}
-          </div>
-          <script>
-            window.onload = function() {
-              ${selected.map((item, index) => `
-                JsBarcode("#barcode-${index}", "${item.barcode || item.sku}", {
-                  width: 1.5, height: 40, fontSize: 12, format: "CODE128"
-                });
-              `).join('\n')}
-              setTimeout(() => { window.print(); }, 500);
-            };
-          </script>
-        </body>
-      </html>
-    `
-    printWindow.document.write(barcodeHTML)
-    printWindow.document.close()
-  }
-
-  const allOnPageSelected = currentRows.length > 0 && currentRows.every(item => selectedRows.has(rowKey(item)))
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="text-gray-600 mt-1">Track stock levels across all locations</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectedRows.size > 0 && (
-            <Button onClick={handlePrintSelectedBarcodes} className="bg-blue-600 hover:bg-blue-700">
-              <Printer className="w-4 h-4 mr-2" />
-              Print Selected ({selectedRows.size})
-            </Button>
-          )}
-          <Button variant="outline" onClick={handleImportInventory} className="gap-2">
-            <Upload className="w-4 h-4" /> Import CSV
-          </Button>
-          <Button variant="outline" onClick={handleExportInventory} className="gap-2">
-            <Download className="w-4 h-4" /> Export CSV
-          </Button>
-          <Link href="/dashboard/inventory/transfer">
-            <Button className="bg-emerald-600 hover:bg-emerald-700">
-              <ArrowRightLeft className="w-4 h-4 mr-2" />
-              Stock Transfer
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {statsLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="p-6">
-              <Skeleton className="h-4 w-20 mb-2" />
-              <Skeleton className="h-8 w-12" />
-            </Card>
-          ))}
-        </div>
-      ) : stats ? (
-        <StatsCards stats={[
-          { label: "Total Products", value: stats.total, icon: <Package className="w-5 h-5" />, color: "blue" },
-          { label: "Published", value: stats.published, icon: <Eye className="w-5 h-5" />, color: "green" },
-          { label: "Unpublished", value: stats.unpublished, icon: <AlertTriangle className="w-5 h-5" />, color: "yellow" },
-        ]} />
-      ) : null}
-
-      <Card className="p-6">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search by Name or SKU"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Warehouses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Warehouses</SelectItem>
-              {warehouses.map(w => (
-                <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {!isLoading && currentRows.length > 0 && (
-          <div className="flex items-center gap-2 mb-4">
-            <Button variant="outline" size="sm" onClick={handleSelectAll}>Select All on Page</Button>
-            <Button variant="outline" size="sm" onClick={handleDeselectAll}>Deselect All</Button>
-            {selectedRows.size > 0 && (
-              <span className="text-sm text-gray-600 ml-2">{selectedRows.size} item(s) selected</span>
+  const renderRow = (r: StockRow, nested = false) => {
+    const k = key(r)
+    const h = HEALTH[r.health]
+    const hasVariants = !nested && (r.variants?.length ?? 0) > 0
+    const open = expanded.has(k)
+    return (
+      <TableRow key={k} data-state={checked.has(k) ? "selected" : undefined} className={cn(nested && "bg-muted/30")}>
+        <TableCell className="pl-4">
+          {!nested && selectable(r) && <Checkbox checked={checked.has(k)} onCheckedChange={() => toggleOne(k)} aria-label={`Select ${r.name}`} />}
+        </TableCell>
+        <TableCell className={cn(nested && "pl-8")}>
+          <div className="flex items-center gap-2">
+            <span className="flex flex-col">
+              <span className="font-semibold">
+                {nested ? r.variantName : r.name}
+                {hasVariants && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{r.variants!.length} variants</span>}
+              </span>
+              <span className="text-xs text-muted-foreground">{r.sku || "—"}</span>
+            </span>
+            {hasVariants && (
+              <Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={() => setExpanded((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n })}>
+                {open ? "Hide" : "Show"}
+              </Button>
             )}
           </div>
-        )}
+        </TableCell>
+        {shownLocations.map((l) => (
+          <TableCell key={l.id} className="text-right tabular-nums">
+            {r.locations.find((x) => x.locationId === l.id)?.quantity ?? 0}
+          </TableCell>
+        ))}
+        <TableCell className="text-right font-bold tabular-nums">{r.onHand}</TableCell>
+        <TableCell className="text-right tabular-nums text-muted-foreground">{r.reserved}</TableCell>
+        <TableCell className="text-right font-semibold tabular-nums">{r.available}</TableCell>
+        <TableCell>
+          <StatusBadge status={r.health} label={h.label} variant={h.variant} />
+          <div className="mt-0.5 text-xs text-muted-foreground">Reorder at {r.reorderPoint}</div>
+        </TableCell>
+        <TableCell className="text-right tabular-nums">{formatCurrency(r.value)}</TableCell>
+        <TableCell className="pr-4">
+          <div className="flex justify-end gap-1">
+            {!hasVariants && (
+              <WithTooltip content="Adjust stock">
+                <Button type="button" variant="outline" size="icon" aria-label={`Adjust ${r.name}`} onClick={() => openAdjust(r)}><Pencil className="size-4" /></Button>
+              </WithTooltip>
+            )}
+            <WithTooltip content="Transfer stock">
+              <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/transfer" aria-label="Transfer"><ArrowLeftRight className="size-4" /></Link></Button>
+            </WithTooltip>
+            <WithTooltip content="Stock history">
+              <Button asChild variant="outline" size="icon"><Link href="/dashboard/inventory/adjustment" aria-label="Stock history"><ClipboardList className="size-4" /></Link></Button>
+            </WithTooltip>
+          </div>
+        </TableCell>
+      </TableRow>
+    )
+  }
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase w-12">
-                  <Checkbox
-                    checked={allOnPageSelected}
-                    onCheckedChange={(checked) => checked ? handleSelectAll() : handleDeselectAll()}
-                  />
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Product</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">SKU</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Total Stock</th>
-                {warehouses.map(w =>
-                  (selectedWarehouse === "all" || selectedWarehouse === String(w.id)) && (
-                    <th key={w.id} className="text-center py-3 px-4 text-xs font-semibold text-emerald-700 uppercase bg-emerald-50">
-                      {w.name}
-                    </th>
-                  )
-                )}
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                Array.from({ length: itemsPerPage }).map((_, i) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-4 mx-auto" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-12 mx-auto" /></td>
-                    {warehouses.map(w =>
-                      (selectedWarehouse === "all" || selectedWarehouse === String(w.id)) && (
-                        <td key={w.id} className="py-3 px-4"><Skeleton className="h-4 w-8 mx-auto" /></td>
-                      )
-                    )}
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-8 mx-auto" /></td>
-                  </tr>
-                ))
-              ) : currentRows.map(item => {
-                const key = rowKey(item)
-                return (
-                  <tr key={key} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4 text-center">
-                      <Checkbox
-                        checked={selectedRows.has(key)}
-                        onCheckedChange={() => handleSelectRow(key)}
-                      />
-                    </td>
-                    <td className="py-3 px-4">
-                      {item.variantName ? (
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-900">{item.productName}</span>
-                          <span className="text-xs text-gray-500">{item.variantName}</span>
-                        </div>
-                      ) : (
-                        <span className="font-medium text-gray-900">{item.productName}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{item.sku}</td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className={`font-bold ${item.reorderPoint && item.stock <= item.reorderPoint ? "text-red-600" : "text-gray-900"}`}>
-                          {item.stock}
-                        </span>
-                        {item.reorderPoint && item.stock <= item.reorderPoint ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
-                            <AlertTriangle className="w-3 h-3" />
-                            Low
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    {warehouses.map(w => {
-                      if (selectedWarehouse !== "all" && selectedWarehouse !== String(w.id)) return null
-                      const loc = item.inventory?.find(inv => inv.locationId === w.id)
-                      return (
-                        <td key={w.id} className="py-3 px-4 text-center text-sm text-gray-600">
-                          {loc ? loc.quantity : 0}
-                        </td>
-                      )
-                    })}
-                    <td className="py-3 px-4 text-center">
-                      <Link href={`/dashboard/products/${item.productId}/barcode`}>
-                        <Button variant="ghost" size="sm" title="Print Barcode">
-                          <QrCode className="w-4 h-4 text-gray-600 hover:text-emerald-600" />
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+  return (
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Stock overview"
+        description="How much you have, where it is, and what needs attention."
+        actions={<>
+          <Button type="button" variant="outline" onClick={handleImport}><Upload className="size-4" aria-hidden /> Import CSV</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+          <Button asChild variant="outline"><Link href="/dashboard/inventory/adjustment">Adjust stock</Link></Button>
+          <Button asChild><Link href="/dashboard/inventory/transfer">Transfer stock</Link></Button>
+        </>}
+      />
+
+      {loading || !s ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px]" />)}
+        </div>
+      ) : (
+        <StatsCards stats={[
+          { label: "SKUs tracked", value: s.skus, icon: <Boxes className="size-4" />, color: "blue", hint: `${s.categories} categories` },
+          { label: "Units on hand", value: s.units, icon: <BarChart3 className="size-4" />, color: "purple", hint: `${s.reserved} reserved for orders` },
+          { label: "Stock value", value: formatCurrency(s.stockValue), icon: <Banknote className="size-4" />, color: "green", hint: "At cost price" },
+          { label: "Published", value: s.published, icon: <Eye className="size-4" />, color: "blue", hint: `${s.unpublished} unpublished` },
+          { label: "Low stock", value: s.low, icon: <AlertTriangle className="size-4" />, color: "yellow", hint: "At or below reorder level", onClick: () => changeTab("low"), active: tab === "low" },
+          { label: "Out of stock", value: s.out, icon: <X className="size-4" />, color: "red", hint: "Needs restocking", onClick: () => changeTab("out"), active: tab === "out" },
+        ]} />
+      )}
+
+      <Card className="gap-0 py-0">
+        <div className="px-4">
+          <StatusTabs
+            value={tab}
+            onChange={changeTab}
+            tabs={[
+              { value: "all", label: "All", count: data?.counts.all },
+              { value: "attention", label: "Needs attention", count: data?.counts.attention },
+              { value: "ok", label: "Healthy", count: data?.counts.ok },
+              { value: "low", label: "Low", count: data?.counts.low },
+              { value: "out", label: "Out of stock", count: data?.counts.out },
+              { value: "over", label: "Overstock", count: data?.counts.over },
+            ]}
+          />
         </div>
 
-        {!isLoading && items.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No inventory found</p>
+        <Toolbar className="p-4">
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Label htmlFor="stock-search" className="sr-only">Search stock</Label>
+            <Input id="stock-search" type="search" placeholder="Search name, SKU or scan barcode…" value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="pl-9" />
           </div>
-        )}
-      </Card>
+          <Select value={loc} onValueChange={(v) => { setLoc(v); setPage(1) }}>
+            <SelectTrigger aria-label="Warehouse" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Warehouse: All</SelectItem>
+              {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={cat} onValueChange={(v) => { setCat(v); setPage(1) }}>
+            <SelectTrigger aria-label="Category" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Category: All</SelectItem>
+              {(data?.categories ?? []).map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Toolbar>
 
-      {!isLoading && (
-        <PaginationControl
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={(val) => { setItemsPerPage(val); setCurrentPage(1) }}
-          totalItems={totalItems}
-        />
-      )}
+        <BulkBar count={selectedRows.length} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/inventory/transfer">Transfer</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/inventory/adjustment">Adjust</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href={reorderHref}>Reorder</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/dashboard/products/print-barcode">Print labels</Link></Button>
+        </BulkBar>
+
+        {adj && (
+          <Card className="mx-4 mb-3 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto]">
+            <div>
+              <SectionTitle as="p">Quick adjust</SectionTitle>
+              <div className="font-semibold">{adj.name}{adj.variantName ? ` · ${adj.variantName}` : ""}</div>
+              <div className="text-xs text-muted-foreground">Current: {currentQty}</div>
+            </div>
+            <FormField label="Location" htmlFor="quick-adj-loc">
+              <Select value={adjLoc || undefined} onValueChange={onAdjLoc}>
+                <SelectTrigger id="quick-adj-loc" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="New quantity" htmlFor="quick-adj-qty">
+              <Input id="quick-adj-qty" type="number" min={0} step={1} inputMode="numeric" className="w-full" value={adjQty} placeholder={String(currentQty)}
+                onChange={(e) => { setAdjQty(e.target.value); setAdjErr("") }} />
+            </FormField>
+            <FormField label="Reason" htmlFor="quick-adj-reason">
+              <Select value={adjReason} onValueChange={setAdjReason}>
+                <SelectTrigger id="quick-adj-reason" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {QUICK_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <div className="flex items-end gap-2">
+              <Button type="button" disabled={adjBusy} onClick={applyAdjust}>Apply</Button>
+              <Button type="button" variant="outline" onClick={() => setAdj(null)}>Cancel</Button>
+            </div>
+            {adjErr && <p role="alert" className="text-sm font-medium text-destructive sm:col-span-2 lg:col-span-5">{adjErr}</p>}
+          </Card>
+        )}
+
+        <div>
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></TableHead>
+                <TableHead scope="col">Product</TableHead>
+                {shownLocations.map((l) => <TableHead key={l.id} scope="col" className="text-right">{l.name}</TableHead>)}
+                <TableHead scope="col" className="text-right">On hand</TableHead>
+                <TableHead scope="col" className="text-right">Reserved</TableHead>
+                <TableHead scope="col" className="text-right">Available</TableHead>
+                <TableHead scope="col">Health</TableHead>
+                <TableHead scope="col" className="text-right">Value</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={9 + shownLocations.length} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>)
+              ) : pageRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9 + shownLocations.length}>
+                    <EmptyState
+                      icon={Boxes}
+                      title="No stock found"
+                      description={search || tab !== "all" || loc !== "all" || cat !== "all" ? "Try clearing the search or filters." : "Add products to start tracking stock."}
+                      className="p-4 md:p-6"
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                pageRows.flatMap((r) => [renderRow(r), ...(expanded.has(key(r)) ? (r.variants ?? []).map((v) => renderRow(v, true)) : [])])
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {!loading && rows.length > 0 && (
+          <>
+          <Separator />
+          <div className="p-4 pt-3">
+            <PaginationControl
+              currentPage={page}
+              totalPages={Math.max(1, Math.ceil(rows.length / perPage))}
+              itemsPerPage={perPage}
+              totalItems={rows.length}
+              onPageChange={setPage}
+              onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+            />
+          </div>
+          </>
+        )}
+        <Separator />
+        <div className="px-4 py-3 text-xs text-muted-foreground">
+          {rows.length} of {data?.counts.all ?? 0} SKUs across {locations.length} location{locations.length === 1 ? "" : "s"} · Reserved = held by unshipped orders
+        </div>
+      </Card>
     </div>
   )
 }

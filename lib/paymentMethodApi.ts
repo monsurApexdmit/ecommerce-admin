@@ -52,8 +52,8 @@ export interface PaymentMethodPayload {
   description?: string
   icon?: string
   gateway_type?: PaymentGatewayType
-  isActive?: boolean
-  sortOrder?: number
+  is_active?: boolean
+  sort_order?: number
 }
 
 export const paymentMethodApi = {

@@ -1,335 +1,316 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { Plus, Edit, Trash2, Search } from "lucide-react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Plus } from "lucide-react"
+import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
+import { staffRoleApi, staffUiApi, type MatrixCell, type MatrixModuleGroup, type RoleMatrix, type StaffRoleResponse } from "@/lib/staffApi"
+import { useModuleGuard } from "@/hooks/use-module-guard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionTitle } from "@/components/common/SectionTitle"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useStaff, PERMISSION_MODULES, type Role, type Module, type Permission } from "@/contexts/staff-context"
-import { staffRoleApi } from "@/lib/staffApi"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
-import { useModuleGuard } from "@/hooks/use-module-guard"
+import { Switch } from "@/components/ui/switch"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-interface BackendPermission {
-    id: number
-    name: string
+const ACTIONS = ["View", "Create", "Edit", "Delete"] as const
+type Act = (typeof ACTIONS)[number]
+const KEY: Record<Act, keyof MatrixCell> = { View: "view", Create: "create", Edit: "edit", Delete: "delete" }
+const SENS: { key: keyof RoleMatrix["sensitive"]; label: string; sub: string }[] = [
+  { key: "cost", label: "See cost price & profit", sub: "Otherwise only selling prices are shown" },
+  { key: "discount", label: "Give discounts", sub: "Up to 10% without owner approval" },
+  { key: "refund", label: "Approve refunds", sub: "Return money to customers" },
+  { key: "void", label: "Void a completed sale", sub: "Logged and shown to the owner" },
+  { key: "export", label: "Export data", sub: "Download customer and sales lists" },
+]
+const NO_SENS: RoleMatrix["sensitive"] = { cost: false, discount: false, refund: false, export: false, void: false }
+const emptyCell = (): MatrixCell => ({ view: false, create: false, edit: false, delete: false })
+
+const grant = (mods: string[], acts: Act[]): Record<string, MatrixCell> =>
+  Object.fromEntries(mods.map((m) => [m, Object.fromEntries(acts.map((a) => [KEY[a], true])) as unknown as MatrixCell]))
+const merge = (...os: Record<string, Partial<MatrixCell>>[]) => {
+  const r: Record<string, MatrixCell> = {}
+  os.forEach((o) => Object.keys(o).forEach((m) => { r[m] = { ...(r[m] ?? emptyCell()), ...o[m] } }))
+  return r
 }
+// Same starting points as the design: a template only pre-fills the grid, nothing is saved until Save role.
+const TEMPLATES: { id: string; label: string; build: (mods: string[]) => Record<string, MatrixCell>; sens: RoleMatrix["sensitive"] }[] = [
+  { id: "sales", label: "Sales manager", sens: { cost: false, discount: true, refund: true, export: false, void: false },
+    build: () => merge(grant(["POS", "Sales", "Orders", "Shipments", "Customers"], ["View", "Create", "Edit"]), grant(["Products", "Coupons", "Stock", "Returns"], ["View"]), grant(["Returns"], ["Create"]), grant(["Dues", "Reports"], ["View"])) },
+  { id: "cashier", label: "Cashier", sens: NO_SENS,
+    build: () => merge(grant(["POS"], ["View", "Create"]), grant(["Customers"], ["View", "Create"]), grant(["Products"], ["View"])) },
+  { id: "store", label: "Store keeper", sens: { cost: true, discount: false, refund: false, export: true, void: false },
+    build: () => merge(grant(["Stock", "Suppliers & POs", "Returns"], ["View", "Create", "Edit"]), grant(["Products", "Categories & brands", "Print barcode"], ["View", "Create", "Edit"]), grant(["Orders", "Shipments"], ["View"])) },
+  { id: "tailor", label: "Tailor manager", sens: { cost: false, discount: true, refund: false, export: false, void: false },
+    build: () => merge(grant(["Tailor shop"], ["View", "Create", "Edit"]), grant(["Customers"], ["View", "Create"]), grant(["POS"], ["View", "Create"])) },
+]
+
 
 export default function RolesPage() {
-    const { canRead } = useSaasAuth()
-    const { roles, rolesLoading, addRole, updateRole, deleteRole } = useStaff()
-    const [searchQuery, setSearchQuery] = useState("")
-    const [isDialogOpen, setIsDialogOpen] = useState(false)
-    const [editingRole, setEditingRole] = useState<Role | null>(null)
+  const blocked = useModuleGuard("Staff")
 
-    // Form State
-    const [roleName, setRoleName] = useState("")
-    const [permissions, setPermissions] = useState<Permission[]>([])
-    const [backendPermissions, setBackendPermissions] = useState<BackendPermission[]>([])
-    const [loadingPermissions, setLoadingPermissions] = useState(false)
+  const [roles, setRoles] = useState<StaffRoleResponse[]>([])
+  const [groups, setGroups] = useState<MatrixModuleGroup[]>([])
+  const [loading, setLoading] = useState(true)
+  const [rq, setRq] = useState("")
+  const [curId, setCurId] = useState<number | null>(null)
+  const [loadingRole, setLoadingRole] = useState(false)
 
-    // Load backend permissions when component mounts
-    useEffect(() => {
-        const loadPermissions = async () => {
-            try {
-                setLoadingPermissions(true)
-                const perms = await staffRoleApi.getPermissions()
-                setBackendPermissions(perms || [])
-            } catch (err) {
-                console.error('Failed to load permissions:', err)
-            } finally {
-                setLoadingPermissions(false)
-            }
-        }
-        loadPermissions()
-    }, [])
+  const [name, setName] = useState("")
+  const [desc, setDesc] = useState("")
+  const [matrix, setMatrix] = useState<Record<string, MatrixCell>>({})
+  const [sens, setSens] = useState<RoleMatrix["sensitive"]>(NO_SENS)
+  const [locked, setLocked] = useState(false)
+  const [memberCount, setMemberCount] = useState(0)
+  const [isNew, setIsNew] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-    const blocked = useModuleGuard('Role & Permission')
+  const touched = useRef(false)
+  const savedRef = useRef<{ matrix: Record<string, MatrixCell>; sens: RoleMatrix["sensitive"] }>({ matrix: {}, sens: NO_SENS })
+  const [autoSaving, setAutoSaving] = useState(false)
+
+  const modules = useMemo(() => groups.flatMap((g) => g.modules.map((m) => m.name)), [groups])
+
+  const loadRoles = useCallback(async () => {
+    try {
+      const res = await staffRoleApi.getAll({ limit: 200 } as any)
+      setRoles(res.data ?? [])
+      return res.data ?? []
+    } catch { setRoles([]); return [] } finally { setLoading(false) }
+  }, [])
+
+  const openRole = useCallback(async (id: number) => {
+    setCurId(id); setIsNew(false); setLoadingRole(true)
+    try {
+      const m = await staffUiApi.getRoleMatrix(id)
+      setName(m.name); setDesc(m.description ?? ""); setMatrix(m.matrix ?? {}); setSens({ ...NO_SENS, ...m.sensitive }); setLocked(m.locked); setMemberCount(m.memberCount); setDirty(false); touched.current = false; savedRef.current = { matrix: m.matrix ?? {}, sens: { ...NO_SENS, ...m.sensitive } }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Could not load the role")
+    } finally { setLoadingRole(false) }
+  }, [])
+
+  useEffect(() => {
+    (async () => {
+      try { setGroups(await staffUiApi.getMatrixModules()) } catch { /* grid stays empty */ }
+      const list = await loadRoles()
+      const first = list.find((r) => r.name.toLowerCase() !== "owner") ?? list[0]
+      if (first) openRole(first.id)
+    })()
+  }, [loadRoles, openRole])
+
+  const cell = (m: string): MatrixCell => (locked ? { view: true, create: true, edit: true, delete: true } : matrix[m] ?? emptyCell())
+  const edit = (fn: () => void) => { if (locked) { toast.error("The Owner role can’t be changed."); return }; touched.current = true; fn(); if (isNew) setDirty(true) }
+
+  // Existing roles save every toggle immediately; a failed save rolls the grid back to the last saved state.
+  useEffect(() => {
+    if (!touched.current || isNew || !curId || locked) return
+    const t = setTimeout(async () => {
+      touched.current = false
+      setAutoSaving(true)
+      try {
+        await staffUiApi.saveRoleMatrix(curId, { name: name.trim() || undefined, description: desc.trim(), matrix, sensitive: sens })
+        savedRef.current = { matrix, sens }
+      } catch (e: any) {
+        setMatrix(savedRef.current.matrix); setSens(savedRef.current.sens)
+        toast.error(e?.response?.data?.message || "Could not save that change — reverted")
+      } finally { setAutoSaving(false) }
+    }, 250)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matrix, sens])
+
+  const flipCell = (m: string, a: Act) => edit(() => setMatrix((cur) => {
+    const c = { ...(cur[m] ?? emptyCell()) }
+    const k = KEY[a]
+    c[k] = !c[k]
+    if (a === "View" && !c.view) { c.create = false; c.edit = false; c.delete = false }
+    if (a !== "View" && c[k]) c.view = true
+    return { ...cur, [m]: c }
+  }))
+  const flipFull = (m: string) => edit(() => setMatrix((cur) => {
+    const c = cell(m)
+    const all = c.view && c.create && c.edit && c.delete
+    return { ...cur, [m]: all ? emptyCell() : { view: true, create: true, edit: true, delete: true } }
+  }))
+  const flipColumn = (a: Act) => edit(() => setMatrix((cur) => {
+    const on = modules.every((m) => (cur[m] ?? emptyCell())[KEY[a]])
+    const next: Record<string, MatrixCell> = {}
+    modules.forEach((m) => {
+      const c = { ...(cur[m] ?? emptyCell()) }
+      c[KEY[a]] = !on
+      if (a === "View" && on) { c.create = false; c.edit = false; c.delete = false }
+      if (a !== "View" && !on) c.view = true
+      next[m] = c
+    })
+    return next
+  }))
+
+  const startNew = () => { setIsNew(true); setCurId(null); setName(""); setDesc("Custom role"); setMatrix({}); setSens(NO_SENS); setLocked(false); setMemberCount(0); setDirty(true) }
+  const applyTemplate = (t: (typeof TEMPLATES)[number]) => { if (locked) return; touched.current = true; setMatrix(t.build(modules)); setSens(t.sens); if (isNew) setDirty(true) }
+
+  const save = async () => {
+    if (!name.trim()) { toast.error("Give the role a name."); return }
+    setSaving(true)
+    try {
+      if (isNew) {
+        const created = await staffUiApi.createRole({ name: name.trim(), description: desc.trim() || undefined, matrix, sensitive: sens })
+        toast.success("Role created")
+        await loadRoles(); await openRole(created.id)
+      } else if (curId) {
+        await staffUiApi.saveRoleMatrix(curId, { name: name.trim(), description: desc.trim(), matrix, sensitive: sens })
+        toast.success("Role saved")
+        await loadRoles(); setDirty(false); savedRef.current = { matrix, sens }
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Could not save the role")
+    } finally { setSaving(false) }
+  }
+
+  const duplicate = async () => {
+    if (!curId) return
+    try { const r = await staffUiApi.duplicateRole(curId); toast.success(`Created “${r.name}”`); await loadRoles(); await openRole(r.id) }
+    catch (e: any) { toast.error(e?.response?.data?.message || "Could not duplicate") }
+  }
+  const remove = async () => {
+    if (!curId) return
+    if (!window.confirm(`Delete the role “${name}”?`)) return
+    try {
+      await staffRoleApi.delete(curId)
+      toast.success("Role deleted")
+      const list = await loadRoles()
+      const next = list[0]
+      if (next) openRole(next.id); else { setCurId(null); setName("") }
+    } catch (e: any) { toast.error(e?.response?.data?.message || "Could not delete the role") }
+  }
+
+  const visibleRoles = roles.filter((r) => !rq.trim() || r.name.toLowerCase().includes(rq.trim().toLowerCase()))
+  const areaCount = modules.filter((m) => { const c = cell(m); return c.view || c.create || c.edit || c.delete }).length
+  const sensCount = SENS.filter((s) => (locked ? true : !!sens[s.key])).length
+
   if (blocked) return blocked
 
-    const filteredRoles = roles.filter((role) =>
-        role.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Roles & permissions"
+        description="Decide who can see and change what. Ticking Create, Edit or Delete also turns on View."
+        actions={<Button type="button" onClick={startNew}><Plus className="size-4" aria-hidden /> Add role</Button>}
+      />
 
-    const buildPermissionRows = (rolePermissions: Permission[] = []) => {
-        const permissionMap = new Map(rolePermissions.map((permission) => [permission.name, permission]))
-
-        const backendSorted = [...backendPermissions].sort((a, b) => {
-            const indexA = PERMISSION_MODULES.indexOf(a.name as Module)
-            const indexB = PERMISSION_MODULES.indexOf(b.name as Module)
-            const normalizedA = indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA
-            const normalizedB = indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB
-            if (normalizedA !== normalizedB) return normalizedA - normalizedB
-            return a.name.localeCompare(b.name)
-        })
-
-        return backendSorted.map((backendPerm) => {
-            const existing = permissionMap.get(backendPerm.name as Module)
-            return {
-                name: backendPerm.name as Module,
-                read: existing?.read || false,
-                write: existing?.write || false,
-                delete: existing?.delete || false,
-            }
-        })
-    }
-
-    const handleOpenDialog = (role?: Role) => {
-        if (role) {
-            setEditingRole(role)
-            setRoleName(role.name)
-            setPermissions(buildPermissionRows(role.permissions))
-        } else {
-            setEditingRole(null)
-            setRoleName("")
-            setPermissions(buildPermissionRows())
-        }
-        setIsDialogOpen(true)
-    }
-
-    const handlePermissionChange = (moduleName: Module, type: "read" | "write" | "delete", checked: boolean) => {
-        setPermissions(prev => prev.map(p => {
-            if (p.name === moduleName) {
-                return { ...p, [type]: checked }
-            }
-            return p
-        }))
-    }
-
-    const handleSelectAll = (type: "read" | "write" | "delete") => {
-        const allChecked = permissions.every(p => p[type])
-        setPermissions(prev => prev.map(p => ({ ...p, [type]: !allChecked })))
-    }
-
-    const handleSelectAllForModule = (moduleName: Module) => {
-        const module = permissions.find(p => p.name === moduleName)
-        if (module) {
-            const allChecked = module.read && module.write && module.delete
-            setPermissions(prev => prev.map(p => {
-                if (p.name === moduleName) {
-                    return { ...p, read: !allChecked, write: !allChecked, delete: !allChecked }
-                }
-                return p
-            }))
-        }
-    }
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-
-        if (editingRole) {
-            await updateRole({
-                ...editingRole,
-                name: roleName,
-                permissions,
-            })
-        } else {
-            await addRole({
-                name: roleName,
-                permissions,
-            })
-        }
-        setIsDialogOpen(false)
-    }
-
-    const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this role?")) {
-            await deleteRole(id)
-        }
-    }
-
-    return (
-        <div>
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Role & Permission</h1>
-                <Button onClick={() => handleOpenDialog()} className="bg-emerald-500 hover:bg-emerald-600">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Role
+      <div className="flex flex-col items-start gap-5 xl:flex-row">
+        <Card className="w-full shrink-0 gap-2 p-3 xl:w-[300px]">
+          <Input type="search" aria-label="Search roles" value={rq} onChange={(e) => setRq(e.target.value)} placeholder="Search by role name" />
+          {loading ? [1, 2, 3].map((i) => <Skeleton key={i} className="h-14" />) : visibleRoles.length === 0 ? <EmptyState title="No roles found" className="p-4 md:p-6" /> :
+            visibleRoles.map((r) => {
+              const isOwner = r.name.toLowerCase() === "owner" || r.locked
+              return (
+                <Button key={r.id} type="button" variant={curId === r.id && !isNew ? "secondary" : "ghost"} aria-pressed={curId === r.id && !isNew} onClick={() => openRole(r.id)}
+                  className="h-auto w-full justify-between gap-3 whitespace-normal text-left">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-sm font-semibold">{r.name}{isOwner && <Badge variant="outline" className="ml-1.5">Locked</Badge>}</span>
+                    <span className="truncate text-xs text-muted-foreground">{r.description || "Custom role"}</span>
+                  </span>
+                  <Badge variant="secondary" className="tabular-nums">{r.memberCount ?? 0}</Badge>
                 </Button>
-            </div>
+              )
+            })}
+          <Button type="button" variant="outline" onClick={startNew} className="mt-1">+ New role</Button>
+        </Card>
 
-            {/* Search */}
-            <div className="bg-white rounded-lg border mb-6 p-4">
-                <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <Input
-                        type="text"
-                        placeholder="Search by role name"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10"
-                    />
+        <Card className="w-full min-w-0 flex-1 p-5">
+          {!curId && !isNew ? <EmptyState title="Pick a role, or add a new one." /> : loadingRole ? <Skeleton className="h-96" /> : (
+            <div className="flex flex-col gap-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField label="Role name" htmlFor="role-name"><Input id="role-name" value={name} disabled={locked} onChange={(e) => { setName(e.target.value); setDirty(true) }} /></FormField>
+                <FormField label="Start from a template">
+                  <div role="group" aria-label="Templates" className="flex flex-wrap gap-1.5">
+                    {TEMPLATES.map((t) => <Button key={t.id} type="button" variant="outline" size="sm" disabled={locked} onClick={() => applyTemplate(t)}>{t.label}</Button>)}
+                  </div>
+                </FormField>
+              </div>
+              {locked && <Alert><AlertDescription>The Owner role always has full access and can’t be changed.</AlertDescription></Alert>}
+
+              <div className="overflow-x-auto rounded-md border">
+                <Table className="min-w-[560px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="px-3">Area</TableHead>
+                      {ACTIONS.map((a) => (
+                        <TableHead key={a} className="px-3 text-center">
+                          <WithTooltip content={`Toggle ${a} for every area`}>
+                            <Button type="button" variant="ghost" size="sm" aria-pressed={modules.length > 0 && modules.every((m) => cell(m)[KEY[a]])} onClick={() => flipColumn(a)}>{a}</Button>
+                          </WithTooltip>
+                        </TableHead>
+                      ))}
+                      <TableHead className="px-3 text-center">Full</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groups.map((g) => (
+                      <Fragment key={g.group}>
+                        <TableRow><TableCell colSpan={6} className="bg-muted/50 px-3 py-1.5"><SectionTitle as="p">{g.group}</SectionTitle></TableCell></TableRow>
+                        {g.modules.map((m) => {
+                          const c = cell(m.name)
+                          const full = c.view && c.create && c.edit && c.delete
+                          return (
+                            <TableRow key={m.name}>
+                              <TableCell className="px-3"><div className="font-semibold">{m.name}</div><div className="text-xs text-muted-foreground">{m.summary}</div></TableCell>
+                              {ACTIONS.map((a) => (
+                                <TableCell key={a} className="px-3 text-center">
+                                  <Checkbox checked={c[KEY[a]]} aria-label={`${a} ${m.name}`} onCheckedChange={() => flipCell(m.name, a)} />
+                                </TableCell>
+                              ))}
+                              <TableCell className="px-3 text-center">
+                                <Switch checked={full} aria-label={`Full access to ${m.name}`} onCheckedChange={() => flipFull(m.name)} />
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <SectionTitle>Sensitive actions</SectionTitle>
+                {SENS.map((s) => {
+                  const on = locked ? true : !!sens[s.key]
+                  return (
+                    <Item key={s.key} variant="outline" size="sm" asChild>
+                      <Label htmlFor={`sens-${s.key}`}>
+                        <ItemContent><ItemTitle>{s.label}</ItemTitle><ItemDescription>{s.sub}</ItemDescription></ItemContent>
+                        <ItemActions><Switch id={`sens-${s.key}`} checked={on} onCheckedChange={() => edit(() => setSens((cur) => ({ ...cur, [s.key]: !cur[s.key] })))} /></ItemActions>
+                      </Label>
+                    </Item>
+                  )
+                })}
+              </div>
+
+              <Separator />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Can open {areaCount} of {modules.length} areas · {sensCount} sensitive action{sensCount === 1 ? "" : "s"} allowed · {memberCount} member{memberCount === 1 ? "" : "s"}{autoSaving ? " · saving…" : dirty ? " · unsaved name/description" : isNew ? "" : " · changes save automatically"}</span>
+                <div className="flex gap-2">
+                  {!isNew && <Button type="button" variant="destructive" disabled={locked} onClick={remove}>Delete</Button>}
+                  {!isNew && <Button type="button" variant="outline" onClick={duplicate}>Duplicate</Button>}
+                  <Button type="button" disabled={saving || locked} onClick={save}>{saving ? "Saving…" : "Save role"}</Button>
                 </div>
+              </div>
             </div>
-
-            {/* Roles Table */}
-            <div className="bg-white rounded-lg border overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-gray-50 border-b">
-                            <tr>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Role Name</th>
-                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {rolesLoading
-                                ? Array.from({ length: 3 }).map((_, index) => (
-                                    <tr key={index} className="hover:bg-gray-50">
-                                        <td className="py-3 px-4">
-                                            <Skeleton className="h-4 w-32" />
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-2">
-                                                <Skeleton className="h-6 w-6 rounded" />
-                                                <Skeleton className="h-6 w-6 rounded" />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                                : filteredRoles.map((role) => (
-                                    <tr key={role.id} className="hover:bg-gray-50">
-                                        <td className="py-3 px-4 font-medium text-gray-900">{role.name}</td>
-                                        <td className="py-3 px-4">
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => handleOpenDialog(role)} className="p-1 hover:bg-gray-100 rounded">
-                                                    <Edit className="w-4 h-4 text-gray-600" />
-                                                </button>
-                                                <button onClick={() => handleDelete(role.id)} className="p-1 hover:bg-gray-100 rounded">
-                                                    <Trash2 className="w-4 h-4 text-red-600" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            {!rolesLoading && filteredRoles.length === 0 && (
-                                <tr>
-                                    <td colSpan={2} className="py-8 text-center text-gray-500">No roles found</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Add/Edit Role Dialog */}
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-4xl sm:max-w-4xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>{editingRole ? "Edit Role" : "Add Role"}</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <Label>Role Name</Label>
-                            <Input
-                                value={roleName}
-                                onChange={(e) => setRoleName(e.target.value)}
-                                required
-                                placeholder="e.g. Sales Manager"
-                                className="mt-1"
-                            />
-                        </div>
-
-                        <div>
-                            <h3 className="font-semibold mb-3">Permissions</h3>
-                            {loadingPermissions ? (
-                                <div className="space-y-2">
-                                    <Skeleton className="h-10 w-full" />
-                                    <Skeleton className="h-10 w-full" />
-                                    <Skeleton className="h-10 w-full" />
-                                </div>
-                            ) : (
-                                <div className="border rounded-lg overflow-hidden">
-                                    <table className="w-full">
-                                        <thead className="bg-gray-50 border-b">
-                                            <tr>
-                                                <th className="text-left py-2 px-4 text-sm font-medium text-gray-700">Module</th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleSelectAll("read")}
-                                                        className="px-2 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold"
-                                                    >
-                                                        Read
-                                                    </button>
-                                                </th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleSelectAll("write")}
-                                                        className="px-2 py-1 rounded text-xs bg-green-100 hover:bg-green-200 text-green-700 font-semibold"
-                                                    >
-                                                        Write
-                                                    </button>
-                                                </th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleSelectAll("delete")}
-                                                        className="px-2 py-1 rounded text-xs bg-red-100 hover:bg-red-200 text-red-700 font-semibold"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </th>
-                                                <th className="text-center py-2 px-4 text-sm font-medium text-gray-700">All</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {permissions.map((permission) => (
-                                                <tr key={permission.name} className="hover:bg-gray-50">
-                                                    <td className="py-2 px-4 text-sm font-medium text-gray-900">{permission.name}</td>
-                                                    <td className="py-2 px-4 text-center">
-                                                        <Checkbox
-                                                            checked={permission.read}
-                                                            onCheckedChange={(checked) => handlePermissionChange(permission.name, "read", checked as boolean)}
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 px-4 text-center">
-                                                        <Checkbox
-                                                            checked={permission.write}
-                                                            onCheckedChange={(checked) => handlePermissionChange(permission.name, "write", checked as boolean)}
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 px-4 text-center">
-                                                        <Checkbox
-                                                            checked={permission.delete}
-                                                            onCheckedChange={(checked) => handlePermissionChange(permission.name, "delete", checked as boolean)}
-                                                        />
-                                                    </td>
-                                                    <td className="py-2 px-4 text-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleSelectAllForModule(permission.name)}
-                                                            className="px-2 py-1 rounded text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold"
-                                                        >
-                                                            All
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" className="bg-emerald-500 hover:bg-emerald-600">
-                                {editingRole ? "Update Role" : "Add Role"}
-                            </Button>
-                        </div>
-                    </form>
-                </DialogContent>
-            </Dialog>
-        </div>
-    )
+          )}
+        </Card>
+      </div>
+    </div>
+  )
 }

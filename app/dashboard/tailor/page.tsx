@@ -1,176 +1,230 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Scissors, ShoppingBag, Clock, CheckCircle, Truck, AlertTriangle, Users, TrendingUp, Plus } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { tailorApi, TailorDashboardStats, TailorOrder, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, PAYMENT_STATUS_COLORS } from "@/lib/tailorApi"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from "@/components/ui/item"
+import { Progress } from "@/components/ui/progress"
+import { EmptyState } from "@/components/common/EmptyState"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { StatTile } from "@/components/common/StatTile"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { PayBadge, UrgentBadge } from "@/components/tailor/order-ui"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { tailorApi, type TailorBoardOrder, type TailorDashboardData, type TailorPaymentStatus } from "@/lib/tailorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
-import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { KpiIcon } from "@/components/tailor/kpi-icon"
 
-function StatCard({ icon: Icon, label, value, color, href }: {
-  icon: React.ElementType; label: string; value: string | number; color: string; href?: string
-}) {
-  const inner = (
-    <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
-        <Icon className="w-6 h-6" />
-      </div>
-      <div>
-        <p className="text-2xl font-black text-gray-900">{value}</p>
-        <p className="text-sm text-gray-500">{label}</p>
-      </div>
-    </Card>
-  )
-  return href ? <Link href={href}>{inner}</Link> : inner
+const SUB_TONE: Record<string, string> = { muted: "text-muted-foreground", red: "text-destructive", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
+const STAGE_DOT: Record<string, string> = { new: "#7C8AA8", cutting: "#F59E0B", stitching: "#2449E8", trial: "#7C3AED", ready: "#0F766E" }
+const SWATCH: Record<string, string> = {
+  white: "#F4F1EA", "off-white": "#EDE6D6", beige: "#D9C7A4", cream: "#F2E8CF", black: "#1F2430", grey: "#9AA3B2", gray: "#9AA3B2", blue: "#3B5BA9", navy: "#1F2F5C",
+  red: "#B42318", maroon: "#7B1E2B", green: "#2E7D5B", yellow: "#E8C547", pink: "#E8A0B4", brown: "#7A5230", purple: "#6D3FA0", orange: "#E8833A",
 }
 
+const whenTxt = (d: number | null) => (d === null ? "No due date" : d < 0 ? `Overdue ${-d}d` : d === 0 ? "Due today" : d === 1 ? "Tomorrow" : `In ${d} days`)
+const whenCls = (d: number | null) => (d === null ? "text-muted-foreground" : d < 0 ? "text-destructive" : d <= 1 ? "text-dash-warn-fg" : "text-muted-foreground")
+const fmtDate = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+
 export default function TailorDashboardPage() {
-  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
-  const [stats, setStats] = useState<TailorDashboardStats | null>(null)
+  const blocked = useModuleGuard("TailorDashboard")
+  const [data, setData] = useState<TailorDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  if (!canRead("TailorDashboard")) return <AccessDenied />
-
-  useEffect(() => {
-    tailorApi.getDashboard()
-      .then(r => {
-        const d = r.data?.data ?? r.data
-        setStats({
-          todayOrders:      d.today_orders      ?? d.todayOrders      ?? 0,
-          pendingOrders:    d.pending_orders     ?? d.pendingOrders    ?? 0,
-          readyForDelivery: d.ready_for_delivery ?? d.readyForDelivery ?? 0,
-          deliveredOrders:  d.delivered_orders   ?? d.deliveredOrders  ?? 0,
-          totalDue:         parseFloat(d.total_due ?? d.totalDue ?? 0) || 0,
-          lowStockFabrics:  d.low_stock_fabrics  ?? d.lowStockFabrics  ?? 0,
-          activeDorjis:     d.active_dorjis      ?? d.activeDorjis     ?? 0,
-          recentOrders:     (d.recent_orders     ?? d.recentOrders     ?? []).map((o: any) => ({
-            id:            o.id,
-            orderNumber:   o.order_number   ?? o.orderNumber,
-            customer:      o.customer ? { name: o.customer.name, phone: o.customer.phone } : undefined,
-            totalAmount:   parseFloat(o.total_amount ?? o.totalAmount ?? 0) || 0,
-            paidAmount:    parseFloat(o.paid_amount  ?? o.paidAmount  ?? 0) || 0,
-            dueAmount:     parseFloat(o.due_amount   ?? o.dueAmount   ?? 0) || 0,
-            orderStatus:   o.order_status   ?? o.orderStatus,
-            paymentStatus: o.payment_status ?? o.paymentStatus,
-            orderDate:     o.order_date     ?? o.orderDate,
-            deliveryDate:  o.delivery_date  ?? o.deliveryDate,
-          })),
-        })
-      })
-      .catch(() => toast.error("Failed to load dashboard"))
-      .finally(() => setLoading(false))
+  const load = useCallback(async () => {
+    setLoading(true); setError("")
+    try { setData(await tailorApi.getDashboardData()) }
+    catch (e: any) { setError(e?.response?.data?.message || "Could not load the tailor dashboard.") }
+    finally { setLoading(false) }
   }, [])
+  useEffect(() => { load() }, [load])
+
+  if (blocked) return blocked
+
+  const fmtKpi = (k: TailorDashboardData["kpis"][number]) => (k.kind === "money" ? formatCurrency(Number(k.value) || 0) : k.kind === "int" ? String(Math.round(Number(k.value) || 0)) : String(k.value))
+  // Server sub-lines embed raw numbers for money ("1,000.00 collected"); keep as provided.
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-            <Scissors className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-gray-900">Tailor Shop</h1>
-            <p className="text-sm text-gray-500">Dashboard overview</p>
-          </div>
-        </div>
-        <Link href="/dashboard/tailor/orders/new">
-          <Button className="bg-purple-600 hover:bg-purple-700 gap-2">
-            <Plus className="w-4 h-4" /> New Order
-          </Button>
-        </Link>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Tailor shop"
+        description="Today’s work, who is doing it, and what is due."
+        actions={<>
+          <Button asChild variant="outline"><Link href="/dashboard/tailor/measurements">Measurements</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/tailor/fabrics">Fabrics</Link></Button>
+          <Button asChild><Link href="/dashboard/tailor/orders/new">+ New tailor order</Link></Button>
+        </>}
+      />
 
-      {/* Stat Cards */}
-      {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={ShoppingBag}    label="Today's Orders"     value={stats?.todayOrders ?? 0}      color="bg-blue-100 text-blue-600"    href="/dashboard/tailor/orders" />
-          <StatCard icon={Clock}          label="Pending Orders"     value={stats?.pendingOrders ?? 0}    color="bg-yellow-100 text-yellow-600" href="/dashboard/tailor/orders?order_status=pending" />
-          <StatCard icon={CheckCircle}    label="Ready for Delivery" value={stats?.readyForDelivery ?? 0} color="bg-green-100 text-green-600"   href="/dashboard/tailor/orders?order_status=ready" />
-          <StatCard icon={Truck}          label="Delivered"          value={stats?.deliveredOrders ?? 0}  color="bg-emerald-100 text-emerald-600" href="/dashboard/tailor/orders?order_status=delivered" />
-          <StatCard icon={TrendingUp}     label="Total Due"          value={formatCurrency(stats?.totalDue ?? 0)} color="bg-red-100 text-red-600" href="/dashboard/tailor/payments" />
-          <StatCard icon={AlertTriangle}  label="Low Stock Fabrics"  value={stats?.lowStockFabrics ?? 0}  color="bg-orange-100 text-orange-600" href="/dashboard/tailor/fabrics" />
-          <StatCard icon={Users}          label="Active Dorjis"      value={stats?.activeDorjis ?? 0}     color="bg-purple-100 text-purple-600" href="/dashboard/tailor/dorjis" />
-        </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <span>{error}</span><Button type="button" variant="link" onClick={load}>Retry</Button>
+          </AlertDescription>
+        </Alert>
       )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Fabric Inventory", href: "/dashboard/tailor/fabrics",      color: "border-blue-200 hover:bg-blue-50 text-blue-700" },
-          { label: "Measurements",     href: "/dashboard/tailor/measurements", color: "border-green-200 hover:bg-green-50 text-green-700" },
-          { label: "Dorji / Tailors",  href: "/dashboard/tailor/dorjis",       color: "border-purple-200 hover:bg-purple-50 text-purple-700" },
-          { label: "Reports",          href: "/dashboard/tailor/reports",      color: "border-gray-200 hover:bg-gray-50 text-gray-700" },
-        ].map(a => (
-          <Link key={a.href} href={a.href}>
-            <Card className={`p-4 text-center text-sm font-semibold border-2 cursor-pointer transition-colors ${a.color}`}>
-              {a.label}
-            </Card>
-          </Link>
-        ))}
-      </div>
+      {loading && !data ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-[110px]" />)}</div>
+          <Skeleton className="h-[260px]" />
+          <div className="grid gap-4 lg:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[220px]" />)}</div>
+        </>
+      ) : data ? (
+        <>
+          <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {data.kpis.map((k) => (
+              <StatTile
+                key={k.label}
+                label={k.label}
+                value={fmtKpi(k)}
+                icon={<KpiIcon label={k.label} />}
+                hint={k.sub ? <span className={SUB_TONE[k.subTone ?? "muted"]}>{k.sub}</span> : undefined}
+              />
+            ))}
+          </section>
 
-      {/* Recent Orders */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-gray-900">Recent Orders</h2>
-          <Link href="/dashboard/tailor/orders" className="text-sm text-purple-600 hover:underline">View all</Link>
-        </div>
-        {loading ? (
-          <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
-        ) : !stats?.recentOrders?.length ? (
-          <p className="text-sm text-gray-400 text-center py-8">No orders yet</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-wide">
-                  <th className="pb-2 pr-4">Order #</th>
-                  <th className="pb-2 pr-4">Customer</th>
-                  <th className="pb-2 pr-4">Total</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2">Payment</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {stats.recentOrders.map((order: TailorOrder) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="py-3 pr-4 font-mono text-xs">
-                      <Link href={`/dashboard/tailor/orders/${order.id}`} className="text-purple-600 hover:underline">
-                        {order.orderNumber}
-                      </Link>
-                    </td>
-                    <td className="py-3 pr-4 font-medium">{order.customer?.name}</td>
-                    <td className="py-3 pr-4">{formatCurrency(order.totalAmount)}</td>
-                    <td className="py-3 pr-4">
-                      <Badge className={`text-xs ${ORDER_STATUS_COLORS[order.orderStatus]}`}>
-                        {ORDER_STATUS_LABELS[order.orderStatus]}
-                      </Badge>
-                    </td>
-                    <td className="py-3">
-                      <Badge className={`text-xs ${PAYMENT_STATUS_COLORS[order.paymentStatus]}`}>
-                        {order.paymentStatus}
-                      </Badge>
-                    </td>
-                  </tr>
+          <SectionCard title="Production board" actions={<span className="text-sm text-muted-foreground">Open an order to move it along</span>}>
+            <div className="grid gap-3 overflow-x-auto" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+              {data.board.map((col) => (
+                <Card key={col.key} className="min-h-[160px] gap-2 bg-muted/50 p-2.5 shadow-none">
+                  <div className="flex items-center justify-between px-1 py-0.5">
+                    <span className="flex items-center gap-1.5 text-sm font-medium"><span className="size-2 rounded-full" style={{ background: STAGE_DOT[col.key] }} />{col.label}</span>
+                    <Badge variant="secondary">{col.count}</Badge>
+                  </div>
+                  {col.orders.map((o) => <BoardCard key={o.id} o={o} />)}
+                </Card>
+              ))}
+            </div>
+            {!data.has_orders && (
+              <p className="mt-3.5 text-sm text-muted-foreground">No tailor orders yet. <Link href="/dashboard/tailor/orders/new" className="font-medium text-primary underline-offset-4 hover:underline">Create the first order</Link> and it will appear on this board.</p>
+            )}
+          </SectionCard>
+
+          <div className="flex flex-wrap gap-4">
+            <SectionCard className="flex-1 basis-[420px]" title="Collect payment" actions={<Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/payments">All payments →</Link></Button>}>
+              <ItemGroup>
+                {data.dues.map((d, i) => (
+                  <Fragment key={d.id}>
+                    {i > 0 && <ItemSeparator />}
+                    <Item size="sm" className="px-0">
+                      <ItemContent className="min-w-0">
+                        <ItemTitle className="w-full truncate">{d.customer} · {d.order_no}</ItemTitle>
+                        <ItemDescription className="text-xs">{d.stage_label}{d.phone ? ` · ${d.phone}` : ""}</ItemDescription>
+                      </ItemContent>
+                      <ItemActions>
+                        <span className="font-semibold tabular-nums text-destructive">{formatCurrency(d.due)}</span>
+                        <Button asChild variant="outline" size="sm"><Link href="/dashboard/tailor/payments">Collect</Link></Button>
+                      </ItemActions>
+                    </Item>
+                  </Fragment>
                 ))}
-              </tbody>
-            </table>
+              </ItemGroup>
+              {data.dues.length === 0 && <EmptyState className="p-4 md:p-6" title="Nothing to collect" description="Every order is paid up." />}
+            </SectionCard>
+
+            <SectionCard className="flex-1 basis-[420px]" contentClassName="flex flex-col gap-3" title="Dorji workload" actions={<Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/dorjis">Manage →</Link></Button>}>
+              {data.workload.map((d) => {
+                const c = d.percent >= 100 && d.open > 0 ? "#B42318" : d.percent >= 75 ? "#F59E0B" : "#0F766E"
+                const bar = d.percent >= 100 && d.open > 0 ? "[&>[data-slot=progress-indicator]]:bg-destructive" : d.percent >= 75 ? "[&>[data-slot=progress-indicator]]:bg-amber-500" : "[&>[data-slot=progress-indicator]]:bg-teal-700"
+                return (
+                  <div key={d.id}>
+                    <div className="flex justify-between text-sm"><span className="font-medium">{d.name}</span><span className="font-semibold" style={{ color: c }}>{d.open} {d.open === 1 ? "piece" : "pieces"} open</span></div>
+                    <Progress value={Math.min(100, Math.max(0, d.percent))} className={cn("mt-1.5", bar)} aria-label={`${d.name} workload`} />
+                  </div>
+                )
+              })}
+              {data.workload.length === 0 && <p className="text-sm text-muted-foreground">No dorjis yet. <Link href="/dashboard/tailor/dorjis" className="font-medium text-primary underline-offset-4 hover:underline">Add a dorji</Link> to track workload.</p>}
+              {data.advice && <Alert><AlertDescription><p><strong>{data.advice.head}</strong> {data.advice.body}</p></AlertDescription></Alert>}
+            </SectionCard>
+
+            <SectionCard className="flex-1 basis-[300px]" contentClassName="flex flex-1 flex-col gap-2.5" title="Fabric alerts">
+              {data.fabric_alerts.map((f) => (
+                <div key={f.id} className="flex items-center gap-2.5">
+                  <span className="size-7 shrink-0 rounded-md border" style={{ background: f.hex_color || SWATCH[(f.color ?? "").toLowerCase()] || "#E3E6EE" }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{f.name}{f.color ? ` · ${f.color}` : ""}</div>
+                    <div className={cn("text-xs font-medium", f.out ? "text-destructive" : "text-dash-warn-fg")}>
+                      {f.out ? "Out of stock" : `${f.stock} ${f.unit ?? ""} left (reorder at ${f.reorder_level})`}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {data.fabric_alerts.length === 0 && <p className="text-sm text-muted-foreground">{data.fabrics_count ? "No fabric is running low." : "No fabrics added yet."}</p>}
+              <Button asChild variant="outline" className="mt-auto"><Link href="/dashboard/vendors/purchase-orders">Order fabric</Link></Button>
+            </SectionCard>
           </div>
-        )}
-      </Card>
+
+          <SectionCard title="Recent orders" actions={<Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/orders">View all →</Link></Button>}>
+            <ItemGroup>
+              {data.recent_orders.map((r, i) => (
+                <Fragment key={r.id}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item size="sm" className="px-0">
+                    <ItemContent className="min-w-[200px]">
+                      <ItemTitle><Link href={`/dashboard/tailor/orders/${r.id}`} className="font-semibold hover:underline">{r.order_no}</Link> <span>{r.customer}</span></ItemTitle>
+                    </ItemContent>
+                    <ItemActions>
+                      <span className="font-semibold tabular-nums">{formatCurrency(r.total)}</span>
+                      <StatusBadge status={r.stage} label={r.stage_label} />
+                      {r.payment ? <PayBadge status={r.payment as TailorPaymentStatus} /> : <Badge variant="outline">—</Badge>}
+                    </ItemActions>
+                  </Item>
+                </Fragment>
+              ))}
+            </ItemGroup>
+            {data.recent_orders.length === 0 && <EmptyState className="p-4 md:p-6" title="No orders yet" />}
+          </SectionCard>
+
+          <SectionCard title="Due soon" actions={<Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/orders">All orders →</Link></Button>}>
+            <ItemGroup>
+              {data.due_soon.map((r, i) => (
+                <Fragment key={r.id}>
+                  {i > 0 && <ItemSeparator />}
+                  <Item size="sm" className="px-0">
+                    <ItemContent className="min-w-[200px]">
+                      <ItemTitle><Link href={`/dashboard/tailor/orders/${r.id}`} className="font-semibold hover:underline">{r.order_no}</Link> <span>{r.customer}</span></ItemTitle>
+                      <ItemDescription className="text-xs">{r.items}</ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      <span className="text-sm text-muted-foreground">{fmtDate(r.delivery_date)}</span>
+                      <span className={cn("font-semibold", whenCls(r.days_left))}>{whenTxt(r.days_left)}</span>
+                    </ItemActions>
+                  </Item>
+                </Fragment>
+              ))}
+            </ItemGroup>
+            {data.due_soon.length === 0 && <EmptyState className="p-4 md:p-6" title="Nothing due soon" description="No orders due in the next 7 days." />}
+          </SectionCard>
+        </>
+      ) : null}
     </div>
+  )
+}
+
+function BoardCard({ o }: { o: TailorBoardOrder }) {
+  return (
+    <Card className="gap-1.5 p-2.5">
+      <div className="flex justify-between gap-1.5">
+        <Link href={`/dashboard/tailor/orders/${o.id}`} className="text-xs font-semibold hover:underline">{o.order_no}</Link>
+        {o.urgent && <UrgentBadge />}
+      </div>
+      <span className="text-sm font-medium">{o.customer}</span>
+      <span className="text-xs text-muted-foreground">{o.items}</span>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{o.dorji || "Not assigned"}</span>
+        <span className={cn("font-semibold", whenCls(o.days_left))}>{whenTxt(o.days_left)}</span>
+      </div>
+      <Button asChild variant="outline" size="sm"><Link href={`/dashboard/tailor/orders/${o.id}`}>Open order →</Link></Button>
+    </Card>
   )
 }

@@ -1,278 +1,291 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Plus, Edit2, Trash2, MapPin, Loader2, AlertCircle } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { AlertCircle, Building2, MapPin, Pencil, Store, Trash2 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { useWarehouse, type Warehouse } from "@/contexts/warehouse-context"
-import { Badge } from "@/components/ui/badge"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { useWarehouse } from "@/contexts/warehouse-context"
+import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { useToast } from "@/hooks/use-toast"
+import { locationApi, type LocationResponse, type LocationType } from "@/lib/locationApi"
+import { staffApi } from "@/lib/staffApi"
 import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
 import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
+import { cn } from "@/lib/utils"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { WithTooltip } from "@/components/common/WithTooltip"
+
+const TYPES: LocationType[] = ["Warehouse", "Shop", "Pickup point"]
+const DISTRICTS = ["Dhaka", "Chattogram", "Sylhet", "Khulna", "Rajshahi", "Barishal", "Rangpur", "Mymensingh"]
+const TYPE_STYLE: Record<string, { Icon: typeof Store }> = {
+  Warehouse: { Icon: Building2 },
+  Shop: { Icon: Store },
+  "Pickup point": { Icon: MapPin },
+}
+
+
+const blank = { type: "Shop" as LocationType, name: "", address: "", district: "Dhaka", phone: "", manager: "" }
 
 export default function LocationsPage() {
-  const { canRead } = useSaasAuth()
-  const { warehouses, loading, addWarehouse, updateWarehouse, deleteWarehouse } = useWarehouse()
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
+  const blocked = useModuleGuard("Store Locations")
+  const { formatCurrency } = useCompanySettings()
+  const { refreshLocations } = useWarehouse()
+  const { toast } = useToast()
+
+  const [locs, setLocs] = useState<LocationResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<LocationResponse | null>(null)
+  const [form, setForm] = useState(blank)
+  const [err, setErr] = useState("")
   const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [managers, setManagers] = useState<string[]>([])
   const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null)
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
 
-  const [formData, setFormData] = useState({
-    name: "",
-    address: "",
-    contact: "",
-    isDefault: false,
-  })
-
-  useEffect(() => {
-    saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
+  const load = useCallback(async () => {
+    try {
+      const res = await locationApi.getAll()
+      setLocs(res.data)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const blocked = useModuleGuard('Store Locations')
+  const loadLimits = useCallback(() => { saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {}) }, [])
+
+  useEffect(() => { load(); loadLimits() }, [load, loadLimits])
+  useEffect(() => {
+    staffApi.getAll({ limit: 100 }).then((r) => {
+      setManagers(Array.from(new Set(r.data.map((s: any) => s.name).filter(Boolean))) as string[])
+    }).catch(() => {})
+  }, [])
+
+  const unlimitedBranches = !!planLimits && (planLimits.maxBranches >= 999999 || planLimits.maxBranches < 0)
+  const atLimit = planLimits !== null && !planLimits.canAddBranch && !editing
+  const sorted = useMemo(() => [...locs].sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.id - b.id), [locs])
+
   if (blocked) return blocked
 
-  const atBranchLimit = planLimits !== null && !planLimits.canAddBranch
-
-  const resetForm = () => {
-    setFormData({ name: "", address: "", contact: "", isDefault: false })
-    setEditingWarehouse(null)
+  const reset = () => { setEditing(null); setForm(blank); setErr("") }
+  const startEdit = (l: LocationResponse) => {
+    setEditing(l)
+    setForm({
+      type: (l.type as LocationType) || "Shop", name: l.name, address: l.address || "",
+      district: l.district || "Dhaka", phone: l.phone || "", manager: l.manager || "",
+    })
+    setErr("")
   }
+  const sync = async () => { await load(); refreshLocations() }
+  const fail = (title: string, e: any) =>
+    toast({ variant: "destructive", title, description: e?.response?.data?.message || e?.response?.data?.errors?.name?.[0] || "Please try again" })
 
-  const handleOpenDialog = (warehouse?: Warehouse) => {
-    if (warehouse) {
-      setEditingWarehouse(warehouse)
-      setFormData({
-        name: warehouse.name,
-        address: warehouse.address,
-        contact: warehouse.contact,
-        isDefault: warehouse.isDefault,
-      })
-    } else {
-      resetForm()
-    }
-    setIsDialogOpen(true)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const save = async () => {
+    const name = form.name.trim(), address = form.address.trim()
+    if (!name) return setErr("Name is required.")
+    if (!address) return setErr("Address is required.")
+    if (locs.some((l) => l.name.toLowerCase() === name.toLowerCase() && l.id !== editing?.id)) return setErr("A location with this name already exists.")
+    if (atLimit) return setUpgradeOpen(true)
     setSaving(true)
+    const body = { name, address, type: form.type, district: form.district, phone: form.phone.trim(), manager: form.manager.trim() }
     try {
-      if (editingWarehouse) {
-        await updateWarehouse({ id: editingWarehouse.id, ...formData })
+      if (editing) {
+        await locationApi.update(editing.id, body)
+        toast({ title: "Location updated", description: name })
       } else {
-        await addWarehouse(formData)
-        saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
+        await locationApi.create(body)
+        toast({ title: "Location added", description: name })
+        loadLimits()
       }
-      setIsDialogOpen(false)
-      resetForm()
-    } catch (err) {
-      console.error("Failed to save location:", err)
+      reset()
+      await sync()
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || "Could not save location")
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDelete = async (warehouse: Warehouse) => {
-    if (warehouse.isDefault) {
-      alert("Cannot delete the default location. Please set another as default first.")
-      return
-    }
-    setDeletingId(warehouse.id)
+  const toggle = async (l: LocationResponse, key: "sellsInPos" | "shipsOnline") => {
+    const next = !l[key]
+    setLocs((p) => p.map((x) => (x.id === l.id ? { ...x, [key]: next } : x)))
+    try { await locationApi.update(l.id, { [key]: next }) }
+    catch (e) { setLocs((p) => p.map((x) => (x.id === l.id ? { ...x, [key]: !next } : x))); fail("Could not update location", e) }
+  }
+
+  const makeDefault = async (l: LocationResponse) => {
     try {
-      await deleteWarehouse(warehouse.id)
-      saasCompanyApi.getPlanLimits().then(setPlanLimits).catch(() => {})
-    } catch (err) {
-      console.error("Failed to delete location:", err)
-    } finally {
-      setDeletingId(null)
-    }
+      await locationApi.update(l.id, { isDefault: true })
+      toast({ title: `${l.name} is now the default location` })
+      await sync()
+    } catch (e) { fail("Could not set default", e) }
+  }
+
+  const remove = async (l: LocationResponse) => {
+    if (l.isDefault) return toast({ variant: "destructive", title: "The default location cannot be deleted", description: "Set another default first." })
+    if ((l.units ?? 0) > 0) return toast({ variant: "destructive", title: "Location still holds stock", description: `${l.name} still holds ${l.units} unit(s) of stock. Transfer it first.` })
+    if (!window.confirm(`Delete location "${l.name}"?`)) return
+    try {
+      await locationApi.delete(l.id)
+      toast({ title: "Location deleted", description: l.name })
+      if (editing?.id === l.id) reset()
+      loadLimits()
+      await sync()
+    } catch (e) { fail("Could not delete location", e) }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Locations</h1>
-          <p className="text-gray-600 mt-1">
-            Manage your warehouses and stores
-            {planLimits && (
-              <span className="ml-2 text-sm text-gray-400">
-                ({planLimits.currentBranches}/{planLimits.maxBranches} branches used)
-              </span>
-            )}
-          </p>
-        </div>
-        <Button
-          onClick={() => atBranchLimit ? setIsUpgradeModalOpen(true) : handleOpenDialog()}
-          className="bg-emerald-600 hover:bg-emerald-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Location
-        </Button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Locations"
+        description={<>
+          Warehouses and shops — where stock lives and where you sell from.
+          {planLimits && <span className="ml-2">({planLimits.currentBranches}/{unlimitedBranches ? "unlimited" : planLimits.maxBranches} branches used)</span>}
+        </>}
+      />
 
-      {atBranchLimit && (
-        <Card className="bg-yellow-50 border-yellow-200 p-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-700 flex-shrink-0 mt-0.5" />
-            <div className="text-yellow-800">
-              <p className="font-semibold">Branch Limit Reached</p>
-              <p className="text-sm mt-0.5">
-                Your <strong>{planLimits?.plan?.name ?? "current"}</strong> plan allows {planLimits?.maxBranches} branch{planLimits?.maxBranches === 1 ? "" : "es"}.
-                Upgrade your plan to add more locations.
-              </p>
+      {atLimit && (
+        <Alert>
+          <AlertCircle />
+          <AlertTitle>Branch limit reached</AlertTitle>
+          <AlertDescription>Your {planLimits?.plan?.name ?? "current"} plan allows {planLimits?.maxBranches} branch{planLimits?.maxBranches === 1 ? "" : "es"}. Upgrade your plan to add more locations.</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-wrap items-start gap-4">
+        <section className="grid min-w-0 flex-[999_1_600px] grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
+          {loading
+            ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[300px]" />)
+            : sorted.length === 0
+              ? <EmptyState bordered title="No locations yet" description="Add your first warehouse or shop." className="col-span-full" />
+              : sorted.map((l) => {
+                const st = TYPE_STYLE[l.type || "Shop"] ?? TYPE_STYLE.Shop
+                return (
+                  <Card key={l.id} className="gap-3 p-4">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar shape="square" className="size-11" fallback={<st.Icon className="size-5" />} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-base font-bold">
+                          <span className="truncate">{l.name}</span>
+                          {l.isDefault && <Badge>Default</Badge>}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">{l.type || "Shop"} · {[l.address, l.district].filter(Boolean).join(", ")}</div>
+                        {(l.phone || l.manager) && <div className="truncate text-xs text-muted-foreground">{[l.manager, l.phone].filter(Boolean).join(" · ")}</div>}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[["Stock value", formatCurrency(l.stockValue ?? 0)], ["SKUs", String(l.skus ?? 0)], ["Staff", String(l.staffCount ?? 0)]].map(([k, v]) => (
+                        <Card key={k} className="min-w-0 gap-0 p-2 shadow-none">
+                          <div className="text-xs text-muted-foreground">{k}</div>
+                          <div className="truncate font-bold tabular-nums">{v}</div>
+                        </Card>
+                      ))}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {([["Sells in POS", "sellsInPos"], ["Ships online orders", "shipsOnline"]] as const).map(([label, key]) => {
+                        const on = !!l[key]
+                        return (
+                          <FormField key={key} orientation="horizontal" label={label} htmlFor={`loc-${l.id}-${key}`}>
+                            <Switch id={`loc-${l.id}-${key}`} checked={on} aria-label={label} onCheckedChange={() => toggle(l, key)} />
+                          </FormField>
+                        )
+                      })}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <WithTooltip content="Edit"><Button type="button" variant="outline" size="icon" aria-label="Edit" onClick={() => startEdit(l)}><Pencil className="size-4" /></Button></WithTooltip>
+                      <WithTooltip content="Delete"><Button type="button" variant="destructive" size="icon" aria-label="Delete" onClick={() => remove(l)}><Trash2 className="size-4" /></Button></WithTooltip>
+                      {!l.isDefault && <Button type="button" variant="outline" onClick={() => makeDefault(l)}>Set default</Button>}
+                      <Button asChild variant="outline" className="flex-1"><Link href="/dashboard/inventory">View stock</Link></Button>
+                    </div>
+                  </Card>
+                )
+              })}
+        </section>
+
+        <aside className="flex-[1_1_340px] self-start">
+        <SectionCard title={editing ? "Edit location" : "Add location"} contentClassName="flex flex-col gap-3.5">
+          {err && <p className="text-sm text-destructive">{err}</p>}
+          <div className="flex flex-col gap-1.5">
+            <p className="text-sm font-medium">Type</p>
+            <div role="radiogroup" aria-label="Type" className="grid grid-cols-3 gap-1.5">
+              {TYPES.map((t) => {
+                const on = form.type === t
+                return (
+                  <Button key={t} type="button" role="radio" aria-checked={on} onClick={() => setForm({ ...form, type: t })}
+                    variant={on ? "default" : "outline"} className="h-auto min-h-9 whitespace-normal">
+                    {t}
+                  </Button>
+                )
+              })}
             </div>
           </div>
-        </Card>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-        </div>
-      ) : warehouses.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <MapPin className="w-12 h-12 text-gray-300 mb-4" />
-            <p className="text-gray-500 text-lg font-medium">No locations yet</p>
-            <p className="text-gray-400 mt-1">Add your first store or warehouse location</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6">
-          {warehouses.map((warehouse) => (
-            <Card key={warehouse.id}>
-              <CardContent className="flex items-center justify-between p-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center mt-1">
-                    <MapPin className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-semibold text-gray-900">{warehouse.name}</h3>
-                      {warehouse.isDefault && (
-                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-                          Default
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-gray-500 mt-1">{warehouse.address}</p>
-                    {warehouse.contact && (
-                      <p className="text-sm text-gray-400 mt-1">Contact: {warehouse.contact}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleOpenDialog(warehouse)}>
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 border-red-200 hover:bg-red-50"
-                    onClick={() => handleDelete(warehouse)}
-                    disabled={warehouse.isDefault || deletingId === warehouse.id}
-                  >
-                    {deletingId === warehouse.id ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Trash2 className="w-4 h-4 mr-2" />
-                    )}
-                    Delete
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+          <FormField label="Name *" htmlFor="loc-name">
+            <Input id="loc-name" className="w-full" value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setErr("") }} placeholder="e.g. Dhanmondi Outlet" />
+          </FormField>
+          <FormField label="Address *" htmlFor="loc-address">
+            <Input id="loc-address" className="w-full" value={form.address} onChange={(e) => { setForm({ ...form, address: e.target.value }); setErr("") }} placeholder="House, road, area" />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="District" htmlFor="loc-district" className="min-w-0">
+              <Select value={form.district || undefined} onValueChange={(v) => setForm({ ...form, district: v })}>
+                <SelectTrigger id="loc-district" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from(new Set([...DISTRICTS, form.district])).filter(Boolean).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Phone" htmlFor="loc-phone" className="min-w-0">
+              <Input id="loc-phone" className="w-full" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="01XXX-XXXXXX" />
+            </FormField>
+          </div>
+          <FormField label="Manager" htmlFor="loc-manager">
+            {managers.length > 0 ? (
+              <Select value={form.manager || "__none"} onValueChange={(v) => setForm({ ...form, manager: v === "__none" ? "" : v })}>
+                <SelectTrigger id="loc-manager" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">No manager</SelectItem>
+                  {Array.from(new Set([...managers, ...(form.manager ? [form.manager] : [])])).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input id="loc-manager" className="w-full" value={form.manager} onChange={(e) => setForm({ ...form, manager: e.target.value })} placeholder="Manager name (no staff yet)" />
+            )}
+          </FormField>
+          <Alert role="note">
+            <AlertDescription>
+              {planLimits ? (unlimitedBranches ? "Your plan allows unlimited locations. " : `Your plan allows ${planLimits.maxBranches} location${planLimits.maxBranches === 1 ? "" : "s"}. `) : ""}Stock starts at 0 — use Transfers to move items in.
+            </AlertDescription>
+          </Alert>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={reset}>Clear</Button>
+            <Button type="button" disabled={saving} onClick={save}>
+              {saving ? "Saving…" : editing ? "Save changes" : "Add location"}
+            </Button>
+          </div>
+        </SectionCard>
+        </aside>
+      </div>
 
       <UpgradeRequiredModal
-        open={isUpgradeModalOpen}
-        onOpenChange={setIsUpgradeModalOpen}
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
         title="Branch Limit Reached"
         description={`Your current plan allows ${planLimits?.maxBranches} branch${planLimits?.maxBranches === 1 ? "" : "es"}.`}
         limitType="warehouses"
         currentLimit={planLimits?.maxBranches}
       />
-
-      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsDialogOpen(open) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingWarehouse ? "Edit Location" : "Add Location"}</DialogTitle>
-            <DialogDescription>
-              {editingWarehouse ? "Update location details" : "Add a new warehouse or store location"}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Location Name</Label>
-              <Input
-                id="name"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g. Downtown Store"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Input
-                id="address"
-                required
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Full address"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="contact">Contact Person</Label>
-              <Input
-                id="contact"
-                value={formData.contact}
-                onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                placeholder="Name or Phone"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2 py-2">
-              <Switch
-                id="default"
-                checked={formData.isDefault}
-                onCheckedChange={(checked) => setFormData({ ...formData, isDefault: checked })}
-              />
-              <Label htmlFor="default">Set as default location</Label>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setIsDialogOpen(false); resetForm() }}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Save Location
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

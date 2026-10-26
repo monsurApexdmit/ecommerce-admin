@@ -125,6 +125,9 @@ export interface ProductResponse {
   offer_price?: number;
   offerPrice?: number;
   offer_type?: string;
+  offer_ends_at?: string | null;
+  wholesale_price?: number | null;
+  min_wholesale_qty?: number | null;
   offerType?: string;
   cost_price?: number;
   costPrice?: number;
@@ -148,9 +151,16 @@ export interface ProductResponse {
   updated_at: string;
 }
 
+export interface ProductImportResult {
+  imported: number;
+  skipped: { row: number; name?: string; reason: string }[];
+  warnings?: { row: number; message: string }[];
+}
+
 export interface ProductListResponse {
   message: string;
   data: ProductResponse[];
+  tabCounts?: { all: number; ok: number; low: number; out: number; hidden: number; draft?: number };
   pagination?: {
     total: number;
     page: number;
@@ -216,6 +226,9 @@ export interface CreateProductData {
   sale_price: number;
   offer_price?: number | null;
   offer_type?: string | null;
+  offer_ends_at?: string | null;
+  wholesale_price?: number | null;
+  min_wholesale_qty?: number | null;
   cost_price?: number;
   profit_margin?: number;
   margin_type?: string;
@@ -225,6 +238,9 @@ export interface CreateProductData {
   is_best_seller?: boolean;
   is_featured?: boolean;
   deal_label?: string;
+  tag?: string;
+  available_in_pos?: boolean;
+  visible_online?: boolean;
   sku?: string;
   barcode?: string;
   barcode_type?: string;
@@ -274,6 +290,9 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.sale_price !== undefined) fd.append('sale_price', String(data.sale_price));
   if (data.offer_price !== undefined) fd.append('offer_price', data.offer_price !== null ? String(data.offer_price) : '');
   if (data.offer_type !== undefined) fd.append('offer_type', data.offer_type !== null ? data.offer_type : '');
+  if (data.offer_ends_at !== undefined) fd.append('offerEndsAt', data.offer_ends_at ?? '');
+  if (data.wholesale_price !== undefined) fd.append('wholesalePrice', data.wholesale_price !== null ? String(data.wholesale_price) : '');
+  if (data.min_wholesale_qty !== undefined) fd.append('minWholesaleQty', data.min_wholesale_qty !== null ? String(data.min_wholesale_qty) : '');
   if (data.cost_price !== undefined) fd.append('cost_price', String(data.cost_price));
   if (data.profit_margin !== undefined) fd.append('profit_margin', String(data.profit_margin));
   if (data.margin_type !== undefined) fd.append('margin_type', data.margin_type);
@@ -286,6 +305,9 @@ function buildFormData(data: CreateProductData | UpdateProductData): FormData {
   if (data.is_best_seller !== undefined) fd.append('is_best_seller', data.is_best_seller ? '1' : '0');
   if (data.is_featured !== undefined) fd.append('is_featured', data.is_featured ? '1' : '0');
   if (data.deal_label !== undefined) fd.append('deal_label', data.deal_label ?? '');
+  if (data.tag !== undefined) fd.append('tag', data.tag ?? '');
+  if (data.available_in_pos !== undefined) fd.append('availableInPos', data.available_in_pos ? '1' : '0');
+  if (data.visible_online !== undefined) fd.append('visibleOnline', data.visible_online ? '1' : '0');
   if (data.receipt_number !== undefined && data.receipt_number !== '') fd.append('receipt_number', data.receipt_number);
   if (data.supplier_payment_status) fd.append('supplier_payment_status', data.supplier_payment_status);
   if (data.supplier_paid_amount !== undefined) fd.append('supplier_paid_amount', String(data.supplier_paid_amount));
@@ -356,6 +378,7 @@ export const productApi = {
     category_id?: number;
     location_id?: number;
     vendor_id?: number;
+    [key: string]: any;
   }): Promise<ProductListResponse> => {
     const response = await api.get('/products', { params });
     // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
@@ -363,6 +386,7 @@ export const productApi = {
     return {
       message: response.data.message || '',
       data: laravelData.data || [],
+      tabCounts: laravelData.tabCounts,
       pagination: {
         total: laravelData.total || 0,
         page: laravelData.current_page || 1,
@@ -419,6 +443,32 @@ export const productApi = {
   delete: async (id: number): Promise<{ message: string }> => {
     const response = await api.delete(`/products/${id}`);
     return response.data;
+  },
+
+  // ---- Phase 5 list actions (endpoint shapes follow PHASE5_API_CONTRACT.md) ----
+  bulkPrice: async (ids: number[], percent: number): Promise<{ count: number; variantsUpdated: number }> => {
+    const response = await api.post('/products/bulk-price', { ids, percent }, { headers: { 'Content-Type': 'application/json' } });
+    const d = response.data?.data ?? {};
+    return { count: Number(d.count ?? 0), variantsUpdated: Number(d.variantsUpdated ?? 0) };
+  },
+
+  adjustStock: async (payload: {
+    reason: 'Quick adjust' | 'Bulk adjust';
+    items: { productId: number; variantId?: number; locationId?: number; delta: number }[];
+  }): Promise<{ adjusted: number; failed: { productId: number; index: number; reason: string }[] }> => {
+    const response = await api.post('/products/bulk-adjust-stock', payload, { headers: { 'Content-Type': 'application/json' } });
+    const d = response.data?.data ?? {};
+    return { adjusted: Number(d.adjusted ?? 0), failed: Array.isArray(d.failed) ? d.failed : [] };
+  },
+
+  importRows: async (rows: Record<string, string>[]): Promise<ProductImportResult> => {
+    const response = await api.post('/products/import', { rows }, { headers: { 'Content-Type': 'application/json' } });
+    const d = response.data?.data ?? {};
+    return {
+      imported: Number(d.imported ?? 0),
+      skipped: Array.isArray(d.skipped) ? d.skipped : [],
+      warnings: Array.isArray(d.warnings) ? d.warnings : [],
+    };
   },
 
   getStats: async (): Promise<{

@@ -1,532 +1,506 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { AlertTriangle, Download, Hash, Layers, Pencil, Search, Trash2, X } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "@/hooks/use-toast"
-import {
-  serialBatchApi,
-  type ProductSerial,
-  type ProductBatch,
-  type SerialBatchStats,
-} from "@/lib/serialBatchApi"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { StatsCards } from "@/components/ui/stats-card"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { serialBatchApi, type ProductBatch, type ProductSerial, type SerialBatchStats } from "@/lib/serialBatchApi"
 import { productApi } from "@/lib/productApi"
-import { Hash, Layers, Plus, Trash2, RefreshCw, AlertTriangle, CheckCircle, Clock } from "lucide-react"
+import { exportToCSV } from "@/lib/export-import-utils"
+import { useWarehouse } from "@/contexts/warehouse-context"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { Toolbar } from "@/components/common/Toolbar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
-function StatCard({ label, value, sub, color = "gray" }: { label: string; value: number; sub?: string; color?: string }) {
-  const colors: Record<string, string> = {
-    gray: "bg-gray-50 border-gray-200",
-    green: "bg-emerald-50 border-emerald-200",
-    orange: "bg-orange-50 border-orange-200",
-    red: "bg-red-50 border-red-200",
-    blue: "bg-blue-50 border-blue-200",
-  }
-  return (
-    <div className={`rounded-lg border p-4 ${colors[color]}`}>
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-    </div>
-  )
+type Tab = "batch" | "serial"
+
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
+
+const SERIAL_VARIANT: Record<string, BadgeVariant> = {
+  available: "default",
+  sold: "secondary",
+  returned: "outline",
+  damaged: "destructive",
 }
 
-function statusBadge(status: ProductSerial["status"]) {
-  const map: Record<string, { label: string; class: string }> = {
-    available: { label: "Available", class: "bg-emerald-100 text-emerald-800" },
-    sold:      { label: "Sold",      class: "bg-gray-100 text-gray-700" },
-    returned:  { label: "Returned",  class: "bg-blue-100 text-blue-800" },
-    damaged:   { label: "Damaged",   class: "bg-red-100 text-red-800" },
-  }
-  const s = map[status] || { label: status, class: "bg-gray-100 text-gray-600" }
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.class}`}>{s.label}</span>
+const today = () => new Date().toISOString().slice(0, 10)
+const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+
+function expiryInfo(b: ProductBatch): { txt: string; variant: BadgeVariant } {
+  if (!b.expiryDate) return { txt: "OK", variant: "default" }
+  const days = Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / 864e5)
+  if (b.isExpired || days < 0) return { txt: `Expired ${Math.abs(days)}d ago`, variant: "destructive" }
+  if (b.isExpiringSoon || days <= 30) return { txt: `In ${days} days`, variant: "secondary" }
+  return { txt: "OK", variant: "default" }
 }
 
 export default function SerialBatchPage() {
+  const { warehouses } = useWarehouse()
   const { toast } = useToast()
-  const [tab, setTab] = useState("serials")
+  const blocked = useModuleGuard("Inventory")
+
+  const [tab, setTab] = useState<Tab>("batch")
   const [stats, setStats] = useState<SerialBatchStats | null>(null)
-
-  // Serials state
-  const [serials, setSerials] = useState<ProductSerial[]>([])
-  const [serialsTotal, setSerialsTotal] = useState(0)
-  const [serialsPage, setSerialsPage] = useState(1)
-  const [serialSearch, setSerialSearch] = useState("")
-  const [serialStatus, setSerialStatus] = useState("")
-  const [serialsLoading, setSerialsLoading] = useState(false)
-
-  // Batches state
-  const [batches, setBatches] = useState<ProductBatch[]>([])
-  const [batchesTotal, setBatchesTotal] = useState(0)
-  const [batchesPage, setBatchesPage] = useState(1)
-  const [batchSearch, setBatchSearch] = useState("")
-  const [batchesLoading, setBatchesLoading] = useState(false)
-
-  // Add serial modal
-  const [addSerialOpen, setAddSerialOpen] = useState(false)
-  const [serialForm, setSerialForm] = useState({
-    productId: "",
-    locationId: "",
-    purchaseOrderNumber: "",
-    receivedDate: new Date().toISOString().split("T")[0],
-    notes: "",
-    bulkInput: "", // one serial per line
-  })
-  const [serialSaving, setSerialSaving] = useState(false)
-
-  // Add batch modal
-  const [addBatchOpen, setAddBatchOpen] = useState(false)
-  const [batchForm, setBatchForm] = useState({
-    productId: "",
-    locationId: "",
-    batchNumber: "",
-    quantityReceived: "",
-    manufactureDate: "",
-    expiryDate: "",
-    purchaseOrderNumber: "",
-    receivedDate: new Date().toISOString().split("T")[0],
-    notes: "",
-  })
-  const [batchSaving, setBatchSaving] = useState(false)
-
-  // Products for selects
   const [products, setProducts] = useState<any[]>([])
 
-  const loadStats = useCallback(async () => {
-    try { setStats(await serialBatchApi.getStats()) } catch {}
-  }, [])
+  const [batches, setBatches] = useState<ProductBatch[]>([])
+  const [serials, setSerials] = useState<ProductSerial[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState("")
+  const [qDebounced, setQDebounced] = useState("")
+  const [statusF, setStatusF] = useState("all")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
-  const loadSerials = useCallback(async () => {
-    setSerialsLoading(true)
-    try {
-      const res = await serialBatchApi.getSerials({
-        search: serialSearch || undefined,
-        status: serialStatus || undefined,
-        page: serialsPage,
-      })
-      setSerials(res.data)
-      setSerialsTotal(res.total)
-    } catch { toast({ title: "Failed to load serials", variant: "destructive" }) }
-    finally { setSerialsLoading(false) }
-  }, [serialSearch, serialStatus, serialsPage, toast])
+  // form
+  const [editing, setEditing] = useState<{ type: Tab; id: number } | null>(null)
+  const [fProduct, setFProduct] = useState("")
+  const [fVariant, setFVariant] = useState("")
+  const [fCode, setFCode] = useState("")
+  const [fQty, setFQty] = useState("")
+  const [fMfg, setFMfg] = useState("")
+  const [fExpiry, setFExpiry] = useState("")
+  const [fPo, setFPo] = useState("")
+  const [fLoc, setFLoc] = useState("")
+  const [fNotes, setFNotes] = useState("")
+  const [serialText, setSerialText] = useState("")
+  const [fReceived, setFReceived] = useState(today())
+  const [fStatus, setFStatus] = useState("available")
+  const [err, setErr] = useState("")
+  const [saving, setSaving] = useState(false)
 
-  const loadBatches = useCallback(async () => {
-    setBatchesLoading(true)
-    try {
-      const res = await serialBatchApi.getBatches({
-        search: batchSearch || undefined,
-        page: batchesPage,
-      })
-      setBatches(res.data)
-      setBatchesTotal(res.total)
-    } catch { toast({ title: "Failed to load batches", variant: "destructive" }) }
-    finally { setBatchesLoading(false) }
-  }, [batchSearch, batchesPage, toast])
+  useEffect(() => { const t = setTimeout(() => setQDebounced(q.trim()), 250); return () => clearTimeout(t) }, [q])
 
   useEffect(() => {
-    loadStats()
-    productApi.getAll({ limit: 200 }).then(r => setProducts(r.data || [])).catch(() => {})
-  }, [loadStats])
+    productApi.getAll({ limit: 500 }).then((r: any) => setProducts(r.data ?? [])).catch(() => {})
+  }, [])
+  useEffect(() => { setFLoc((l) => l || (warehouses[0] ? String(warehouses[0].id) : "")) }, [warehouses])
 
-  useEffect(() => { if (tab === "serials") loadSerials() }, [tab, loadSerials])
-  useEffect(() => { if (tab === "batches") loadBatches() }, [tab, loadBatches])
+  const loadStats = useCallback(() => { serialBatchApi.getStats().then(setStats).catch(() => {}) }, [])
+  useEffect(() => { loadStats() }, [loadStats])
 
-  const handleAddSerials = async () => {
-    const lines = serialForm.bulkInput.split("\n").map(l => l.trim()).filter(Boolean)
-    if (!serialForm.productId || lines.length === 0) return
-    setSerialSaving(true)
+  const load = useCallback(async () => {
+    setLoading(true)
     try {
-      await serialBatchApi.createSerials({
-        productId: parseInt(serialForm.productId),
-        locationId: serialForm.locationId ? parseInt(serialForm.locationId) : undefined,
-        serials: lines.map(sn => ({
-          serialNumber: sn,
-          purchaseOrderNumber: serialForm.purchaseOrderNumber || undefined,
-          receivedDate: serialForm.receivedDate || undefined,
-          notes: serialForm.notes || undefined,
+      const params: Record<string, any> = { page, per_page: perPage }
+      if (qDebounced) params.search = qDebounced
+      if (statusF !== "all") params.status = statusF
+      if (tab === "batch") {
+        const r = await serialBatchApi.getBatches(params)
+        setBatches(r.data); setTotal(r.total)
+      } else {
+        const r = await serialBatchApi.getSerials(params)
+        setSerials(r.data); setTotal(r.total)
+      }
+    } catch {
+      setBatches([]); setSerials([]); setTotal(0)
+    } finally {
+      setLoading(false)
+    }
+  }, [tab, page, perPage, qDebounced, statusF])
+  useEffect(() => { load() }, [load])
+
+  const batchCount = stats?.batchCount ?? stats?.batches.total ?? 0
+  const serialCount = stats?.serialCount ?? stats?.serials.total ?? 0
+  const noRecords = !!stats && batchCount === 0 && serialCount === 0
+
+  const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setStatusF("all"); clearForm(); setQ("") }
+
+  function clearForm() {
+    setEditing(null); setFProduct(""); setFVariant(""); setFCode(""); setFQty(""); setFMfg(""); setFExpiry(""); setFPo("")
+    setFNotes(""); setSerialText(""); setFReceived(today()); setFStatus("available"); setErr("")
+  }
+
+  const product = products.find((p) => String(p.id) === fProduct)
+  const variants: any[] = product?.variants ?? []
+  const serialLines = useMemo(() => Array.from(new Set(serialText.split("\n").map((s) => s.trim()).filter(Boolean))), [serialText])
+
+  const editBatch = (b: ProductBatch) => {
+    setTab("batch")
+    setEditing({ type: "batch", id: b.id })
+    setFProduct(String(b.productId)); setFVariant(b.variantId ? String(b.variantId) : "")
+    setFCode(b.batchNumber); setFQty(String(b.quantityRemaining)); setFMfg(b.manufactureDate?.slice(0, 10) ?? "")
+    setFExpiry(b.expiryDate?.slice(0, 10) ?? ""); setFPo(b.purchaseOrderNumber ?? ""); setFLoc(b.locationId ? String(b.locationId) : fLoc)
+    setFNotes(b.notes ?? ""); setErr("")
+  }
+  const editSerial = (s: ProductSerial) => {
+    setTab("serial")
+    setEditing({ type: "serial", id: s.id })
+    setFProduct(String(s.productId)); setFVariant(s.variantId ? String(s.variantId) : "")
+    setSerialText(s.serialNumber); setFReceived(s.receivedDate?.slice(0, 10) ?? today()); setFPo(s.purchaseOrderNumber ?? "")
+    setFLoc(s.locationId ? String(s.locationId) : fLoc); setFStatus(s.status); setFNotes(s.notes ?? ""); setErr("")
+  }
+
+  const save = async () => {
+    if (!fProduct) { setErr("Select a product."); return }
+    if (variants.length > 0 && !fVariant) { setErr("Pick a variant."); return }
+    setSaving(true); setErr("")
+    try {
+      if (tab === "batch") {
+        if (!fCode.trim()) { setErr("Enter a batch / lot number."); setSaving(false); return }
+        const qty = Number(fQty)
+        if (!Number.isInteger(qty) || fQty.trim() === "" || qty < (editing ? 0 : 1)) { setErr(editing ? "Enter a whole number, 0 or more." : "Enter a whole number above zero."); setSaving(false); return }
+        if (fMfg && fExpiry && fExpiry < fMfg) { setErr("Expiry cannot be before the manufacture date."); setSaving(false); return }
+        const body = {
+          productId: Number(fProduct), variantId: fVariant ? Number(fVariant) : undefined, locationId: fLoc ? Number(fLoc) : undefined,
+          batchNumber: fCode.trim(), manufactureDate: fMfg || undefined, expiryDate: fExpiry || undefined,
+          purchaseOrderNumber: fPo.trim() || undefined, notes: fNotes.trim() || undefined,
+        }
+        if (editing) await serialBatchApi.updateBatch(editing.id, {
+          ...body, variantId: fVariant ? Number(fVariant) : null, quantityRemaining: qty,
+          manufactureDate: fMfg || null, expiryDate: fExpiry || null, purchaseOrderNumber: fPo.trim() || null, notes: fNotes.trim() || null,
+        } as any)
+        else await serialBatchApi.createBatch({ ...body, quantityReceived: qty, receivedDate: today() })
+        toast({ title: editing ? "Batch updated" : "Batch added", description: fCode.trim() })
+      } else {
+        if (editing) {
+          await serialBatchApi.updateSerial(editing.id, {
+            serialNumber: serialLines[0], status: fStatus as any, purchaseOrderNumber: fPo.trim() || undefined,
+            receivedDate: fReceived || undefined, notes: fNotes.trim() || undefined, locationId: fLoc ? Number(fLoc) : undefined,
+          })
+          toast({ title: "Serial updated" })
+        } else {
+          if (serialLines.length === 0) { setErr("Enter at least one serial number."); setSaving(false); return }
+          const res: any = await serialBatchApi.createSerials({
+            productId: Number(fProduct), variantId: fVariant ? Number(fVariant) : undefined, locationId: fLoc ? Number(fLoc) : undefined,
+            serials: serialLines.map((serialNumber) => ({
+              serialNumber, purchaseOrderNumber: fPo.trim() || undefined, receivedDate: fReceived || undefined, notes: fNotes.trim() || undefined,
+              ...(fStatus !== "available" ? { status: fStatus } : {}),
+            })),
+          } as any)
+          const created = Array.isArray(res) ? res.length : res?.created?.length ?? 0
+          const skipped = Array.isArray(res) ? 0 : res?.skipped?.length ?? 0
+          toast({ title: `${created} serial${created === 1 ? "" : "s"} added`, description: skipped ? `${skipped} duplicate${skipped === 1 ? "" : "s"} skipped` : undefined })
+        }
+      }
+      clearForm()
+      load(); loadStats()
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || "Could not save.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (type: Tab, id: number, label: string) => {
+    if (!window.confirm(`Delete ${label}?`)) return
+    try {
+      if (type === "batch") await serialBatchApi.deleteBatch(id)
+      else await serialBatchApi.deleteSerial(id)
+      toast({ title: "Deleted", description: label })
+      load(); loadStats()
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not delete", description: e?.response?.data?.message })
+    }
+  }
+
+  const handleExport = async () => {
+    try {
+      const base: Record<string, any> = { page: 1, per_page: 500 }
+      if (qDebounced) base.search = qDebounced
+      const [bs, ss] = await Promise.all([
+        serialBatchApi.getBatches({ ...base, ...(tab === "batch" && statusF !== "all" ? { status: statusF } : {}) }),
+        serialBatchApi.getSerials({ ...base, ...(tab === "serial" && statusF !== "all" ? { status: statusF } : {}) }),
+      ])
+      const rows = [
+        ...(bs.data as ProductBatch[]).map((b) => ({
+          type: "Batch", code: b.batchNumber, product: b.productName + (b.variantName ? ` · ${b.variantName}` : ""), qty: b.quantityRemaining,
+          manufactured: b.manufactureDate?.slice(0, 10) ?? "", expiry: b.expiryDate?.slice(0, 10) ?? "", status: expiryInfo(b).txt,
+          warehouse: b.locationName ?? "", po: b.purchaseOrderNumber ?? "", received: b.receivedDate?.slice(0, 10) ?? "", sellOrder: b.sellOrderLabel ?? "", notes: b.notes ?? "",
         })),
-      })
-      toast({ title: `${lines.length} serial(s) added` })
-      setAddSerialOpen(false)
-      setSerialForm({ productId: "", locationId: "", purchaseOrderNumber: "", receivedDate: new Date().toISOString().split("T")[0], notes: "", bulkInput: "" })
-      loadSerials()
-      loadStats()
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.message || "Failed to add serials", variant: "destructive" })
-    } finally { setSerialSaving(false) }
-  }
-
-  const handleDeleteSerial = async (id: number) => {
-    try {
-      await serialBatchApi.deleteSerial(id)
-      toast({ title: "Serial deleted" })
-      loadSerials(); loadStats()
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.message || "Cannot delete serial", variant: "destructive" })
+        ...(ss.data as ProductSerial[]).map((s) => ({
+          type: "Serial", code: s.serialNumber, product: s.productName + (s.variantName ? ` · ${s.variantName}` : ""), qty: 1,
+          manufactured: "", expiry: "", status: s.status, warehouse: s.locationName ?? "", po: s.purchaseOrderNumber ?? "",
+          received: s.receivedDate?.slice(0, 10) ?? "", sellOrder: "", notes: s.notes ?? "",
+        })),
+      ]
+      if (rows.length === 0) { toast({ title: "Nothing to export" }); return }
+      exportToCSV(rows, "serial-batch", ["type", "code", "product", "qty", "manufactured", "expiry", "status", "warehouse", "po", "received", "sellOrder", "notes"])
+    } catch {
+      toast({ variant: "destructive", title: "Could not export" })
     }
   }
 
-  const handleAddBatch = async () => {
-    if (!batchForm.productId || !batchForm.batchNumber || !batchForm.quantityReceived) return
-    setBatchSaving(true)
-    try {
-      await serialBatchApi.createBatch({
-        productId: parseInt(batchForm.productId),
-        locationId: batchForm.locationId ? parseInt(batchForm.locationId) : undefined,
-        batchNumber: batchForm.batchNumber,
-        quantityReceived: parseInt(batchForm.quantityReceived),
-        manufactureDate: batchForm.manufactureDate || undefined,
-        expiryDate: batchForm.expiryDate || undefined,
-        purchaseOrderNumber: batchForm.purchaseOrderNumber || undefined,
-        receivedDate: batchForm.receivedDate || undefined,
-        notes: batchForm.notes || undefined,
-      })
-      toast({ title: "Batch created" })
-      setAddBatchOpen(false)
-      setBatchForm({ productId: "", locationId: "", batchNumber: "", quantityReceived: "", manufactureDate: "", expiryDate: "", purchaseOrderNumber: "", receivedDate: new Date().toISOString().split("T")[0], notes: "" })
-      loadBatches(); loadStats()
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.message || "Failed to create batch", variant: "destructive" })
-    } finally { setBatchSaving(false) }
-  }
+  if (blocked) return blocked
 
-  const handleDeleteBatch = async (id: number) => {
-    try {
-      await serialBatchApi.deleteBatch(id)
-      toast({ title: "Batch deleted" })
-      loadBatches(); loadStats()
-    } catch (e: any) {
-      toast({ title: e?.response?.data?.message || "Cannot delete batch", variant: "destructive" })
-    }
-  }
+  const rows = tab === "batch" ? batches : serials
+  const formTitle = editing ? (tab === "batch" ? "Edit batch" : "Edit serial") : tab === "batch" ? "Add batch / lot" : "Add serial numbers"
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Serial &amp; Batch Tracking</h1>
-          <p className="text-gray-500 text-sm mt-1">Track individual units by serial number or grouped lots by batch/expiry</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => { loadSerials(); loadBatches(); loadStats() }}>
-          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
-        </Button>
-      </div>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title={<>Serial &amp; batch tracking</>}
+        description="Trace units one by one, or by batch with expiry dates — oldest stock sells first."
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+      />
 
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Total Serials" value={stats.serials.total} color="blue" />
-          <StatCard label="Available Serials" value={stats.serials.available} sub={`${stats.serials.sold} sold`} color="green" />
-          <StatCard label="Total Batches" value={stats.batches.total} sub={`${stats.batches.active} active`} color="blue" />
-          <StatCard label="Expiring / Expired" value={stats.batches.expiringSoon + stats.batches.expired}
-            sub={`${stats.batches.expiringSoon} expiring soon, ${stats.batches.expired} expired`}
-            color={stats.batches.expired > 0 ? "red" : stats.batches.expiringSoon > 0 ? "orange" : "gray"} />
-        </div>
+      {!stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px]" />)}</div>
+      ) : (
+        <StatsCards stats={[
+          { label: "Batches", value: batchCount, icon: <Layers className="size-4" />, color: "blue", hint: `${stats.batchProducts ?? 0} products batch-tracked` },
+          { label: "Expiring in 30 days", value: stats.expiringSoonCount ?? stats.batches.expiringSoon, icon: <AlertTriangle className="size-4" />, color: "yellow",
+            hint: stats.firstExpiring ? `${stats.firstExpiring.batchNumber} · ${stats.firstExpiring.quantity} left` : "Nothing expiring soon" },
+          { label: "Expired", value: stats.expiredCount ?? stats.batches.expired, icon: <X className="size-4" />, color: "red",
+            hint: stats.firstExpired ? `${stats.firstExpired.batchNumber}${(stats.expiredCount ?? 0) > 1 ? ` +${(stats.expiredCount ?? 1) - 1} more` : ""}` : "None expired" },
+          { label: "Serial numbers", value: serialCount, icon: <Hash className="size-4" />, color: "purple",
+            hint: `${stats.serialAvailable ?? stats.serials.available} available · ${stats.serialSold ?? stats.serials.sold} sold` },
+        ]} />
       )}
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="serials" className="flex items-center gap-1"><Hash className="w-4 h-4" /> Serial Numbers</TabsTrigger>
-          <TabsTrigger value="batches" className="flex items-center gap-1"><Layers className="w-4 h-4" /> Batches / Lots</TabsTrigger>
-        </TabsList>
+      {noRecords && (
+        <Alert role="status">
+          <AlertDescription className="flex flex-wrap items-center gap-3.5">
+            <span className="min-w-[260px] flex-1">
+              Serial and batch tracking is set per product. <strong className="text-foreground">Nothing tracked yet</strong> — add a batch or serial numbers with the form on this page, or set tracking per product when adding or editing it.
+            </span>
+            <Button asChild><Link href="/dashboard/products">Set up a product</Link></Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
-        {/* ── Serials Tab ── */}
-        <TabsContent value="serials" className="space-y-4 mt-4">
-          <div className="flex gap-2 items-center">
-            <Input placeholder="Search serial number..." value={serialSearch} onChange={e => setSerialSearch(e.target.value)} className="max-w-xs" />
-            <Select value={serialStatus || "all"} onValueChange={v => setSerialStatus(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
+      <div className="flex flex-col items-start gap-5 xl:flex-row">
+        <Card className="w-full min-w-0 flex-1 gap-0 py-0">
+          <div className="px-4">
+            <StatusTabs value={tab} onChange={changeTab} tabs={[
+              { value: "batch", label: "Batches / lots", count: batchCount },
+              { value: "serial", label: "Serial numbers", count: serialCount },
+            ]} />
+          </div>
+          <Toolbar className="p-4">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Label htmlFor="sb-search" className="sr-only">Search</Label>
+              <Input id="sb-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search batch / serial number or product…"
+                className="pl-9" />
+            </div>
+            <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
+              <SelectTrigger aria-label="Status" className="w-[190px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="available">Available</SelectItem>
-                <SelectItem value="sold">Sold</SelectItem>
-                <SelectItem value="returned">Returned</SelectItem>
-                <SelectItem value="damaged">Damaged</SelectItem>
+                <SelectItem value="all">Status: All</SelectItem>
+                {tab === "batch" ? (
+                  <>
+                    <SelectItem value="ok">OK</SelectItem><SelectItem value="soon">Expiring in 30 days</SelectItem><SelectItem value="expired">Expired</SelectItem>
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="available">Available</SelectItem><SelectItem value="sold">Sold</SelectItem><SelectItem value="returned">Returned</SelectItem><SelectItem value="damaged">Damaged</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
-            <Button onClick={loadSerials} variant="outline" size="sm">Search</Button>
-            <div className="ml-auto">
-              <Button onClick={() => setAddSerialOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
-                <Plus className="w-4 h-4 mr-1" /> Add Serials
-              </Button>
-            </div>
-          </div>
+          </Toolbar>
 
-          <div className="rounded-md border bg-white overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="p-3 text-left font-medium text-gray-600">Serial #</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Product</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Location</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Status</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Received</th>
-                  <th className="p-3 text-left font-medium text-gray-600">PO #</th>
-                  <th className="p-3 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {serialsLoading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">Loading...</td></tr>
-                ) : serials.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">No serial numbers found. Add serials for products with Serial Number tracking enabled.</td></tr>
-                ) : serials.map(s => (
-                  <tr key={s.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="p-3 font-mono font-medium">{s.serialNumber}</td>
-                    <td className="p-3">
-                      <div>{s.productName}</div>
-                      {s.variantName && <div className="text-xs text-gray-400">{s.variantName}</div>}
-                    </td>
-                    <td className="p-3 text-gray-500">{s.locationName || "—"}</td>
-                    <td className="p-3">{statusBadge(s.status)}</td>
-                    <td className="p-3 text-gray-500">{s.receivedDate || "—"}</td>
-                    <td className="p-3 text-gray-500">{s.purchaseOrderNumber || "—"}</td>
-                    <td className="p-3">
-                      {s.status !== "sold" && (
-                        <button onClick={() => handleDeleteSerial(s.id)} className="text-red-400 hover:text-red-600">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {serialsTotal > 50 && (
-              <div className="p-3 border-t flex justify-between items-center text-sm text-gray-500">
-                <span>Showing {serials.length} of {serialsTotal}</span>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" disabled={serialsPage === 1} onClick={() => setSerialsPage(p => p - 1)}>Prev</Button>
-                  <Button variant="outline" size="sm" onClick={() => setSerialsPage(p => p + 1)}>Next</Button>
-                </div>
-              </div>
+          <div>
+            {tab === "batch" ? (
+              <Table className="min-w-[780px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Batch</TableHead><TableHead>Product</TableHead>
+                    <TableHead className="text-right">Qty left</TableHead><TableHead>Expiry</TableHead>
+                    <TableHead>Received</TableHead><TableHead>Sell order</TableHead>
+                    <TableHead className="pr-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={7} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>) :
+                    batches.map((b) => {
+                      const e = expiryInfo(b)
+                      return (
+                        <TableRow key={b.id}>
+                          <TableCell className="pl-4 font-bold">{b.batchNumber}</TableCell>
+                          <TableCell>
+                            <div className="font-semibold">{b.productName}{b.variantName ? ` · ${b.variantName}` : ""}</div>
+                            <div className="text-xs text-muted-foreground">{[b.locationName, b.notes].filter(Boolean).join(" · ") || "—"}</div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <div className="font-bold">{b.quantityRemaining}</div>
+                            <div className="text-xs text-muted-foreground">of {Math.max(b.quantityReceived, b.quantityRemaining)} received</div>
+                          </TableCell>
+                          <TableCell>
+                            <div>{fmt(b.expiryDate)}</div>
+                            <Badge variant={e.variant}>{e.txt}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div>{fmt(b.receivedDate)}</div>
+                            <div className="text-xs text-muted-foreground">{b.purchaseOrderNumber || "—"}</div>
+                          </TableCell>
+                          <TableCell className="tabular-nums">{b.sellOrderLabel ?? "—"}</TableCell>
+                          <TableCell className="pr-4">
+                            <div className="flex justify-end gap-1">
+                              <WithTooltip content={`Edit ${b.batchNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.batchNumber}`} onClick={() => editBatch(b)}><Pencil className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={`Delete ${b.batchNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${b.batchNumber}`} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Serial no.</TableHead><TableHead>Product</TableHead>
+                    <TableHead>Warehouse</TableHead><TableHead>Status</TableHead>
+                    <TableHead>Received</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={6} className="px-4"><Skeleton className="h-10" /></TableCell></TableRow>) :
+                    serials.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="pl-4 font-bold">{s.serialNumber}</TableCell>
+                        <TableCell className="font-semibold">{s.productName}{s.variantName ? ` · ${s.variantName}` : ""}</TableCell>
+                        <TableCell>{s.locationName ?? "—"}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={s.status} variant={SERIAL_VARIANT[s.status] ?? SERIAL_VARIANT.sold} className="capitalize" />
+                        </TableCell>
+                        <TableCell>
+                          <div>{fmt(s.receivedDate)}</div>
+                          <div className="text-xs text-muted-foreground">{s.purchaseOrderNumber || "—"}</div>
+                        </TableCell>
+                        <TableCell className="pr-4">
+                          <div className="flex justify-end gap-1">
+                            <WithTooltip content={`Edit ${s.serialNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${s.serialNumber}`} onClick={() => editSerial(s)}><Pencil className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={`Delete ${s.serialNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${s.serialNumber}`} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
             )}
           </div>
-        </TabsContent>
 
-        {/* ── Batches Tab ── */}
-        <TabsContent value="batches" className="space-y-4 mt-4">
-          <div className="flex gap-2 items-center">
-            <Input placeholder="Search batch number..." value={batchSearch} onChange={e => setBatchSearch(e.target.value)} className="max-w-xs" />
-            <Button onClick={loadBatches} variant="outline" size="sm">Search</Button>
-            <div className="ml-auto">
-              <Button onClick={() => setAddBatchOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
-                <Plus className="w-4 h-4 mr-1" /> Add Batch
-              </Button>
-            </div>
-          </div>
+          {!loading && rows.length === 0 && (
+            <EmptyState
+              icon={tab === "batch" ? Layers : Hash}
+              title={q || statusF !== "all" ? "Nothing matches" : tab === "batch" ? "No batches yet" : "No serial numbers yet"}
+              description={q || statusF !== "all" ? "Try clearing the search or status." : "Use the form to add your first one."}
+            />
+          )}
 
-          <div className="rounded-md border bg-white overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="p-3 text-left font-medium text-gray-600">Batch #</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Product</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Qty Received</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Qty Remaining</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Expiry Date</th>
-                  <th className="p-3 text-left font-medium text-gray-600">Status</th>
-                  <th className="p-3 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {batchesLoading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">Loading...</td></tr>
-                ) : batches.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400">No batches found. Add batches for products with Batch/Lot tracking enabled.</td></tr>
-                ) : batches.map(b => (
-                  <tr key={b.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="p-3 font-mono font-medium">{b.batchNumber}</td>
-                    <td className="p-3">
-                      <div>{b.productName}</div>
-                      {b.variantName && <div className="text-xs text-gray-400">{b.variantName}</div>}
-                    </td>
-                    <td className="p-3">{b.quantityReceived}</td>
-                    <td className="p-3 font-medium">{b.quantityRemaining}</td>
-                    <td className="p-3">
-                      {b.expiryDate ? (
-                        <span className={b.isExpired ? "text-red-600 font-medium" : b.isExpiringSoon ? "text-orange-600 font-medium" : "text-gray-600"}>
-                          {b.expiryDate}
-                        </span>
-                      ) : "—"}
-                    </td>
-                    <td className="p-3">
-                      {b.isExpired ? (
-                        <span className="flex items-center gap-1 text-xs text-red-600 font-medium"><AlertTriangle className="w-3 h-3" />Expired</span>
-                      ) : b.isExpiringSoon ? (
-                        <span className="flex items-center gap-1 text-xs text-orange-600 font-medium"><Clock className="w-3 h-3" />Expiring Soon</span>
-                      ) : b.quantityRemaining === 0 ? (
-                        <span className="text-xs text-gray-400">Depleted</span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-emerald-600"><CheckCircle className="w-3 h-3" />Active</span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <button onClick={() => handleDeleteBatch(b.id)} className="text-red-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {batchesTotal > 50 && (
-              <div className="p-3 border-t flex justify-between items-center text-sm text-gray-500">
-                <span>Showing {batches.length} of {batchesTotal}</span>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" disabled={batchesPage === 1} onClick={() => setBatchesPage(p => p - 1)}>Prev</Button>
-                  <Button variant="outline" size="sm" onClick={() => setBatchesPage(p => p + 1)}>Next</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* ── Add Serials Modal ── */}
-      <Dialog open={addSerialOpen} onOpenChange={setAddSerialOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add Serial Numbers</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Product <span className="text-red-500">*</span></Label>
-              {(() => {
-                const serialProducts = products.filter((p: any) => p.trackingType === "serial" || p.tracking_type === "serial")
-                return (
-                  <>
-                    <Select value={serialForm.productId} onValueChange={v => setSerialForm(f => ({ ...f, productId: v }))} disabled={serialProducts.length === 0}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Select product..." /></SelectTrigger>
-                      <SelectContent>
-                        {serialProducts.map((p: any) => (
-                          <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {serialProducts.length === 0 ? (
-                      <p className="text-xs text-amber-600">
-                        No products have Serial tracking enabled. Edit a product and set its tracking type to “Serial” first.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Only products with Serial Number tracking enabled are shown.</p>
-                    )}
-                  </>
-                )
-              })()}
-            </div>
-            <div className="space-y-1">
-              <Label>Serial Numbers <span className="text-red-500">*</span></Label>
-              <Textarea
-                value={serialForm.bulkInput}
-                onChange={e => setSerialForm(f => ({ ...f, bulkInput: e.target.value }))}
-                placeholder={"SN-001\nSN-002\nSN-003\n(one per line)"}
-                rows={5}
-                className="font-mono text-sm"
+          {!loading && total > 0 && (
+            <>
+            <Separator />
+            <div className="p-4 pt-3">
+              <PaginationControl
+                currentPage={page}
+                totalPages={Math.max(1, Math.ceil(total / perPage))}
+                itemsPerPage={perPage}
+                totalItems={total}
+                onPageChange={setPage}
+                onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
               />
-              <p className="text-xs text-gray-400">{serialForm.bulkInput.split("\n").filter(l => l.trim()).length} serial(s) entered</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Received Date</Label>
-                <Input type="date" value={serialForm.receivedDate} onChange={e => setSerialForm(f => ({ ...f, receivedDate: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>PO Number</Label>
-                <Input value={serialForm.purchaseOrderNumber} onChange={e => setSerialForm(f => ({ ...f, purchaseOrderNumber: e.target.value }))} placeholder="Optional" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Input value={serialForm.notes} onChange={e => setSerialForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddSerialOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddSerials} disabled={serialSaving || !serialForm.productId || !serialForm.bulkInput.trim()} className="bg-emerald-600 hover:bg-emerald-700">
-              {serialSaving ? "Adding..." : "Add Serials"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </>
+          )}
+        </Card>
 
-      {/* ── Add Batch Modal ── */}
-      <Dialog open={addBatchOpen} onOpenChange={setAddBatchOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add Batch / Lot</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Product <span className="text-red-500">*</span></Label>
-              {(() => {
-                const batchProducts = products.filter((p: any) => p.trackingType === "batch" || p.tracking_type === "batch")
-                return (
-                  <>
-                    <Select value={batchForm.productId} onValueChange={v => setBatchForm(f => ({ ...f, productId: v }))} disabled={batchProducts.length === 0}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Select product..." /></SelectTrigger>
-                      <SelectContent>
-                        {batchProducts.map((p: any) => (
-                          <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {batchProducts.length === 0 ? (
-                      <p className="text-xs text-amber-600">
-                        No products have Batch/Lot tracking enabled. Edit a product and set its tracking type to “Batch” first.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Only products with Batch/Lot tracking enabled are shown.</p>
-                    )}
-                  </>
-                )
-              })()}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Batch Number <span className="text-red-500">*</span></Label>
-                <Input value={batchForm.batchNumber} onChange={e => setBatchForm(f => ({ ...f, batchNumber: e.target.value }))} placeholder="e.g. LOT-2026-001" />
+        <aside aria-label="Add" className="w-full shrink-0 xl:w-[380px]">
+        <SectionCard title={formTitle} contentClassName="flex flex-col gap-3.5">
+          {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
+          <FormField label="Product *" htmlFor="sb-f-product">
+            <Select value={fProduct || "__none"} onValueChange={(v) => { setFProduct(v === "__none" ? "" : v); setFVariant("") }} disabled={editing?.type === "serial"}>
+              <SelectTrigger id="sb-f-product" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Select a product</SelectItem>
+                {products.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}{p.sku ? ` (${p.sku})` : ""}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
+          {variants.length > 0 && (
+            <FormField label="Variant *" htmlFor="sb-f-variant">
+              <Select value={fVariant || "__none"} onValueChange={(v) => setFVariant(v === "__none" ? "" : v)} disabled={editing?.type === "serial"}>
+                <SelectTrigger id="sb-f-variant" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Select variant</SelectItem>
+                  {variants.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+
+          {tab === "batch" ? (
+            <>
+              <div className="grid grid-cols-2 gap-2.5">
+                <FormField label="Batch / lot no. *" htmlFor="sb-f-code"><Input id="sb-f-code" className="w-full" value={fCode} onChange={(e) => setFCode(e.target.value)} placeholder="e.g. GM-2610" /></FormField>
+                <FormField label={editing ? "Qty left *" : "Quantity *"} htmlFor="sb-f-qty"><Input id="sb-f-qty" type="number" min={editing ? 0 : 1} step={1} className="w-full" value={fQty} onChange={(e) => setFQty(e.target.value)} placeholder="0" /></FormField>
               </div>
-              <div className="space-y-1">
-                <Label>Quantity Received <span className="text-red-500">*</span></Label>
-                <Input type="number" min="1" value={batchForm.quantityReceived} onChange={e => setBatchForm(f => ({ ...f, quantityReceived: e.target.value }))} placeholder="0" />
+              <div className="grid grid-cols-2 gap-2.5">
+                <FormField label="Manufactured" htmlFor="sb-f-mfg"><Input id="sb-f-mfg" type="date" className="w-full" value={fMfg} onChange={(e) => setFMfg(e.target.value)} /></FormField>
+                <FormField label="Expires" htmlFor="sb-f-expiry"><Input id="sb-f-expiry" type="date" className="w-full" value={fExpiry} onChange={(e) => setFExpiry(e.target.value)} /></FormField>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Manufacture Date</Label>
-                <Input type="date" value={batchForm.manufactureDate} onChange={e => setBatchForm(f => ({ ...f, manufactureDate: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-2.5">
+                <FormField label="PO number" htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></FormField>
+                <FormField label="Warehouse" htmlFor="sb-f-loc">
+                  <Select value={fLoc || undefined} onValueChange={setFLoc}>
+                    <SelectTrigger id="sb-f-loc" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormField>
               </div>
-              <div className="space-y-1">
-                <Label>Expiry Date</Label>
-                <Input type="date" value={batchForm.expiryDate} onChange={e => setBatchForm(f => ({ ...f, expiryDate: e.target.value }))} />
+              <FormField label="Notes" htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></FormField>
+            </>
+          ) : (
+            <>
+              <FormField label={editing ? "Serial number *" : "Serial numbers *"} htmlFor="sb-f-serials" description={editing ? undefined : `${serialLines.length} serial${serialLines.length === 1 ? "" : "s"} · duplicates are skipped automatically`}>
+                <Textarea id="sb-f-serials" rows={editing ? 1 : 5} className="w-full" value={serialText} onChange={(e) => setSerialText(e.target.value)} placeholder="Scan or type one per line" />
+              </FormField>
+              <div className="grid grid-cols-2 gap-2.5">
+                <FormField label="Received" htmlFor="sb-f-received"><Input id="sb-f-received" type="date" className="w-full" value={fReceived} onChange={(e) => setFReceived(e.target.value)} /></FormField>
+                <FormField label="PO number" htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></FormField>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Received Date</Label>
-                <Input type="date" value={batchForm.receivedDate} onChange={e => setBatchForm(f => ({ ...f, receivedDate: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>PO Number</Label>
-                <Input value={batchForm.purchaseOrderNumber} onChange={e => setBatchForm(f => ({ ...f, purchaseOrderNumber: e.target.value }))} placeholder="Optional" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Input value={batchForm.notes} onChange={e => setBatchForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddBatchOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddBatch} disabled={batchSaving || !batchForm.productId || !batchForm.batchNumber || !batchForm.quantityReceived} className="bg-emerald-600 hover:bg-emerald-700">
-              {batchSaving ? "Saving..." : "Create Batch"}
+              <FormField label="Warehouse" htmlFor="sb-f-loc">
+                <Select value={fLoc || undefined} onValueChange={setFLoc}>
+                    <SelectTrigger id="sb-f-loc" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+              </FormField>
+              <FormField label="Status" htmlFor="sb-f-status">
+                <Select value={fStatus} onValueChange={setFStatus}>
+                  <SelectTrigger id="sb-f-status" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="available">Available</SelectItem><SelectItem value="sold">Sold</SelectItem><SelectItem value="returned">Returned</SelectItem><SelectItem value="damaged">Damaged</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Notes" htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></FormField>
+            </>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={clearForm}>Clear</Button>
+            <Button type="button" disabled={saving} onClick={save}>
+              {saving ? "Saving…" : editing ? "Save changes" : tab === "batch" ? "Add batch" : `Add ${serialLines.length || ""} serial${serialLines.length === 1 ? "" : "s"}`.replace("  ", " ")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SectionCard>
+        </aside>
+      </div>
     </div>
   )
 }

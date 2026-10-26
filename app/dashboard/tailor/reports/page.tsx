@@ -1,417 +1,256 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { BarChart2, Package, Users } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react"
+import { Download, Printer } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  tailorApi,
-  TailorOrder, TailorFabric, TailorDorji,
-  ORDER_STATUS_LABELS, ORDER_STATUS_COLORS,
-} from "@/lib/tailorApi"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { StatTile } from "@/components/common/StatTile"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { tailorApi, type TailorKpi, type TailorReport, type TailorReportCell, type TailorReportType } from "@/lib/tailorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
+import { KpiIcon } from "@/components/tailor/kpi-icon"
 
-type Tab = "orders" | "fabrics" | "dorjis"
+const TABS: [TailorReportType, string][] = [["orders", "Orders & income"], ["fabrics", "Fabrics"], ["dorjis", "Dorjis"]]
+const RANGES = [
+  ["month", "This month"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["ytd", "This year"], ["all", "All time"], ["custom", "Custom…"],
+] as const
+type RangeId = (typeof RANGES)[number][0]
 
-function firstOfMonth() {
-  const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+const SUB_TONE: Record<string, string> = { muted: "text-muted-foreground", red: "text-destructive", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
+const MIX_COLORS = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
+/** Report cell tone -> status text for StatusBadge's variant mapping. */
+const PILL: Record<string, string> = {
+  paid: "paid", partial: "partial", unpaid: "unpaid",
+  "stage:new": "new", "stage:cutting": "cutting", "stage:stitching": "stitching", "stage:trial": "trial",
+  "stage:ready": "ready", "stage:delivered": "delivered", "stage:cancelled": "cancelled",
+  "fabric:ok": "in stock", "fabric:low": "low stock", "fabric:out-of-stock": "out of stock", "fabric:inactive": "inactive",
 }
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
 
-// ── Orders Report ────────────────────────────────────────────────────────────
+const pad = (n: number) => String(n).padStart(2, "0")
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const addDays = (iso: string, n: number) => { const [y, m, d] = iso.split("-").map(Number); return ymd(new Date(y, m - 1, d + n)) }
 
-interface OrdersReportData {
-  summary: {
-    totalOrders: number
-    totalAmount: number
-    totalPaid: number
-    totalDue: number
-    byStatus: Record<string, number>
+function windowFor(range: RangeId, from: string, to: string): [string, string] {
+  const today = ymd(new Date())
+  switch (range) {
+    case "month": return [`${today.slice(0, 8)}01`, today]
+    case "7": return [addDays(today, -6), today]
+    case "30": return [addDays(today, -29), today]
+    case "90": return [addDays(today, -89), today]
+    case "ytd": return [`${today.slice(0, 4)}-01-01`, today]
+    case "all": return ["", ""]
+    default: return [from, to]
   }
-  orders: TailorOrder[]
 }
 
-function OrdersReport({ formatCurrency }: { formatCurrency: (n: number) => string }) {
-  const [dateFrom, setDateFrom] = useState(firstOfMonth())
-  const [dateTo, setDateTo] = useState(today())
-  const [data, setData] = useState<OrdersReportData | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  const load = () => {
-    setLoading(true)
-    tailorApi.getOrdersReport({ date_from: dateFrom, date_to: dateTo })
-      .then(r => setData(r.data))
-      .catch(() => toast.error("Failed to load orders report"))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { load() }, [])
-
-  const byStatus = data?.summary?.byStatus ?? {}
-  const maxByStatus = Math.max(...Object.values(byStatus), 1)
-
-  return (
-    <div className="space-y-5">
-      {/* Date filter */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-gray-500">From</Label>
-          <Input type="date" className="h-9 w-36 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-gray-500">To</Label>
-          <Input type="date" className="h-9 w-36 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-        </div>
-        <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={load} disabled={loading}>
-          {loading ? "Loading..." : "Apply"}
-        </Button>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Total Orders", value: data?.summary?.totalOrders ?? 0, fmt: false, color: "text-gray-900" },
-          { label: "Total Revenue", value: data?.summary?.totalAmount ?? 0, fmt: true, color: "text-purple-700" },
-          { label: "Total Collected", value: data?.summary?.totalPaid ?? 0, fmt: true, color: "text-green-700" },
-          { label: "Total Due", value: data?.summary?.totalDue ?? 0, fmt: true, color: "text-red-600" },
-        ].map(c => (
-          <Card key={c.label} className="p-4">
-            <p className="text-xs text-gray-500 mb-1">{c.label}</p>
-            <div className={`text-xl font-black ${c.color}`}>
-              {loading ? <Skeleton className="h-7 w-24" /> : c.fmt ? formatCurrency(c.value as number) : c.value}
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Orders by status — horizontal bar chart */}
-      {!loading && data && Object.keys(byStatus).length > 0 && (
-        <Card className="p-5">
-          <p className="text-sm font-semibold text-gray-700 mb-4">Orders by Status</p>
-          <div className="space-y-2">
-            {Object.entries(byStatus).map(([status, count]) => (
-              <div key={status} className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 w-36 shrink-0">
-                  {ORDER_STATUS_LABELS[status as keyof typeof ORDER_STATUS_LABELS] ?? status}
-                </span>
-                <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 rounded-full transition-all"
-                    style={{ width: `${(count / maxByStatus) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-gray-700 w-8 text-right">{count}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Orders table */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Order #</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Paid</th>
-                <th className="px-4 py-3">Due</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-8" /></td></tr>
-                ))
-              ) : (data?.orders ?? []).length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
-                    <BarChart2 className="w-10 h-10 mx-auto mb-2 text-gray-200" />
-                    <p className="text-gray-400">No orders in this period</p>
-                  </td>
-                </tr>
-              ) : (data?.orders ?? []).map(o => (
-                <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">
-                    <Link href={`/dashboard/tailor/orders/${o.id}`} className="text-purple-600 hover:underline">
-                      {o.orderNumber}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                    {new Date(o.orderDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">{o.customer?.name ?? "—"}</td>
-                  <td className="px-4 py-3 font-semibold">{formatCurrency(o.totalAmount)}</td>
-                  <td className="px-4 py-3 text-green-700">{formatCurrency(o.paidAmount)}</td>
-                  <td className="px-4 py-3 text-red-600">{formatCurrency(o.dueAmount)}</td>
-                  <td className="px-4 py-3">
-                    <Badge className={ORDER_STATUS_COLORS[o.orderStatus]}>
-                      {ORDER_STATUS_LABELS[o.orderStatus]}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  )
+const short = (n: number) => {
+  const a = Math.abs(n)
+  const s = a >= 1e7 ? `${(a / 1e7).toFixed(1)}Cr` : a >= 1e5 ? `${(a / 1e5).toFixed(1)}L` : a >= 1e3 ? `${(a / 1e3).toFixed(1)}k` : String(Math.round(a))
+  return (n < 0 ? "-" : "") + s.replace(".0", "")
 }
-
-// ── Fabrics Report ────────────────────────────────────────────────────────────
-
-interface FabricsReportData {
-  fabrics: TailorFabric[]
-  lowStockCount: number
-  totalValue: number
-}
-
-function FabricsReport({ formatCurrency }: { formatCurrency: (n: number) => string }) {
-  const [data, setData] = useState<FabricsReportData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    tailorApi.getFabricsReport()
-      .then(r => setData(r.data))
-      .catch(() => toast.error("Failed to load fabrics report"))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const fabrics = data?.fabrics ?? []
-
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-4 max-w-xl">
-        {[
-          { label: "Total Fabrics", value: loading ? "…" : fabrics.length, color: "text-gray-900" },
-          { label: "Low Stock (< 5)", value: loading ? "…" : data?.lowStockCount ?? 0, color: "text-orange-600" },
-          { label: "Inventory Value", value: loading ? "…" : formatCurrency(data?.totalValue ?? 0), color: "text-green-700" },
-        ].map(c => (
-          <Card key={c.label} className="p-4">
-            <p className="text-xs text-gray-500 mb-1">{c.label}</p>
-            <p className={`text-xl font-black ${c.color}`}>{c.value}</p>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Color</th>
-                <th className="px-4 py-3">Stock</th>
-                <th className="px-4 py-3">Unit</th>
-                <th className="px-4 py-3">Purchase Price</th>
-                <th className="px-4 py-3">Selling Price</th>
-                <th className="px-4 py-3">Value</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}><td colSpan={9} className="px-4 py-3"><Skeleton className="h-8" /></td></tr>
-                ))
-              ) : fabrics.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
-                    <Package className="w-10 h-10 mx-auto mb-2 text-gray-200" />
-                    <p className="text-gray-400">No fabrics found</p>
-                  </td>
-                </tr>
-              ) : fabrics.map(f => (
-                <tr key={f.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-semibold text-gray-900">{f.name}</td>
-                  <td className="px-4 py-3 text-gray-500">{f.fabricType ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-500">{f.color ?? "—"}</td>
-                  <td className={`px-4 py-3 font-semibold ${f.stockQuantity < 5 ? "text-red-600" : "text-gray-700"}`}>
-                    {f.stockQuantity}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{f.unit}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatCurrency(f.purchasePrice)}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatCurrency(f.sellingPrice)}</td>
-                  <td className="px-4 py-3 font-semibold text-green-700">
-                    {formatCurrency(f.stockQuantity * f.sellingPrice)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge className={f.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
-                      {f.status}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  )
-}
-
-// ── Dorjis Report ────────────────────────────────────────────────────────────
-
-type DorjiReportRow = TailorDorji & {
-  ordersCount: number
-  totalEarned: number
-  completedOrders: number
-}
-
-interface DorjisReportData {
-  dorjis: DorjiReportRow[]
-}
-
-function DorjisReport({ formatCurrency }: { formatCurrency: (n: number) => string }) {
-  const [dateFrom, setDateFrom] = useState(firstOfMonth())
-  const [dateTo, setDateTo] = useState(today())
-  const [data, setData] = useState<DorjisReportData | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  const load = () => {
-    setLoading(true)
-    tailorApi.getDorjisReport({ date_from: dateFrom, date_to: dateTo })
-      .then(r => setData(r.data))
-      .catch(() => toast.error("Failed to load dorjis report"))
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { load() }, [])
-
-  const dorjis = data?.dorjis ?? []
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-gray-500">From</Label>
-          <Input type="date" className="h-9 w-36 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-gray-500">To</Label>
-          <Input type="date" className="h-9 w-36 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-        </div>
-        <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={load} disabled={loading}>
-          {loading ? "Loading..." : "Apply"}
-        </Button>
-      </div>
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Speciality</th>
-                <th className="px-4 py-3">Commission</th>
-                <th className="px-4 py-3">Orders</th>
-                <th className="px-4 py-3">Completed</th>
-                <th className="px-4 py-3">Total Earned</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-8" /></td></tr>
-                ))
-              ) : dorjis.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center">
-                    <Users className="w-10 h-10 mx-auto mb-2 text-gray-200" />
-                    <p className="text-gray-400">No dorji data for this period</p>
-                  </td>
-                </tr>
-              ) : dorjis.map(d => (
-                <tr key={d.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-semibold text-gray-900">{d.name}</td>
-                  <td className="px-4 py-3 text-gray-500">{d.phone}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(d.speciality ?? []).length === 0 ? (
-                        <span className="text-gray-400">—</span>
-                      ) : (d.speciality ?? []).map(s => (
-                        <Badge key={s} className="bg-purple-100 text-purple-700 text-xs">{s}</Badge>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {d.commissionType === "percentage" ? `${d.commissionValue}%` : formatCurrency(d.commissionValue)}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700 font-semibold">{d.ordersCount}</td>
-                  <td className="px-4 py-3 text-green-700 font-semibold">{d.completedOrders}</td>
-                  <td className="px-4 py-3 font-bold text-purple-700">{formatCurrency(d.totalEarned)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  )
-}
-
-// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TailorReportsPage() {
-  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
-  const [tab, setTab] = useState<Tab>("orders")
+  const { toast } = useToast()
+  const blocked = useModuleGuard("TailorReports")
 
-  if (!canRead("TailorReports")) return <AccessDenied />
+  const [type, setType] = useState<TailorReportType>("orders")
+  const [range, setRange] = useState<RangeId>("month")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [report, setReport] = useState<TailorReport | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "orders",  label: "Orders Report",  icon: <BarChart2 className="w-4 h-4" /> },
-    { key: "fabrics", label: "Fabrics Report",  icon: <Package className="w-4 h-4" /> },
-    { key: "dorjis",  label: "Dorjis Report",   icon: <Users className="w-4 h-4" /> },
-  ]
+  const [wFrom, wTo] = windowFor(range, from, to)
+  const customIncomplete = range === "custom" && (!from || !to)
+
+  const load = useCallback(async () => {
+    if (customIncomplete) { setLoading(false); return }
+    setLoading(true); setError("")
+    try {
+      setReport(await tailorApi.getReport(type, { from: wFrom || undefined, to: wTo || undefined }))
+    } catch (e: any) {
+      setReport(null)
+      setError(e?.response?.data?.message || "Could not load this report.")
+    } finally {
+      setLoading(false)
+    }
+  }, [type, wFrom, wTo, customIncomplete])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { setPage(1) }, [type, wFrom, wTo])
+
+  const table = report?.tables[0]
+
+  const fmt = useCallback((c: TailorReportCell): string => {
+    if (c.t === "money") return formatCurrency(Number(c.v) || 0)
+    if (c.t === "int") return String(Math.round(Number(c.v) || 0))
+    if (c.t === "pct") return `${Math.round(Number(c.v) || 0)}%`
+    return String(c.v ?? "")
+  }, [formatCurrency])
+  const fmtKpi = (k: TailorKpi) => (k.kind === "money" ? formatCurrency(Number(k.value) || 0) : k.kind === "int" ? String(Math.round(Number(k.value) || 0)) : String(k.value))
+  const unitTxt = (u: string | null | undefined) => (u ? ` ${u}` : "")
+  const fmtNum = (v: number, kind: "money" | "int" | "num", unit?: string | null) =>
+    kind === "money" ? formatCurrency(v) : kind === "num" ? `${Number(v.toFixed(1))}${unitTxt(unit)}` : String(Math.round(v))
+
+  const periodTxt = useMemo(() => {
+    if (range === "all") return "Period: all time"
+    if (!wFrom && !wTo) return "Pick a start and end date to see this report."
+    const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    return `Period: ${wFrom ? f(wFrom) : "start"} to ${wTo ? f(wTo) : "today"}`
+  }, [range, wFrom, wTo])
+
+  const handleExport = () => {
+    if (!report || !table || table.rows.length === 0) { toast({ variant: "destructive", title: "Nothing to export for this period" }); return }
+    const out: string[][] = [table.columns, ...table.rows.map((r) => r.map((c) => (c.t === "money" || c.t === "int" || c.t === "pct" ? String(c.v) : String(c.v))))]
+    const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+    const blob = new Blob([out.map((r) => r.map(esc).join(",")).join("\n")], { type: "text/csv;charset=utf-8" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = `tailor-${type}-${ymd(new Date())}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  if (blocked) return blocked
+
+  const bars = report?.chart?.bars ?? []
+  const maxBar = Math.max(1, ...bars.map((b) => Math.abs(b.value)))
+  const chartKind = report?.chart?.kind ?? "money"
+  const rows = table ? table.rows.slice((page - 1) * perPage, page * perPage) : []
 
   return (
-    <div className="p-6 space-y-5">
-      <div>
-        <h1 className="text-2xl font-black text-gray-900">Reports</h1>
-        <p className="text-sm text-gray-500">Analytics and summaries for your tailor shop</p>
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      <PageHeader
+        title="Tailor reports"
+        description={report?.subtitle ?? "How the workshop is doing — orders, fabric and dorjis."}
+        actions={<div className="flex gap-2 print:hidden">
+          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> Print</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+        </div>}
+      />
+
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <SegmentedControl aria-label="Report" size="default" value={type} onValueChange={(v) => setType(v as TailorReportType)}
+          options={TABS.map(([id, label]) => ({ value: id, label }))} />
+        <SegmentedControl aria-label="Date range" className="md:ml-auto" value={range} onValueChange={(v) => setRange(v as RangeId)}
+          options={RANGES.map(([id, label]) => ({ value: id, label }))} />
       </div>
 
-      {/* Tab buttons */}
-      <div className="flex gap-2 border-b border-gray-200">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              tab === t.key
-                ? "border-purple-600 text-purple-700"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {range === "custom" && (
+        <div className="flex flex-wrap gap-3 print:hidden">
+          <FormField orientation="horizontal" className="w-auto gap-2" label="From" htmlFor="rep-from">
+            <Input id="rep-from" type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField>
+          <FormField orientation="horizontal" className="w-auto gap-2" label="To" htmlFor="rep-to">
+            <Input id="rep-to" type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} /></FormField>
+        </div>
+      )}
+      <p className="text-sm text-muted-foreground">{periodTxt}</p>
 
-      {tab === "orders"  && <OrdersReport  formatCurrency={formatCurrency} />}
-      {tab === "fabrics" && <FabricsReport formatCurrency={formatCurrency} />}
-      {tab === "dorjis"  && <DorjisReport  formatCurrency={formatCurrency} />}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+
+      {loading && !report ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
+      ) : report ? (
+        <>
+          <section aria-label="Summary" className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length >= 5 ? "xl:grid-cols-5" : "xl:grid-cols-4", loading && "opacity-60")}>
+            {report.kpis.map((k) => (
+              <StatTile key={k.label} label={k.label} value={fmtKpi(k)} icon={<KpiIcon label={k.label} />}
+                hint={k.sub ? <span className={SUB_TONE[k.subTone ?? "muted"]}>{k.sub}</span> : undefined} />
+            ))}
+          </section>
+
+          <div className="grid gap-4 lg:grid-cols-[2fr_1fr] print:grid-cols-1">
+            <SectionCard className="min-w-0 print:break-inside-avoid" title={report.chart?.title}>
+              {bars.length === 0 ? <p className="text-sm text-muted-foreground">{table?.empty}</p> : (
+                <div className="overflow-x-auto">
+                  <div className="flex h-[200px] items-end gap-2 border-b" style={{ minWidth: bars.length * 34 }}>
+                    {bars.map((b) => (
+                      <div key={b.label} className="flex h-full min-w-[26px] flex-1 flex-col items-center justify-end gap-1" title={`${b.label}: ${fmtNum(b.value, chartKind, report.chart?.unit)}`}>
+                        <span className="text-[11px] font-semibold text-muted-foreground">{b.value ? (chartKind === "money" ? short(b.value) : String(Number(b.value.toFixed(1)))) : ""}</span>
+                        <div className="w-full max-w-[34px] rounded-t-md bg-primary" style={{ height: `${Math.round((Math.abs(b.value) / maxBar) * 160)}px` }} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2" style={{ minWidth: bars.length * 34 }}>{bars.map((b) => <span key={b.label} className="min-w-[26px] flex-1 pt-1.5 text-center text-[11px] text-muted-foreground">{b.label}</span>)}</div>
+                </div>
+              )}
+            </SectionCard>
+
+            <Card className="gap-3 p-5 print:break-inside-avoid">
+              {report.mixes.map((mx, mi) => {
+                const top = mx.items.slice(0, 6)
+                const peak = Math.max(1, ...top.map((i) => Math.abs(i.value)))
+                return (
+                  <div key={mx.title} className={cn("flex flex-col gap-3", mi > 0 && "mt-3")}>
+                    <h2 className="leading-none font-semibold">{mx.title}</h2>
+                    {top.length === 0 ? <p className="text-sm text-muted-foreground">Nothing to show for this period.</p> : top.map((m, i) => (
+                      <div key={m.label}>
+                        <div className="flex justify-between text-sm"><span className="font-medium">{m.label}</span><span className="tabular-nums text-muted-foreground">{fmtNum(m.value, mx.kind, mx.unit)}</span></div>
+                        <Progress value={Math.round((Math.abs(m.value) / peak) * 100)} aria-label={m.label}
+                          className="mt-1.5 [&>[data-slot=progress-indicator]]:bg-(--mix)" style={{ "--mix": MIX_COLORS[i % MIX_COLORS.length] } as CSSProperties} />
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </Card>
+          </div>
+
+          {table && (
+            <Card className="gap-0 py-0">
+              <div className="overflow-x-auto">
+                <Table className="min-w-[700px]">
+                  <TableHeader>
+                    <TableRow>
+                      {table.columns.map((c, i) => <TableHead key={c + i} scope="col">{c}</TableHead>)}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r, ri) => (
+                      <TableRow key={ri}>
+                        {r.map((c, ci) => (
+                          <TableCell key={ci} className={cn("tabular-nums", c.bold && "font-bold")}>
+                            {c.tone && PILL[c.tone] ? <StatusBadge status={PILL[c.tone]} label={fmt(c)} /> : fmt(c)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {table.rows.length === 0 && <EmptyState className="p-4 md:p-6" title={table.empty || "No rows for this period"} />}
+              {table.rows.length > 10 && (
+                <div className="print:hidden">
+                  <Separator />
+                  <div className="p-4">
+                  <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(table.rows.length / perPage))} itemsPerPage={perPage} totalItems={table.rows.length}
+                    onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+        </>
+      ) : null}
     </div>
   )
 }

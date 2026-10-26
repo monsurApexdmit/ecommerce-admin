@@ -70,7 +70,50 @@ export interface InventoryListResponse {
   total: number;
 }
 
+export type StockHealth = 'ok' | 'low' | 'out' | 'over';
+
+export interface StockRow {
+  type: 'product' | 'variant';
+  id: number;
+  productId: number;
+  name: string;
+  variantName: string | null;
+  sku: string;
+  barcode?: string | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  published: boolean;
+  reorderPoint: number;
+  cost: number;
+  locations: InventoryLocation[];
+  onHand: number;
+  reserved: number;
+  available: number;
+  health: StockHealth;
+  value: number;
+  variants?: StockRow[];
+}
+
+export interface StockOverview {
+  items: StockRow[];
+  total: number;
+  stats: {
+    skus: number; categories: number; units: number; reserved: number; stockValue: number;
+    published: number; unpublished: number; low: number; out: number; over: number; ok: number; attention: number;
+  };
+  counts: { all: number; attention: number; ok: number; low: number; out: number; over: number };
+  locations: { id: number; name: string; isDefault?: boolean }[];
+  categories: { id: number; name: string }[];
+}
+
 export const inventoryApi = {
+  getOverview: async (params?: {
+    search?: string; location_id?: number; category_id?: number; health?: string; page?: number; per_page?: number;
+  }): Promise<StockOverview> => {
+    const response = await api.get('/inventory/overview', { params: { per_page: 1000, ...params } });
+    return response.data.data;
+  },
+
   getAll: async (params?: {
     search?: string;
     warehouse_id?: number;

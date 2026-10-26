@@ -29,18 +29,19 @@
   --chart-4: oklch(0.6 0.2 30);
   --chart-5: oklch(0.75 0.12 280);
   --radius: 0.5rem;
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.15 0 0);
-  --sidebar-primary: oklch(0.55 0.15 165);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.96 0.01 165);
-  --sidebar-accent-foreground: oklch(0.15 0 0);
-  --sidebar-border: oklch(0.93 0 0);
-  --sidebar-ring: oklch(0.55 0.15 165);
+  --sidebar: #0E1525;
+  --sidebar-foreground: #C9D1E3;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1D2A45;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #1D2A45;
+  --sidebar-ring: var(--brand);
 
   /* Brand accent — overridable at runtime by the topbar swatch picker.
-     Default emerald. `-soft` is the tinted active/badge bg, `-fg` the text. */
-  --brand: #059669;
+     Default is the design's blue. `-soft` is the tinted active/badge bg, `-fg` the text.
+     `--dash-accent*` below derive from it, so theme + shadcn controls share one accent. */
+  --brand: #2449E8;
   --brand-foreground: #ffffff;
   --brand-soft: color-mix(in srgb, var(--brand) 11%, transparent);
   --brand-fg: var(--brand);
@@ -94,17 +95,99 @@
   --chart-3: oklch(0.75 0.15 60);
   --chart-4: oklch(0.65 0.2 30);
   --chart-5: oklch(0.8 0.12 280);
-  --sidebar: oklch(0.18 0.02 258);
-  --sidebar-foreground: oklch(0.93 0.008 250);
-  --sidebar-primary: oklch(0.6 0.15 165);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.26 0.02 258);
-  --sidebar-accent-foreground: oklch(0.93 0.008 250);
-  --sidebar-border: oklch(0.3 0.02 258);
-  --sidebar-ring: oklch(0.6 0.15 165);
+  --sidebar: #0E1525;
+  --sidebar-foreground: #C9D1E3;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1D2A45;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #1D2A45;
+  --sidebar-ring: var(--brand);
+}
+
+/* ── Dashboard redesign tokens ─────────────────────────────────────────────
+ * Scoped by name (--dash-*), consumed via the dash-* utilities below. Dark values
+ * apply under the existing `.dark` class. */
+:root {
+  --dash-sidebar: #0E1525;
+  --dash-sidebar-fg: #C9D1E3;
+  --dash-sidebar-active: #1D2A45;
+  --dash-bg: #F3F4F7;
+  --dash-card: #FFFFFF;
+  --dash-border: #E3E6EE;
+  --dash-border-soft: #EEF0F5;
+  --dash-ink: #0E1525;
+  --dash-muted: #5B6478;
+  --dash-accent: var(--brand);
+  --dash-accent-soft: color-mix(in srgb, var(--brand) 11%, white);
+  --dash-accent-fg: color-mix(in srgb, var(--brand), black 30%);
+  --dash-warn: #F59E0B;
+  --dash-warn-soft: #FDF0DC;
+  --dash-warn-fg: #7A3E06;
+  --dash-danger: #B42318;
+  --dash-danger-soft: #FDE8E6;
+  --dash-danger-fg: #8F1C13;
+  --dash-success: #0F766E;
+  --dash-success-soft: #DDF3EF;
+  --dash-success-fg: #0B5D57;
+  --dash-neutral: #7C8AA8;
+  --dash-neutral-soft: #EEF0F5;
+  --dash-neutral-fg: #3B4458;
+}
+.dark {
+  --dash-sidebar: #0A0F1C;
+  --dash-sidebar-fg: #C9D1E3;
+  --dash-sidebar-active: #1D2A45;
+  --dash-bg: #0B101C;
+  --dash-card: #131A2B;
+  --dash-border: #263049;
+  --dash-border-soft: #1D2640;
+  --dash-ink: #E8ECF6;
+  --dash-muted: #9AA5BD;
+  --dash-accent: color-mix(in srgb, var(--brand), white 30%);
+  --dash-accent-soft: color-mix(in srgb, var(--brand) 24%, #131A2B);
+  --dash-accent-fg: color-mix(in srgb, var(--brand), white 62%);
+  --dash-warn: #F59E0B;
+  --dash-warn-soft: #3A2A0B;
+  --dash-warn-fg: #F7C873;
+  --dash-danger: #F0605A;
+  --dash-danger-soft: #3A1613;
+  --dash-danger-fg: #F5A6A0;
+  --dash-success: #2DB5A5;
+  --dash-success-soft: #0F2E2B;
+  --dash-success-fg: #7FDDD0;
+  --dash-neutral: #7C8AA8;
+  --dash-neutral-soft: #1B2438;
+  --dash-neutral-fg: #B6C0D6;
 }
 
 @theme inline {
+  --color-dash-sidebar: var(--dash-sidebar);
+  --color-dash-sidebar-fg: var(--dash-sidebar-fg);
+  --color-dash-sidebar-active: var(--dash-sidebar-active);
+  --color-dash-bg: var(--dash-bg);
+  --color-dash-card: var(--dash-card);
+  --color-dash-border: var(--dash-border);
+  --color-dash-border-soft: var(--dash-border-soft);
+  --color-dash-ink: var(--dash-ink);
+  --color-dash-muted: var(--dash-muted);
+  --color-dash-accent: var(--dash-accent);
+  --color-dash-accent-soft: var(--dash-accent-soft);
+  --color-dash-accent-fg: var(--dash-accent-fg);
+  --color-dash-warn: var(--dash-warn);
+  --color-dash-warn-soft: var(--dash-warn-soft);
+  --color-dash-warn-fg: var(--dash-warn-fg);
+  --color-dash-danger: var(--dash-danger);
+  --color-dash-danger-soft: var(--dash-danger-soft);
+  --color-dash-danger-fg: var(--dash-danger-fg);
+  --color-dash-success: var(--dash-success);
+  --color-dash-success-soft: var(--dash-success-soft);
+  --color-dash-success-fg: var(--dash-success-fg);
+  --color-dash-neutral: var(--dash-neutral);
+  --color-dash-neutral-soft: var(--dash-neutral-soft);
+  --color-dash-neutral-fg: var(--dash-neutral-fg);
+  --font-dash-display: var(--font-display-ui), var(--font-sans), system-ui, sans-serif;
+  --font-dash-body: var(--font-body-ui), var(--font-sans), system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -250,4 +333,158 @@
   .via-gray-50, .via-gray-100, .via-slate-50, .via-slate-100, .via-white {
     --tw-gradient-via: var(--background) !important;
   }
+}
+
+@layer components {
+/* ==========================================================================
+ * App shell — sidebar + header (design foundation from saas-inventory-ui)
+ * ========================================================================== */
+:root {
+  --brand-1: #3B5BFF;
+  --brand-2: #7C3AED;
+  --brand-grad: linear-gradient(135deg, #3B5BFF 0%, #6D4AFF 55%, #8B3DFF 100%);
+  --brand-ring: rgba(79, 91, 255, .22);
+  --nav-a: #0A0F24;
+  --nav-b: #0E1533;
+  --nav-c: #160F3A;
+  --nav-ink: #C7CEE6;
+  --nav-muted: #7983A6;
+  --shell-line: #E6E9F2;
+  --shell-line-strong: #D3D9E8;
+  --shadow-brand: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 8px 20px -8px rgba(79, 70, 255, .65);
+}
+.dark {
+  --shell-line: #232B50;
+  --shell-line-strong: #323C69;
+  --brand-ring: rgba(99, 102, 255, .32);
+}
+
+/* Page canvas behind the cards */
+.app-canvas {
+  background:
+    radial-gradient(1100px 420px at 85% -80px, rgba(99, 102, 255, .10), transparent 60%),
+    radial-gradient(900px 380px at -5% 0, rgba(139, 92, 246, .07), transparent 55%),
+    linear-gradient(180deg, #F7F8FC, #EDF0F9);
+}
+.dark .app-canvas {
+  background:
+    radial-gradient(1100px 420px at 85% -80px, rgba(99, 102, 255, .16), transparent 60%),
+    radial-gradient(900px 380px at -5% 0, rgba(139, 92, 246, .12), transparent 55%),
+    linear-gradient(180deg, #0B1020, #0E1430);
+}
+
+/* Headings follow the display face inside the shell */
+[data-app-shell] :is(h1, h2, h3) { font-family: var(--font-dash-display); letter-spacing: -0.02em; }
+
+/* Sidebar surface (desktop rail + mobile sheet) */
+[data-slot="sidebar-inner"],
+[data-slot="sidebar"][data-mobile="true"] {
+  background:
+    radial-gradient(420px 260px at 0 0, rgba(91, 76, 255, .38), transparent 70%),
+    radial-gradient(360px 300px at 100% 100%, rgba(139, 61, 255, .22), transparent 70%),
+    linear-gradient(180deg, var(--nav-a) 0%, var(--nav-b) 55%, var(--nav-c) 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, .06);
+}
+.nav-scroll { scrollbar-width: none; }
+.nav-scroll::-webkit-scrollbar { display: none; }
+
+.nav-logo {
+  background: var(--brand-grad);
+  box-shadow: 0 8px 22px -6px rgba(99, 79, 255, .75), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.nav-section {
+  color: var(--nav-muted); font-weight: 600; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+}
+.nav-btn {
+  position: relative; display: flex; width: 100%; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px;
+  border: 0; border-radius: 11px; background: transparent; color: var(--nav-ink);
+  font-size: 14px; font-weight: 500; text-align: left; text-decoration: none; cursor: pointer;
+  transition: background-color .18s ease, color .18s ease;
+}
+.nav-btn:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.nav-btn:focus-visible { outline: 3px solid var(--brand-ring); outline-offset: 1px; }
+.nav-btn[data-active="true"] {
+  background: linear-gradient(90deg, rgba(99, 102, 255, .34), rgba(139, 92, 246, .12));
+  box-shadow: inset 2px 0 0 #8B9CFF, 0 6px 18px -10px rgba(99, 102, 255, .8);
+  color: #fff;
+}
+.nav-btn[data-parent-active="true"] { color: #fff; }
+.nav-sub {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 0 10px;
+  border-radius: 8px; color: #A9B3C9; font-size: 13px; text-decoration: none;
+  transition: background-color .18s ease, color .18s ease;
+}
+.nav-sub:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.nav-sub[data-active="true"] { background: rgba(255, 255, 255, .09); color: #fff; font-weight: 600; }
+.nav-badge {
+  flex: none; border-radius: 99px; background: #F59E0B; color: #1F1300; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; line-height: 1.3; box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
+}
+.nav-count { flex: none; border-radius: 99px; background: #F5B54A; color: #1F1300; font-size: 11px; font-weight: 700; padding: 1px 8px; }
+.nav-dot {
+  position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 99px; background: #F59E0B;
+  border: 2px solid var(--nav-b);
+}
+.nav-user {
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); border-radius: 14px;
+}
+
+/* Header (glass, sticky) */
+.app-header {
+  background: rgba(255, 255, 255, .78);
+  -webkit-backdrop-filter: saturate(160%) blur(14px); backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid var(--shell-line);
+}
+.dark .app-header { background: rgba(14, 20, 48, .78); }
+.shell-btn {
+  display: inline-flex; height: 44px; width: 44px; flex: none; align-items: center; justify-content: center;
+  border: 1px solid var(--shell-line-strong); border-radius: 12px; background: var(--card); color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(16, 24, 56, .05); cursor: pointer;
+  transition: border-color .16s ease, transform .16s ease, background-color .16s ease;
+}
+.shell-btn:hover { border-color: #AEB9EE; transform: translateY(-1px); }
+.shell-btn:focus-visible { outline: 3px solid var(--brand-ring); outline-offset: 2px; }
+.dark .shell-btn { background: #171E3F; border-color: #323C69; }
+.dark .shell-btn:hover { border-color: #4A57A0; }
+.shell-search {
+  display: flex; height: 44px; min-width: 0; align-items: center; gap: 8px; padding: 0 14px;
+  border: 1px solid var(--shell-line-strong); border-radius: 12px; background: #F7F8FB; color: var(--muted-foreground);
+  font-size: 14px; text-align: left; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease;
+}
+.shell-search:hover { border-color: #B6C0E8; }
+.shell-search:focus-visible { outline: none; border-color: #5B6BFF; box-shadow: 0 0 0 4px var(--brand-ring); }
+.dark .shell-search { background: #0F1530; border-color: #323C69; }
+.brand-btn {
+  display: inline-flex; height: 44px; align-items: center; gap: 8px; padding: 0 18px; border-radius: 12px;
+  background: var(--brand-grad); box-shadow: var(--shadow-brand); color: #fff; font-size: 14px; font-weight: 600;
+  text-decoration: none; letter-spacing: -.005em; transition: transform .16s ease, filter .16s ease;
+}
+.brand-btn:hover { filter: brightness(1.07) saturate(1.05); transform: translateY(-1px); }
+.brand-btn:active { transform: translateY(0); filter: brightness(.97); }
+.brand-btn:focus-visible { outline: 3px solid var(--brand-ring); outline-offset: 2px; }
+@media print { [data-slot="sidebar"], .app-header { display: none !important; } }
+
+/* ---- Card surface (design foundation: 18px radius, soft depth, lift on hover) ---- */
+.surface {
+  background: var(--dash-card);
+  border: 1px solid var(--shell-line);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(16, 24, 56, .04), 0 10px 28px -14px rgba(16, 24, 56, .18);
+}
+.dark .surface { box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px -14px rgba(0, 0, 0, .5); }
+.surface-hover { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.surface-hover:hover {
+  transform: translateY(-2px);
+  border-color: #CBD3F5;
+  box-shadow: 0 2px 4px rgba(16, 24, 56, .05), 0 22px 48px -18px rgba(40, 52, 140, .32);
+}
+.dark .surface-hover:hover { border-color: #4A57A0; }
+.th-label {
+  background: #F6F7FC; color: var(--dash-muted); font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.dark .th-label { background: #171E3F; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.page-in { animation: page-in .35s ease backwards; }
+@media (prefers-reduced-motion: reduce) { .page-in, .surface-hover { animation: none; transition: none; } }
 }

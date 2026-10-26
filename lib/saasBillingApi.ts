@@ -57,6 +57,10 @@ export interface Plan {
   name: string;
   description: string;
   price: number;
+  /** price for a yearly purchase in cents (10 x monthly) */
+  priceYearly?: number;
+  taxRate?: number;
+  isTrial?: boolean;
   currency?: string;
   billingPeriod?: 'monthly' | 'yearly';
   durationDays?: number;
@@ -92,7 +96,12 @@ export interface Subscription {
   companyId: number;
   planId: number;
   planName: string;
-  status: 'active' | 'cancelled' | 'expired' | 'pending';
+  status: 'active' | 'trialing' | 'cancelled' | 'expired' | 'past_due' | 'pending';
+  cancelReason?: string | null;
+  isTrial?: boolean;
+  /** amount for the chosen billing period in cents */
+  periodPrice?: number;
+  daysRemaining?: number;
   currentPeriodStart: string;
   currentPeriodEnd: string;
   price: number;
@@ -116,7 +125,13 @@ export interface PaymentRecord {
   companyId: number;
   amount: number;
   currency: string;
-  status: 'pending' | 'paid' | 'failed' | 'cancelled';
+  status: 'pending' | 'paid' | 'completed' | 'failed' | 'cancelled' | 'refunded';
+  planName?: string | null;
+  billingPeriod?: 'monthly' | 'yearly' | null;
+  subtotal?: number | null;
+  taxAmount?: number | null;
+  billingEmail?: string | null;
+  description?: string | null;
   paymentMethod: string;
   paymentDate: string;
   invoiceNumber: string;
@@ -167,6 +182,35 @@ export interface UpgradeSubscriptionPayload {
   prorationBillingCycle: 'immediate' | 'next_billing';
 }
 
+export interface PlanCheckoutPayload {
+  planId: number;
+  billingPeriod?: 'monthly' | 'yearly';
+  paymentMethod?: 'card' | 'bkash' | 'bank';
+  billingEmail?: string;
+}
+
+export interface UsageMeter {
+  used: number;
+  limit: number;
+}
+
+export interface BillingUsage {
+  plan: { id: number; name: string; price: number } | null;
+  planName: string | null;
+  teamMembers: UsageMeter;
+  products: UsageMeter;
+  branches: UsageMeter;
+  salesThisMonth: number;
+  unlimitedThreshold: number;
+}
+
+export interface InvoiceFile {
+  filename: string;
+  invoiceNumber: string;
+  contentType: string;
+  html: string;
+}
+
 export interface UpgradeSubscriptionResponse {
   message: string;
   data: {
@@ -182,6 +226,7 @@ export interface UpgradeSubscriptionResponse {
 }
 
 export interface CancelSubscriptionPayload {
+  subscriptionId?: number;
   reason?: string;
   feedback?: string;
 }
@@ -213,6 +258,9 @@ export interface RenewSubscriptionPayload {
   subscriptionId: number;
   paymentMethodId?: string;
   autoRenew?: boolean;
+  billingPeriod?: 'monthly' | 'yearly';
+  paymentMethod?: 'card' | 'bkash' | 'bank';
+  billingEmail?: string;
 }
 
 export interface RenewSubscriptionResponse {
@@ -368,6 +416,45 @@ export const saasBillingApi = {
       '/billing/renew',
       payload
     );
+    return response.data;
+  },
+
+  /** GET /billing/usage - usage counters versus plan limits */
+  getUsage: async () => {
+    const response = await api.get<{ data: BillingUsage }>('/billing/usage');
+    return response.data;
+  },
+
+  /** PUT /billing/auto-renew - toggle auto renewal (no charge) */
+  setAutoRenew: async (subscriptionId: number, autoRenew: boolean) => {
+    const response = await api.put('/billing/auto-renew', { subscriptionId, autoRenew });
+    return response.data;
+  },
+
+  /** PUT /billing/billing-period - switch monthly/yearly for the current paid plan (from next renewal, no charge) */
+  setBillingPeriod: async (subscriptionId: number, billingPeriod: 'monthly' | 'yearly') => {
+    const response = await api.put('/billing/billing-period', { subscriptionId, billingPeriod });
+    return response.data;
+  },
+
+  /** POST /billing/create-subscription - first subscription for a company */
+  subscribeToPlan: async (payload: PlanCheckoutPayload) => {
+    const response = await api.post('/billing/create-subscription', payload);
+    return response.data;
+  },
+
+  /** POST /billing/upgrade - switch an existing subscription to another plan */
+  changePlan: async (payload: PlanCheckoutPayload) => {
+    const response = await api.post('/billing/upgrade', payload);
+    return response.data;
+  },
+
+  /**
+   * GET /billing/payments/{id}/invoice
+   * Returns a printable HTML invoice
+   */
+  getInvoice: async (paymentId: number) => {
+    const response = await api.get<{ data: InvoiceFile }>(`/billing/payments/${paymentId}/invoice`);
     return response.data;
   },
 

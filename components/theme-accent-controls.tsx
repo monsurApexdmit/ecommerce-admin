@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { Moon, Sun } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { ACCENT_STORAGE_KEY } from "@/components/accent-picker"
 
 /**
@@ -21,19 +23,22 @@ export function ThemeAccentControls() {
   }, [])
 
   if (!mounted) {
-    return <div className="size-8" aria-hidden />
+    return <div className="size-11" aria-hidden />
   }
 
   const isDark = resolvedTheme === "dark"
 
   return (
-    <button
-      type="button"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-    >
-      {isDark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
-    </button>
+    <WithTooltip content={isDark ? "Switch to light mode" : "Switch to dark mode"}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => setTheme(isDark ? "light" : "dark")}
+        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        {isDark ? <Sun className="size-[18px] text-amber-400" /> : <Moon className="size-[18px]" />}
+      </Button>
+    </WithTooltip>
   )
 }

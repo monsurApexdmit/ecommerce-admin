@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import {
   LayoutDashboard, Building2, CreditCard, LogOut, Zap, Menu, X, ChevronRight,
 } from "lucide-react"
+import { WithTooltip } from "@/components/common/WithTooltip"
 
 const nav = [
   { href: "/platform", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -55,39 +58,37 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {nav.map((item) => (
-          <Link
+          <Button
             key={item.href}
-            href={item.href}
-            onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              isActive(item)
-                ? "bg-emerald-600 text-white"
-                : "text-gray-400 hover:bg-gray-800 hover:text-white"
-            }`}
+            asChild
+            variant={isActive(item) ? "default" : "ghost"}
+            className="w-full justify-start"
           >
-            <item.icon className="w-4 h-4" />
-            {item.label}
-          </Link>
+            <Link href={item.href} onClick={() => setSidebarOpen(false)}>
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </Link>
+          </Button>
         ))}
       </nav>
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-gray-800">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-7 h-7 bg-emerald-700 rounded-full flex items-center justify-center text-xs font-bold">
-            {adminEmail[0]?.toUpperCase()}
-          </div>
+          <UserAvatar className="size-7" name={adminEmail} />
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white font-medium truncate">{adminEmail}</p>
             <p className="text-xs text-gray-500">Super Admin</p>
           </div>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleLogout}
-          className="flex items-center gap-2 text-xs text-gray-400 hover:text-red-400 transition-colors w-full"
+          className="w-full justify-start"
         >
           <LogOut className="w-3.5 h-3.5" /> Sign Out
-        </button>
+        </Button>
       </div>
     </aside>
   )
@@ -113,9 +114,9 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar (mobile) */}
         <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
-          <button onClick={() => setSidebarOpen(true)}>
+          <WithTooltip content="Open menu"><Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu className="w-5 h-5" />
-          </button>
+          </Button></WithTooltip>
           <span className="font-semibold text-sm">Platform Admin</span>
         </div>
 

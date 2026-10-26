@@ -63,6 +63,8 @@ export interface ProductBatch {
   notes?: string
   isExpired: boolean
   isExpiringSoon: boolean
+  sellOrder?: number | null
+  sellOrderLabel?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -89,6 +91,15 @@ export interface InventoryMovement {
 export interface SerialBatchStats {
   serials: { total: number; available: number; sold: number; other: number }
   batches: { total: number; expired: number; expiringSoon: number; active: number }
+  batchCount?: number
+  batchProducts?: number
+  expiringSoonCount?: number
+  firstExpiring?: { batchNumber: string; quantity: number } | null
+  expiredCount?: number
+  firstExpired?: { batchNumber: string } | null
+  serialCount?: number
+  serialAvailable?: number
+  serialSold?: number
 }
 
 export interface CreateSerialsData {
@@ -130,7 +141,7 @@ export const serialBatchApi = {
     api.get(`/serials/${id}`).then((r: { data: any }) => r.data.data as ProductSerial),
 
   createSerials: (data: CreateSerialsData) =>
-    api.post("/serials", data).then((r: { data: any }) => r.data.data as ProductSerial[]),
+    api.post("/serials", data).then((r: { data: any }) => r.data.data as { created: ProductSerial[]; skipped: string[] }),
 
   updateSerial: (id: number, data: Partial<ProductSerial>) =>
     api.put(`/serials/${id}`, data).then((r: { data: any }) => r.data.data as ProductSerial),

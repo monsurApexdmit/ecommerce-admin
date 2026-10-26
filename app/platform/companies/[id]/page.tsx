@@ -4,18 +4,23 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { platformApi, PlatformCompany, PlatformPlan } from "@/lib/platformApi"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Spinner } from "@/components/ui/spinner"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { SectionCard } from "@/components/common/SectionCard"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  ArrowLeft, Loader, AlertCircle, Users, CreditCard, CheckCircle2,
+  ArrowLeft, AlertCircle, Users, CreditCard, CheckCircle2,
   Clock, XCircle, Calendar, Globe, Phone, Mail,
 } from "lucide-react"
-
-const STATUS_STYLE: Record<string, string> = {
-  active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
-  trial:     "bg-yellow-50 text-yellow-700 border-yellow-200",
-  inactive:  "bg-gray-100 text-gray-500 border-gray-200",
-  suspended: "bg-red-50 text-red-700 border-red-200",
-  unverified:"bg-blue-50 text-blue-600 border-blue-200",
-}
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -112,12 +117,13 @@ export default function CompanyDetailPage() {
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64"><Loader className="w-6 h-6 animate-spin text-emerald-600" /></div>
+    <div className="flex items-center justify-center h-64"><Spinner className="size-6" /></div>
   )
   if (error || !company) return (
-    <div className="flex items-center gap-2 text-red-600 p-4 bg-red-50 rounded-xl">
-      <AlertCircle className="w-5 h-5" /> {error || "Company not found"}
-    </div>
+    <Alert variant="destructive">
+      <AlertCircle />
+      <AlertDescription>{error || "Company not found"}</AlertDescription>
+    </Alert>
   )
 
   const activeSub = company.subscription?.status === "active" ? company.subscription : null
@@ -126,28 +132,27 @@ export default function CompanyDetailPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
-        <Link href="/platform/companies" className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-          <ArrowLeft className="w-4 h-4" /> Companies
-        </Link>
-        <span className="text-gray-300">/</span>
-        <h1 className="text-2xl font-bold text-gray-900">{company.name}</h1>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_STYLE[company.status] ?? STATUS_STYLE.inactive}`}>
-          {company.status}
-        </span>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/platform/companies">
+            <ArrowLeft /> Companies
+          </Link>
+        </Button>
+        <span className="text-muted-foreground">/</span>
+        <h1 className="text-2xl font-bold">{company.name}</h1>
+        <StatusBadge status={company.status} />
       </div>
 
       {actionMsg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3 rounded-xl">
-          {actionMsg}
-        </div>
+        <Alert>
+          <AlertDescription>{actionMsg}</AlertDescription>
+        </Alert>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Company info */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Company Info</h2>
+          <SectionCard title="Company Info">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 { icon: Mail, label: "Email", value: company.email },
@@ -157,192 +162,175 @@ export default function CompanyDetailPage() {
                 { icon: Users, label: "Team Size", value: `${company.usersCount} users` },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-start gap-2">
-                  <Icon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs text-gray-400">{label}</p>
-                    <p className="text-sm text-gray-700">{value || <span className="text-gray-300">—</span>}</p>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-sm">{value || <span className="text-muted-foreground">—</span>}</p>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </SectionCard>
 
           {/* Store subdomain */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="font-semibold text-gray-900 mb-1">Aura Store Subdomain</h2>
-            <p className="text-xs text-gray-400 mb-4">Used to route <code className="bg-gray-100 px-1 rounded">subdomain.yourstore.com</code> to this company's store.</p>
+          <SectionCard
+            title="Aura Store Subdomain"
+            description={<>Used to route <code className="bg-muted px-1 rounded">subdomain.yourstore.com</code> to this company's store.</>}
+          >
             <div className="flex gap-2 items-center">
-              <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden flex-1">
-                <input
+              <InputGroup className="flex-1">
+                <InputGroupInput
                   type="text"
                   value={subdomain}
                   onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                   placeholder="e.g. acme"
-                  className="flex-1 px-2.5 py-2 text-sm outline-none bg-white"
                 />
-                <span className="px-3 py-2 bg-gray-50 text-gray-400 text-xs border-l border-gray-200">.localhost:8080</span>
-              </div>
-              <button
+                <InputGroupAddon align="inline-end">
+                  <InputGroupText>.localhost:8080</InputGroupText>
+                </InputGroupAddon>
+              </InputGroup>
+              <Button
                 onClick={handleSaveSubdomain}
                 disabled={savingSubdomain}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
               >
                 {savingSubdomain ? "Saving…" : "Save"}
-              </button>
+              </Button>
             </div>
             {company.subdomain && (
-              <p className="mt-2 text-xs text-gray-500">
-                Current: <code className="bg-gray-100 px-1 rounded text-emerald-700">{company.subdomain}.localhost:8080</code>
-                {" — add "}<code className="bg-gray-100 px-1 rounded">127.0.0.1 {company.subdomain}.localhost</code>{" to /etc/hosts"}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Current: <code className="bg-muted px-1 rounded text-foreground">{company.subdomain}.localhost:8080</code>
+                {" — add "}<code className="bg-muted px-1 rounded">127.0.0.1 {company.subdomain}.localhost</code>{" to /etc/hosts"}
               </p>
             )}
-          </div>
+          </SectionCard>
 
           {/* Users table */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-              <Users className="w-4 h-4 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">Team Members</h2>
-              <span className="ml-auto text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{company.users?.length ?? 0}</span>
-            </div>
+          <SectionCard
+            title={<span className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" />Team Members</span>}
+            actions={<Badge variant="secondary">{company.users?.length ?? 0}</Badge>}
+            contentClassName="px-0"
+          >
             {!company.users?.length ? (
-              <div className="text-center py-10 text-gray-400 text-sm">No users found</div>
+              <EmptyState title="No users found" className="p-4 md:p-6" />
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase">Name</th>
-                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase">Role</th>
-                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase">Status</th>
-                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase">Last Login</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Login</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {company.users!.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-gray-900">{u.fullName}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full capitalize">{u.role}</span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_STYLE[u.status] ?? STATUS_STYLE.inactive}`}>
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-gray-400">
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <p className="font-medium">{u.fullName}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="capitalize">{u.role}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={u.status} />
+                      </TableCell>
+                      <TableCell>
                         {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : "Never"}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
-          </div>
+          </SectionCard>
         </div>
 
         {/* Right column */}
         <div className="space-y-5">
           {/* Subscription card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <CreditCard className="w-4 h-4 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">Subscription</h2>
-            </div>
+          <SectionCard title={<span className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-muted-foreground" />Subscription</span>}>
             {activeSub ? (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Plan</span>
-                  <span className="text-sm font-semibold text-gray-900">{activeSub.planName}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Price</span>
-                  <span className="text-sm text-gray-700">${activeSub.planPrice}/mo</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Expires</span>
-                  <span className="text-sm text-gray-700">
-                    {activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd).toLocaleDateString() : "—"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Status</span>
-                  <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">Active</span>
-                </div>
-                <button
+                <InfoList>
+                  <InfoRow label="Plan" value={activeSub.planName} />
+                  <InfoRow label="Price" value={`$${activeSub.planPrice}/mo`} />
+                  <InfoRow
+                    label="Expires"
+                    value={activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd).toLocaleDateString() : "—"}
+                  />
+                  <InfoRow label="Status" value={<StatusBadge status="active" label="Active" />} />
+                </InfoList>
+                <Button
+                  variant="destructive"
+                  size="sm"
                   onClick={handleCancel}
                   disabled={cancelling}
-                  className="mt-3 w-full text-xs text-red-600 hover:text-red-800 border border-red-200 hover:border-red-400 rounded-lg py-2 transition-colors"
+                  className="mt-3 w-full"
                 >
                   {cancelling ? "Cancelling…" : "Cancel Subscription"}
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-sm text-gray-400 mb-3">No active subscription</p>
+                <p className="text-sm text-muted-foreground mb-3">No active subscription</p>
               </div>
             )}
-          </div>
+          </SectionCard>
 
           {/* Assign plan */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-semibold text-gray-900 mb-3">
-              {activeSub ? "Change Plan" : "Assign Plan"}
-            </h2>
+          <SectionCard title={activeSub ? "Change Plan" : "Assign Plan"}>
             <div className="space-y-3">
-              <select
-                value={selectedPlanId}
-                onChange={e => setSelectedPlanId(Number(e.target.value) || "")}
-                className="w-full text-sm border border-gray-300 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              <Select
+                value={selectedPlanId === "" ? "" : String(selectedPlanId)}
+                onValueChange={v => setSelectedPlanId(Number(v) || "")}
               >
-                <option value="">Select a plan…</option>
-                {plans.filter(p => p.isActive).map(p => (
-                  <option key={p.id} value={p.id}>{p.name} — ${p.price}/mo</option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500 w-16">Months</label>
-                <input
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a plan…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.filter(p => p.isActive).map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/mo</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormField label="Months" htmlFor="assign-months" orientation="horizontal">
+                <Input
+                  id="assign-months"
                   type="number"
                   min={1}
                   max={24}
                   value={selectedMonths}
                   onChange={e => setSelectedMonths(parseInt(e.target.value) || 1)}
-                  className="flex-1 text-sm border border-gray-300 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex-1"
                 />
-              </div>
-              <button
+              </FormField>
+              <Button
                 onClick={handleAssign}
                 disabled={!selectedPlanId || assigning}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                className="w-full"
               >
                 {assigning ? "Assigning…" : activeSub ? "Change Plan" : "Assign & Activate"}
-              </button>
+              </Button>
             </div>
-          </div>
+          </SectionCard>
 
           {/* Danger zone */}
-          <div className="bg-white rounded-xl border border-red-100 p-5">
-            <h2 className="font-semibold text-red-700 mb-3 text-sm">Danger Zone</h2>
-            <button
+          <SectionCard title={<span className="text-destructive">Danger Zone</span>} className="border-destructive/30">
+            <Button
+              variant={company.status === "inactive" || company.status === "suspended" ? "default" : "destructive"}
               onClick={handleToggleStatus}
               disabled={toggling}
-              className={`w-full text-sm font-medium py-2.5 rounded-lg transition-colors ${
-                company.status === "inactive" || company.status === "suspended"
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                  : "border border-red-300 text-red-600 hover:bg-red-50"
-              }`}
+              className="w-full"
             >
               {toggling ? "Updating…" : (company.status === "inactive" || company.status === "suspended" ? "Activate Company" : "Deactivate Company")}
-            </button>
-            <p className="text-xs text-gray-400 mt-2">
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2">
               {company.status === "inactive" || company.status === "suspended"
                 ? "Re-enables all users of this company."
                 : "Blocks all users from logging in."}
             </p>
-          </div>
+          </SectionCard>
         </div>
       </div>
     </div>

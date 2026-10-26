@@ -63,6 +63,43 @@ export interface CustomerAddress {
   isDefault: boolean;
 }
 
+export type CustomerGroup = 'retail' | 'wholesale' | 'vip';
+export type CustomerKind = 'individual' | 'business';
+
+export interface CustomerCounts {
+  total: number;
+  active: number;
+  inactive: number;
+  byGroup: { retail: number; wholesale: number; vip: number };
+  byType: { individual: number; business: number };
+}
+
+export interface CustomerExtraFields {
+  type?: CustomerKind;
+  businessName?: string;
+  licenceBin?: string;
+  customerGroup?: CustomerGroup;
+  creditLimit?: number;
+  openingBalance?: number;
+  birthday?: string | null;
+  tags?: string[];
+  smsOptIn?: boolean;
+  district?: string;
+  area?: string;
+}
+
+export interface DuplicateGroup {
+  key: string;
+  reason: 'phone' | 'name_email';
+  customers: CustomerResponse[];
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  skippedRows: { row: number; reason: string }[];
+}
+
 export interface CustomerResponse {
   id: number;
   userId: number;
@@ -74,25 +111,46 @@ export interface CustomerResponse {
   state: string;
   zipCode: string;
   country: string;
-  customerType: 'retail' | 'wholesale';
+  customerType: CustomerGroup;
+  customerGroup?: CustomerGroup;
+  type?: CustomerKind;
+  businessName?: string | null;
+  licenceBin?: string | null;
+  creditLimit?: number;
+  openingBalance?: number;
+  /** Outstanding due on sales */
+  creditUsed?: number;
+  creditUsedPercent?: number;
+  birthday?: string | null;
+  tags?: string[];
+  smsOptIn?: boolean;
+  district?: string | null;
+  area?: string | null;
+  recentOrders?: { id: number; invoiceNo: string; date: string; amount: number; status: string }[];
   status: 'active' | 'inactive';
   notes: string;
   storeCredit: number;
   totalOrders?: number;
   totalSpent?: number;
+  /** Outstanding balance across the customer's sales */
+  dueAmount?: number;
+  lastOrderAt?: string | null;
+  /** Another customer has the same phone number */
+  duplicatePhone?: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CustomerListResponse {
   message: string;
+  counts?: CustomerCounts;
   data: CustomerResponse[];
   total: number;
   page: number;
   limit: number;
 }
 
-export interface CreateCustomerData {
+export interface CreateCustomerData extends CustomerExtraFields {
   name: string;
   email: string;
   phone?: string;
@@ -101,13 +159,13 @@ export interface CreateCustomerData {
   state?: string;
   zipCode?: string;
   country?: string;
-  customerType?: 'retail' | 'wholesale';
+  customerType?: CustomerGroup;
   status?: 'active' | 'inactive';
   notes?: string;
   storeCredit?: number;
 }
 
-export interface UpdateCustomerData {
+export interface UpdateCustomerData extends CustomerExtraFields {
   name?: string;
   email?: string;
   phone?: string;
@@ -116,24 +174,37 @@ export interface UpdateCustomerData {
   state?: string;
   zipCode?: string;
   country?: string;
-  customerType?: 'retail' | 'wholesale';
+  customerType?: CustomerGroup;
   status?: 'active' | 'inactive';
   notes?: string;
   storeCredit?: number;
 }
 
-export const customerApi = {
-  getAll: async (params?: {
+export interface CustomerListParams {
     page?: number;
     limit?: number;
     search?: string;
-  }): Promise<CustomerListResponse> => {
+    status?: string;
+    /** individual | business */
+    type?: string;
+    /** retail | wholesale | vip */
+    group?: string;
+    smsOptIn?: boolean;
+    /** all | loyal | risk | due | never | dup */
+    segment?: string;
+    /** recent | name | spent | orders | due */
+    sort?: string;
+}
+
+export const customerApi = {
+  getAll: async (params?: CustomerListParams): Promise<CustomerListResponse> => {
     const response = await api.get('/customers', { params });
     // Laravel returns { success, message, data: { data: [...], total, per_page, current_page } }
     const laravelData = response.data.data || {};
     return {
       message: response.data.message || '',
       data: laravelData.data || [],
+      counts: laravelData.counts,
       total: laravelData.total || 0,
       page: laravelData.current_page || 1,
       limit: laravelData.per_page || 10,
@@ -207,12 +278,65 @@ export const customerApi = {
     return response.data.data;
   },
 
+  /** Fetch every row matching the filters (used by export) */
+  getAllFiltered: async (params: CustomerListParams = {}): Promise<CustomerResponse[]> => {
+    const res = await customerApi.getAll({ ...params, page: 1, limit: 2000 });
+    const out = [...res.data];
+    const pages = Math.ceil((res.total || 0) / 2000);
+    for (let p = 2; p <= pages; p++) {
+      const r = await customerApi.getAll({ ...params, page: p, limit: 2000 });
+      out.push(...r.data);
+    }
+    return out;
+  },
+
+  setStatus: async (id: number, status: 'active' | 'inactive'): Promise<CustomerResponse> => {
+    const response = await api.patch(`/customers/${id}/status`, { status });
+    return response.data.data;
+  },
+
+  getDuplicates: async (): Promise<DuplicateGroup[]> => {
+    const response = await api.get('/customers/duplicates');
+    return response.data.data?.groups ?? [];
+  },
+
+  merge: async (primaryId: number, duplicateIds: number[]): Promise<{ merged: number; customer: CustomerResponse }> => {
+    const response = await api.post('/customers/merge', { primaryId, duplicateIds });
+    return response.data.data;
+  },
+
+  bulkTag: async (ids: number[], tag: string): Promise<{ updated: number }> => {
+    const response = await api.post('/customers/bulk-tag', { ids, tag });
+    return response.data.data;
+  },
+
+  getSmsNumbers: async (params?: { search?: string; group?: string; type?: string; status?: string; segment?: string }): Promise<{ numbers: string[]; count: number }> => {
+    const response = await api.get('/customers/sms-numbers', { params });
+    return response.data.data ?? { numbers: [], count: 0 };
+  },
+
+  importRows: async (rows: Record<string, unknown>[]): Promise<ImportResult> => {
+    const response = await api.post('/customers/import', { rows });
+    return response.data.data;
+  },
+
   getStats: async (): Promise<{
     total: number;
     active: number;
     inactive: number;
     individuals: number;
     businesses: number;
+    addedThisMonth: number;
+    withOrders: number;
+    repeatBuyers: number;
+    repeatRatePct: number;
+    avgLifetimeValue: number;
+    owing: number;
+    totalDue: number;
+    atRisk: number;
+    loyal: number;
+    never: number;
+    duplicates: number;
   }> => {
     const response = await api.get('/customers/stats');
     return response.data.data;

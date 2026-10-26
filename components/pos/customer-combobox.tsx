@@ -19,6 +19,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { useCustomer } from "@/contexts/customer-context"
+import { UserAvatar } from "@/components/common/UserAvatar"
 
 // value is customer id string, or "" for walk-in
 interface CustomerComboboxProps {
@@ -38,13 +39,19 @@ export function CustomerCombobox({ value, onValueChange }: CustomerComboboxProps
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
+                    type="button"
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="w-full justify-between h-12 bg-white border-gray-200"
+                    aria-label="Select customer"
+                    className="h-auto w-full min-w-0 justify-start gap-2.5 py-1.5 text-left"
                 >
-                    {selectedLabel}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <UserAvatar name={selectedLabel} className="size-[34px]" />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-sm font-semibold">{selectedLabel}</span>
+                        <span className="text-xs text-muted-foreground">Search by name or phone</span>
+                    </span>
+                    <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
@@ -75,7 +82,7 @@ export function CustomerCombobox({ value, onValueChange }: CustomerComboboxProps
                                     <Check className={cn("mr-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
                                     <div className="flex flex-col">
                                         <span className="font-medium">{c.name}</span>
-                                        {c.phone && <span className="text-xs text-gray-400">{c.phone}</span>}
+                                        {c.phone && <span className="text-xs text-muted-foreground">{c.phone}</span>}
                                     </div>
                                 </CommandItem>
                             ))}

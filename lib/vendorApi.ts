@@ -64,6 +64,17 @@ export interface VendorResponse {
   totalPaid: number;
   amountPayable: number;
   poDueAmount?: number;
+  contactPerson?: string | null;
+  district?: string | null;
+  country?: string | null;
+  paymentTerms?: string | null;
+  openingBalance?: number;
+  tin?: string | null;
+  payTo?: string | null;
+  accountNumber?: string | null;
+  notes?: string | null;
+  leadTimeDays?: number | null;
+  createdAt?: string;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -92,6 +103,16 @@ export interface CreateVendorData {
   description?: string;
   totalPaid?: number;
   amountPayable?: number;
+  contactPerson?: string;
+  district?: string;
+  country?: string;
+  paymentTerms?: string;
+  openingBalance?: number;
+  tin?: string;
+  payTo?: string;
+  accountNumber?: string;
+  notes?: string;
+  leadTimeDays?: number;
 }
 
 export interface UpdateVendorData {
@@ -104,9 +125,81 @@ export interface UpdateVendorData {
   description?: string;
   totalPaid?: number;
   amountPayable?: number;
+  contactPerson?: string;
+  district?: string;
+  country?: string;
+  paymentTerms?: string;
+  openingBalance?: number;
+  tin?: string;
+  payTo?: string;
+  accountNumber?: string;
+  notes?: string;
+  leadTimeDays?: number;
+}
+
+export interface VendorOverviewRow extends VendorResponse {
+  purchased: number;
+  poCount: number;
+  openPoCount: number;
+  owed: number;
+  itemsSummary: string | null;
+}
+
+export interface VendorOverviewStats {
+  total: number;
+  active: number;
+  inactive: number;
+  blocked: number;
+  oweCount: number;
+  totalOwed: number;
+  owedSuppliers: number;
+  overdueSuppliers: number;
+  totalPurchased: number;
+  poCount: number;
+  totalPaid: number;
+  paymentCount: number;
+  openPos: number;
+  draftPos: number;
+  orderedPos: number;
+  avgLeadDays: number | null;
+  oldestOverdue: { poNumber: string; expectedDate: string } | null;
+}
+
+export interface VendorProfile {
+  vendor: VendorResponse;
+  purchased: number;
+  openPos: number;
+  owed: number;
+  totalPaid: number;
+  productCount: number;
+  stockValue: number;
+  recentPurchaseOrders: {
+    id: number; poNumber: string; itemsSummary: string | null; total: number; status: string;
+    paymentStatus: string; expectedDate: string | null; due: number; isOverdue: boolean;
+  }[];
+  products: { productId: number; name: string; lastCost: number; stock: number; stockValue: number }[];
+  payments: { id: string | number; date: string; method: string; note: string | null; amount: number; poNumber: string | null }[];
 }
 
 export const vendorApi = {
+  getOverview: async (params?: {
+    search?: string; status?: string; sort?: string; page?: number; limit?: number;
+  }): Promise<{ data: VendorOverviewRow[]; total: number; stats: VendorOverviewStats }> => {
+    const res = await api.get('/vendors/overview', { params });
+    const d = res.data.data ?? {};
+    return { data: d.data ?? [], total: d.total ?? 0, stats: d.stats };
+  },
+
+  getProfile: async (id: number): Promise<VendorProfile> => {
+    const res = await api.get(`/vendors/${id}/profile`);
+    return res.data.data;
+  },
+
+  recordPayment: async (id: number, body: { amount: number; method: string; note?: string; date?: string }): Promise<VendorProfile> => {
+    const res = await api.post(`/vendors/${id}/payments`, body);
+    return res.data.data;
+  },
+
   /**
    * Get all vendors
    */

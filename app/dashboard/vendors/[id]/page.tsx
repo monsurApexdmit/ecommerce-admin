@@ -9,7 +9,15 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { StatTile } from "@/components/common/StatTile"
+import { FormField } from "@/components/common/FormField"
+import { EmptyState } from "@/components/common/EmptyState"
+import { InfoList, InfoRow } from "@/components/common/InfoList"
+import { UserAvatar } from "@/components/common/UserAvatar"
+import { StatusBadge } from "@/components/common/StatusBadge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useState } from "react"
 import Link from "next/link"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -47,10 +55,11 @@ export default function VendorDetailsPage() {
 
   if (!vendor) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Supplier Not Found</h2>
-        <Button onClick={() => router.push("/dashboard/vendors")}>Back to Suppliers</Button>
-      </div>
+      <EmptyState
+        className="min-h-[400px]"
+        title="Supplier Not Found"
+        action={<Button onClick={() => router.push("/dashboard/vendors")}>Back to Suppliers</Button>}
+      />
     )
   }
 
@@ -83,181 +92,103 @@ export default function VendorDetailsPage() {
     }
   }
 
-  const statusColor = vendor.status === "Active"
-    ? "bg-emerald-100 text-emerald-700"
-    : vendor.status === "Blocked"
-    ? "bg-red-100 text-red-700"
-    : "bg-gray-100 text-gray-700"
+  const payableTone = vendor.amountPayable > 0 ? "text-destructive" : "text-emerald-600"
+  const poDueTone = (vendor.poDueAmount ?? 0) > 0 ? "text-destructive" : "text-emerald-600"
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Supplier Details"
+        actions={<>
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard/vendors")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-4 h-4" />
             Back
           </Button>
-          <h1 className="text-2xl font-bold text-gray-900">Supplier Details</h1>
-        </div>
-        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={openEditDialog}>
-          <Edit2 className="w-4 h-4 mr-2" />
-          Edit Supplier
-        </Button>
-      </div>
+          <Button size="sm" onClick={openEditDialog}>
+            <Edit2 className="w-4 h-4" />
+            Edit Supplier
+          </Button>
+        </>}
+      />
 
       {/* Profile card */}
       <Card className="p-6">
         <div className="flex items-start gap-6">
-          {vendor.logo ? (
-            <img
-              src={vendor.logo}
-              alt={vendor.name}
-              className="w-20 h-20 rounded-full object-cover border"
-              onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center text-2xl font-bold text-emerald-600 shrink-0">
-              {vendor.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <UserAvatar src={vendor.logo} name={vendor.name} fallback={vendor.name.charAt(0).toUpperCase()} className="size-20 shrink-0 text-2xl" />
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-2xl font-bold text-gray-900">{vendor.name}</h2>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}>{vendor.status}</span>
+              <h2 className="text-2xl font-semibold">{vendor.name}</h2>
+              <StatusBadge status={vendor.status} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm text-gray-600">
-              <p><span className="font-medium text-gray-800">Email:</span> {vendor.email}</p>
-              <p><span className="font-medium text-gray-800">Phone:</span> {vendor.phone}</p>
-              {vendor.address && (
-                <p className="sm:col-span-2"><span className="font-medium text-gray-800">Address:</span> {vendor.address}</p>
-              )}
-              {vendor.description && (
-                <p className="sm:col-span-2"><span className="font-medium text-gray-800">Description:</span> {vendor.description}</p>
-              )}
-              <p><span className="font-medium text-gray-800">Member since:</span> {new Date(vendor.created_at).toLocaleDateString()}</p>
-            </div>
+            <InfoList className="grid-cols-1 gap-1 sm:grid-cols-2">
+              <InfoRow layout="stacked" label="Email" value={vendor.email} />
+              <InfoRow layout="stacked" label="Phone" value={vendor.phone} />
+              {vendor.address && <InfoRow layout="stacked" label="Address" value={vendor.address} className="sm:col-span-2" />}
+              {vendor.description && <InfoRow layout="stacked" label="Description" value={vendor.description} className="sm:col-span-2" />}
+              <InfoRow layout="stacked" label="Member since" value={new Date(vendor.created_at).toLocaleDateString()} />
+            </InfoList>
           </div>
         </div>
       </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg"><Package className="w-5 h-5 text-blue-600" /></div>
-            <div>
-              <p className="text-xs text-gray-500">Total Products</p>
-              <p className="text-xl font-bold text-gray-900">{totalProducts}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-lg"><DollarSign className="w-5 h-5 text-purple-600" /></div>
-            <div>
-              <p className="text-xs text-gray-500">Inventory Value</p>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(inventoryValue)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 rounded-lg"><CreditCard className="w-5 h-5 text-emerald-600" /></div>
-            <div>
-              <p className="text-xs text-gray-500">Total Paid</p>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(vendor.totalPaid)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${vendor.amountPayable > 0 ? "bg-red-100" : "bg-emerald-100"}`}>
-              <Wallet className={`w-5 h-5 ${vendor.amountPayable > 0 ? "text-red-600" : "text-emerald-600"}`} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Amount Payable</p>
-              <p className={`text-xl font-bold ${vendor.amountPayable > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                {formatCurrency(vendor.amountPayable)}
-              </p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${(vendor.poDueAmount ?? 0) > 0 ? "bg-red-100" : "bg-emerald-100"}`}>
-              <Receipt className={`w-5 h-5 ${(vendor.poDueAmount ?? 0) > 0 ? "text-red-600" : "text-emerald-600"}`} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Purchase Order Due</p>
-              <p className={`text-xl font-bold ${(vendor.poDueAmount ?? 0) > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                {formatCurrency(vendor.poDueAmount ?? 0)}
-              </p>
-            </div>
-          </div>
-        </Card>
+        <StatTile label="Total Products" value={totalProducts} icon={<Package />} />
+        <StatTile label="Inventory Value" value={formatCurrency(inventoryValue)} icon={<DollarSign />} />
+        <StatTile label="Total Paid" value={formatCurrency(vendor.totalPaid)} icon={<CreditCard />} />
+        <StatTile label="Amount Payable" value={<span className={payableTone}>{formatCurrency(vendor.amountPayable)}</span>} icon={<Wallet className={payableTone} />} />
+        <StatTile label="Purchase Order Due" value={<span className={poDueTone}>{formatCurrency(vendor.poDueAmount ?? 0)}</span>} icon={<Receipt className={poDueTone} />} />
       </div>
 
       {/* Products table */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Products ({totalProducts})
-        </h3>
+      <SectionCard title={`Products (${totalProducts})`}>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Product</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Category</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Price</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Stock</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Value</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead>Value</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {vendorProducts.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-400">No products found for this supplier</td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <EmptyState icon={Package} title="No products found for this supplier" className="p-4 md:p-6" />
+                  </TableCell>
+                </TableRow>
               ) : vendorProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="py-3 px-4">
+                <TableRow key={product.id}>
+                  <TableCell>
                     <div className="flex items-center gap-3">
-                      <img
-                        src={product.image || "/placeholder.svg"}
-                        alt={product.name}
-                        className="w-10 h-10 rounded object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }}
-                      />
-                      <span className="font-medium text-gray-900">{product.name}</span>
+                      <UserAvatar src={product.image || "/placeholder.svg"} name={product.name} shape="square" className="size-10" />
+                      <span className="font-medium">{product.name}</span>
                     </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{product.category}</td>
-                  <td className="py-3 px-4 text-sm font-semibold text-gray-900">{formatCurrency(product.salePrice)}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
+                  </TableCell>
+                  <TableCell>{product.category}</TableCell>
+                  <TableCell>{formatCurrency(product.salePrice)}</TableCell>
+                  <TableCell>
                     {product.stock < 5 ? (
-                      <span className="text-red-600 font-semibold">{product.stock} <span className="text-xs">(Low)</span></span>
+                      <span className="text-destructive font-semibold">{product.stock} <span className="text-xs">(Low)</span></span>
                     ) : product.stock}
-                  </td>
-                  <td className="py-3 px-4 text-sm font-semibold text-gray-900">
+                  </TableCell>
+                  <TableCell>
                     {formatCurrency(product.salePrice * product.stock)}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      product.status === "Selling" ? "bg-emerald-100 text-emerald-700"
-                      : product.status === "Out of Stock" ? "bg-red-100 text-red-700"
-                      : "bg-gray-100 text-gray-700"
-                    }`}>
-                      {product.status}
-                    </span>
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={product.status} />
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
-      </Card>
+      </SectionCard>
 
       {/* Edit dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -266,46 +197,41 @@ export default function VendorDetailsPage() {
             <DialogTitle>Edit Supplier</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2 space-y-1">
-              <Label>Supplier Name</Label>
-              <Input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
-            </div>
-            <div className="space-y-1">
-              <Label>Email</Label>
-              <Input type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} />
-            </div>
-            <div className="space-y-1">
-              <Label>Phone</Label>
-              <Input value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label>Address</Label>
-              <Input value={formData.address} onChange={e => setFormData(p => ({ ...p, address: e.target.value }))} />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label>Description</Label>
-              <Input value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} />
-            </div>
-            <div className="space-y-1">
-              <Label>Total Paid ($)</Label>
+            <FormField label="Supplier Name" htmlFor="vd-name" className="col-span-2">
+              <Input id="vd-name" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
+            </FormField>
+            <FormField label="Email" htmlFor="vd-email">
+              <Input id="vd-email" type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} />
+            </FormField>
+            <FormField label="Phone" htmlFor="vd-phone">
+              <Input id="vd-phone" value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} />
+            </FormField>
+            <FormField label="Address" htmlFor="vd-address" className="col-span-2">
+              <Input id="vd-address" value={formData.address} onChange={e => setFormData(p => ({ ...p, address: e.target.value }))} />
+            </FormField>
+            <FormField label="Description" htmlFor="vd-desc" className="col-span-2">
+              <Input id="vd-desc" value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} />
+            </FormField>
+            <FormField label="Total Paid ($)" htmlFor="vd-paid">
               <Input
+                id="vd-paid"
                 type="number" min={0} step="0.01"
                 value={formData.totalPaid}
                 onChange={e => setFormData(p => ({ ...p, totalPaid: parseFloat(e.target.value) || 0 }))}
               />
-            </div>
-            <div className="space-y-1">
-              <Label>Amount Payable ($)</Label>
+            </FormField>
+            <FormField label="Amount Payable ($)" htmlFor="vd-payable">
               <Input
+                id="vd-payable"
                 type="number" min={0} step="0.01"
                 value={formData.amountPayable}
                 onChange={e => setFormData(p => ({ ...p, amountPayable: parseFloat(e.target.value) || 0 }))}
               />
-            </div>
+            </FormField>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>

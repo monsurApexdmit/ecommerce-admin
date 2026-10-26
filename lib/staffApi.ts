@@ -75,12 +75,20 @@ export interface StaffListResponse {
 
 export interface CreateStaffData {
   name: string;
-  email: string;
+  email?: string;
   contact: string;
+  phone?: string;
+  account?: string;
+  nid?: string;
+  emergencyContact?: string;
+  loginMethod?: 'email' | 'pin';
+  pin?: string;
+  locationIds?: number[];
+
   joiningDate?: string;
   role?: string;
   staffRoleId?: number | null;
-  status?: 'Active' | 'Inactive';
+  status?: 'Active' | 'Inactive' | 'Invited' | 'On leave' | string;
   published?: boolean;
   avatar?: string;
   salary?: number;
@@ -93,10 +101,18 @@ export interface UpdateStaffData {
   name?: string;
   email?: string;
   contact?: string;
+  phone?: string;
+  account?: string;
+  nid?: string;
+  emergencyContact?: string;
+  loginMethod?: 'email' | 'pin';
+  pin?: string;
+  locationIds?: number[];
+
   joiningDate?: string;
   role?: string;
   staffRoleId?: number | null;
-  status?: 'Active' | 'Inactive';
+  status?: 'Active' | 'Inactive' | 'Invited' | 'On leave' | string;
   published?: boolean;
   avatar?: string;
   salary?: number;
@@ -201,6 +217,10 @@ export interface StaffRoleResponse {
   id: number;
   companyId?: number;
   name: string;
+  description?: string | null;
+  locked?: boolean;
+  memberCount?: number;
+  sensitive?: Record<string, boolean> | null;
   permissions: {
     id?: number;
     name: string;
@@ -324,6 +344,125 @@ export const salaryPaymentApi = {
     const response = await api.delete(`/salary-payments/${id}`);
     return response.data;
   },
+};
+
+
+// ── New staff UI (overview, roles matrix, payroll) ─────────────────────────
+
+export type StaffStatus = 'Active' | 'Invited' | 'On leave' | 'Inactive';
+
+export interface StaffRow {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  roleId: number | null;
+  roleName: string | null;
+  locationIds: number[];
+  locationNames: string[];
+  salary: number;
+  paymentMethod: string | null;
+  account: string | null;
+  nid: string | null;
+  emergencyContact: string | null;
+  joiningDate: string | null;
+  status: StaffStatus | string;
+  published: boolean;
+  loginMethod: 'email' | 'pin' | string;
+  hasPin: boolean;
+  lastActiveAt: string | null;
+  invited: boolean;
+  isOwner?: boolean;
+  isOnlyOwner?: boolean;
+}
+
+export interface StaffOverview {
+  rows: StaffRow[];
+  stats: {
+    total: number; owners: number; staffCount: number; activeToday: number; activeTodayNames: string[];
+    inactive: number; invited: number; firstInvitedName: string | null; monthlyPayroll: number; seatsUsed: number; seatLimit: number | null;
+  };
+  counts: Record<'all' | 'Active' | 'Invited' | 'On leave' | 'Inactive', number>;
+  roles: { id: number; name: string; description?: string | null; isOwner?: boolean; memberCount: number }[];
+  locations: { id: number; name: string }[];
+}
+
+export interface StaffSalarySummary {
+  monthly: number;
+  paidThisYear: number;
+  dueNow: number;
+  history: { id: number; month: string; label: string; detail: string; net: number; status: string; canPay: boolean }[];
+}
+
+export interface MatrixModuleGroup { group: string; modules: { name: string; summary: string }[] }
+export type MatrixCell = { view: boolean; create: boolean; edit: boolean; delete: boolean };
+export interface RoleMatrix {
+  id: number;
+  name: string;
+  description: string | null;
+  locked: boolean;
+  memberCount: number;
+  matrix: Record<string, MatrixCell>;
+  sensitive: { cost: boolean; discount: boolean; refund: boolean; export: boolean; void: boolean };
+}
+
+export interface PayrollRow {
+  staffId: number;
+  name: string;
+  role: string | null;
+  joined: string | null;
+  paymentId: number | null;
+  base: number;
+  bonus: number;
+  deduction: number;
+  bonusNote: string | null;
+  deductionNote: string | null;
+  net: number;
+  method: string | null;
+  status: 'pending' | 'paid' | 'not_generated';
+}
+
+export interface Payroll {
+  month: string;
+  label: string;
+  payday: string;
+  daysLeft: number;
+  rows: PayrollRow[];
+  stats: { baseTotal: number; netTotal: number; paid: number; paidCount: number; pendingNet: number; pendingCount: number; notGenerated: number; paidThisYear: number; peopleCount: number };
+  history: { month: string; label: string; people: number; net: number; paid: number; pending: number }[];
+  months: { month: string; label: string }[];
+}
+
+export const staffUiApi = {
+  getOverview: async (params?: { search?: string; status?: string; role_id?: number; location_id?: number; page?: number; per_page?: number }): Promise<StaffOverview> => {
+    const response = await api.get('/staff/overview', { params: { per_page: 500, ...params } });
+    return response.data.data;
+  },
+  resendInvite: async (id: number) => (await api.post(`/staff/${id}/resend-invite`)).data,
+  getSalarySummary: async (id: number): Promise<StaffSalarySummary> => (await api.get(`/staff/${id}/salary-summary`)).data.data,
+
+  getMatrixModules: async (): Promise<MatrixModuleGroup[]> => {
+    const response = await api.get('/staff-roles/matrix-modules');
+    const d = response.data.data ?? [];
+    return (Array.isArray(d) ? d : d.groups ?? []).map((g: any) => ({
+      group: g.group,
+      modules: (g.modules ?? []).map((m: any) => (typeof m === 'string' ? { name: m, summary: '' } : { name: m.name, summary: m.summary ?? '' })),
+    }));
+  },
+  getRoleMatrix: async (id: number): Promise<RoleMatrix> => (await api.get(`/staff-roles/${id}/matrix`)).data.data,
+  saveRoleMatrix: async (id: number, body: { name?: string; description?: string; matrix: Record<string, MatrixCell>; sensitive: RoleMatrix['sensitive'] }): Promise<RoleMatrix> =>
+    (await api.put(`/staff-roles/${id}/matrix`, body)).data.data,
+  createRole: async (body: { name: string; description?: string; matrix?: Record<string, MatrixCell>; sensitive?: RoleMatrix['sensitive'] }): Promise<RoleMatrix> =>
+    (await api.post('/staff-roles/matrix', body)).data.data,
+  duplicateRole: async (id: number): Promise<RoleMatrix> => (await api.post(`/staff-roles/${id}/duplicate`)).data.data,
+
+  getPayroll: async (month: string): Promise<Payroll> => (await api.get('/salary/payroll', { params: { month } })).data.data,
+  generatePayroll: async (month: string) => (await api.post('/salary/payroll/generate', { month })).data,
+  adjustPayment: async (id: number, body: { bonus: number; deduction: number; method?: string; bonusNote?: string; deductionNote?: string }) =>
+    (await api.patch(`/salary-payments/${id}/adjust`, body)).data,
+  payPayment: async (id: number, body?: { method?: string; date?: string }) => (await api.post(`/salary-payments/${id}/pay`, body ?? {})).data,
+  payAll: async (month: string) => (await api.post('/salary/payroll/pay-all', { month })).data,
+  reversePayment: async (id: number) => (await api.post(`/salary-payments/${id}/reverse`)).data,
 };
 
 export default staffApi;

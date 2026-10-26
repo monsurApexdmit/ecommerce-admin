@@ -54,11 +54,45 @@ export interface PurchaseOrder {
   paymentStatus: 'pending' | 'partially_paid' | 'paid'
   payments: PurchasePayment[]
   items: PurchaseOrderItem[]
+  discountType?: 'flat' | 'percent'
+  discountValue?: number
+  discountAmount?: number
+  taxRate?: number
+  taxAmount?: number
+  shippingCost?: number
+  subtotal?: number
+  itemsSummary?: string | null
+  unitsOrdered?: number
+  unitsReceived?: number
+  isOverdue?: boolean
+  sentAt?: string | null
+  receivedAt?: string | null
+  receipts?: PurchaseReceipt[]
   createdAt: string
   updatedAt: string
 }
 
+export interface PurchaseReceipt {
+  id: number
+  date: string
+  receivedAt: string
+  locationId: number | null
+  locationName: string | null
+  itemsSummary: string | null
+  items: { itemId: number; productId: number; productName: string; quantity: number }[]
+}
+
+export interface PurchaseStats {
+  total: number
+  count?: number
+  totalDue: number
+  reorderCount: number
+  byStatus: Record<'draft' | 'ordered' | 'partial' | 'received' | 'cancelled', { count: number; amount: number }>
+}
+
 export interface PurchasePayment {
+  date?: string
+  method?: string
   id: number
   amount: number
   paymentMethod: string
@@ -69,6 +103,11 @@ export interface PurchasePayment {
 }
 
 export interface CreatePurchaseOrderData {
+  status?: 'draft' | 'sent' | 'received'
+  discountType?: 'flat' | 'percent'
+  discountValue?: number
+  taxRate?: number
+  shippingCost?: number
   paidAmount?: number
   paymentMethod?: string
   paymentDate?: string
@@ -86,6 +125,7 @@ export interface CreatePurchaseOrderData {
 }
 
 export interface ReceiveItemsData {
+  locationId?: number
   items: {
     itemId: number
     quantityReceiving: number

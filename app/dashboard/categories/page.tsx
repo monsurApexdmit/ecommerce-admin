@@ -1,549 +1,554 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
+import { useMemo, useState } from "react"
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, FolderTree, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { Toolbar } from "@/components/common/Toolbar"
+import { BulkBar } from "@/components/common/BulkBar"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { SwatchPicker } from "@/components/common/SwatchPicker"
+import { UserAvatar } from "@/components/common/UserAvatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Download, Upload, Edit, Trash2, Eye, Plus, FilePen, ChevronDown, ChevronRight } from "lucide-react"
-import { exportToCSV, parseCSV } from "@/lib/export-import-utils"
-import { usePagination } from "@/hooks/use-pagination"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { PaginationControl } from "@/components/ui/pagination-control"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { exportToCSV } from "@/lib/export-import-utils"
+import { parseCsvRows } from "@/lib/csv-rows"
+import { categoryApi } from "@/lib/categoryApi"
+import { usePagination } from "@/hooks/use-pagination"
 import { useCategory, type Category } from "@/contexts/category-context"
 import { useToast } from "@/hooks/use-toast"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { cn } from "@/lib/utils"
+import { WithTooltip } from "@/components/common/WithTooltip"
+
+interface Row { cat: Category; depth: number; hasChildren: boolean }
+
+const SWATCHES = [
+  { name: "Blue", value: "#2449E8" },
+  { name: "Purple", value: "#6D28D9" },
+  { name: "Amber", value: "#D97706" },
+  { name: "Red", value: "#DC2626" },
+  { name: "Teal", value: "#0F766E" },
+]
+
+const byOrder = (a: Category, b: Category) =>
+  (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.category_name.localeCompare(b.category_name)
+
+const emptyForm = { name: "", parent_id: "none", published: true, description: "", color: SWATCHES[0].value as string, image: "" as string, imageFile: null as File | null }
 
 export default function CategoriesPage() {
-  const { canRead } = useSaasAuth()
-  const { categories: rootCategories, getAllCategoriesFlat, addCategory, updateCategory, deleteCategory } = useCategory()
+  const { categories, isLoading, getAllCategoriesFlat, addCategory, updateCategory, deleteCategory, bulkDeleteCategories, reorderCategories, refreshCategories } = useCategory()
   const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [parentsOnly, setParentsOnly] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
-  
-  // All flat categories for dropdowns and flat list views if needed
-  const flatCategories = getAllCategoriesFlat()
+  const [search, setSearch] = useState("")
+  const [tab, setTab] = useState("all")
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<Category | null>(null)
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [deleteTargets, setDeleteTargets] = useState<Category[]>([])
+  const [deleting, setDeleting] = useState(false)
 
-  const [formData, setFormData] = useState({
-    name: "",
-    parent_id: "none",
-    published: true,
-  })
-  const [isBulkActionDialogOpen, setIsBulkActionDialogOpen] = useState(false)
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-  const [bulkAction, setBulkAction] = useState("")
+  // Flat, de-duplicated list of every category
+  const flat = useMemo(() => {
+    const seen = new Map<string, Category>()
+    getAllCategoriesFlat().forEach((c) => { if (!seen.has(c.id)) seen.set(c.id, c) })
+    return Array.from(seen.values())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [])
+  const byId = useMemo(() => new Map(flat.map((c) => [c.id, c])), [flat])
+  const childrenOf = useMemo(() => {
+    const m = new Map<string, Category[]>()
+    flat.forEach((c) => {
+      if (c.parent_id && byId.has(c.parent_id)) {
+        const list = m.get(c.parent_id) ?? []
+        list.push(c)
+        m.set(c.parent_id, list)
+      }
+    })
+    m.forEach((list) => list.sort(byOrder))
+    return m
+  }, [flat, byId])
 
-  const blocked = useModuleGuard('Categories')
-  if (blocked) return blocked
-
-  // Filter Logic
-  // If "Parents Only" is checked, we only search/filter ROOT categories.
-  // Otherwise, we search/filter ALL categories (flat list).
-  const sourceList = parentsOnly ? rootCategories : flatCategories
-
-  const filteredCategories = sourceList.filter((category) =>
-    (category.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()),
+  const roots = useMemo(
+    () => flat.filter((c) => !c.parent_id || !byId.has(c.parent_id)).sort(byOrder),
+    [flat, byId],
   )
 
-  const {
-    currentItems: currentCategories,
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    goToPage,
-    setCurrentPage,
-    handleItemsPerPageChange,
-  } = usePagination(filteredCategories, 10)
+  const term = search.trim().toLowerCase()
 
-  const handleFilterChange = () => {
-    setCurrentPage(1)
-  }
+  // Whole tree in display order (ignores collapsing) with depth
+  const treeOrder = useMemo(() => {
+    const out: { cat: Category; depth: number }[] = []
+    const walk = (c: Category, depth: number) => { out.push({ cat: c, depth }); (childrenOf.get(c.id) ?? []).forEach((k) => walk(k, depth + 1)) }
+    roots.forEach((r) => walk(r, 0))
+    return out
+  }, [roots, childrenOf])
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(currentCategories.map((c) => c.id))
-    } else {
-      setSelectedIds([])
+  const publishedCount = flat.filter((c) => c.status).length
+  const flatMode = !!term || tab !== "all"
+  // Rows matching the active tab + search (name or description), in tree order
+  const filteredList = useMemo(
+    () => treeOrder.map((t) => t.cat).filter((c) =>
+      (tab === "all" || (tab === "published" ? c.status : !c.status)) &&
+      (!term || c.category_name.toLowerCase().includes(term) || (c.description ?? "").toLowerCase().includes(term))),
+    [treeOrder, tab, term],
+  )
+
+  // Each unit is one root with its visible descendants (or a single match while searching)
+  const units = useMemo<Row[][]>(() => {
+    if (flatMode) {
+      return filteredList.map((c) => [{ cat: c, depth: 0, hasChildren: false }])
     }
-  }
-
-  const handleSelectOne = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedIds([...selectedIds, id])
-    } else {
-      setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id))
+    const walk = (c: Category, depth: number, out: Row[]) => {
+      const kids = childrenOf.get(c.id) ?? []
+      out.push({ cat: c, depth, hasChildren: kids.length > 0 })
+      if (!collapsed.has(c.id)) kids.forEach((k) => walk(k, depth + 1, out))
     }
+    return roots.map((r) => { const out: Row[] = []; walk(r, 0, out); return out })
+  }, [flatMode, filteredList, roots, childrenOf, collapsed])
+
+  const { currentItems, currentPage, totalPages, itemsPerPage, setCurrentPage, handleItemsPerPageChange } = usePagination(units, 10)
+
+  const blocked = useModuleGuard("Categories")
+  if (blocked) return blocked
+
+  const rows = currentItems.flat()
+  const allChecked = rows.length > 0 && rows.every((r) => checked.has(r.cat.id))
+  const selected = flat.filter((c) => checked.has(c.id))
+  const parentName = (c: Category) => (c.parent_id ? byId.get(c.parent_id)?.category_name : undefined)
+
+  const toggleOne = (id: string) =>
+    setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAll = () =>
+    setChecked((prev) => { const n = new Set(prev); allChecked ? rows.forEach((r) => n.delete(r.cat.id)) : rows.forEach((r) => n.add(r.cat.id)); return n })
+
+  const parentsWithKids = roots.filter((r) => (childrenOf.get(r.id) ?? []).length > 0).map((r) => r.id)
+  const anyCollapsed = collapsed.size > 0
+  const toggleExpandAll = () => setCollapsed(anyCollapsed ? new Set() : new Set(flat.filter((c) => childrenOf.has(c.id)).map((c) => c.id)))
+  const toggleBranch = (id: string) =>
+    setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  // Descendants of the category being edited can't become its parent
+  const blockedParents = (() => {
+    const set = new Set<string>()
+    if (!editing) return set
+    const walk = (id: string) => { set.add(id); (childrenOf.get(id) ?? []).forEach((k) => walk(k.id)) }
+    walk(editing.id)
+    return set
+  })()
+
+  const openForm = (c?: Category | null) => {
+    setEditing(c ?? null)
+    setForm(c ? { name: c.category_name, parent_id: c.parent_id || "none", published: c.status, description: c.description ?? "", color: c.color || SWATCHES[0].value, image: c.image ?? "", imageFile: null } : emptyForm)
+    setFormOpen(true)
   }
 
-  const togglePublished = (category: Category) => {
-    updateCategory(category.id, { status: !category.status })
-  }
-
-  const handleAdd = async () => {
-    if (!formData.name) return
-
+  const save = async () => {
+    if (!form.name.trim()) {
+      toast({ variant: "destructive", title: "Name required", description: "Give the category a name" })
+      return
+    }
+    const wanted = form.name.trim().toLowerCase()
+    if (flat.some((c) => c.id !== editing?.id && c.category_name.trim().toLowerCase() === wanted)) {
+      toast({ variant: "destructive", title: "Name already used", description: "A category with this name already exists." })
+      return
+    }
+    setSaving(true)
     try {
-      await addCategory({
-        category_name: formData.name.replace(/\b\w/g, (c) => c.toUpperCase()),
-        status: formData.published,
-        parent_id: formData.parent_id === "none" ? null : formData.parent_id,
-      })
-
-      toast({
-        title: "Success",
-        description: "Category created successfully",
-      })
-      closeDialog()
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || 'Failed to create category',
-      })
-    }
-  }
-
-  const handleEdit = (category: Category) => {
-    setEditingCategory(category)
-    setFormData({
-      name: category.category_name,
-      parent_id: category.parent_id || "none",
-      published: category.status,
-    })
-    setIsDialogOpen(true)
-  }
-
-  const handleUpdate = async () => {
-    if (!editingCategory || !formData.name) return
-
-    try {
-      await updateCategory(editingCategory.id, {
-        category_name: formData.name.replace(/\b\w/g, (c) => c.toUpperCase()),
-        status: formData.published,
-        parent_id: formData.parent_id === "none" ? null : formData.parent_id,
-      })
-
-      toast({
-        title: "Success",
-        description: "Category updated successfully",
-      })
-      closeDialog()
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || 'Failed to update category',
-      })
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteCategory(id)
-      setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id))
-      toast({
-        title: "Success",
-        description: "Category deleted successfully",
-      })
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || 'Failed to delete category',
-      })
-    }
-  }
-
-  const handleBulkDelete = async () => {
-    const errors: string[] = []
-    let successCount = 0
-
-    for (const id of selectedIds) {
-      try {
-        await deleteCategory(id)
-        successCount++
-      } catch (error: any) {
-        const category = flatCategories.find(c => c.id === id)
-        const categoryName = category ? category.category_name : id.substring(0, 8)
-        errors.push(`${categoryName}: ${error.message}`)
+      const payload = {
+        category_name: form.name.trim().replace(/\b\w/g, (ch) => ch.toUpperCase()),
+        color: form.color,
+        status: form.published,
+        parent_id: form.parent_id === "none" ? null : form.parent_id,
+        description: form.description.trim(),
+        imageFile: form.imageFile,
       }
+      if (editing) {
+        await updateCategory(editing.id, payload)
+        toast({ title: "Category updated", description: payload.category_name })
+      } else {
+        await addCategory(payload)
+        toast({ title: "Category added", description: payload.category_name })
+      }
+      setFormOpen(false)
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Could not save", description: error.message || "Please try again" })
+    } finally {
+      setSaving(false)
     }
-    setSelectedIds([])
+  }
 
-    if (errors.length > 0) {
-      toast({
-        variant: "destructive",
-        title: `${successCount} deleted, ${errors.length} failed`,
-        description: errors.join(', '),
-      })
-    } else {
-      toast({
-        title: "Success",
-        description: `${successCount} categories deleted successfully`,
-      })
+  const setPublished = async (list: Category[], status: boolean) => {
+    const res = await Promise.allSettled(list.filter((c) => c.status !== status).map((c) => updateCategory(c.id, { status })))
+    const failed = res.filter((r) => r.status === "rejected").length
+    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} categories could not be updated` })
+    else toast({ title: status ? "Published" : "Unpublished", description: `${list.length} categor${list.length === 1 ? "y" : "ies"} updated` })
+  }
+
+  const confirmDelete = async () => {
+    setDeleting(true)
+    try {
+      if (deleteTargets.length === 1) {
+        await deleteCategory(deleteTargets[0].id)
+        toast({ title: "Deleted", description: deleteTargets[0].category_name })
+      } else {
+        const r = await bulkDeleteCategories(deleteTargets.map((c) => c.id))
+        toast({
+          variant: r.kept && !r.deleted ? "destructive" : undefined,
+          title: `${r.deleted} deleted, ${r.kept} kept`,
+          description: r.kept ? `Kept because they have products or sub-categories: ${r.keptNames.join(", ")}` : undefined,
+        })
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Could not delete", description: e.message })
+    } finally {
+      setDeleting(false)
+      setDeleteTargets([])
+      setChecked(new Set())
     }
+  }
+
+  // Swap a category with its previous/next sibling and save the order
+  const move = async (c: Category, dir: -1 | 1) => {
+    const siblings = c.parent_id && byId.has(c.parent_id) ? (childrenOf.get(c.parent_id) ?? []) : roots
+    const i = siblings.findIndex((s) => s.id === c.id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= siblings.length) return
+    const ids = siblings.map((s) => s.id)
+    ;[ids[i], ids[j]] = [ids[j], ids[i]]
+    try { await reorderCategories(ids) } catch (e: any) { toast({ variant: "destructive", title: "Could not reorder", description: e.message }) }
   }
 
   const handleExport = () => {
-    const exportData = filteredCategories.map((category) => ({
-      id: category.id,
-      name: category.category_name,
-      parent_id: category.parent_id || "None",
-      published: category.status ? "Yes" : "No",
-    }))
-
-    const headers = ["ID", "Name", "Parent ID", "Published"]
-    exportToCSV(exportData, "categories", headers)
+    const list = selected.length ? selected : filteredList
+    exportToCSV(
+      list.map((c) => ({
+        name: c.category_name,
+        parent: parentName(c) ?? "",
+        description: c.description ?? "",
+        products: String(c.products_count ?? 0),
+        published: c.status ? "Yes" : "No",
+      })),
+      "categories",
+      ["Name", "Parent", "Description", "Products", "Published"],
+    )
   }
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
     if (!file) return
-
     const reader = new FileReader()
-    reader.onload = (e) => {
-      const text = e.target?.result as string
-      const importedData = parseCSV(text)
-
-      importedData.forEach((item) => {
-         if(item.name) {
-             addCategory({
-                 category_name: item.name,
-                 status: item.published === "Yes",
-                 parent_id: item.parent_id === "None" ? null : item.parent_id
-             })
-         }
+    reader.onload = async (ev) => {
+      const items = parseCsvRows(ev.target?.result as string).filter((i) => i.name)
+      const ids = new Map(flat.map((c) => [c.category_name.trim().toLowerCase(), Number(c.id)]))
+      let pending = items
+      let ok = 0, dup = 0
+      // Parents first: keep passing over rows whose parent now exists
+      for (let pass = 0; pass < 10 && pending.length; pass++) {
+        const next: typeof items = []
+        for (const item of pending) {
+          const key = item.name.toLowerCase()
+          if (ids.has(key)) { dup++; continue }
+          const parentKey = (item.parent ?? item.parent_name ?? "").toLowerCase()
+          if (parentKey && parentKey !== "none" && !ids.has(parentKey)) { next.push(item); continue }
+          try {
+            const r = await categoryApi.create({
+              category_name: item.name,
+              status: !["no", "false", "0"].includes((item.published ?? "").toLowerCase()),
+              parent_id: parentKey && parentKey !== "none" ? ids.get(parentKey)! : null,
+              description: item.description || null,
+            })
+            ids.set(key, r.data.id)
+            ok++
+          } catch { dup++ }
+        }
+        if (next.length === pending.length) break
+        pending = next
+      }
+      await refreshCategories()
+      toast({
+        title: "Import finished",
+        description: `${ok} added${dup ? `, ${dup} skipped (duplicate or invalid)` : ""}${pending.length ? `, ${pending.length} skipped (parent not found)` : ""}`,
       })
-      setIsImportDialogOpen(false)
+      setImportOpen(false)
     }
     reader.readAsText(file)
+    e.target.value = ""
   }
 
-  const handleBulkAction = () => {
-    if (!bulkAction || selectedIds.length === 0) return
-
-    if (bulkAction === "delete") {
-      handleBulkDelete()
-    } else if (bulkAction === "publish") {
-      selectedIds.forEach(id => updateCategory(id, { status: true }))
-      setSelectedIds([])
-    } else if (bulkAction === "unpublish") {
-      selectedIds.forEach(id => updateCategory(id, { status: false }))
-      setSelectedIds([])
-    }
-
-    setIsBulkActionDialogOpen(false)
-    setBulkAction("")
-  }
-
-  const closeDialog = () => {
-    setIsDialogOpen(false)
-    setEditingCategory(null)
-    setFormData({ name: "", parent_id: "none", published: true })
-  }
-  
-  // Helper to get parent name
-  const getParentName = (parentId: string | null) => {
-      if(!parentId) return "-"
-      const parent = flatCategories.find(c => c.id === parentId)
-      return parent ? parent.category_name : parentId
-  }
+  const total = flat.length
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-gray-900">Category</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="text-gray-700 bg-transparent" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
+    <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
+      {/* Header */}
+      <PageHeader
+        title="Categories"
+        description="Organise products into groups and sub-groups."
+        actions={<>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> Import</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" onClick={() => openForm(null)}>
+            <Plus className="size-4" aria-hidden /> Add category
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-gray-700 bg-transparent"
-            onClick={() => setIsImportDialogOpen(true)}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-orange-600 border-orange-200 bg-orange-50"
-            disabled={selectedIds.length === 0}
-            onClick={() => setIsBulkActionDialogOpen(true)}
-          >
-            <FilePen className="w-4 h-4 mr-2" />
-            Bulk Action
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-red-600 hover:bg-red-50 bg-transparent"
-            disabled={selectedIds.length === 0}
-            onClick={handleBulkDelete}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
-          <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600" onClick={() => setIsDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Category
-          </Button>
+        </>}
+      />
+
+      <Card className="gap-0 py-0">
+        <div className="px-4">
+          <StatusTabs value={tab} onChange={(v) => { setTab(v); setCurrentPage(1) }} tabs={[
+            { value: "all", label: "All", count: flat.length },
+            { value: "published", label: "Published", count: publishedCount },
+            { value: "unpublished", label: "Unpublished", count: flat.length - publishedCount },
+          ]} />
         </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search by Category name"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
-                handleFilterChange()
-              }}
-              className="pl-10"
-            />
+        <Toolbar className="p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Label htmlFor="cat-search" className="sr-only">Search categories</Label>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input id="cat-search" type="search" placeholder="Search name or description…" value={search} onChange={(e) => setSearch(e.target.value)}
+              className="pl-9" />
           </div>
-          
-          <div className="flex items-center gap-2 border px-3 py-2 rounded-md bg-gray-50">
-            <Switch
-              checked={parentsOnly}
-              onCheckedChange={(checked) => {
-                setParentsOnly(checked)
-                handleFilterChange()
-              }}
-              className="data-[state=checked]:bg-emerald-500"
-            />
-            <span className="text-sm font-medium">Parents Only</span>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  <input
-                    type="checkbox"
-                    checked={currentCategories.length > 0 && selectedIds.length === currentCategories.length}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
-                 {!parentsOnly && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PARENT</th>}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">PUBLISHED</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading
-                ? Array.from({ length: 5 }).map((_, index) => (
-                    <tr key={index} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-4 rounded" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
-                       {!parentsOnly && <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>}
-                      <td className="py-3 px-4"><Skeleton className="h-6 w-11 rounded-full" /></td>
-                      <td className="py-3 px-4"><Skeleton className="h-5 w-20" /></td>
-                    </tr>
-                  ))
-                : currentCategories.map((category) => (
-                    <tr key={category.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(category.id)}
-                          onChange={(e) => handleSelectOne(category.id, e.target.checked)}
-                          className="rounded border-gray-300"
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-gray-900 font-medium">{category.category_name}</td>
-                      {!parentsOnly && (
-                          <td className="py-3 px-4 text-gray-500 text-sm">
-                              {getParentName(category.parent_id)}
-                          </td>
-                      )}
-                      <td className="py-3 px-4">
-                        <Switch
-                          checked={category.status}
-                          onCheckedChange={() => togglePublished(category)}
-                          className="data-[state=checked]:bg-emerald-500"
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button className="text-gray-500 hover:text-gray-700" onClick={() => handleEdit(category)}>
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button className="text-gray-500 hover:text-red-600" onClick={() => handleDelete(category.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-            </tbody>
-          </table>
-        </div>
-
-        {filteredCategories.length === 0 && !isLoading && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No categories found matching your criteria</p>
-          </div>
-        )}
-
-        <div className="mx-4 pb-4">
-          <PaginationControl
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            onItemsPerPageChange={handleItemsPerPageChange}
-            totalItems={filteredCategories.length}
-          />
-        </div>
-      </div>
-
-      <Dialog open={isDialogOpen} onOpenChange={closeDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingCategory ? "Edit Category" : "Add New Category"}</DialogTitle>
-          </DialogHeader>
-
-
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Category Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter category name"
-              />
-            </div>
-            
-            <div className="space-y-2">
-                <Label htmlFor="parent">Parent Category</Label>
-                <Select 
-                    value={formData.parent_id || "none"} 
-                    onValueChange={(val) => setFormData({...formData, parent_id: val})}
-                >
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select Parent Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="none">None (Top Level)</SelectItem>
-                         {/* Filter: only active categories and exclude self when editing */}
-                        {flatCategories
-                           .filter(c => c.status === true && (!editingCategory || c.id !== editingCategory.id))
-                           .map(cat => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                                {cat.category_name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={formData.published}
-                onCheckedChange={(checked) => setFormData({ ...formData, published: checked })}
-                className="data-[state=checked]:bg-emerald-500"
-              />
-              <Label>Published</Label>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>
-              Cancel
+          {search && (
+            <Button type="button" variant="ghost" onClick={() => setSearch("")}>
+              <X className="size-4" aria-hidden /> Clear
             </Button>
-            <Button
-              onClick={editingCategory ? handleUpdate : handleAdd}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {editingCategory ? "Update" : "Add"} Category
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
+          {!flatMode && parentsWithKids.length > 0 && (
+            <Button type="button" variant="outline" onClick={toggleExpandAll}>{anyCollapsed ? "Expand all" : "Collapse all"}</Button>
+          )}
+        </Toolbar>
 
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Import Categories</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>CSV File</Label>
-              <Input type="file" accept=".csv" onChange={handleImport} />
-              <p className="text-sm text-gray-500">
-                Upload a CSV file with columns: Name, Status, Parent ID
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Publish</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Unpublish</Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+        </BulkBar>
 
-      <Dialog open={isBulkActionDialogOpen} onOpenChange={setIsBulkActionDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Bulk Actions</DialogTitle>
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all categories on this page" /></TableHead>
+              <TableHead scope="col">Category</TableHead>
+              <TableHead scope="col" className="text-right">Products</TableHead>
+              <TableHead scope="col">Published</TableHead>
+              <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={5} className="px-4"><Skeleton className="h-10 rounded" /></TableCell></TableRow>)
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5}>
+                  <EmptyState icon={FolderTree} className="p-4 md:p-6"
+                    title={flatMode ? "No categories found" : "No categories yet"}
+                    description={flatMode ? "Try a different search or tab." : "Add your first category to group products."} />
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map(({ cat: c, depth, hasChildren }) => {
+                const kids = childrenOf.get(c.id)?.length ?? 0
+                const parent = parentName(c)
+                const sub = flatMode && parent ? `Sub-category of ${parent}` : depth > 0 ? `Sub-category of ${parent ?? "—"}` : kids > 0 ? `${kids} sub-categor${kids === 1 ? "y" : "ies"}` : "Top-level category"
+                const ck = checked.has(c.id)
+                return (
+                  <TableRow key={c.id} data-state={ck ? "selected" : undefined}>
+                    <TableCell className="pl-4">
+                      <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.category_name}`} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2.5" style={{ paddingLeft: depth * 28 }}>
+                        {hasChildren && !flatMode ? (
+                          <WithTooltip content={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}><Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
+                            aria-label={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}
+                            className="shrink-0">
+                            {collapsed.has(c.id) ? <ChevronRight className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
+                          </Button></WithTooltip>
+                        ) : (
+                          <span aria-hidden className="w-8 shrink-0 text-center text-muted-foreground">{depth > 0 ? "└" : ""}</span>
+                        )}
+                        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", !c.color && "bg-muted text-muted-foreground")}
+                          style={c.color ? { backgroundColor: `${c.color}1F`, color: c.color } : undefined}>
+                          <FolderTree className="size-[18px]" aria-hidden />
+                        </span>
+                        <Button type="button" variant="ghost" onClick={() => openForm(c)} className="h-auto flex-col items-start gap-0 p-0 text-left whitespace-normal hover:bg-transparent">
+                          <span className="font-semibold">{c.category_name}</span>
+                          {c.description && <span className="line-clamp-1 max-w-[420px] text-xs font-normal text-foreground/80">{c.description}</span>}
+                          <span className="text-xs font-normal text-muted-foreground">{sub}</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.products_count == null ? "—" : `${c.products_count} product${c.products_count === 1 ? "" : "s"}`}
+                    </TableCell>
+                    <TableCell>
+                      <Switch checked={c.status} aria-label={`Published: ${c.category_name}`}
+                        onCheckedChange={(v) => setPublished([c], v)} />
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <div className="flex justify-end gap-1">
+                        {!flatMode && (() => {
+                          const sibs = c.parent_id && byId.has(c.parent_id) ? (childrenOf.get(c.parent_id) ?? []) : roots
+                          const idx = sibs.findIndex((s) => s.id === c.id)
+                          return (
+                            <>
+                              <WithTooltip content={`Move ${c.category_name} up`}><Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} up`} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={`Move ${c.category_name} down`}><Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} down`} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button></WithTooltip>
+                            </>
+                          )
+                        })()}
+                        <WithTooltip content={`Edit ${c.category_name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.category_name}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
+                        <DropdownMenu>
+                          <WithTooltip content={`More actions for ${c.category_name}`}><DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.category_name}`}><MoreHorizontal className="size-4" /></Button>
+                          </DropdownMenuTrigger></WithTooltip>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openForm(c)}>Edit category</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setPublished([c], !c.status)}>{c.status ? "Unpublish" : "Publish"}</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>
+                              <Trash2 className="size-4" aria-hidden /> Delete category
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
+
+        <Separator />
+        <div className="px-4 py-3 text-xs text-muted-foreground">
+          {flatMode ? `${filteredList.length} of ${total}` : total} categor{total === 1 ? "y" : "ies"} · {roots.length} top-level
+        </div>
+        <div className="px-4 pb-4">
+          <PaginationControl currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}
+            itemsPerPage={itemsPerPage} onItemsPerPageChange={handleItemsPerPageChange} totalItems={units.length} />
+        </div>
+      </Card>
+
+      {/* Add / edit */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[480px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[480px]">
+          <DialogHeader className="border-b border-dash-border px-6 py-[18px] text-left">
+            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? `Edit ${editing.category_name}` : "New category"}</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">Group products so they are easy to find in POS.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Action Type</Label>
-              <Select value={bulkAction} onValueChange={setBulkAction}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select action" />
-                </SelectTrigger>
+          <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
+            <FormField label="Name" required htmlFor="cat-name" className="min-w-0">
+              <Input id="cat-name" placeholder="e.g. Panjabi" value={form.name} autoFocus
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter") save() }} />
+            </FormField>
+            <FormField label={<span id="cat-parent-label">Parent category</span>} htmlFor="cat-parent" className="min-w-0">
+              <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
+                <SelectTrigger id="cat-parent" aria-labelledby="cat-parent-label" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="publish">Publish</SelectItem>
-                  <SelectItem value="unpublish">Unpublish</SelectItem>
-                  <SelectItem value="delete">Delete</SelectItem>
+                  <SelectItem value="none">None (top level)</SelectItem>
+                  {treeOrder.filter(({ cat }) => !blockedParents.has(cat.id)).map(({ cat, depth }) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <span style={{ paddingLeft: depth * 14 }}>{depth > 0 ? "└ " : ""}{cat.category_name}{cat.status ? "" : " (unpublished)"}</span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FormField>
+            <FormField label="Description" htmlFor="cat-description" className="min-w-0">
+              <Textarea id="cat-description" rows={2} placeholder="Shown on the storefront category page" value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            </FormField>
+            <FormField label={<span id="cat-color-label">Icon colour</span>} className="min-w-0">
+              <SwatchPicker size="sm" aria-label="Icon colour"
+                options={SWATCHES.map((sw) => ({ value: sw.value, label: sw.name, color: sw.value }))}
+                value={form.color} onValueChange={(v) => setForm({ ...form, color: v })} />
+            </FormField>
+            <FormField label="Image (optional)" htmlFor="cat-image" className="min-w-0">
+              <Button asChild variant="outline" className="h-20 w-full cursor-pointer gap-3 border-dashed">
+                <Label htmlFor="cat-image">
+                  {form.imageFile || form.image ? (
+                    <>
+                      <UserAvatar shape="square" src={form.imageFile ? URL.createObjectURL(form.imageFile) : form.image} alt="" name={form.name} className="size-14" />
+                      <span className="truncate">{form.imageFile?.name ?? "Current image — click to replace"}</span>
+                    </>
+                  ) : "Drop an image or click to upload"}
+                </Label>
+              </Button>
+              <Input id="cat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => setForm({ ...form, imageFile: e.target.files?.[0] ?? null })} />
+            </FormField>
+            <Item variant="outline" size="sm">
+              <ItemContent>
+                <ItemTitle id="cat-pub-label">Published</ItemTitle>
+                <ItemDescription>Show this category in POS and online</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="cat-pub-label" />
+              </ItemActions>
+            </Item>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsBulkActionDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleBulkAction} className="bg-emerald-600 hover:bg-emerald-700" disabled={!bulkAction}>
-              Apply Action
+          <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : editing ? "Save changes" : "Add category"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-md rounded-[18px] border-dash-border bg-dash-card font-dash-body text-dash-ink">
+          <DialogHeader className="text-left">
+            <DialogTitle className="font-dash-display text-[22px] font-bold">Import categories</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">Upload a CSV with the columns Name, Parent (parent category name), Description and Published (Yes/No). Products is ignored. Existing names are skipped.</DialogDescription>
+          </DialogHeader>
+          <FormField label="CSV file" htmlFor="cat-import-file" className="min-w-0">
+            <Input id="cat-import-file" type="file" accept=".csv" onChange={handleImport} />
+          </FormField>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
+        <AlertDialogContent className="font-dash-body text-dash-ink">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].category_name : `${deleteTargets.length} categories`}?</AlertDialogTitle>
+            <AlertDialogDescription>Categories that have products or sub-categories are kept; the rest are deleted. This can’t be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

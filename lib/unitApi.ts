@@ -45,6 +45,12 @@ export interface UnitResponse {
   unitName: string;
   symbol: string | null;
   status: boolean;
+  type?: 'Count' | 'Weight' | 'Volume' | 'Length';
+  conversionQty?: number | null;
+  conversionUnitId?: number | null;
+  conversion?: string | null;
+  usedBy?: number;
+  productsCount?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -53,6 +59,9 @@ export interface CreateUnitData {
   unitName: string;
   symbol?: string;
   status?: boolean;
+  type?: 'Count' | 'Weight' | 'Volume' | 'Length';
+  conversionQty?: number | null;
+  conversionUnitId?: number | null;
 }
 
 export const unitApi = {

@@ -1,457 +1,339 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
+import { toast } from "sonner"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { saasBillingApi, type BillingUsage, type PaymentRecord, type Subscription } from "@/lib/saasBillingApi"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { saasBillingApi, type Subscription, type PaymentRecord } from "@/lib/saasBillingApi"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
-import { useModuleGuard } from "@/hooks/use-module-guard"
-import { useToast } from "@/hooks/use-toast"
-import { AlertCircle, Loader, Download, RefreshCw, CreditCard, Calendar, Toggle2 } from "lucide-react"
-import { formatPrice } from "@/lib/utils/subscriptionUtils"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item"
+import { PageHeader } from "@/components/common/PageHeader"
+import { SectionCard } from "@/components/common/SectionCard"
+import { FormField } from "@/components/common/FormField"
+import { StatusBadge, type StatusVariant } from "@/components/common/StatusBadge"
+import { EmptyState } from "@/components/common/EmptyState"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+
+const UNLIMITED = 999999
+const TAX_RATE = 0.1
+const TRIAL_DAYS = 10
+
+
+const REASONS = [
+  { id: "", label: "Select a reason" },
+  { id: "too_expensive", label: "Too expensive" },
+  { id: "missing_features", label: "Missing features" },
+  { id: "switching_products", label: "Switching to another product" },
+  { id: "poor_support", label: "Poor customer support" },
+  { id: "other", label: "Other" },
+]
+const METHODS: Record<string, string> = { card: "Card", bkash: "bKash", bank: "Bank transfer", free: "—" }
+
+const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+
+const FAQ = [
+  ["How do I change my subscription plan?", 'Click "Upgrade plan" above to change to a different plan. You will be charged the new plan price immediately.'],
+  ["Can I cancel my subscription?", 'Yes, click "Cancel subscription" above. Your access will continue until the end of the current billing period.'],
+  ["What is auto-renewal?", "Auto-renewal automatically extends your subscription on the next billing date. You can disable it anytime."],
+]
 
 export default function SubscriptionsPage() {
-  const router = useRouter()
-  const { company, canRead } = useSaasAuth()
-  const { toast } = useToast()
+  const blocked = useModuleGuard("Subscriptions")
+  const { formatCurrency } = useCompanySettings()
+  const { canWrite } = useSaasAuth()
+  const writable = canWrite("Subscriptions")
 
-  const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [sub, setSub] = useState<Subscription | null>(null)
+  const [usage, setUsage] = useState<BillingUsage | null>(null)
   const [payments, setPayments] = useState<PaymentRecord[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [renewalLoading, setRenewalLoading] = useState(false)
-  const [cancelLoading, setCancelLoading] = useState(false)
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
-  const [cancelReason, setCancelReason] = useState("")
-  const [autoRenewToggleLoading, setAutoRenewToggleLoading] = useState(false)
+  const [histLoading, setHistLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [reason, setReason] = useState("")
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        setError("")
+  const money = (cents: number) => formatCurrency((cents || 0) / 100)
 
-        // Load current subscription
-        try {
-          const subResponse = await saasBillingApi.getCurrentSubscription()
-          setSubscription(subResponse.data)
-        } catch (err: any) {
-          if (err.response?.status !== 404) {
-            throw err
-          }
-        }
-
-        // Load payment history
-        try {
-          const paymentResponse = await saasBillingApi.getPaymentHistory()
-          setPayments(paymentResponse.data.payments || [])
-        } catch (err: any) {
-          if (err.response?.status !== 404) {
-            throw err
-          }
-          setPayments([])
-        }
-      } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to load subscription data")
-      } finally {
-        setLoading(false)
-      }
+  const loadSub = useCallback(async () => {
+    try {
+      const res = await saasBillingApi.getCurrentSubscription()
+      const d: any = res.data
+      setSub(d && d.status !== "none" && d.id ? (d as Subscription) : null)
+    } catch (e: any) {
+      if (e?.response?.status !== 404) toast.error(e?.response?.data?.message || "Failed to load subscription data")
+      setSub(null)
     }
-
-    loadData()
+    try { setUsage((await saasBillingApi.getUsage()).data) } catch { setUsage(null) }
   }, [])
 
-  const blocked = useModuleGuard('Subscriptions')
+  const loadPayments = useCallback(async () => {
+    setHistLoading(true)
+    try {
+      const res = await saasBillingApi.getPaymentHistory(page, perPage)
+      setPayments(res.data.payments || [])
+      setTotal(res.data.total || 0)
+    } catch { setPayments([]); setTotal(0) } finally { setHistLoading(false) }
+  }, [page, perPage])
+
+  useEffect(() => { (async () => { setLoading(true); await loadSub(); setLoading(false) })() }, [loadSub])
+  useEffect(() => { loadPayments() }, [loadPayments])
+  // ?cancel=1 (from Plan & billing) opens the cancel dialog once the subscription has loaded
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return
+    if (new URLSearchParams(window.location.search).get("cancel") === "1") {
+      window.history.replaceState(null, "", window.location.pathname)
+      if (sub && sub.status !== "cancelled" && !(sub.isTrial || sub.status === "trialing")) setCancelOpen(true)
+    }
+  }, [loading, sub])
+
+  // ---- derived subscription state ----
+  const isTrial = !!sub && (sub.isTrial || sub.status === "trialing")
+  const periodEnd = sub?.currentPeriodEnd ?? null
+  const pastEnd = !!periodEnd && new Date(periodEnd).getTime() < Date.now()
+  const status: "active" | "trial" | "cancelled" | "expired" | "past_due" = !sub ? "active"
+    : sub.status === "cancelled" ? "cancelled"
+    : sub.status === "past_due" ? "past_due"
+    : sub.status === "expired" || pastEnd ? "expired"
+    : isTrial ? "trial" : "active"
+  const cancelled = status === "cancelled", expired = status === "expired"
+  const daysLeft = periodEnd ? Math.max(0, Math.ceil((new Date(periodEnd).getTime() - Date.now()) / 864e5)) : 0
+  const basePrice = isTrial ? 0 : sub?.periodPrice ?? sub?.price ?? 0
+  const yearly = sub?.billingPeriod === "yearly"
+
+  const STATUS_PILL: Record<string, { label: string; variant: StatusVariant }> = {
+    active: { label: "Active", variant: "default" },
+    trial: { label: "Trial", variant: "secondary" },
+    cancelled: { label: "Cancelled", variant: "destructive" },
+    expired: { label: "Expired", variant: "outline" },
+    past_due: { label: "Past due", variant: "secondary" },
+  }
+  const pill = STATUS_PILL[status]
+
+  const meters = usage ? [
+    { label: "Team members", used: usage.teamMembers.used, limit: usage.teamMembers.limit as number | null },
+    { label: "Products", used: usage.products.used, limit: usage.products.limit as number | null },
+    { label: "Locations", used: usage.branches.used, limit: usage.branches.limit as number | null },
+    { label: "Sales this month", used: usage.salesThisMonth, limit: null as number | null },
+  ] : []
+  const overAny = meters.some((m) => m.limit !== null && m.limit < UNLIMITED && m.limit > 0 && m.used > m.limit)
+
+  let note: { danger: boolean; text: string } | null = null
+  if (cancelled) note = { danger: false, text: `Your subscription is cancelled. Access continues until ${fmtD(periodEnd)}.` }
+  else if (expired) note = { danger: true, text: `Your subscription expired on ${fmtD(periodEnd)}. Renew to regain access.` }
+  else if (overAny) note = { danger: false, text: "You are over a plan limit. Consider upgrading your plan." }
+
+  const switchOn = !!sub && sub.autoRenew && status === "active" && !isTrial
+
+  const flipAuto = async () => {
+    if (!sub || busy) return
+    if (isTrial) { toast.error("Auto-renewal applies to paid plans only"); return }
+    if (status !== "active") { toast.error("Reactivate your subscription first"); return }
+    setBusy(true)
+    try {
+      await saasBillingApi.setAutoRenew(sub.id, !sub.autoRenew)
+      toast.success(!sub.autoRenew ? "Auto-renewal enabled" : "Auto-renewal disabled")
+      await loadSub()
+    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to update auto-renewal setting") } finally { setBusy(false) }
+  }
+
+  const doRenew = async () => {
+    if (!sub || isTrial || busy) return
+    const totalCents = Math.round(basePrice * (1 + TAX_RATE))
+    const early = status === "active" && daysLeft > 7
+    const verb = cancelled || expired ? "Reactivate" : "Renew"
+    if (!window.confirm(`${early ? `Your plan is paid until ${fmtD(periodEnd)}. ` : ""}${verb} ${sub.planName} for ${money(totalCents)} (incl. 10% tax)?`)) return
+    setBusy(true)
+    try {
+      await saasBillingApi.renewSubscription({ subscriptionId: sub.id, billingPeriod: sub.billingPeriod, autoRenew: true })
+      toast.success(cancelled || expired ? "Subscription reactivated" : "Subscription renewed")
+      await Promise.all([loadSub(), loadPayments()])
+    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to renew subscription") } finally { setBusy(false) }
+  }
+
+  const doCancel = async () => {
+    if (!sub) return
+    setBusy(true)
+    try {
+      await saasBillingApi.cancelSubscription({ subscriptionId: sub.id, reason })
+      setCancelOpen(false); setReason("")
+      toast.success("Subscription cancelled. Your access continues until the end of the billing period.")
+      await loadSub()
+    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to cancel subscription") } finally { setBusy(false) }
+  }
+
+  const download = async (p: PaymentRecord) => {
+    try {
+      const res = await saasBillingApi.getInvoice(p.id)
+      const f = res.data
+      const url = URL.createObjectURL(new Blob([f.html], { type: "text/html" }))
+      const a = document.createElement("a")
+      a.href = url; a.download = f.filename; document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast.success(`Invoice ${f.invoiceNumber} downloaded`)
+    } catch (e: any) { toast.error(e?.response?.data?.message || "Could not download invoice") }
+  }
+
   if (blocked) return blocked
 
-  const handleRenew = async () => {
-    if (!subscription) return
-
-    setRenewalLoading(true)
-    try {
-      const response = await saasBillingApi.renewSubscription({
-        subscriptionId: subscription.id,
-        autoRenew: true,
-      })
-
-      setSubscription({
-        ...subscription,
-        currentPeriodEnd: response.data.currentPeriodEnd,
-        status: "active",
-      })
-      toast({ title: "Success", description: "Subscription renewed successfully" })
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to renew subscription")
-      toast({ title: "Error", description: "Failed to renew subscription", variant: "destructive" })
-    } finally {
-      setRenewalLoading(false)
-    }
-  }
-
-  const handleCancel = async () => {
-    if (!subscription) return
-
-    setCancelLoading(true)
-    try {
-      await saasBillingApi.cancelSubscription({
-        subscriptionId: subscription.id,
-        reason: cancelReason,
-      })
-
-      setSubscription({
-        ...subscription,
-        status: "cancelled",
-      })
-      setIsCancelDialogOpen(false)
-      setCancelReason("")
-      toast({ title: "Success", description: "Subscription cancelled successfully. Your access continues until the end of the billing period." })
-    } catch (err: any) {
-      toast({ title: "Error", description: err.response?.data?.message || "Failed to cancel subscription", variant: "destructive" })
-    } finally {
-      setCancelLoading(false)
-    }
-  }
-
-  const handleAutoRenewToggle = async () => {
-    if (!subscription) return
-
-    setAutoRenewToggleLoading(true)
-    try {
-      const newAutoRenew = !subscription.autoRenew
-      const response = await saasBillingApi.renewSubscription({
-        subscriptionId: subscription.id,
-        autoRenew: newAutoRenew,
-      })
-
-      setSubscription({
-        ...subscription,
-        autoRenew: newAutoRenew,
-      })
-      toast({
-        title: "Success",
-        description: newAutoRenew ? "Auto-renewal enabled" : "Auto-renewal disabled"
-      })
-    } catch (err: any) {
-      toast({ title: "Error", description: "Failed to update auto-renewal setting", variant: "destructive" })
-    } finally {
-      setAutoRenewToggleLoading(false)
-    }
-  }
-
-  const handleDownloadInvoice = (invoiceUrl: string | undefined) => {
-    if (invoiceUrl) {
-      window.open(invoiceUrl, "_blank")
-    }
-  }
-
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case "active":
-        return "bg-emerald-100 text-emerald-800"
-      case "cancelled":
-        return "bg-red-100 text-red-800"
-      case "expired":
-        return "bg-gray-100 text-gray-800"
-      case "past_due":
-        return "bg-orange-100 text-orange-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
-          <p className="text-gray-600">Loading subscription details...</p>
-        </div>
-      </div>
-    )
-  }
+  const cancelDisabled = !writable || cancelled || expired || isTrial
 
   return (
-    <div className="space-y-8 pb-12">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Subscriptions</h1>
-        <p className="text-gray-600">Manage your subscription and billing details</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Subscriptions"
+        description="Manage your subscription and billing details."
+        actions={<>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/overview">Billing settings</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/plans">Browse plans</Link></Button>
+        </>}
+      />
 
-      {/* Error */}
-      {error && (
-        <Card className="bg-red-50 border-red-200 p-6">
-          <div className="flex items-center gap-3 text-red-800">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p>{error}</p>
-          </div>
-        </Card>
-      )}
-
-      {/* Current Subscription */}
-      {subscription ? (
-        <Card className={`p-8 border-2 ${subscription.status === "active" ? "border-emerald-200" : "border-red-200"}`}>
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">{subscription.planName} Plan</h2>
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${subscription.status === "active" ? "bg-emerald-600 animate-pulse" : "bg-red-600"}`}></div>
-                <span className={`text-sm font-medium px-2 py-1 rounded ${getStatusColor(subscription.status)}`}>
-                  {subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1)}
-                </span>
+      {loading ? (
+        <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]"><Skeleton className="h-[320px]" /><Skeleton className="h-[320px]" /></div>
+      ) : sub ? (
+        <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+          <Card className="gap-4 p-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-bold">{sub.planName} plan</h2>
+              <StatusBadge status={status} variant={pill.variant} label={pill.label} />
+            </div>
+            <div><strong className="text-4xl font-bold tabular-nums">{isTrial ? "Free" : money(basePrice)}</strong>{" "}
+              <span className="text-sm text-muted-foreground">{isTrial ? "· 10-day trial" : yearly ? "/ year · billed yearly" : "/ month · billed monthly"}</span></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><div className="text-xs text-muted-foreground">Current period</div>
+                <strong className="text-sm">{sub.currentPeriodStart ? `${fmtD(sub.currentPeriodStart)} → ${fmtD(periodEnd)}` : "—"}</strong></div>
+              <div><div className="text-xs text-muted-foreground">{cancelled || expired || isTrial ? "Ends on" : "Next billing date"}</div>
+                <strong className="text-sm">{fmtD(isTrial || cancelled || expired ? periodEnd : sub.nextBillingDate ?? periodEnd)}</strong></div>
+            </div>
+            {isTrial && status === "trial" && (
+              <div>
+                <div className="mb-1 flex justify-between text-xs"><span className="font-semibold">Free trial</span><span className="text-muted-foreground">{daysLeft} day{daysLeft === 1 ? "" : "s"} remaining</span></div>
+                <Progress aria-label="Free trial progress" value={Math.min(100, Math.max(0, Math.round(((TRIAL_DAYS - daysLeft) / TRIAL_DAYS) * 100)))} />
               </div>
+            )}
+            <Item variant="muted" size="sm">
+              <ItemContent>
+                <ItemTitle>Auto-renewal</ItemTitle>
+                <ItemDescription>{isTrial ? "Not available during the free trial" : switchOn ? "Your subscription will automatically renew on the next billing date" : "Your subscription will expire and not renew automatically"}</ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Switch checked={switchOn} aria-label="Auto renewal" disabled={!writable || busy} onCheckedChange={() => flipAuto()} />
+              </ItemActions>
+            </Item>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild><Link href="/dashboard/billing/plans">{isTrial || expired || cancelled ? "Choose a plan" : "Upgrade plan"}</Link></Button>
+              {!isTrial && writable && <Button type="button" variant="outline" disabled={busy} onClick={doRenew}>{cancelled || expired ? "Reactivate" : "Renew now"}</Button>}
+              <Button type="button" variant="destructive" disabled={cancelDisabled} onClick={() => setCancelOpen(true)}>{cancelled ? "Cancelled" : "Cancel subscription"}</Button>
             </div>
-            <div className="text-right">
-              <p className="text-3xl font-bold text-emerald-600">
-                {formatPrice(subscription.price)}
-                <span className="text-base text-gray-600">/{subscription.billingPeriod === "monthly" ? "mo" : "yr"}</span>
-              </p>
-            </div>
-          </div>
+            {note && <Alert variant={note.danger ? "destructive" : "default"}><AlertDescription>{note.text}</AlertDescription></Alert>}
+          </Card>
 
-          <div className="grid grid-cols-2 gap-6 mb-8">
-            {/* Current Period */}
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Current Period</p>
-              <p className="font-semibold text-gray-900">
-                {new Date(subscription.currentPeriodStart).toLocaleDateString()} →{" "}
-                {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
-              </p>
-            </div>
-
-            {/* Next Billing */}
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Next Billing Date</p>
-              <p className="font-semibold text-gray-900">
-                {new Date(subscription.nextBillingDate).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-
-          {/* Auto-Renewal Toggle */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-gray-900">Auto-Renewal</p>
-              <p className="text-sm text-gray-600">
-                {subscription.autoRenew
-                  ? "Your subscription will automatically renew on the next billing date"
-                  : "Your subscription will expire and not renew automatically"}
-              </p>
-            </div>
-            <button
-              onClick={handleAutoRenewToggle}
-              disabled={autoRenewToggleLoading}
-              className={`px-4 py-2 rounded font-medium transition-colors ${
-                subscription.autoRenew
-                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                  : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {autoRenewToggleLoading ? "Updating..." : subscription.autoRenew ? "Enabled" : "Disabled"}
-            </button>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 flex-wrap">
-            <Button onClick={() => router.push("/dashboard/billing/plans")} className="bg-emerald-600 hover:bg-emerald-700">
-              Upgrade Plan
-            </Button>
-            <Button variant="outline" onClick={handleRenew} disabled={renewalLoading || subscription.status !== "active"}>
-              {renewalLoading ? (
-                <>
-                  <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  Renewing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Renew Now
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsCancelDialogOpen(true)}
-              disabled={subscription.status === "cancelled"}
-              className="text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {subscription.status === "cancelled" ? "Cancelled" : "Cancel Subscription"}
-            </Button>
-          </div>
-        </Card>
+          <SectionCard title="Usage" contentClassName="flex flex-col gap-4">
+            {!usage ? <Skeleton className="h-40" /> : meters.map((m) => {
+              const finite = m.limit !== null && m.limit > 0 && m.limit < UNLIMITED
+              const over = finite && m.used > (m.limit as number)
+              return (
+                <div key={m.label}>
+                  <div className="mb-1.5 flex items-baseline justify-between text-sm">
+                    <span className="font-medium">{m.label}</span>
+                    <span className="text-muted-foreground"><strong className="text-foreground tabular-nums">{m.used.toLocaleString("en-US")}</strong>{" "}
+                      {m.limit === null ? "this month" : finite ? `of ${(m.limit as number).toLocaleString("en-US")}` : "of unlimited"}</span>
+                  </div>
+                  <Progress
+                    aria-label={`${m.label} usage`}
+                    value={finite ? Math.min(100, Math.round((m.used / (m.limit as number)) * 100)) : 0}
+                    className={cn(over && "*:data-[slot=progress-indicator]:bg-destructive")}
+                  />
+                </div>
+              )
+            })}
+          </SectionCard>
+        </section>
       ) : (
-        <Card className="bg-blue-50 border-blue-200 p-8">
-          <div className="text-center">
-            <CreditCard className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-blue-900 mb-2">No Active Subscription</h3>
-            <p className="text-blue-700 mb-6">You're currently on a trial. Choose a plan to start your subscription.</p>
-            <Button onClick={() => router.push("/dashboard/billing/plans")} className="bg-blue-600 hover:bg-blue-700">
-              Browse Plans
-            </Button>
-          </div>
-        </Card>
+        <SectionCard title="No active subscription" description="You are currently on a trial. Choose a plan to start your subscription.">
+          <Button asChild><Link href="/dashboard/billing/plans">Browse plans</Link></Button>
+        </SectionCard>
       )}
 
-      {/* Payment History */}
-      <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-4">Payment History</h3>
-
-        {payments.length > 0 ? (
-          <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Date</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Description</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Amount</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Invoice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((payment) => (
-                    <tr key={payment.id} className="border-b hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {new Date(payment.paymentDate || payment.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{payment.invoiceNumber}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                        {formatPrice(payment.amount)}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            payment.status === "paid"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : payment.status === "pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        {payment.invoiceUrl ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDownloadInvoice(payment.invoiceUrl)}
-                            className="text-emerald-600 hover:bg-emerald-50"
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        ) : (
-          <Card className="p-8 text-center text-gray-500">
-            <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No payment history yet</p>
-          </Card>
-        )}
-      </div>
-
-      {/* FAQ */}
-      <Card className="p-8 bg-gray-50">
-        <h3 className="text-lg font-bold text-gray-900 mb-6">FAQ</h3>
-        <div className="space-y-4">
-          <div>
-            <p className="font-semibold text-gray-900 mb-2">How do I change my subscription plan?</p>
-            <p className="text-sm text-gray-600">
-              Click "Upgrade Plan" above to change to a different plan. You'll be charged the difference immediately.
-            </p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 mb-2">Can I cancel my subscription?</p>
-            <p className="text-sm text-gray-600">
-              Yes, click "Cancel Subscription" above. Your access will continue until the end of the current billing period.
-            </p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900 mb-2">What is auto-renewal?</p>
-            <p className="text-sm text-gray-600">
-              Auto-renewal automatically extends your subscription on the next billing date. You can disable it anytime.
-            </p>
-          </div>
+      <SectionCard title="Payment history" description="Invoices for every plan purchase and renewal." contentClassName="px-0">
+        <div className="overflow-x-auto">
+          <Table className="min-w-[760px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead><TableHead>Invoice</TableHead><TableHead>Plan</TableHead>
+                <TableHead>Method</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
+                <TableHead className="text-right">Download</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading || histLoading ? [1, 2, 3].map((i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-10" /></TableCell></TableRow>) :
+                payments.length === 0 ? (
+                  <TableRow><TableCell colSpan={7}><EmptyState title="No payment history yet" className="p-4 md:p-6" /></TableCell></TableRow>
+                ) : payments.map((p) => {
+                  const paid = p.status === "completed" || p.status === "paid"
+                  const trialRow = p.amount === 0 && p.description === "Free trial"
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell>{fmtD(p.paymentDate ?? p.createdAt)}</TableCell>
+                      <TableCell>{trialRow ? "Free trial" : p.invoiceNumber || "—"}</TableCell>
+                      <TableCell>{p.planName || p.description || "—"}{p.billingPeriod && <span className="text-xs text-muted-foreground"> ({p.billingPeriod === "yearly" ? "Yearly" : "Monthly"})</span>}</TableCell>
+                      <TableCell>{METHODS[p.paymentMethod] ?? (p.paymentMethod || "—")}</TableCell>
+                      <TableCell className="tabular-nums">{trialRow ? "Free" : money(p.amount)}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={p.status} variant={paid ? "default" : p.status === "failed" ? "destructive" : "secondary"}
+                          label={paid ? "Paid" : p.status.charAt(0).toUpperCase() + p.status.slice(1)} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {p.invoiceNumber && !trialRow && <Button type="button" variant="link" size="sm" aria-label={`Download invoice ${p.invoiceNumber}`} onClick={() => download(p)}>Download</Button>}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+            </TableBody>
+          </Table>
         </div>
-      </Card>
+        {total > 0 && (
+          <div className="px-6 pt-3"><PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
+            onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} /></div>
+        )}
+      </SectionCard>
 
-      {/* Cancel Subscription Dialog */}
-      <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancel Subscription</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to cancel your subscription? Your access will continue until{" "}
-              {subscription && new Date(subscription.currentPeriodEnd).toLocaleDateString()}.
-            </DialogDescription>
-          </DialogHeader>
+      <SectionCard title="FAQ" contentClassName="flex flex-col gap-4">
+        {FAQ.map(([qn, an]) => (
+          <div key={qn}><div className="text-sm font-semibold">{qn}</div><div className="text-sm text-muted-foreground">{an}</div></div>
+        ))}
+      </SectionCard>
 
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-gray-900 mb-2 block">
-                Reason for cancellation (optional)
-              </label>
-              <Select value={cancelReason} onValueChange={setCancelReason}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a reason" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="too_expensive">Too expensive</SelectItem>
-                  <SelectItem value="missing_features">Missing features</SelectItem>
-                  <SelectItem value="switching_products">Switching to another product</SelectItem>
-                  <SelectItem value="poor_support">Poor customer support</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <Dialog open={cancelOpen} onOpenChange={(o) => { if (!busy) setCancelOpen(o) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Cancel subscription</DialogTitle>
+          <DialogDescription>Are you sure you want to cancel your subscription? Your access will continue until {fmtD(periodEnd)}.</DialogDescription>
+          <FormField label="Reason for cancellation (optional)" htmlFor="cancel-reason">
+            <Select value={String(reason)} onValueChange={(val) => setReason(val)}>
+              <SelectTrigger id="cancel-reason" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REASONS.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>Keep subscription</Button>
+            <Button type="button" variant="destructive" disabled={busy} onClick={doCancel}>{busy ? "Cancelling…" : "Cancel subscription"}</Button>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCancelDialogOpen(false)}>
-              Keep Subscription
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancel}
-              disabled={cancelLoading}
-            >
-              {cancelLoading ? (
-                <>
-                  <Loader className="w-4 h-4 mr-2 animate-spin" />
-                  Cancelling...
-                </>
-              ) : (
-                "Cancel Subscription"
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

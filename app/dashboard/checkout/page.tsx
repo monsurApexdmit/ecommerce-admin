@@ -9,9 +9,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Badge } from "@/components/ui/badge"
+import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
+import { EmptyState } from "@/components/common/EmptyState"
+import { FormField } from "@/components/common/FormField"
+import { PageHeader } from "@/components/common/PageHeader"
+import { WithTooltip } from "@/components/common/WithTooltip"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { ArrowLeft, MapPin, Trash2, Plus, Check } from "lucide-react"
@@ -163,9 +169,9 @@ export default function CheckoutPage() {
             <CardDescription>Add some products to your cart to checkout</CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/dashboard/products">
-              <Button>Browse Products</Button>
-            </Link>
+            <Button asChild>
+              <Link href="/dashboard/products">Browse Products</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -176,15 +182,14 @@ export default function CheckoutPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/orders">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+        <WithTooltip content="Back to orders">
+          <Button asChild variant="ghost" size="icon">
+            <Link href="/dashboard/orders" aria-label="Back to orders">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
           </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold">Checkout</h1>
-          <p className="text-gray-500">Complete your order</p>
-        </div>
+        </WithTooltip>
+        <PageHeader title="Checkout" description="Complete your order" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -197,10 +202,9 @@ export default function CheckoutPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customer">Select Customer (Optional)</Label>
+                <FormField label="Select Customer (Optional)" htmlFor="customer">
                   <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="customer" className="w-full">
                       <SelectValue placeholder="Guest checkout" />
                     </SelectTrigger>
                     <SelectContent>
@@ -212,10 +216,9 @@ export default function CheckoutPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </FormField>
 
-                <div className="space-y-2">
-                  <Label htmlFor="customerName">Customer Name *</Label>
+                <FormField label="Customer Name *" htmlFor="customerName">
                   <Input
                     id="customerName"
                     value={customerName}
@@ -223,7 +226,7 @@ export default function CheckoutPage() {
                     placeholder="Enter customer name"
                     required
                   />
-                </div>
+                </FormField>
               </div>
             </CardContent>
           </Card>
@@ -253,12 +256,10 @@ export default function CheckoutPage() {
                 {customerAddresses.length > 0 ? (
                   <>
                     <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         id="useDefault"
                         checked={useDefaultAddress}
-                        onChange={(e) => setUseDefaultAddress(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300"
+                        onCheckedChange={(v) => setUseDefaultAddress(v === true)}
                       />
                       <Label htmlFor="useDefault" className="cursor-pointer">
                         Use my default address (auto-selected)
@@ -266,54 +267,41 @@ export default function CheckoutPage() {
                     </div>
 
                     {!useDefaultAddress && (
-                      <RadioGroup
+                      <ChoiceCardGroup
                         value={selectedAddressId}
                         onValueChange={setSelectedAddressId}
-                        className="space-y-3"
+                        className="gap-3"
+                        aria-label="Shipping address"
                       >
                         {customerAddresses.map((address) => (
-                          <div
-                            key={address.id}
-                            className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors ${
-                              selectedAddressId === address.id
-                                ? "border-emerald-500 bg-emerald-50"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <RadioGroupItem value={address.id} id={address.id} />
-                            <Label htmlFor={address.id} className="flex-1 cursor-pointer">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <p className="font-semibold">{address.fullName}</p>
-                                  <p className="text-sm text-gray-600">{address.phone}</p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {address.addressLine1}
-                                    {address.addressLine2 && `, ${address.addressLine2}`}
-                                  </p>
-                                  <p className="text-sm text-gray-600">
-                                    {address.city}, {address.state} {address.postalCode}
-                                  </p>
-                                  <p className="text-sm text-gray-600">{address.country}</p>
-                                </div>
-                                {address.isDefault && (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Default
-                                  </span>
-                                )}
+                          <ChoiceCard key={address.id} value={address.id} className="font-normal">
+                            <div className="flex w-full items-start justify-between gap-2">
+                              <div>
+                                <p className="font-semibold">{address.fullName}</p>
+                                <p className="text-sm text-muted-foreground">{address.phone}</p>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {address.addressLine1}
+                                  {address.addressLine2 && `, ${address.addressLine2}`}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {address.city}, {address.state} {address.postalCode}
+                                </p>
+                                <p className="text-sm text-muted-foreground">{address.country}</p>
                               </div>
-                            </Label>
-                          </div>
+                              {address.isDefault && (
+                                <Badge variant="secondary">
+                                  <Check />
+                                  Default
+                                </Badge>
+                              )}
+                            </div>
+                          </ChoiceCard>
                         ))}
-                      </RadioGroup>
+                      </ChoiceCardGroup>
                     )}
                   </>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                    <p>No shipping addresses found</p>
-                    <p className="text-sm">Add an address to enable shipping</p>
-                  </div>
+                  <EmptyState icon={MapPin} title="No shipping addresses found" description="Add an address to enable shipping" />
                 )}
               </CardContent>
             </Card>
@@ -325,20 +313,15 @@ export default function CheckoutPage() {
               <CardTitle>Payment Method</CardTitle>
             </CardHeader>
             <CardContent>
-              <RadioGroup value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
-                <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                  <RadioGroupItem value="Cash" id="cash" />
-                  <Label htmlFor="cash" className="flex-1 cursor-pointer">Cash</Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                  <RadioGroupItem value="Card" id="card" />
-                  <Label htmlFor="card" className="flex-1 cursor-pointer">Card</Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                  <RadioGroupItem value="Online" id="online" />
-                  <Label htmlFor="online" className="flex-1 cursor-pointer">Online</Label>
-                </div>
-              </RadioGroup>
+              <ChoiceCardGroup
+                value={paymentMethod}
+                onValueChange={(value) => setPaymentMethod(value as "Cash" | "Card" | "Online")}
+                aria-label="Payment method"
+              >
+                <ChoiceCard value="Cash" title="Cash" className="p-3" />
+                <ChoiceCard value="Card" title="Card" className="p-3" />
+                <ChoiceCard value="Online" title="Online" className="p-3" />
+              </ChoiceCardGroup>
             </CardContent>
           </Card>
 
@@ -371,20 +354,21 @@ export default function CheckoutPage() {
                   <div key={item.productId} className="flex items-start justify-between gap-2 pb-3 border-b">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{item.productName}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {formatCurrency(item.price)} × {item.quantity}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-sm">{formatCurrency(item.price * item.quantity)}</p>
-                      <Button
+                      <WithTooltip content={`Remove ${item.productName}`}><Button
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
+                        aria-label={`Remove ${item.productName}`}
                         onClick={() => removeFromCart(item.productId)}
                       >
                         <Trash2 className="h-3 w-3" />
-                      </Button>
+                      </Button></WithTooltip>
                     </div>
                   </div>
                 ))}
@@ -394,8 +378,7 @@ export default function CheckoutPage() {
 
               {/* Additional Charges */}
               <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="shipping">Shipping Cost</Label>
+                <FormField label="Shipping Cost" htmlFor="shipping">
                   <Input
                     id="shipping"
                     type="number"
@@ -405,10 +388,9 @@ export default function CheckoutPage() {
                     onChange={(e) => setShippingCost(parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
                   />
-                </div>
+                </FormField>
 
-                <div className="space-y-2">
-                  <Label htmlFor="discount">Discount</Label>
+                <FormField label="Discount" htmlFor="discount">
                   <Input
                     id="discount"
                     type="number"
@@ -418,7 +400,7 @@ export default function CheckoutPage() {
                     onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
                     placeholder="0.00"
                   />
-                </div>
+                </FormField>
               </div>
 
               <Separator />
@@ -484,15 +466,15 @@ export default function CheckoutPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               You can manage customer shipping addresses from the Store menu.
             </p>
-            <Link href="/dashboard/store/shipping-addresses" target="_blank">
-              <Button className="w-full">
-                <MapPin className="h-4 w-4 mr-2" />
+            <Button asChild className="w-full">
+              <Link href="/dashboard/store/shipping-addresses" target="_blank">
+                <MapPin className="h-4 w-4" />
                 Manage Shipping Addresses
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

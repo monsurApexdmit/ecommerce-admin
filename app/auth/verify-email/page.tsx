@@ -6,8 +6,11 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Spinner } from "@/components/ui/spinner"
+import { FormField } from "@/components/common/FormField"
 import { saasAuthApi } from "@/lib/saasAuthApi"
-import { AlertCircle, CheckCircle, Loader, Mail, RefreshCw } from "lucide-react"
+import { AlertCircle, CheckCircle, Mail, RefreshCw } from "lucide-react"
 
 type State = "verifying" | "success" | "error" | "resend"
 
@@ -75,9 +78,9 @@ export default function VerifyEmailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
         <Card className="w-full max-w-md p-10 shadow-lg text-center">
-          <Loader className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900">Verifying your email…</h1>
-          <p className="text-gray-500 text-sm mt-2">Please wait a moment.</p>
+          <Spinner className="size-12 mx-auto mb-4" />
+          <h1 className="text-xl font-bold">Verifying your email…</h1>
+          <p className="text-muted-foreground text-sm mt-2">Please wait a moment.</p>
         </Card>
       </div>
     )
@@ -91,15 +94,15 @@ export default function VerifyEmailPage() {
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Email Verified!</h1>
-          <p className="text-gray-600 mt-2 text-sm">
+          <h1 className="text-2xl font-bold">Email Verified!</h1>
+          <p className="text-muted-foreground mt-2 text-sm">
             Your account is now active. Your 10-day free trial has started.
           </p>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3 mt-4 text-sm text-emerald-800">
-            Redirecting to dashboard…
-          </div>
+          <Alert className="mt-4">
+            <AlertDescription className="justify-items-center">Redirecting to dashboard…</AlertDescription>
+          </Alert>
           <Button
-            className="mt-6 w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="mt-6 w-full"
             onClick={() => router.push("/dashboard")}
           >
             Go to Dashboard
@@ -117,23 +120,21 @@ export default function VerifyEmailPage() {
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8 text-red-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Verification Failed</h1>
-          <p className="text-gray-600 mt-2 text-sm">{error}</p>
+          <h1 className="text-2xl font-bold">Verification Failed</h1>
+          <p className="text-muted-foreground mt-2 text-sm">{error}</p>
 
           <div className="mt-6 space-y-3">
             <Button
               variant="outline"
-              className="w-full flex items-center gap-2"
+              className="w-full"
               onClick={() => setState("resend")}
             >
               <RefreshCw className="w-4 h-4" />
               Resend Verification Email
             </Button>
-            <Link href="/auth/login">
-              <Button variant="ghost" className="w-full text-gray-600">
-                Back to Login
-              </Button>
-            </Link>
+            <Button asChild variant="ghost" className="w-full">
+              <Link href="/auth/login">Back to Login</Link>
+            </Button>
           </div>
         </Card>
       </div>
@@ -148,48 +149,47 @@ export default function VerifyEmailPage() {
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Mail className="w-8 h-8 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Check Your Email</h1>
-          <p className="text-gray-600 text-sm mt-2">
+          <h1 className="text-2xl font-bold">Check Your Email</h1>
+          <p className="text-muted-foreground text-sm mt-2">
             We sent a verification link to your email. Click the link to activate your account.
           </p>
         </div>
 
         {resendSent ? (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4 text-center">
-            <CheckCircle className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
-            <p className="text-sm text-emerald-800 font-medium">Verification email sent!</p>
-            <p className="text-xs text-emerald-700 mt-1">Check your inbox and spam folder.</p>
-          </div>
+          <Alert>
+            <CheckCircle />
+            <AlertTitle>Verification email sent!</AlertTitle>
+            <AlertDescription>Check your inbox and spam folder.</AlertDescription>
+          </Alert>
         ) : (
           <form onSubmit={handleResend} className="space-y-4">
-            <p className="text-sm text-gray-500 text-center">
+            <p className="text-sm text-muted-foreground text-center">
               Didn't receive it? Resend below.
             </p>
+            <FormField htmlFor="resend-email" error={resendError || undefined}>
             <Input
+              id="resend-email"
               type="email"
+              aria-label="Email address"
               placeholder="your@email.com"
               value={resendEmail}
               onChange={(e) => {
                 setResendEmail(e.target.value)
                 setResendError("")
               }}
-              className={`h-10 ${resendError ? "border-red-500" : ""}`}
+              aria-invalid={resendError ? true : undefined}
               disabled={resendLoading}
             />
-            {resendError && (
-              <p className="text-red-600 text-xs flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {resendError}
-              </p>
-            )}
+            </FormField>
             <Button
               type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="w-full"
               disabled={resendLoading}
             >
               {resendLoading ? (
-                <span className="flex items-center gap-2">
-                  <Loader className="w-4 h-4 animate-spin" /> Sending…
-                </span>
+                <>
+                  <Spinner /> Sending…
+                </>
               ) : (
                 "Resend Verification Email"
               )}
@@ -198,9 +198,9 @@ export default function VerifyEmailPage() {
         )}
 
         <div className="mt-6 text-center">
-          <Link href="/auth/login" className="text-sm text-emerald-600 hover:underline">
-            Back to Login
-          </Link>
+          <Button asChild variant="link" size="sm">
+            <Link href="/auth/login">Back to Login</Link>
+          </Button>
         </div>
       </Card>
     </div>
