@@ -1,642 +1,713 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useRef } from "react"
-import { useSearchParams } from "next/navigation"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import {
+  Banknote, CheckCircle2, Clock, Download, Eye, MoreHorizontal, Package, Plus, Printer, Search, ShoppingCart, Truck, X, XCircle,
+} from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Printer, Eye, Download, Mail, ShoppingBag, Trash2, Package, Clock, CheckCircle, AlertCircle } from "lucide-react"
-import { PaginationControl } from "@/components/ui/pagination-control"
-import { StatusBadge } from "@/components/ui/status-badge"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { StatsCards } from "@/components/ui/stats-card"
-import { sellsApi, SellResponse, SellItem } from "@/lib/sellsApi"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { DateRangeFilter } from "@/components/ui/date-range-filter"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import {
+  SaleDetailDialog, SALE_STATUS_STYLE, salePayment,
+} from "@/components/sales/sale-detail-dialog"
+import { sellsApi, type SellResponse } from "@/lib/sellsApi"
+import { fetchSection } from "@/lib/dashboard/api"
 import { printSaleInvoice } from "@/lib/invoice-print"
+import { printPackingSlips } from "@/lib/packing-slip-print"
+import { exportToCSV } from "@/lib/export-import-utils"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
-const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
-const itemPrice = (item: SellItem) => item.unit_price ?? item.unitPrice ?? item.price ?? 0
-const itemTotal = (item: SellItem) => item.total_price ?? item.totalPrice ?? (itemPrice(item) * item.quantity)
+type Tab = "all" | "Pending" | "Confirmed" | "Packed" | "Shipped" | "Delivered" | "Completed" | "Cancelled"
+type Source = "all" | "sales" | "pos" | "online"
+type Pay = "all" | "paid" | "partial" | "unpaid"
 
-interface StatsData {
-  totalSells: number
-  totalRevenue: number
-  pendingOrders: number
-  processingOrders: number
-  deliveredOrders: number
+const TAB_VALUES: Tab[] = ["Pending", "Confirmed", "Packed", "Shipped", "Delivered", "Completed", "Cancelled"]
+
+interface Stats {
+  total: number
+  last30: number
+  due: number
+  unpaid: number
+  revenue: number
+  pending: number
+  processing: number
+  shipped: number
+  delivered: number
 }
 
-// Seller identity printed at the top of every invoice. Company settings only
-// carry tax/currency, so name/address/contact live here until the backend
-// exposes them.
+const SOURCES: { value: Source; label: string }[] = [
+  { value: "all", label: "All sources" },
+  { value: "pos", label: "POS" },
+  { value: "online", label: "Online" },
+  { value: "sales", label: "Manual" },
+]
+
+const PAYMENTS: { value: Pay; label: string }[] = [
+  { value: "all", label: "Payment: All" },
+  { value: "paid", label: "Paid" },
+  { value: "partial", label: "Partial" },
+  { value: "unpaid", label: "Unpaid" },
+]
+
+const STAGE_STYLE: Record<string, string> = {
+  ...SALE_STATUS_STYLE,
+  Confirmed: SALE_STATUS_STYLE.Processing,
+  Completed: SALE_STATUS_STYLE.Delivered,
+}
+
+/** Derived order stage: no extra DB statuses, built from status + fulfillment + payment. */
+function orderStage(o: SellResponse): Tab {
+  if (o.status === "Cancelled") return "Cancelled"
+  if (o.status === "Delivered") return salePayment(o).label === "Paid" ? "Completed" : "Delivered"
+  if (o.fulfillmentStatus === "shipped") return "Shipped"
+  if (o.fulfillmentStatus === "packed") return "Packed"
+  return o.status === "Processing" ? "Confirmed" : "Pending"
+}
+
+const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+const LIVE_BLOCKERS = ["failed", "returned", "cancelled", "canceled"]
+const isLiveShipment = (sh: { status?: string }) => !LIVE_BLOCKERS.includes(String(sh.status ?? "").toLowerCase())
+const humanize = (v?: string) => {
+  const t = String(v ?? "").replace(/[_-]+/g, " ").trim().toLowerCase()
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : ""
+}
+
+const SOURCE_CHIP: Record<string, { label: string; cls: string }> = {
+  pos: { label: "POS", cls: "bg-dash-accent-soft text-dash-accent-fg" },
+  storefront: { label: "Online store", cls: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300" },
+  manual: { label: "Manual", cls: "bg-dash-neutral-soft text-dash-neutral-fg" },
+}
+
+const iconBtn =
+  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
+const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
+
+function ageOf(iso: string): { text: string; days: number } {
+  const ms = Date.now() - new Date(iso).getTime()
+  const days = Math.floor(ms / 86_400_000)
+  if (days >= 1) return { text: `${days}d ago`, days }
+  const hrs = Math.floor(ms / 3_600_000)
+  return { text: hrs >= 1 ? `${hrs}h ago` : "just now", days: 0 }
+}
 
 export default function OrdersPage() {
-  const { canRead } = useSaasAuth()
-  const searchParams = useSearchParams()
   const { formatCurrency, settings } = useCompanySettings()
-  const latestFetchIdRef = useRef(0)
+  const { canRead, canDo } = useSaasAuth()
+  const mayExport = canDo("export")
+  const { toast } = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [orders, setOrders] = useState<SellResponse[]>([])
   const [total, setTotal] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [tabCounts, setTabCounts] = useState<Partial<Record<Tab | "all", number>>>({})
+  const [exporting, setExporting] = useState(false)
+  const [oldestPending, setOldestPending] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [statsLoading, setStatsLoading] = useState(true)
-  const [stats, setStats] = useState<StatsData | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [methodFilter, setMethodFilter] = useState<string>("all")
+
+  const [tab, setTab] = useState<Tab>("all")
+  const [search, setSearch] = useState("")
+  const [source, setSource] = useState<Source>("all")
+  const [methodFilter, setMethodFilter] = useState("all")
+  const [payFilter, setPayFilter] = useState<Pay>("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [selectedOrder, setSelectedOrder] = useState<SellResponse | null>(null)
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [updatingStatus, setUpdatingStatus] = useState<number | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [resetCount, setResetCount] = useState(0)
 
+  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const [selected, setSelected] = useState<SellResponse | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SellResponse | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const latestFetch = useRef(0)
+  const blocked = useModuleGuard("Orders")
+
+  // Deep links: ?status= (all 7), ?customer= / ?q= / ?search=, ?source=, ?pay=
   useEffect(() => {
-    const customerParam = searchParams.get("customer")
-    if (customerParam) {
-      setSearchQuery(customerParam)
-      setCurrentPage(1)
-      return
+    const st = searchParams.get("status")?.toLowerCase()
+    if (st) {
+      const t = st === "processing" ? "Confirmed" : TAB_VALUES.find((v) => v.toLowerCase() === st)
+      if (t) { setTab(t); setPage(1) }
     }
-
-    setSearchQuery("")
+    const q = searchParams.get("customer") || searchParams.get("q") || searchParams.get("search")
+    if (q) { setSearch(q); setPage(1) }
+    const src = searchParams.get("source")?.toLowerCase()
+    if (src) {
+      const v = src === "manual" ? "sales" : src === "storefront" ? "online" : src
+      if (["sales", "pos", "online"].includes(v)) { setSource(v as Source); setPage(1) }
+    }
+    const pay = searchParams.get("pay")?.toLowerCase()
+    if (pay && ["paid", "partial", "unpaid"].includes(pay)) { setPayFilter(pay as Pay); setPage(1) }
   }, [searchParams])
 
-  const fetchOrders = useCallback(async () => {
-    const fetchId = ++latestFetchIdRef.current
-    setIsLoading(true)
-    try {
-      const params: Record<string, string | number> = {
-        page: currentPage,
-        limit: itemsPerPage,
-      }
-      if (searchQuery) params.search = searchQuery
-      if (statusFilter !== "all") params.status = statusFilter
-      if (methodFilter !== "all") params.method = methodFilter
-      if (startDate) params.start_date = startDate
-      if (endDate) params.end_date = endDate
+  const filterParams = useCallback(() => {
+    const params: Record<string, string> = {}
+    if (search) params.search = search
+    if (tab !== "all") params.status = tab.toLowerCase()
+    if (source !== "all") params.source = source
+    if (payFilter !== "all") params.payment = payFilter
+    if (methodFilter !== "all") params.method = methodFilter
+    if (startDate) params.start_date = startDate
+    if (endDate) params.end_date = endDate
+    return params
+  }, [search, tab, source, payFilter, methodFilter, startDate, endDate])
 
-      const res = await sellsApi.getAll(params)
-      if (fetchId !== latestFetchIdRef.current) {
-        return
-      }
+  const fetchOrders = useCallback(async () => {
+    const id = ++latestFetch.current
+    setLoading(true)
+    try {
+      const res = await sellsApi.getAll({ page, per_page: perPage, ...filterParams() })
+      if (id !== latestFetch.current) return
       setOrders(res.data ?? [])
       setTotal(res.total ?? res.data?.length ?? 0)
-    } catch (err) {
-      if (fetchId !== latestFetchIdRef.current) {
-        return
-      }
-      console.error("Failed to fetch orders:", err)
-      setOrders([])
+      if (res.meta) applyMeta(res.meta)
+    } catch {
+      if (id === latestFetch.current) setOrders([])
     } finally {
-      if (fetchId === latestFetchIdRef.current) {
-        setIsLoading(false)
-      }
+      if (id === latestFetch.current) setLoading(false)
     }
-  }, [currentPage, itemsPerPage, searchQuery, statusFilter, methodFilter, startDate, endDate])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, perPage, filterParams])
+
+  /** meta.tabCounts (respects filters except status) and meta.kpis (company-wide), per PHASE2_API_CONTRACT.md. */
+  const applyMeta = (meta: Record<string, any>) => {
+    const c = meta.tabCounts ?? {}
+    const k = meta.kpis ?? {}
+    const counts: Partial<Record<Tab, number>> = {}
+    for (const t of TAB_VALUES) if (c[t.toLowerCase()] !== undefined) counts[t] = num(c[t.toLowerCase()])
+    setTabCounts({ all: c.all !== undefined ? num(c.all) : undefined, ...counts })
+    setStats({
+      total: num(k.totalOrders), last30: num(k.last30Days), due: num(k.dueToCollect), unpaid: num(k.unpaidCount),
+      revenue: num(k.revenue), pending: num(k.pending), processing: num(k.confirmedOrPacked),
+      shipped: num(k.shipped), delivered: num(k.delivered),
+    })
+  }
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true)
     try {
-      const res = await sellsApi.getStats()
-      const d = res.data as Record<string, number>
-      setStats({
-        totalSells:        d.totalSells        ?? d.total_sells        ?? 0,
-        totalRevenue:      d.totalRevenue      ?? d.total_revenue      ?? 0,
-        pendingOrders:     d.pendingOrders     ?? d.pending_count      ?? 0,
-        processingOrders:  d.processingOrders  ?? d.processing_count   ?? 0,
-        deliveredOrders:   d.deliveredOrders   ?? d.delivered_count    ?? 0,
+      // Fallback KPIs until the list response (meta.kpis) arrives
+      const d = (await sellsApi.getStats()).data
+      setStats((prev) => prev ?? {
+        total: d.totalSells ?? 0, last30: 0, due: d.totalDue ?? 0, unpaid: d.unpaidCount ?? 0, revenue: d.totalRevenue ?? 0,
+        pending: d.pendingOrders ?? 0, processing: (d.processingOrders ?? 0), shipped: d.shippedOrders ?? 0, delivered: d.deliveredOrders ?? 0,
       })
-    } catch (err) {
-      console.error("Failed to fetch stats:", err)
+    } catch {
+      /* ignore */
     } finally {
       setStatsLoading(false)
     }
-  }, [])
+    // Oldest pending order, for the "needs action" banner (needs Dashboard access; optional)
+    if (canRead("Dashboard")) {
+      const today = new Date().toISOString().slice(0, 10)
+      fetchSection("alerts", { from: today, to: today })
+        .then((a) => setOldestPending(a.pendingOrders.oldestOrderTime))
+        .catch(() => setOldestPending(null))
+    }
+  }, [canRead])
 
-  useEffect(() => {
-    fetchOrders()
-    fetchStats()
-  }, [fetchOrders, fetchStats])
+  useEffect(() => { fetchOrders() }, [fetchOrders])
+  useEffect(() => { fetchStats() }, [fetchStats])
 
-  const blocked = useModuleGuard('Orders')
   if (blocked) return blocked
 
-  const handleStatusChange = async (id: number, newStatus: SellResponse["status"]) => {
-    setUpdatingStatus(id)
+  const refresh = () => { fetchOrders(); fetchStats() }
+  const hasFilters = !!(search || source !== "all" || payFilter !== "all" || methodFilter !== "all" || startDate || endDate || tab !== "all")
+
+  const resetFilters = () => {
+    setSearch(""); setTab("all"); setSource("all"); setPayFilter("all"); setMethodFilter("all")
+    setStartDate(""); setEndDate(""); setPage(1); setResetCount((n) => n + 1); setChecked(new Set())
+  }
+  const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setChecked(new Set()) }
+
+  const allChecked = orders.length > 0 && orders.every((o) => checked.has(o.id))
+  const toggleAll = () => setChecked(allChecked ? new Set() : new Set(orders.map((o) => o.id)))
+  const toggleOne = (id: number) =>
+    setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const selectedOrders = orders.filter((o) => checked.has(o.id))
+
+  const fullOrder = async (order: SellResponse): Promise<SellResponse> => {
+    if (order.items?.length) return order
+    try { return (await sellsApi.getById(order.id)).data } catch { return order }
+  }
+  const printInvoice = async (order: SellResponse) =>
+    printSaleInvoice(await fullOrder(order), { formatCurrency, taxId: settings?.taxId })
+  const openDetail = async (order: SellResponse) => {
+    setSelected(order)
+    const full = await fullOrder(order)
+    if (full !== order) setSelected(full)
+  }
+
+  const report = (results: PromiseSettledResult<unknown>[], okTitle: string) => {
+    const failed = results.filter((r) => r.status === "rejected").length
+    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${results.length} could not be changed` })
+    else toast({ title: okTitle, description: `${results.length} order${results.length === 1 ? "" : "s"} updated` })
+    setChecked(new Set())
+    refresh()
+  }
+
+  const cancelOrders = async (targets: SellResponse[]) => {
+    const eligible = targets.filter((o) => !["Cancelled", "Delivered", "Completed"].includes(orderStage(o)))
+    if (eligible.length === 0) { toast({ variant: "destructive", title: "Nothing to cancel", description: "Delivered or cancelled orders can't be cancelled" }); return }
+    if (!window.confirm(`Cancel ${eligible.length} order${eligible.length === 1 ? "" : "s"}? Stock goes back to inventory and any balance due is cleared.`)) return
+    report(await Promise.allSettled(eligible.map((o) => sellsApi.updateStatus(o.id, "Cancelled"))), "Cancelled")
+  }
+
+  const confirmOrders = async (targets: SellResponse[]) => {
+    const eligible = targets.filter((o) => orderStage(o) === "Pending")
+    if (eligible.length === 0) { toast({ variant: "destructive", title: "Nothing to confirm", description: "Only pending orders can be confirmed" }); return }
+    report(await Promise.allSettled(eligible.map((o) => sellsApi.updateStatus(o.id, "Processing"))), "Confirmed")
+  }
+
+  /** Row status select: maps each stage onto status + fulfillment calls. */
+  const moveTo = async (o: SellResponse, to: Tab) => {
+    const from = orderStage(o)
+    if (to === from) return
+    if (to === "Cancelled") { await cancelOrders([o]); return }
     try {
-      await sellsApi.updateStatus(id, newStatus)
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: newStatus } : o)))
-      if (selectedOrder?.id === id) setSelectedOrder((prev) => prev ? { ...prev, status: newStatus } : prev)
-    } catch (err) {
-      console.error("Failed to update status:", err)
+      if (to === "Pending") {
+        if (from === "Packed" || from === "Shipped") await sellsApi.updateFulfillment(o.id, "unfulfilled")
+        await sellsApi.updateStatus(o.id, "Pending")
+      } else if (to === "Confirmed") {
+        if (o.status === "Pending") await sellsApi.updateStatus(o.id, "Processing")
+        else if (from === "Packed") await sellsApi.updateFulfillment(o.id, "unfulfilled")
+      } else if (to === "Packed") {
+        await sellsApi.updateFulfillment(o.id, "packed")
+      } else if (to === "Shipped") {
+        await sellsApi.updateFulfillment(o.id, "shipped")
+      } else if (to === "Delivered") {
+        await sellsApi.updateStatus(o.id, "Delivered")
+      }
+      toast({ title: `Marked ${to.toLowerCase()}`, description: `#${o.invoiceNo}` })
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not update", description: err?.response?.data?.message || "Please try again" })
+    }
+    refresh()
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await sellsApi.delete(deleteTarget.id)
+      toast({ title: "Order deleted", description: `#${deleteTarget.invoiceNo}` })
+      setDeleteTarget(null)
+      if (selected?.id === deleteTarget.id) setSelected(null)
+      refresh()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not delete", description: err?.response?.data?.message || "Please try again" })
     } finally {
-      setUpdatingStatus(null)
+      setDeleting(false)
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this order?")) return
-    setDeletingId(id)
+  const EXPORT_HEADERS = ["Invoice", "Date", "Customer", "Phone", "Channel", "Status", "Payment", "Method", "Items", "Delivery address", "Subtotal", "Discount", "Tax", "Delivery", "Total", "Paid", "Due"]
+
+  const toExportRow = (o: SellResponse) => {
+    const total = num(o.amount), delivery = num(o.shippingCost), discount = num(o.discount)
+    const lines = (o.items ?? []).reduce((n, it) => n + num(it.unit_price ?? it.unitPrice ?? it.price) * (it.quantity ?? 1), 0)
+    const subtotal = o.items?.length ? lines : total - delivery + discount
+    const tax = o.items?.length ? Math.max(0, Math.round((total - (subtotal - discount + delivery)) * 100) / 100) : 0
+    const pay = salePayment(o)
+    return {
+      invoice: o.invoiceNo,
+      date: new Date(o.orderTime).toLocaleString(),
+      customer: o.customerName,
+      phone: o.shippingPhone ?? "",
+      channel: SOURCE_CHIP[o.source ?? "manual"]?.label ?? o.source ?? "",
+      status: orderStage(o),
+      payment: o.status === "Cancelled" ? "Cancelled" : pay.label === "Due" ? "Unpaid" : pay.label,
+      method: o.method,
+      items: (o.items ?? []).reduce((n, it) => n + (it.quantity ?? 1), 0),
+      delivery_address: [o.shippingAddressLine1, o.shippingAddressLine2, o.shippingCity, o.shippingState].filter(Boolean).join(", "),
+      subtotal: subtotal.toFixed(2),
+      discount: discount.toFixed(2),
+      tax: tax.toFixed(2),
+      delivery: delivery.toFixed(2),
+      total: total.toFixed(2),
+      paid: num(o.paidAmount).toFixed(2),
+      due: pay.due.toFixed(2),
+    }
+  }
+
+  const handleExport = async () => {
+    setExporting(true)
     try {
-      await sellsApi.delete(id)
-      setOrders((prev) => prev.filter((o) => o.id !== id))
-      setTotal((prev) => prev - 1)
-      if (selectedOrder?.id === id) setIsDetailsOpen(false)
-    } catch (err) {
-      console.error("Failed to delete order:", err)
+      let rows: SellResponse[] = selectedOrders
+      if (rows.length === 0) {
+        // Every row matching the current filters, not just this page
+        for (let p = 1; p <= 500; p++) {
+          const res = await sellsApi.getAll({ page: p, per_page: 100, ...filterParams() })
+          rows.push(...(res.data ?? []))
+          if (!res.data?.length || rows.length >= (res.total ?? 0)) break
+        }
+      }
+      if (rows.length === 0) { toast({ title: "Nothing to export" }); return }
+      exportToCSV(rows.map(toExportRow), "orders", EXPORT_HEADERS)
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Export failed", description: err?.response?.data?.message })
     } finally {
-      setDeletingId(null)
+      setExporting(false)
     }
   }
 
-  const fetchFullOrder = async (id: number): Promise<SellResponse | null> => {
-    try {
-      const res = await sellsApi.getById(id)
-      // Backend may return { data: order } or the order directly
-      return (res.data ?? res) as SellResponse
-    } catch (err) {
-      console.error("Failed to fetch order details:", err)
-      return null
-    }
-  }
+  const printSelectedInvoices = async () => { for (const o of selectedOrders) await printInvoice(o) }
+  const printSlips = async () => printPackingSlips(await Promise.all(selectedOrders.map(fullOrder)))
 
-  const handleViewDetails = async (order: SellResponse) => {
-    setSelectedOrder(order)
-    setIsDetailsOpen(true)
-    const full = await fetchFullOrder(order.id)
-    if (full) setSelectedOrder(full)
-  }
+  const hasLiveShipment = (o: SellResponse) => !!o.shipments?.some(isLiveShipment)
+  const canShipOrder = (o: SellResponse) =>
+    o.source !== "pos" && ["Pending", "Confirmed", "Packed"].includes(orderStage(o)) && !hasLiveShipment(o)
+  const firstShippable = selectedOrders.find(canShipOrder)
 
-  const handlePrintFromTable = async (order: SellResponse) => {
-    // If items already loaded (from list response), print immediately
-    if (order.items?.length) {
-      handlePrintInvoice(order)
-      return
-    }
-    // Otherwise fetch full order first
-    const full = await fetchFullOrder(order.id)
-    handlePrintInvoice(full ?? order)
-  }
-
-  const handleReset = () => {
-    setSearchQuery("")
-    setStatusFilter("all")
-    setMethodFilter("all")
-    setStartDate("")
-    setEndDate("")
-    setCurrentPage(1)
-  }
-
-  const handleDownloadAllOrders = () => {
-    const csvContent = [
-      ["Invoice No", "Order Time", "Customer Name", "Method", "Amount", "Status"],
-      ...orders.map((o) => [
-        o.invoiceNo,
-        o.orderTime,
-        o.customerName,
-        o.method,
-        fmt(o.amount),
-        o.status,
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "orders.csv"
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
-
-  const handlePrintInvoice = (order: SellResponse) => {
-    printSaleInvoice(order, { formatCurrency, taxId: settings?.taxId })
-  }
-
-  const handleEmailInvoice = (order: SellResponse) => {
-    alert(`Email invoice #${order.invoiceNo} functionality would be implemented here`)
-  }
-
-  const totalPages = Math.ceil(total / itemsPerPage)
-
-  const handleItemsPerPageChange = (value: number) => {
-    setItemsPerPage(value)
-    setCurrentPage(1)
-  }
+  const oldestAge = oldestPending ? ageOf(oldestPending) : null
+  const createShipment = (id: number) => router.push(`/dashboard/orders/shipments?new=1&order=${id}`)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
+    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Orders</h1>
+          <p className="mt-1 text-sm text-dash-muted">Every order from POS, your online store and manual sales, in one place.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {mayExport && <button type="button" onClick={handleExport} disabled={exporting}
+            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+            <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}
+          </button>}
+          <Link href="/dashboard/orders/shipments"
+            className="inline-flex h-11 items-center rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+            Shipments
+          </Link>
+          <Link href="/dashboard/sales?new=1"
+            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+            <Plus className="size-4" aria-hidden /> Create order
+          </Link>
+        </div>
       </div>
 
-      {statsLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+      {/* Needs-action banner */}
+      {stats && stats.pending > 0 && (
+        <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-dash-warn-soft px-[18px] py-3.5 text-dash-warn-fg">
+          <Clock className="size-[22px] shrink-0" aria-hidden />
+          <span className="min-w-[260px] flex-1 text-sm">
+            <strong>{stats.pending} order{stats.pending === 1 ? "" : "s"} need action.</strong>
+            {oldestAge ? ` The oldest has been pending for ${oldestAge.days >= 1 ? `${oldestAge.days} days` : oldestAge.text.replace(" ago", "")}.` : ""} Confirm them so fulfillment can start.
+          </span>
+          <button type="button" onClick={() => changeTab("Pending")}
+            className="h-10 rounded-[10px] bg-dash-warn-fg px-3.5 text-[13px] font-semibold text-dash-warn-soft">
+            Review pending
+          </button>
         </div>
-      ) : stats ? (
-        <StatsCards
-          stats={[
-            { label: "Total", value: stats.totalSells, icon: <ShoppingBag className="w-5 h-5" />, color: "blue" },
-            { label: "Pending", value: stats.pendingOrders, icon: <Clock className="w-5 h-5" />, color: "yellow" },
-            { label: "Processing", value: stats.processingOrders, icon: <Package className="w-5 h-5" />, color: "purple" },
-            { label: "Delivered", value: stats.deliveredOrders, icon: <CheckCircle className="w-5 h-5" />, color: "green" },
-            { label: "Revenue", value: formatCurrency(stats.totalRevenue), icon: <AlertCircle className="w-5 h-5" />, color: "blue" },
-          ]}
-        />
-      ) : null}
+      )}
 
-      <Card className="p-6">
-        <div className="space-y-4 mb-6">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="relative flex-1">
-              <Input
-                type="text"
-                placeholder="Search by Customer Name"
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
-              />
-            </div>
+      {/* KPIs */}
+      {statsLoading || !stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+        </div>
+      ) : (
+        <div className="[&>div]:xl:grid-cols-6">
+          <StatsCards stats={[
+            { label: "Total orders", value: stats.total, icon: <ShoppingCart className="size-4" />, color: "blue", hint: `${stats.last30} in last 30 days`,
+              active: tab === "all", onClick: () => changeTab("all") },
+            { label: "Needs action", value: stats.pending, icon: <Clock className="size-4" />, color: "yellow", hint: "Pending confirmation",
+              active: tab === "Pending", onClick: () => changeTab("Pending") },
+            { label: "Processing", value: stats.processing, icon: <Package className="size-4" />, color: "blue", hint: "Confirmed or packed",
+              active: tab === "Confirmed", onClick: () => changeTab("Confirmed") },
+            { label: "Shipped", value: stats.shipped, icon: <Truck className="size-4" />, color: "purple", hint: "With courier",
+              active: tab === "Shipped", onClick: () => changeTab("Shipped") },
+            { label: "Delivered", value: stats.delivered, icon: <CheckCircle2 className="size-4" />, color: "green", hint: "Completed",
+              active: tab === "Delivered", onClick: () => changeTab("Delivered") },
+            { label: "Revenue", value: formatCurrency(stats.revenue), icon: <Banknote className="size-4" />, color: "green",
+              hint: `Due to collect ${formatCurrency(stats.due)}${stats.unpaid ? ` · ${stats.unpaid} unpaid` : ""}` },
+          ]} />
+        </div>
+      )}
 
-            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1) }}>
-              <SelectTrigger className="w-full lg:w-48">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="Delivered">Delivered</SelectItem>
-                <SelectItem value="Processing">Processing</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v); setCurrentPage(1) }}>
-              <SelectTrigger className="w-full lg:w-48">
-                <SelectValue placeholder="Method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Methods</SelectItem>
-                <SelectItem value="Cash">Cash</SelectItem>
-                <SelectItem value="Card">Card</SelectItem>
-                <SelectItem value="Online">Online</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button onClick={handleDownloadAllOrders} className="bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap">
-              <Download className="w-4 h-4 mr-2" />
-              Download All Orders
-            </Button>
-          </div>
-
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1) }} />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <Input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1) }} />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button onClick={fetchOrders} className="bg-emerald-600 hover:bg-emerald-700">Filter</Button>
-              <Button onClick={handleReset} variant="outline">Reset</Button>
-            </div>
-          </div>
+      {/* Table card */}
+      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+        <div className="px-4">
+          <StatusTabs
+            value={tab}
+            onChange={changeTab}
+            tabs={[
+              { value: "all", label: "All", count: tabCounts.all },
+              ...TAB_VALUES.map((t) => ({ value: t, label: t, count: tabCounts[t] })),
+            ]}
+          />
         </div>
 
+        <div className="flex flex-wrap items-center gap-2.5 p-4">
+          <label className="flex h-11 min-w-[260px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+            <Search className="size-[18px]" aria-hidden />
+            <span className="sr-only">Search orders</span>
+            <input
+              type="search"
+              placeholder="Search invoice, customer or phone…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted"
+            />
+          </label>
+          <div role="group" aria-label="Source" className="flex gap-0.5 rounded-[10px] bg-dash-neutral-soft p-[3px]">
+            {SOURCES.map((s) => (
+              <button key={s.value} type="button" aria-pressed={source === s.value}
+                onClick={() => { setSource(s.value); setPage(1) }}
+                className={cn("h-[38px] rounded-lg px-3 text-[13px] font-semibold",
+                  source === s.value ? "bg-dash-card text-dash-ink shadow-sm" : "text-dash-muted hover:text-dash-ink")}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <Select value={payFilter} onValueChange={(v) => { setPayFilter(v as Pay); setPage(1) }}>
+            <SelectTrigger aria-label="Payment status" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PAYMENTS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v); setPage(1) }}>
+            <SelectTrigger aria-label="Payment method" className={cn(filterSelect, "w-[140px]")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Method: All</SelectItem>
+              <SelectItem value="Cash">Cash</SelectItem>
+              <SelectItem value="Card">Card</SelectItem>
+              <SelectItem value="Online">Online</SelectItem>
+              <SelectItem value="COD">COD</SelectItem>
+              <SelectItem value="bKash">bKash</SelectItem>
+              <SelectItem value="Nagad">Nagad</SelectItem>
+              <SelectItem value="Bank">Bank</SelectItem>
+            </SelectContent>
+          </Select>
+          <DateRangeFilter
+            key={resetCount}
+            start={startDate}
+            end={endDate}
+            onChange={(a, b) => { setStartDate(a); setEndDate(b); setPage(1) }}
+            className="flex flex-wrap items-center gap-2"
+          />
+          {hasFilters && (
+            <button type="button" onClick={resetFilters} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+              <X className="size-4" aria-hidden /> Clear
+            </button>
+          )}
+        </div>
+
+        {/* Bulk actions */}
+        {checked.size > 0 && (
+          <div className="mx-4 mb-3 flex flex-wrap items-center gap-2.5 rounded-[10px] bg-dash-ink px-3.5 py-2.5 text-dash-bg">
+            <span className="text-sm font-semibold">{checked.size} selected</span>
+            <button type="button" onClick={() => confirmOrders(selectedOrders)}
+              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10 disabled:opacity-40">
+              Confirm
+            </button>
+            <button type="button" onClick={printSelectedInvoices}
+              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10 disabled:opacity-40">
+              Print invoices
+            </button>
+            <button type="button" onClick={printSlips}
+              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10 disabled:opacity-40">
+              Print packing slips
+            </button>
+            <button type="button" disabled={!firstShippable} onClick={() => firstShippable && createShipment(firstShippable.id)}
+              title={firstShippable ? `Ship #${firstShippable.invoiceNo}` : "No selected order is ready to ship"}
+              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10 disabled:opacity-40">
+              Create shipment
+            </button>
+            <button type="button" onClick={() => cancelOrders(selectedOrders)}
+              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10 disabled:opacity-40">
+              Cancel orders
+            </button>
+            {mayExport && <button type="button" onClick={handleExport}
+              className="h-9 rounded-lg border border-white/25 px-3 text-[13px] font-semibold hover:bg-white/10">
+              Export selected
+            </button>}
+            <button type="button" onClick={() => setChecked(new Set())}
+              className="ml-auto h-9 px-3 text-[13px] font-semibold opacity-80 hover:opacity-100">
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1080px] border-collapse text-sm">
             <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice No</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Order Time</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer Name</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Method</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Amount</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Action</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wider">Invoice</th>
+              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
+                <th scope="col" className="w-5 py-3 pl-4 pr-2">
+                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
+                </th>
+                <th scope="col" className="px-2 py-3 font-semibold">Order</th>
+                <th scope="col" className="px-2 py-3 font-semibold">Customer</th>
+                <th scope="col" className="px-2 py-3 font-semibold">Source</th>
+                <th scope="col" className="px-2 py-3 font-semibold">Payment</th>
+                <th scope="col" className="px-2 py-3 text-right font-semibold">Amount</th>
+                <th scope="col" className="px-2 py-3 font-semibold">Status</th>
+                <th scope="col" className="px-2 py-3 font-semibold">Shipment</th>
+                <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading
-                ? Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-12" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                    <td className="py-3 px-4"><Skeleton className="h-8 w-32" /></td>
-                    <td className="py-3 px-4"><div className="flex gap-2"><Skeleton className="h-8 w-8 rounded" /><Skeleton className="h-8 w-8 rounded" /></div></td>
-                  </tr>
+              {loading ? (
+                [1, 2, 3, 4, 5].map((i) => (
+                  <tr key={i}><td colSpan={9} className="px-4 py-3"><Skeleton className="h-9 rounded" /></td></tr>
                 ))
-                : orders.map((order) => (
-                  <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <span className="font-semibold text-gray-900">#{order.invoiceNo}</span>
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
-                      {new Date(order.orderTime).toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">{order.customerName}</td>
-                    <td className="py-3 px-4 text-sm text-gray-900">{order.method}</td>
-                    <td className="py-3 px-4 text-sm font-semibold text-gray-900">{formatCurrency(Number(order.amount ?? 0))}</td>
-                    <td className="py-3 px-4">
-                      <StatusBadge status={order.status} />
-                    </td>
-                    <td className="py-3 px-4">
-                      <Select
-                        value={order.status}
-                        onValueChange={(value) => handleStatusChange(order.id, value as SellResponse["status"])}
-                        disabled={updatingStatus === order.id}
-                      >
-                        <SelectTrigger className="w-32 h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Delivered">Delivered</SelectItem>
-                          <SelectItem value="Processing">Processing</SelectItem>
-                          <SelectItem value="Pending">Pending</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => handlePrintFromTable(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600" title="Print">
-                          <Printer className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(order)} className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600" title="View">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(order.id)}
-                          disabled={deletingId === order.id}
-                          className="p-2 h-8 w-8 hover:bg-red-50 hover:text-red-600"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+              ) : orders.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-14 text-center">
+                    <ShoppingCart className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
+                    <p className="font-semibold">No orders found</p>
+                    <p className="text-sm text-dash-muted">{hasFilters ? "Try clearing the filters." : "Orders from POS, your store and manual sales appear here."}</p>
+                  </td>
+                </tr>
+              ) : (
+                orders.map((o) => {
+                  const pay = salePayment(o)
+                  const stage = orderStage(o)
+                  const age = ageOf(o.orderTime)
+                  const stale = o.status === "Pending" && age.days > 7
+                  const qty = o.items?.reduce((n, it) => n + (it.quantity ?? 1), 0) ?? 0
+                  const src = SOURCE_CHIP[o.source ?? "pos"] ?? SOURCE_CHIP.manual
+                  const shipment = o.shipments?.find(isLiveShipment) ?? o.shipments?.[0]
+                  const canShip = canShipOrder(o)
+                  const ck = checked.has(o.id)
+                  return (
+                    <tr key={o.id} className={ck ? "bg-dash-accent-soft/40" : ""}>
+                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(o.id)} aria-label={`Select ${o.invoiceNo}`} />
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="font-semibold">#{o.invoiceNo}</div>
+                        <div className="text-xs text-dash-muted">
+                          {new Date(o.orderTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })},{" "}
+                          {new Date(o.orderTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase()} ·{" "}
+                          <span className={cn("font-semibold", stale ? "text-dash-danger" : "")}>{age.text}</span>
+                        </div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="font-semibold">{o.customerName}</div>
+                        <div className="text-xs text-dash-muted">{qty > 0 ? `${qty} item${qty === 1 ? "" : "s"}` : "—"}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <span className={cn("rounded-md px-2 py-[3px] text-xs font-semibold", src.cls)}>{src.label}</span>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div>{o.method}</div>
+                        <div className={cn("text-xs font-semibold", o.status === "Cancelled" ? "text-dash-muted" : pay.label === "Paid" ? "text-dash-success-fg" : pay.label === "Partial" ? "text-dash-warn-fg" : "text-dash-danger-fg")}>
+                          {o.status === "Cancelled" ? "Cancelled" : pay.label === "Due" ? "Unpaid" : pay.label}
+                        </div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3 text-right font-bold tabular-nums">{formatCurrency(Number(o.amount))}</td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <Select value={stage} disabled={stage === "Cancelled"} onValueChange={(v) => moveTo(o, v as Tab)}>
+                          <SelectTrigger
+                            aria-label={`Status for ${o.invoiceNo}`}
+                            className={cn("h-8 w-auto gap-1.5 rounded-full border-0 px-3 text-xs font-bold shadow-none", STAGE_STYLE[stage])}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TAB_VALUES.map((t) => (
+                              <SelectItem key={t} value={t} disabled={t === "Completed" && stage !== "Completed"}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3 text-[13px]">
+                        {shipment ? (
+                          <div>
+                            <Link href="/dashboard/orders/shipments" className="font-semibold text-dash-accent hover:underline">
+                              {shipment.trackingNumber || shipment.carrier || "Courier"}
+                              {humanize(shipment.status) ? ` · ${humanize(shipment.status)}` : ""}
+                            </Link>
+                            {canShip && <button type="button" onClick={() => createShipment(o.id)} className="ml-2 font-semibold text-dash-accent hover:underline">+ Create</button>}
+                          </div>
+                        ) : o.source === "pos" ? (
+                          <span className="text-dash-muted">Picked up in store</span>
+                        ) : canShip ? (
+                          <button type="button" onClick={() => createShipment(o.id)} className="font-semibold text-dash-accent hover:underline">+ Create</button>
+                        ) : (
+                          <span className="text-dash-muted">No shipment</span>
+                        )}
+                      </td>
+                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        <div className="flex justify-end gap-1">
+                          <button type="button" aria-label={`View ${o.invoiceNo}`} className={iconBtn} onClick={() => openDetail(o)}><Eye className="size-4" /></button>
+                          <button type="button" aria-label={`Print ${o.invoiceNo}`} className={iconBtn} onClick={() => printInvoice(o)}><Printer className="size-4" /></button>
+                          {!["Cancelled", "Delivered", "Completed"].includes(stage) && (
+                            <button type="button" aria-label={`Cancel ${o.invoiceNo}`} title="Cancel order" className={cn(iconBtn, "text-dash-danger")} onClick={() => cancelOrders([o])}><XCircle className="size-4" /></button>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" aria-label={`More actions for ${o.invoiceNo}`} className={iconBtn}><MoreHorizontal className="size-4" /></button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {canShip && <DropdownMenuItem onClick={() => createShipment(o.id)}>Create shipment</DropdownMenuItem>}
+                              <DropdownMenuItem onClick={async () => printPackingSlips([await fullOrder(o)])}>Print packing slip</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-dash-danger focus:text-dash-danger" onClick={() => setDeleteTarget(o)}>Delete order</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
 
-        {!isLoading && orders.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No orders found</p>
+        {!loading && orders.length > 0 && (
+          <div className="border-t border-dash-border-soft p-4 pt-3">
+            <PaginationControl
+              currentPage={page}
+              totalPages={Math.max(1, Math.ceil(total / perPage))}
+              itemsPerPage={perPage}
+              totalItems={total}
+              onPageChange={setPage}
+              onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+            />
           </div>
         )}
-      </Card>
+      </section>
 
-      <PaginationControl
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-        itemsPerPage={itemsPerPage}
-        onItemsPerPageChange={handleItemsPerPageChange}
-        totalItems={total}
-      />
+      <SaleDetailDialog sale={selected} onClose={() => setSelected(null)} onPrint={printInvoice} onChanged={() => refresh()} onCreateShipment={(s) => createShipment(s.id)} />
 
-      {/* Order Detail Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">Invoice</DialogTitle>
-          </DialogHeader>
-
-          {selectedOrder && (
-            <div className="space-y-8 py-4">
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                <div>
-                  <h1 className="text-4xl font-bold mb-3">INVOICE</h1>
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-gray-700">STATUS</span>
-                    <StatusBadge status={selectedOrder.status} />
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-2 justify-end mb-2">
-                    <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                      <ShoppingBag className="w-5 h-5 text-white" />
-                    </div>
-                    <span className="text-2xl font-bold text-emerald-600">Admin</span>
-                  </div>
-                  <p className="text-sm text-gray-600">59 Station Rd, Purls Bridge, United Kingdom</p>
-                  <p className="text-sm text-gray-600">019579034</p>
-                </div>
-              </div>
-
-              {/* Meta */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Date</h3>
-                  <p className="text-sm text-gray-900">{new Date(selectedOrder.orderTime).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Invoice No</h3>
-                  <p className="text-sm text-gray-900">#{selectedOrder.invoiceNo}</p>
-                </div>
-                <div className="sm:text-right">
-                  <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">
-                    {selectedOrder.shippingFullName ? "Ship To" : "Invoice To"}
-                  </h3>
-                  {selectedOrder.shippingFullName ? (
-                    <>
-                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.shippingFullName}</p>
-                      {selectedOrder.shippingEmail && <p className="text-xs text-gray-600">{selectedOrder.shippingEmail}</p>}
-                      {selectedOrder.shippingPhone && <p className="text-xs text-gray-600">{selectedOrder.shippingPhone}</p>}
-                      {selectedOrder.shippingAddressLine1 && <p className="text-xs text-gray-600">{selectedOrder.shippingAddressLine1}{selectedOrder.shippingAddressLine2 ? `, ${selectedOrder.shippingAddressLine2}` : ""}</p>}
-                      <p className="text-xs text-gray-600">{[selectedOrder.shippingCity, selectedOrder.shippingState, selectedOrder.shippingPostalCode].filter(Boolean).join(", ")}</p>
-                      {selectedOrder.shippingCountry && <p className="text-xs text-gray-600">{selectedOrder.shippingCountry}</p>}
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-gray-900">{selectedOrder.customerName}</p>
-                      {(selectedOrder.shippingEmail) && <p className="text-xs text-gray-600">{selectedOrder.shippingEmail}</p>}
-                      {(selectedOrder.shippingPhone) && <p className="text-xs text-gray-600">{selectedOrder.shippingPhone}</p>}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="border rounded-lg overflow-x-auto">
-                <table className="w-full min-w-[600px]">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">SR.</th>
-                      <th className="text-left py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Product Title</th>
-                      <th className="text-center py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Quantity</th>
-                      <th className="text-right py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Item Price</th>
-                      <th className="text-right py-4 px-4 text-xs font-semibold text-gray-900 uppercase">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedOrder.items?.length ? (
-                      selectedOrder.items.map((item, i) => (
-                        <React.Fragment key={item.id ?? i}>
-                          <tr className="border-t">
-                            <td className="py-5 px-4 text-sm text-gray-900">{i + 1}</td>
-                            <td className="py-5 px-4 text-sm text-gray-900">
-                              {item.productName}
-                              {item.bundleItems && item.bundleItems.length > 0 && (
-                                <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-medium">Bundle</span>
-                              )}
-                            </td>
-                            <td className="py-5 px-4 text-sm text-center text-gray-900">{item.quantity}</td>
-                            <td className="py-5 px-4 text-sm text-right text-gray-900">{formatCurrency(itemPrice(item))}</td>
-                            <td className="py-5 px-4 text-sm text-right font-semibold text-red-600">{formatCurrency(itemTotal(item))}</td>
-                          </tr>
-                          {item.bundleItems && item.bundleItems.length > 0 && item.bundleItems.map((bi, j) => (
-                            <tr key={`${item.id}-bi-${j}`} className="bg-gray-50">
-                              <td className="py-2 px-4"></td>
-                              <td className="py-2 px-4 text-xs text-gray-500 pl-8">↳ {bi.productName}</td>
-                              <td className="py-2 px-4 text-xs text-center text-gray-500">{bi.totalQty}</td>
-                              <td className="py-2 px-4 text-xs text-right text-gray-400">{bi.qtyPerBundle}×{item.quantity}</td>
-                              <td className="py-2 px-4"></td>
-                            </tr>
-                          ))}
-                        </React.Fragment>
-                      ))
-                    ) : (
-                      <tr className="border-t">
-                        <td colSpan={5} className="py-8 text-center text-sm text-gray-500">No items available</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Summary */}
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Payment Method</h3>
-                    <p className="text-base font-semibold text-gray-900">{selectedOrder.method}</p>
-                    {/* Payment status badge */}
-                    {selectedOrder.paymentStatus && (() => {
-                      const ps = selectedOrder.paymentStatus
-                      const isPaid = ps === "paid"
-                      const isDeposit = ps === "shipping_deposit_paid"
-                      return (
-                        <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          isPaid ? "bg-green-100 text-green-700"
-                          : isDeposit ? "bg-amber-100 text-amber-700"
-                          : "bg-yellow-100 text-yellow-700"
-                        }`}>
-                          {isPaid ? "✓ Paid" : isDeposit ? "⏳ Deposit Paid" : ps === "pending_payment" ? "⏳ Awaiting Payment" : ps === "failed" ? "✗ Failed" : ps === "cancelled" ? "✗ Cancelled" : "⏳ Pending"}
-                        </span>
-                      )
-                    })()}
-                    {selectedOrder.paymentTransactionId && (
-                      <p className="text-[10px] text-gray-500 font-mono mt-1 break-all">Txn: {selectedOrder.paymentTransactionId}</p>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Shipping Cost</h3>
-                    <p className="text-base font-semibold text-gray-600">{formatCurrency(Number(selectedOrder.shippingCost ?? 0))}</p>
-                    {/* Shipping deposit — only when > 0 */}
-                    {selectedOrder.shippingDepositAmount != null && Number(selectedOrder.shippingDepositAmount) > 0 && (
-                      <div className="mt-1.5 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                        <p className="text-[10px] font-semibold text-amber-700 uppercase">Shipping Deposit Paid</p>
-                        <p className="text-sm font-bold text-amber-700">{formatCurrency(Number(selectedOrder.shippingDepositAmount))}</p>
-                        {selectedOrder.shippingDepositTransactionId && (
-                          <p className="text-[10px] font-mono text-amber-600 break-all mt-0.5">Txn: {selectedOrder.shippingDepositTransactionId}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Discount</h3>
-                    <p className="text-base font-semibold text-gray-600">{formatCurrency(Number(selectedOrder.discount ?? 0))}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">Total Amount</h3>
-                    <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(selectedOrder.amount ?? 0))}</p>
-                    {selectedOrder.shippingDepositAmount != null && Number(selectedOrder.shippingDepositAmount) > 0 && selectedOrder.paymentStatus === "shipping_deposit_paid" && (
-                      <p className="text-xs text-gray-500 mt-1">Remaining on delivery: {formatCurrency(Number(selectedOrder.amount ?? 0) - Number(selectedOrder.shippingDepositAmount))}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Update Status */}
-              <div className="border rounded-lg p-6 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-900 uppercase">Update Status</h3>
-                <Select
-                  value={selectedOrder.status}
-                  onValueChange={(value) => handleStatusChange(selectedOrder.id, value as SellResponse["status"])}
-                  disabled={updatingStatus === selectedOrder.id}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Delivered">Delivered</SelectItem>
-                    <SelectItem value="Processing">Processing</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Order Notes */}
-              <div className="border rounded-lg p-6 space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900 uppercase">Order Note</h3>
-                <Input
-                  placeholder="Add a note to this order..."
-                  defaultValue={selectedOrder.notes || ""}
-                  onBlur={async (e) => {
-                    const notes = e.target.value
-                    if (notes !== selectedOrder.notes) {
-                      try {
-                        await sellsApi.update(selectedOrder.id, { notes })
-                        setOrders((prev) => prev.map((o) => o.id === selectedOrder.id ? { ...o, notes } : o))
-                        setSelectedOrder((prev) => prev ? { ...prev, notes } : prev)
-                      } catch (err) {
-                        console.error("Failed to save note:", err)
-                      }
-                    }
-                  }}
-                  className="flex-1"
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <Button onClick={() => handlePrintInvoice(selectedOrder)} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
-                  <Download className="w-4 h-4 mr-2" />
-                  Download Invoice
-                </Button>
-                <Button onClick={() => handleEmailInvoice(selectedOrder)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <Mail className="w-4 h-4 mr-2" />
-                  Email Invoice
-                </Button>
-                <Button onClick={() => handlePrintInvoice(selectedOrder)} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
-                  <Printer className="w-4 h-4 mr-2" />
-                  Print Invoice
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete order #{deleteTarget?.invoiceNo}?</AlertDialogTitle>
+            <AlertDialogDescription>This removes the order permanently. This can’t be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700">
+              {deleting ? "Deleting…" : "Delete order"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

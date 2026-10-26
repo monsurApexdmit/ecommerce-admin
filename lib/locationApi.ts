@@ -55,6 +55,27 @@ export interface LocationResponse {
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+  type?: LocationType;
+  district?: string | null;
+  phone?: string | null;
+  manager?: string | null;
+  sellsInPos?: boolean;
+  shipsOnline?: boolean;
+  stockValue?: number;
+  skus?: number;
+  units?: number;
+  staffCount?: number;
+}
+
+export type LocationType = 'Warehouse' | 'Shop' | 'Pickup point';
+
+export interface LocationExtras {
+  type?: LocationType;
+  district?: string;
+  phone?: string;
+  manager?: string;
+  sellsInPos?: boolean;
+  shipsOnline?: boolean;
 }
 
 export interface LocationListResponse {
@@ -62,14 +83,14 @@ export interface LocationListResponse {
   data: LocationResponse[];
 }
 
-export interface CreateLocationData {
+export interface CreateLocationData extends LocationExtras {
   name: string;
   address: string;
   contactPerson?: string;
   isDefault?: boolean;
 }
 
-export interface UpdateLocationData {
+export interface UpdateLocationData extends LocationExtras {
   name?: string;
   address?: string;
   contactPerson?: string;
@@ -106,6 +127,9 @@ export const locationApi = {
     const payload: any = { name: data.name, address: data.address };
     if (data.contactPerson !== undefined) payload.contactPerson = data.contactPerson;
     if (data.isDefault !== undefined) payload.isDefault = data.isDefault;
+    for (const k of ['type', 'district', 'phone', 'manager', 'sellsInPos', 'shipsOnline'] as const) {
+      if (data[k] !== undefined) payload[k] = data[k];
+    }
     const response = await api.post('/locations', payload);
     return response.data;
   },
@@ -116,6 +140,9 @@ export const locationApi = {
     if (data.address !== undefined) payload.address = data.address;
     if (data.contactPerson !== undefined) payload.contactPerson = data.contactPerson;
     if (data.isDefault !== undefined) payload.isDefault = data.isDefault;
+    for (const k of ['type', 'district', 'phone', 'manager', 'sellsInPos', 'shipsOnline'] as const) {
+      if (data[k] !== undefined) payload[k] = data[k];
+    }
     const response = await api.put(`/locations/${id}`, payload);
     return response.data;
   },

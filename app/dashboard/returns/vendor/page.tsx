@@ -1,765 +1,567 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { vendorReturnsApi, VendorReturnResponse, VendorReturnStatus } from "@/lib/vendorReturnsApi"
-import { productApi, ProductResponse, ProductVariantResponse } from "@/lib/productApi"
-import { useVendor } from "@/contexts/vendor-context"
-import { useCompanySettings } from "@/contexts/company-settings-context"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
-import { useModuleGuard } from "@/hooks/use-module-guard"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Search, Eye, Download, TruckIcon, Plus, Trash2, ChevronsUpDown } from "lucide-react"
-import { PaginationControl } from "@/components/ui/pagination-control"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { Banknote, Download, Eye, Printer, Search, Truck, Undo2, Package, CheckCircle2 } from "lucide-react"
+import { toast } from "sonner"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useToast } from "@/hooks/use-toast"
+import { StatsCards } from "@/components/ui/stats-card"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import vendorReturnsApi, { type ReturnableItem, type SupplierReturnRow, type SupplierReturnStats } from "@/lib/vendorReturnsApi"
+import vendorApi, { type VendorOverviewRow } from "@/lib/vendorApi"
+import purchaseOrderApi from "@/lib/purchaseOrderApi"
+import { exportToCSV } from "@/lib/export-import-utils"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useWarehouse } from "@/contexts/warehouse-context"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { cn } from "@/lib/utils"
 
-const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
+type Tab = "all" | "pending" | "shipped" | "received" | "credited"
 
-function formatDate(dateString?: string) {
-  if (!dateString) return "N/A"
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function VendorReturnStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { color: string; label: string }> = {
-    pending: { color: "bg-yellow-100 text-yellow-800 border-yellow-200", label: "Pending" },
-    shipped: { color: "bg-blue-100 text-blue-800 border-blue-200", label: "Shipped" },
-    received_by_vendor: { color: "bg-purple-100 text-purple-800 border-purple-200", label: "Received" },
-    completed: { color: "bg-green-100 text-green-800 border-green-200", label: "Completed" },
-  }
-  const cfg = config[status] || config.pending
-  return (
-    <Badge variant="outline" className={cfg.color}>
-      {cfg.label}
-    </Badge>
-  )
-}
-
-const STATUS_ORDER: VendorReturnStatus[] = ["pending", "shipped", "received_by_vendor", "completed"]
-
-const RETURN_REASONS = [
-  "Defective/Damaged",
-  "Expired products",
-  "Overstocked items",
-  "Wrong items received",
-  "Quality issues",
-  "Recall",
-  "Other",
+const TABS: [Tab, string][] = [["all", "All"], ["pending", "Pending"], ["shipped", "Shipped"], ["received", "Received"], ["credited", "Credited"]]
+const REASONS = ["Defective/Damaged", "Expired products", "Overstocked items", "Wrong items received", "Quality issues", "Recall", "Other"]
+const CREDITS: { id: "note" | "refund" | "replacement"; label: string; sub: string }[] = [
+  { id: "note", label: "Credit note", sub: "Reduces what you owe" },
+  { id: "refund", label: "Refund", sub: "Money back to you" },
+  { id: "replacement", label: "Replacement", sub: "New stock sent" },
 ]
+const CREDIT_LABEL: Record<string, string> = { note: "Credit note", refund: "Refund", replace: "Replacement", replacement: "Replacement" }
+const STATUS: Record<string, { label: string; cls: string; next?: string; nextLabel?: string }> = {
+  pending: { label: "Pending", cls: "bg-dash-warn-soft text-dash-warn-fg", next: "shipped", nextLabel: "Mark shipped" },
+  shipped: { label: "Shipped", cls: "bg-dash-accent-soft text-dash-accent-fg", next: "received", nextLabel: "Mark received" },
+  received: { label: "Received", cls: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300", next: "credited", nextLabel: "Mark credited" },
+  credited: { label: "Credited", cls: "bg-dash-success-soft text-dash-success-fg" },
+}
 
-const ITEMS_PER_PAGE = 10
+const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
+const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
+const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
+const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
+const creditEffectText = (type: string, amount: string, supplier: string) =>
+  type === "refund" ? `${supplier || "The supplier"} refunds ${amount}; mark credited when the money arrives`
+    : type === "replacement" || type === "replace" ? `${supplier || "The supplier"} sends replacement stock worth ${amount}; mark credited when it arrives`
+    : `A credit note of ${amount} lowers what you owe ${supplier || "this supplier"} once marked credited`
+const today = () => new Date().toISOString().slice(0, 10)
+const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+const stKey = (r: SupplierReturnRow) => (STATUS[r.status] ? r.status : r.status === "completed" ? "credited" : "pending")
 
-export default function VendorReturnsPage() {
-  const { canRead } = useSaasAuth()
-  const { vendors } = useVendor()
-  const { toast } = useToast()
+interface PickLine { key: string; productId: number; variantId: number | null; name: string; sku: string; stock: number; receivedQty: number | null; on: boolean; qty: number; cost: number; reason: string }
+
+export default function SupplierReturnsPage() {
   const { formatCurrency } = useCompanySettings()
+  const { warehouses } = useWarehouse()
+  const blocked = useModuleGuard("Vendor Returns")
 
-  const [returns, setReturns] = useState<VendorReturnResponse[]>([])
-  const [stats, setStats] = useState({ total: 0, pending: 0, shipped: 0, received_by_vendor: 0, completed: 0, total_credit_amount: 0 })
-  const [isLoading, setIsLoading] = useState(true)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalItems, setTotalItems] = useState(0)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [vendorFilter, setVendorFilter] = useState("all")
+  const [rows, setRows] = useState<SupplierReturnRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({})
+  const [stats, setStats] = useState<SupplierReturnStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<Tab>("all")
+  const [search, setSearch] = useState("")
+  const [searchD, setSearchD] = useState("")
+  const [fromD, setFromD] = useState("")
+  const [toD, setToD] = useState("")
+  const [supF, setSupF] = useState("all")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [detail, setDetail] = useState<SupplierReturnRow | null>(null)
+  const [busyId, setBusyId] = useState<number | null>(null)
 
-  const [selectedReturn, setSelectedReturn] = useState<VendorReturnResponse | null>(null)
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [statusUpdateLoading, setStatusUpdateLoading] = useState<number | null>(null)
+  const [vendors, setVendors] = useState<VendorOverviewRow[]>([])
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [createLoading, setCreateLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    vendorId: "",
-    returnDate: new Date().toISOString().split("T")[0],
-    creditType: "credit_note",
-    notes: "",
-    items: [] as { productId: string; productName?: string; variantId?: number; quantity: number; unitPrice: string; reason: string }[],
-  })
+  // ---- new return form
+  const [formOpen, setFormOpen] = useState(false)
+  const [supId, setSupId] = useState("")
+  const [pos, setPos] = useState<{ id: number; poNumber: string }[]>([])
+  const [poId, setPoId] = useState("")
+  const [retDate, setRetDate] = useState(today())
+  const [tracking, setTracking] = useState("")
+  const [locId, setLocId] = useState("")
+  const [sq, setSq] = useState("")
+  const [items, setItems] = useState<PickLine[]>([])
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const [credit, setCredit] = useState<"note" | "refund" | "replacement">("note")
+  const [note, setNote] = useState("")
+  const [printNote, setPrintNote] = useState(true)
+  const [photos, setPhotos] = useState<File[]>([])
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [err, setErr] = useState("")
+  const [saving, setSaving] = useState(false)
 
-  // Vendor product state
-  const [vendorProducts, setVendorProducts] = useState<ProductResponse[]>([])
-  const [vendorProductsLoading, setVendorProductsLoading] = useState(false)
-  const [productSearchOpen, setProductSearchOpen] = useState(false)
-  const [productSearch, setProductSearch] = useState("")
+  useEffect(() => { const t = setTimeout(() => setSearchD(search.trim()), 250); return () => clearTimeout(t) }, [search])
+  useEffect(() => { vendorApi.getOverview({ limit: 500, sort: "name" }).then((r) => setVendors(r.data)).catch(() => {}) }, [])
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true)
+  const load = useCallback(async () => {
+    setLoading(true)
     try {
-      const [listRes, statsRes] = await Promise.all([
-        vendorReturnsApi.getAll({
-          page: currentPage,
-          limit: ITEMS_PER_PAGE,
-          search: searchQuery || undefined,
-          status: statusFilter !== "all" ? statusFilter : undefined,
-          vendorId: vendorFilter !== "all" ? Number(vendorFilter) : undefined,
-        }),
-        vendorReturnsApi.getStats(),
-      ])
-      setReturns(listRes.data ?? [])
-      setTotalItems(listRes.pagination?.total ?? listRes.total ?? listRes.data?.length ?? 0)
-      if (statsRes.data) setStats({ ...statsRes.data, total_credit_amount: statsRes.data.totalCreditAmount ?? statsRes.data.total_credit_amount ?? 0 })
+      const params: Record<string, any> = { page, per_page: perPage }
+      if (tab !== "all") params.status = tab
+      if (searchD) params.search = searchD
+      if (fromD) params.from = fromD
+      if (toD) params.to = toD
+      if (supF !== "all") params.vendor_id = supF
+      const res = await vendorReturnsApi.getLog(params)
+      setRows(res.data); setTotal(res.total); setCounts(res.counts); setStats(res.stats)
     } catch {
-      setReturns([])
+      setRows([])
+      toast.error("Failed to load supplier returns")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [currentPage, searchQuery, statusFilter, vendorFilter])
+  }, [page, perPage, tab, searchD, fromD, toD, supF])
+  useEffect(() => { load() }, [load])
 
+  // purchase orders of the chosen supplier
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    setPoId("")
+    if (!supId) { setPos([]); return }
+    purchaseOrderApi.getAll({ vendor_id: supId, limit: 20 })
+      .then((r) => setPos(((r.data?.data?.data ?? []) as any[]).filter((p) => p.status === "partial" || p.status === "received").map((p) => ({ id: p.id, poNumber: p.poNumber }))))
+      .catch(() => setPos([]))
+  }, [supId])
 
-  const handleViewDetails = async (ret: VendorReturnResponse) => {
-    try {
-      const res = await vendorReturnsApi.getById(ret.id)
-      setSelectedReturn(res.data)
-    } catch {
-      setSelectedReturn(ret)
-    }
-    setIsDetailsOpen(true)
+  // items in stock at the chosen location
+  useEffect(() => {
+    if (!formOpen || !locId) { setItems([]); return }
+    const t = setTimeout(async () => {
+      setItemsLoading(true)
+      try {
+        const res: ReturnableItem[] = await vendorReturnsApi.getReturnableItems({
+          location_id: Number(locId), vendor_id: supId ? Number(supId) : undefined, po_id: poId ? Number(poId) : undefined, search: sq.trim() || undefined,
+        })
+        setItems((prev) => res.map((r) => {
+          const key = `${r.productId}-${r.variantId ?? 0}`
+          const old = prev.find((p) => p.key === key)
+          return { key, productId: r.productId, variantId: r.variantId, name: r.name, sku: r.sku, stock: r.stock, receivedQty: r.receivedQty,
+            on: old?.on ?? false, qty: old?.qty ?? 1, cost: old?.cost ?? r.lastCost, reason: old?.reason ?? REASONS[0] }
+        }))
+      } catch { setItems([]) } finally { setItemsLoading(false) }
+    }, 250)
+    return () => clearTimeout(t)
+  }, [formOpen, locId, supId, poId, sq])
+
+  const openForm = () => {
+    setSupId(""); setPoId(""); setRetDate(today()); setTracking(""); setSq(""); setItems([]); setCredit("note"); setNote(""); setPrintNote(true); setPhotos([]); setErr("")
+    setLocId(warehouses[0] ? String(warehouses[0].id) : "")
+    setFormOpen(true)
   }
+  const patch = (key: string, p: Partial<PickLine>) => setItems((ls) => ls.map((l) => (l.key === key ? { ...l, ...p } : l)))
 
-  const handleStatusUpdate = async (ret: VendorReturnResponse, newStatus: VendorReturnStatus) => {
-    setStatusUpdateLoading(ret.id)
+  const creditEffect = (type: string, amt: number, supplier: string) => creditEffectText(type, formatCurrency(amt), supplier)
+  const picked = items.filter((i) => i.on)
+  const units = picked.reduce((a, i) => a + i.qty, 0)
+  const subtotal = Math.round(picked.reduce((a, i) => a + i.qty * i.cost, 0) * 100) / 100
+  const locName = warehouses.find((w) => String(w.id) === locId)?.name ?? ""
+
+  const submit = async () => {
+    if (!supId) { setErr("Choose a supplier."); return }
+    if (picked.length === 0) { setErr("Select at least one item to return."); return }
+    if (!retDate) { setErr("Choose the return date."); return }
+    if (retDate > today()) { setErr("Return date cannot be in the future."); return }
+    if (picked.some((i) => i.cost < 0)) { setErr("Unit cost must be 0 or more."); return }
+    if (picked.some((i) => i.qty > i.stock)) { setErr("A quantity is more than the stock at this location."); return }
+    setSaving(true); setErr("")
     try {
-      await vendorReturnsApi.updateStatus(ret.id, newStatus)
-      toast({ title: "Status updated" })
-      fetchData()
-    } catch {
-      toast({ title: "Failed to update status", variant: "destructive" })
+      const res = await vendorReturnsApi.createReturn({
+        vendorId: Number(supId), purchaseOrderId: poId ? Number(poId) : undefined, locationId: Number(locId), returnDate: retDate,
+        trackingNo: tracking.trim() || undefined, creditType: credit, note: note.trim() || undefined,
+        items: picked.map((i) => ({ productId: i.productId, variantId: i.variantId, quantity: i.qty, unitCost: i.cost, reason: i.reason })),
+      })
+      let created = res
+      if (photos.length > 0) {
+        try { created = await vendorReturnsApi.uploadPhotos(res.id, photos) } catch { toast.error("Return created, but the photos could not be uploaded. Add them from the return details.") }
+      }
+      toast.success(`${res.returnNumber} created`)
+      setFormOpen(false)
+      if (printNote) printReturn(created)
+      setPage(1); load()
+    } catch (e: any) {
+      setErr(e?.response?.data?.message ?? "Could not create the return.")
     } finally {
-      setStatusUpdateLoading(null)
+      setSaving(false)
     }
   }
 
-  const allowedNextStatuses = (current: VendorReturnStatus) => {
-    const idx = STATUS_ORDER.indexOf(current)
-    return STATUS_ORDER.slice(idx)
-  }
-
-  const handleDownloadReport = () => {
-    const csvContent = [
-      ["Return #", "Supplier", "Amount", "Status", "Date"],
-      ...returns.map((ret) => [
-        ret.returnNumber ?? ret.id,
-        ret.vendorName ?? ret.vendorId,
-        formatCurrency(Number(fmt(ret.totalAmount))),
-        ret.status,
-        formatDate(ret.createdAt),
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `vendor-returns-${new Date().toISOString().split("T")[0]}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
-
-  const handleVendorSelect = useCallback(async (vendorId: string) => {
-    setFormData((prev) => ({ ...prev, vendorId, items: [] }))
-    setVendorProducts([])
-    if (!vendorId) return
-    setVendorProductsLoading(true)
+  const advance = async (r: SupplierReturnRow) => {
+    const s = STATUS[stKey(r)]
+    if (!s.next) return
+    if (!window.confirm(`Move ${r.returnNumber} to "${STATUS[s.next].label}"?`)) return
+    setBusyId(r.id)
     try {
-      const res = await productApi.getAll({ vendor_id: Number(vendorId), limit: 200 })
-      setVendorProducts(res.data ?? [])
-    } catch {
-      toast({ title: "Failed to load supplier products", variant: "destructive" })
-    } finally {
-      setVendorProductsLoading(false)
-    }
-  }, [toast])
+      const updated = await vendorReturnsApi.advance(r.id, s.next)
+      toast.success(`${r.returnNumber} marked ${STATUS[s.next].label.toLowerCase()}`)
+      if (detail?.id === r.id) setDetail(updated)
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Could not update the status")
+    } finally { setBusyId(null) }
+  }
 
-  const blocked = useModuleGuard('Vendor Returns')
+  const addPhotos = async (r: SupplierReturnRow, files: File[]) => {
+    if (files.length === 0) return
+    setPhotoBusy(true)
+    try {
+      const updated = await vendorReturnsApi.uploadPhotos(r.id, files)
+      setDetail(updated); load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Could not upload the photos")
+    } finally { setPhotoBusy(false) }
+  }
+  const removePhoto = async (r: SupplierReturnRow, attId: number) => {
+    if (!window.confirm("Remove this photo?")) return
+    setPhotoBusy(true)
+    try { setDetail(await vendorReturnsApi.removePhoto(r.id, attId)); load() } catch { toast.error("Could not remove the photo") } finally { setPhotoBusy(false) }
+  }
+
+  const printReturn = (r: SupplierReturnRow) => {
+    const w = window.open("", "_blank", "width=720,height=800")
+    if (!w) { toast.error("Allow pop-ups to print"); return }
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string))
+    w.document.write(`<!doctype html><title>${esc(r.returnNumber)}</title><body style="font-family:sans-serif;padding:24px">
+      <h2 style="margin:0">Return note ${esc(r.returnNumber)}</h2>
+      <p style="color:#5B6478">${fmt(r.returnDate ?? r.createdAt)} · ${esc(r.supplierName)} · ${esc(r.poNumber ?? "Not linked to a PO")}</p>
+      <table style="width:100%;border-collapse:collapse">${r.lines.map((l) => `<tr><td style="padding:6px 0">${esc(l.name)}</td><td>${l.quantity} × ${formatCurrency(l.unitCost)}</td><td style="text-align:right">${formatCurrency(l.total)}</td></tr>`).join("")}</table>
+      <h3 style="text-align:right">Value (${esc(CREDIT_LABEL[r.creditType] ?? "Credit note")}): ${formatCurrency(r.amount)}</h3>
+      <p>Reason: ${esc(r.reason ?? "—")}</p>${r.trackingNo ? `<p>Tracking: ${esc(r.trackingNo)}</p>` : ""}${r.note ? `<p>Note: ${esc(r.note)}</p>` : ""}</body>`)
+    w.document.close(); w.focus(); w.print()
+  }
+
+  const handleExport = async () => {
+    try {
+      const params: Record<string, any> = { per_page: 500 }
+      if (tab !== "all") params.status = tab
+      if (searchD) params.search = searchD
+      if (fromD) params.from = fromD
+      if (toD) params.to = toD
+      if (supF !== "all") params.vendor_id = supF
+      const all: SupplierReturnRow[] = []
+      for (let p = 1; p <= 40; p++) {
+        const res = await vendorReturnsApi.getLog({ ...params, page: p })
+        all.push(...res.data)
+        if (p >= res.lastPage) break
+      }
+      if (all.length === 0) { toast.error("Nothing to export"); return }
+      exportToCSV(all.map((r) => ({
+        return: r.returnNumber, date: r.returnDate ?? r.createdAt, supplier: r.supplierName, po: r.poNumber ?? "Not linked", items: r.itemsSummary, reason: r.reason ?? "",
+        credit_type: CREDIT_LABEL[r.creditType] ?? r.creditType, amount: r.amount, status: STATUS[stKey(r)].label, tracking: r.trackingNo ?? "", photos: r.attachments?.length ?? 0, note: r.note ?? "",
+      })), "supplier-returns", ["return", "date", "supplier", "po", "items", "reason", "credit_type", "amount", "status", "tracking", "photos", "note"])
+    } catch {
+      toast.error("Could not export returns")
+    }
+  }
+
+  const cycleSup = () => {
+    const opts = ["all", ...(stats?.suppliers ?? []).map((v) => String(v.id))]
+    setSupF(opts[(opts.indexOf(supF) + 1) % opts.length]); setPage(1)
+  }
+  const supLabel = supF === "all" ? "Supplier: All" : stats?.suppliers?.find((v) => String(v.id) === supF)?.name ?? "Supplier"
+  const hasFilter = !!(searchD || fromD || toD || supF !== "all")
+  const timeline = useMemo(() => detail ? [["Shipped", detail.shippedAt], ["Received by supplier", detail.receivedAt], ["Credited", detail.creditedAt]]
+    .filter((x) => x[1]).map((x) => `${x[0]} ${fmt(x[1])}`).join(" · ") || "No updates yet" : "", [detail])
+
   if (blocked) return blocked
 
-  const handleSelectProduct = (product: ProductResponse, variant?: ProductVariantResponse) => {
-    const unitPrice = variant
-      ? String(variant.sale_price || variant.price)
-      : String(product.sale_price || product.price)
-    const newItem = {
-      productId: String(product.id),
-      productName: variant ? `${product.name} — ${variant.name}` : product.name,
-      variantId: variant?.id,
-      quantity: 1,
-      unitPrice,
-      reason: "",
-    }
-    setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }))
-    setProductSearchOpen(false)
-    setProductSearch("")
-  }
-
-  const handleRemoveItem = (index: number) => {
-    setFormData((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }))
-  }
-
-  const handleItemChange = (index: number, field: string, value: string | number) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
-    }))
-  }
-
-  const handleCreateReturn = async () => {
-    if (!formData.vendorId) {
-      toast({ title: "Please select a supplier", variant: "destructive" })
-      return
-    }
-    if (formData.items.length === 0) {
-      toast({ title: "Please add at least one item", variant: "destructive" })
-      return
-    }
-    if (formData.items.some((item) => !item.productId || !item.quantity || !item.reason)) {
-      toast({ title: "Please fill in all item details", variant: "destructive" })
-      return
-    }
-
-    const selectedVendor = vendors.find((v) => v.id === formData.vendorId)
-    const totalAmount = formData.items.reduce((sum, item) => {
-      const price = item.unitPrice ? parseFloat(item.unitPrice) : 0
-      return sum + (price * item.quantity)
-    }, 0)
-
-    setCreateLoading(true)
-    try {
-      await vendorReturnsApi.create({
-        vendorId: Number(formData.vendorId),
-        vendorName: selectedVendor?.name,
-        creditType: formData.creditType,
-        notes: formData.notes || undefined,
-        returnDate: formData.returnDate ? `${formData.returnDate.split("T")[0]}T00:00:00Z` : undefined,
-        totalAmount: totalAmount > 0 ? totalAmount : undefined,
-        items: formData.items.map((item) => ({
-          productId: Number(item.productId),
-          productName: item.productName,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice ? Number(item.unitPrice) : undefined,
-          totalPrice: item.unitPrice ? Number(item.unitPrice) * item.quantity : undefined,
-          reason: item.reason,
-        })),
-      })
-      toast({ title: "Return created successfully" })
-      setIsCreateDialogOpen(false)
-      fetchData()
-    } catch {
-      toast({ title: "Failed to create return", variant: "destructive" })
-    } finally {
-      setCreateLoading(false)
-    }
-  }
-
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE)
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Supplier Returns</h1>
-          <p className="text-gray-600 mt-1">Manage products returned to suppliers</p>
+          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Supplier returns</h1>
+          <p className="mt-1 text-sm text-dash-muted">Send faulty or extra stock back and get credit for it.</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={() => {
-              setFormData({ vendorId: "", returnDate: new Date().toISOString().split("T")[0], creditType: "credit_note", notes: "", items: [] })
-              setVendorProducts([])
-              setProductSearch("")
-              setProductSearchOpen(false)
-              setIsCreateDialogOpen(true)
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Return
-          </Button>
-          <Button onClick={handleDownloadReport} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
+          <button type="button" onClick={openForm} className={primaryBtn}>New return</button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: "Total Returns", value: stats.total, color: "text-gray-900", icon: <TruckIcon className="w-8 h-8 text-gray-400" /> },
-          { label: "Pending", value: stats.pending, color: "text-yellow-600" },
-          { label: "Shipped", value: stats.shipped, color: "text-blue-600" },
-          { label: "Total Credit", value: formatCurrency(stats.total_credit_amount), color: "text-green-600" },
-        ].map((s) => (
-          <Card key={s.label} className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{s.label}</p>
-                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-              </div>
-              {s.icon}
-            </div>
-          </Card>
-        ))}
-      </div>
+      {loading && !stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}</div>
+      ) : stats ? (
+        <StatsCards stats={[
+          { label: "Supplier returns", value: stats.count, icon: <Undo2 className="size-4" />, color: "blue", hint: "All time" },
+          { label: "Pending / shipped", value: `${stats.pendingCount} / ${stats.shippedCount}`, icon: <Truck className="size-4" />, color: "yellow", hint: "Awaiting dispatch / in transit" },
+          { label: "Credit to receive", value: formatCurrency(stats.creditToReceive), icon: <Banknote className="size-4" />, color: "yellow", hint: "Not yet credited" },
+          { label: "Credit received", value: formatCurrency(stats.creditReceived), icon: <CheckCircle2 className="size-4" />, color: "green", hint: "Marked as credited" },
+          { label: "Most returned to", value: stats.mostReturnedTo?.name ?? "—", icon: <Package className="size-4" />, color: "red", hint: stats.mostReturnedTo ? `${stats.mostReturnedTo.count} return(s)` : "No returns yet" },
+        ]} />
+      ) : null}
 
-      {/* Filters + Table */}
-      <Card className="p-6">
-        <div className="flex flex-wrap items-center gap-4 mb-6">
-          <div className="relative flex-1 min-w-[300px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search by return # or supplier"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
-              className="pl-10"
-            />
-          </div>
-          <Select value={vendorFilter} onValueChange={(v) => { setVendorFilter(v); setCurrentPage(1) }}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="All Suppliers" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Suppliers</SelectItem>
-              {vendors.map((v) => (
-                <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1) }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="shipped">Shipped</SelectItem>
-              <SelectItem value="received_by_vendor">Received</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
+      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+        <div className="px-4">
+          <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }} tabs={TABS.map(([v, label]) => ({ value: v, label, count: counts[v] }))} />
+        </div>
+        <div className="flex flex-wrap items-end gap-2.5 p-4">
+          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+            <Search className="size-[18px]" aria-hidden />
+            <span className="sr-only">Search returns</span>
+            <input type="search" placeholder="Search return #, PO, supplier or reason…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold text-dash-muted">From
+            <input type="date" className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none" value={fromD} onChange={(e) => { setFromD(e.target.value); setPage(1) }} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold text-dash-muted">To
+            <input type="date" className="h-11 rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm font-normal text-dash-ink outline-none" value={toD} onChange={(e) => { setToD(e.target.value); setPage(1) }} />
+          </label>
+          <button type="button" onClick={cycleSup} className={outlineBtn}>{supLabel} ▾</button>
         </div>
 
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Return #</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Supplier</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Amount</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Date</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Actions</th>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-sm">
+            <thead>
+              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
+                <th className="py-3 pl-4 pr-2 font-semibold">Return</th><th className="px-2 py-3 font-semibold">Supplier / PO</th>
+                <th className="px-2 py-3 font-semibold">Items &amp; reason</th><th className="px-2 py-3 text-right font-semibold">Value</th>
+                <th className="px-2 py-3 font-semibold">Status</th><th className="py-3 pl-2 pr-4 text-right font-semibold">Next step</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 6 }).map((__, j) => (
-                      <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></td>
-                    ))}
-                  </tr>
-                ))
-              ) : returns.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-500">No supplier returns found</td>
-                </tr>
-              ) : (
-                returns.map((ret) => (
-                  <tr key={ret.id} className="hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-gray-900">{ret.returnNumber ?? `#${ret.id}`}</td>
-                    <td className="py-3 px-4 text-sm text-gray-900">{ret.vendorName ?? ret.vendorId}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-gray-900">{formatCurrency(Number(fmt(ret.totalAmount)))}</td>
-                    <td className="py-3 px-4 text-center"><VendorReturnStatusBadge status={ret.status} /></td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{formatDate(ret.createdAt)}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(ret)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {ret.status !== "completed" && (
-                          <Select
-                            value={ret.status}
-                            onValueChange={(v) => handleStatusUpdate(ret, v as VendorReturnStatus)}
-                            disabled={statusUpdateLoading === ret.id}
-                          >
-                            <SelectTrigger className="w-[140px] h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {allowedNextStatuses(ret.status).map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  {s === "pending" ? "Pending" : s === "shipped" ? "Shipped" : s === "received_by_vendor" ? "Received" : "Completed"}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+            <tbody>
+              {loading ? [1, 2, 3, 4].map((i) => <tr key={i}><td colSpan={6} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+                rows.length === 0 ? (
+                  <tr><td colSpan={6} className="py-14 text-center">
+                    <Undo2 className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
+                    <p className="font-semibold">No supplier returns found</p>
+                    <p className="text-sm text-dash-muted">{hasFilter || tab !== "all" ? "Try clearing the filters." : "Create one with New return."}</p>
+                  </td></tr>
+                ) : rows.map((r) => {
+                  const s = STATUS[stKey(r)]
+                  return (
+                    <tr key={r.id}>
+                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                        <button type="button" onClick={() => setDetail(r)} className="font-bold hover:underline">{r.returnNumber}</button>
+                        <div className="text-xs text-dash-muted">{fmt(r.returnDate ?? r.createdAt)}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="font-semibold">{r.supplierName || "—"}</div>
+                        {r.poNumber ? <Link href="/dashboard/vendors/purchase-orders" className="text-xs font-semibold text-dash-accent hover:underline">{r.poNumber}</Link> : <span className="text-xs text-dash-muted">Not linked</span>}
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="max-w-[240px] truncate">{r.itemsSummary}</div>
+                        <div className="text-xs text-dash-muted">{r.reason || "—"}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
+                        <div className="font-bold">{formatCurrency(r.amount)}</div>
+                        <div className="text-xs text-dash-muted">{CREDIT_LABEL[r.creditType] ?? "Credit note"}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3"><span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", s.cls)}>{s.label}</span></td>
+                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        <div className="flex items-center justify-end gap-1">
+                          {s.next && <button type="button" disabled={busyId === r.id} onClick={() => advance(r)} className="mr-1 h-9 rounded-lg bg-dash-ink px-3 text-[13px] font-semibold text-dash-bg disabled:opacity-40">{s.nextLabel}</button>}
+                          <button type="button" aria-label="View return" className={iconBtn} onClick={() => setDetail(r)}><Eye className="size-4" /></button>
+                          <button type="button" aria-label="Print return note" className={iconBtn} onClick={() => printReturn(r)}><Printer className="size-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
             </tbody>
           </table>
         </div>
 
-        {!isLoading && totalItems > 0 && (
-          <div className="mt-4">
-            <PaginationControl
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onItemsPerPageChange={() => {}}
-              totalItems={totalItems}
-            />
+        {!loading && total > 0 && (
+          <div className="border-t border-dash-border-soft p-4 pt-3">
+            <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
+              onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
           </div>
         )}
-      </Card>
+        <div className="border-t border-dash-border-soft px-4 py-3 text-xs text-dash-muted tabular-nums">{formatCurrency(stats?.pendingCreditAmount ?? stats?.creditToReceive ?? 0)} credit still to receive</div>
+      </section>
 
-      {/* Details Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="sm:max-w-5xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Supplier Return Details — {selectedReturn?.returnNumber ?? `#${selectedReturn?.id}`}</DialogTitle>
-            <DialogDescription>Complete information about this supplier return</DialogDescription>
-          </DialogHeader>
-          {selectedReturn && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-sm font-medium text-gray-700">Supplier</p><p className="text-sm text-gray-900">{selectedReturn.vendorName ?? selectedReturn.vendorId}</p></div>
-                <div><p className="text-sm font-medium text-gray-700">Status</p><div className="mt-1"><VendorReturnStatusBadge status={selectedReturn.status} /></div></div>
-                <div><p className="text-sm font-medium text-gray-700">Credit Type</p><p className="text-sm text-gray-900 capitalize">{(selectedReturn.creditType ?? "N/A").replace("_", " ")}</p></div>
-                <div><p className="text-sm font-medium text-gray-700">Return Date</p><p className="text-sm text-gray-900">{formatDate(selectedReturn.returnDate ?? selectedReturn.createdAt)}</p></div>
-                {selectedReturn.completedDate && (
-                  <div><p className="text-sm font-medium text-gray-700">Completed Date</p><p className="text-sm text-gray-900">{formatDate(selectedReturn.completedDate)}</p></div>
-                )}
-                {selectedReturn.createdBy && (
-                  <div><p className="text-sm font-medium text-gray-700">Created By</p><p className="text-sm text-gray-900">{selectedReturn.createdBy}</p></div>
-                )}
-              </div>
+      {/* ---------------- New supplier return ---------------- */}
+      <Dialog open={formOpen} onOpenChange={(o) => !o && setFormOpen(false)}>
+        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[980px]">
+          <div className="border-b border-dash-border-soft px-6 py-4">
+            <DialogTitle className="font-dash-display text-xl font-bold">New supplier return</DialogTitle>
+            <DialogDescription className="text-[13px]">Stock leaves {locName || "the location"} as soon as you create the return.</DialogDescription>
+          </div>
 
-              {selectedReturn.items && selectedReturn.items.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-3">Return Items</p>
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Product</th>
-                          <th className="text-center py-2 px-3 text-xs font-semibold text-gray-700">Qty</th>
-                          <th className="text-right py-2 px-3 text-xs font-semibold text-gray-700">Unit Price</th>
-                          <th className="text-right py-2 px-3 text-xs font-semibold text-gray-700">Total</th>
-                          <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {selectedReturn.items.map((item, i) => (
-                          <tr key={i}>
-                            <td className="py-2 px-3 text-sm">
-                              <p className="font-medium text-gray-900">{item.productName ?? `Product #${item.productId}`}</p>
-                              {item.variantName && <p className="text-xs text-gray-500">{item.variantName}</p>}
-                            </td>
-                            <td className="py-2 px-3 text-center text-sm">{item.quantity}</td>
-                            <td className="py-2 px-3 text-right text-sm">{formatCurrency(Number(fmt(item.unitPrice)))}</td>
-                            <td className="py-2 px-3 text-right text-sm font-medium">{formatCurrency(Number(fmt(item.totalPrice ?? Number(item.unitPrice ?? 0) * item.quantity)))}</td>
-                            <td className="py-2 px-3 text-sm text-gray-600">{item.reason}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_320px]">
+            <div className="flex min-w-0 flex-col gap-5">
+              <fieldset className="flex flex-col gap-3">
+                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">1 · Supplier</legend>
+                <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Supplier *
+                  <div className="flex flex-wrap gap-1.5">
+                    {vendors.filter((v) => v.status === "Active").map((v) => (
+                      <button key={v.id} type="button" aria-pressed={supId === String(v.id)} onClick={() => { setSupId(String(v.id)); setErr("") }}
+                        className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", supId === String(v.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{v.name}</button>
+                    ))}
                   </div>
                 </div>
-              )}
+                {supId && (
+                  <div className="flex flex-col gap-1.5 text-[13px] font-semibold">From purchase order
+                    <div className="flex flex-wrap gap-1.5">
+                      <button type="button" aria-pressed={poId === ""} onClick={() => setPoId("")} className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", poId === "" ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>Not linked</button>
+                      {pos.map((p) => (
+                        <button key={p.id} type="button" aria-pressed={poId === String(p.id)} onClick={() => setPoId(String(p.id))}
+                          className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", poId === String(p.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{p.poNumber}</button>
+                      ))}
+                    </div>
+                    {pos.length === 0 && <span className="text-xs font-normal text-dash-muted">No received purchase orders for this supplier.</span>}
+                  </div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Return date *<input type="date" max={today()} className={input} value={retDate} onChange={(e) => setRetDate(e.target.value)} /></label>
+                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Shipment / tracking no. (optional)<input className={input} value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Courier or waybill number" /></label>
+                </div>
+                <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Taken from
+                  <div className="flex flex-wrap gap-1.5">
+                    {warehouses.map((w) => (
+                      <button key={w.id} type="button" aria-pressed={locId === String(w.id)} onClick={() => setLocId(String(w.id))}
+                        className={cn("h-9 rounded-full border px-3 text-[13px] font-semibold", locId === String(w.id) ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{w.name}</button>
+                    ))}
+                  </div>
+                </div>
+              </fieldset>
 
-              <div className="flex justify-end">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Total Credit Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(fmt(selectedReturn.totalAmount)))}</p>
+              <fieldset className="flex flex-col gap-3">
+                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">2 · Items going back</legend>
+                <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+                  <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search products</span>
+                  <input type="search" value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Search products in stock at this location…"
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
+                </label>
+                {itemsLoading && items.length === 0 ? <Skeleton className="h-16 rounded-xl" /> : items.length === 0 ? (
+                  <span className="text-[13px] text-dash-muted">{supId ? "No products with stock here to return." : "Choose a supplier, then pick items."}</span>
+                ) : (
+                  <div className="flex flex-col rounded-xl border border-dash-border">
+                    {items.map((i) => (
+                      <div key={i.key} className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 border-b border-dash-border-soft px-3 py-3 last:border-0 lg:grid-cols-[auto_1fr_auto_88px_150px_80px]">
+                        <input type="checkbox" checked={i.on} onChange={() => patch(i.key, { on: !i.on })} aria-label={`Return ${i.name}`} className="size-4" />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{i.name}</div>
+                          <div className="text-xs text-dash-muted">{i.receivedQty !== null ? `${i.receivedQty} received · ` : ""}cost {formatCurrency(i.cost)} · {i.stock} in stock</div>
+                        </div>
+                        <div className="col-start-2 flex items-center lg:col-start-auto">
+                          <button type="button" aria-label="Decrease quantity" onClick={() => patch(i.key, { qty: Math.max(1, i.qty - 1), on: true })} className="h-9 w-8 rounded-l-lg border border-dash-border">−</button>
+                          <span className="flex h-9 w-10 items-center justify-center border-y border-dash-border text-sm tabular-nums">{i.qty}</span>
+                          <button type="button" aria-label="Increase quantity" onClick={() => patch(i.key, { qty: Math.min(i.stock, i.qty + 1), on: true })} className="h-9 w-8 rounded-r-lg border border-dash-border">+</button>
+                        </div>
+                        <input type="number" min={0} step="0.01" aria-label="Unit cost" value={i.cost} onChange={(e) => patch(i.key, { cost: Number(e.target.value) || 0 })}
+                          className="col-start-2 h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-sm outline-none focus-visible:border-dash-accent lg:col-start-auto" />
+                        <select aria-label="Reason" value={i.reason} onChange={(e) => patch(i.key, { reason: e.target.value })} className="col-start-2 h-9 rounded-lg border border-dash-border bg-dash-card px-2 text-xs lg:col-start-auto">
+                          {REASONS.map((r) => <option key={r}>{r}</option>)}
+                        </select>
+                        <span className="col-start-2 text-right text-sm font-bold tabular-nums lg:col-start-auto">{formatCurrency(i.qty * i.cost)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex flex-col gap-1.5 text-[13px] font-semibold">Photos of the problem (optional)
+                <input type="file" accept="image/*,application/pdf" multiple aria-label="Attach photos"
+                  onChange={(e) => { const f = Array.from(e.target.files ?? []); setPhotos((p) => [...p, ...f].slice(0, 10)); e.target.value = "" }}
+                  className="block text-xs font-normal file:mr-3 file:h-9 file:rounded-lg file:border file:border-dash-border file:bg-dash-card file:px-3 file:text-[13px] file:font-semibold" />
+                {photos.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {photos.map((f, i) => (
+                      <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-full border border-dash-border bg-dash-bg px-3 py-1 text-xs font-medium">
+                        {f.name}
+                        <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="font-bold text-dash-muted hover:text-dash-ink">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note to supplier
+                <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Stitching open on 3 pieces, photos attached" />
+              </label>
+            </div>
+
+            <aside className="flex flex-col gap-3 rounded-xl border border-dash-border-soft bg-dash-bg p-4 lg:self-start">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">3 · What you get back</span>
+              <div role="radiogroup" aria-label="Credit type" className="flex flex-col gap-1.5">
+                {CREDITS.map((c) => (
+                  <button key={c.id} type="button" role="radio" aria-checked={credit === c.id} onClick={() => setCredit(c.id)}
+                    className={cn("flex flex-col rounded-[10px] border-2 px-3 py-2 text-left text-[13px] font-semibold", credit === c.id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                    {c.label}<span className="text-[11px] font-normal opacity-80">{c.sub}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-col gap-1.5 text-[13px]">
+                <div className="flex justify-between"><span className="text-dash-muted">{units} units at cost</span><span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span></div>
+                <div className="flex justify-between"><span className="text-dash-muted">Return transport</span><span className="font-semibold tabular-nums">{formatCurrency(0)}</span></div>
+                <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
+                  <span className="font-bold">{credit === "note" ? "Credit note" : credit === "refund" ? "Refund due" : "Replacement value"}</span>
+                  <span className="font-dash-display text-2xl font-bold tabular-nums">{formatCurrency(subtotal)}</span>
                 </div>
               </div>
+              <div className="flex flex-col gap-1 rounded-[10px] bg-dash-card px-3 py-2.5 text-xs text-dash-muted">
+                <span className="font-semibold text-dash-ink">What happens</span>
+                <span>− {units} units leave {locName || "the location"} now</span>
+                <span>{creditEffect(credit, subtotal, vendors.find((v) => String(v.id) === supId)?.name ?? "")}</span>
+              </div>
+              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={printNote} onChange={() => setPrintNote((v) => !v)} className="size-4" />Print return note for driver</label>
+              {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+            </aside>
+          </div>
 
-              {selectedReturn.notes && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Notes</p>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{selectedReturn.notes}</p>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap justify-end gap-2 border-t border-dash-border-soft px-6 py-4">
+            <button type="button" onClick={() => setFormOpen(false)} className={outlineBtn}>Cancel</button>
+            <button type="button" disabled={saving || picked.length === 0} onClick={submit} className={primaryBtn}>{saving ? "Saving…" : `Create return · ${formatCurrency(subtotal)}`}</button>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Create Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
-        setIsCreateDialogOpen(open)
-        if (!open) {
-          setVendorProducts([])
-          setProductSearch("")
-          setProductSearchOpen(false)
-        }
-      }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Supplier Return</DialogTitle>
-            <DialogDescription>Select a supplier to load their products, then add items to return</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5">
-            {/* Vendor + Date + Credit Type */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label>Supplier *</Label>
-                <Select value={formData.vendorId} onValueChange={handleVendorSelect}>
-                  <SelectTrigger className="mt-1 w-full">
-                    <SelectValue placeholder="Select vendor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vendors.map((v) => (
-                      <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Return Date *</Label>
-                <Input
-                  type="date"
-                  className="mt-1"
-                  value={formData.returnDate}
-                  onChange={(e) => setFormData({ ...formData, returnDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Credit Type *</Label>
-                <Select value={formData.creditType} onValueChange={(v) => setFormData({ ...formData, creditType: v })}>
-                  <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="refund">Refund</SelectItem>
-                    <SelectItem value="credit_note">Credit Note</SelectItem>
-                    <SelectItem value="replacement">Replacement</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Product autocomplete (only after vendor selected) */}
-            <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
-              <p className="text-sm font-medium text-gray-700">Add Product</p>
-              <Popover open={productSearchOpen} onOpenChange={setProductSearchOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    disabled={!formData.vendorId || vendorProductsLoading}
-                    className="w-full justify-between bg-white font-normal"
-                  >
-                    {vendorProductsLoading
-                      ? "Loading products..."
-                      : !formData.vendorId
-                      ? "Select a supplier first"
-                      : `Search product... (${vendorProducts.length} available)`}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[560px] p-0" align="start">
-                  <Command>
-                    <CommandInput
-                      placeholder="Search by product name or SKU..."
-                      value={productSearch}
-                      onValueChange={setProductSearch}
-                    />
-                    <CommandList className="max-h-72">
-                      <CommandEmpty>No products found.</CommandEmpty>
-                      {vendorProducts
-                        .filter((p) =>
-                          p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-                          (p.sku ?? "").toLowerCase().includes(productSearch.toLowerCase())
-                        )
-                        .map((product) => (
-                          <CommandGroup key={product.id} heading={product.name}>
-                            {/* Base product (no variants) */}
-                            {(!product.variants || product.variants.length === 0) && (
-                              <CommandItem
-                                value={`${product.id}-base-${product.name}`}
-                                onSelect={() => handleSelectProduct(product)}
-                              >
-                                <div className="flex justify-between w-full">
-                                  <div>
-                                    <span className="font-medium">{product.name}</span>
-                                    <span className="text-xs text-gray-500 ml-2">SKU: {product.sku}</span>
-                                  </div>
-                                  <span className="text-sm font-medium text-gray-700">{formatCurrency(Number(fmt(product.sale_price || product.price)))}</span>
-                                </div>
-                              </CommandItem>
-                            )}
-                            {/* Variants */}
-                            {product.variants?.map((v) => (
-                              <CommandItem
-                                key={v.id}
-                                value={`${product.id}-${v.id}-${v.name}`}
-                                onSelect={() => handleSelectProduct(product, v)}
-                              >
-                                <div className="flex justify-between w-full pl-3">
-                                  <div>
-                                    <span>{v.name}</span>
-                                    <span className="text-xs text-gray-500 ml-2">SKU: {v.sku}</span>
-                                  </div>
-                                  <span className="text-sm font-medium text-gray-700">{formatCurrency(Number(fmt(v.sale_price || v.price)))}</span>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Return Items */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Label>Return Items *</Label>
-                {formData.items.length > 0 && (
-                  <p className="text-xs text-gray-500">{formData.items.length} item{formData.items.length > 1 ? "s" : ""} added</p>
-                )}
-              </div>
-
-              {formData.items.length === 0 ? (
-                <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center text-sm text-gray-400">
-                  Select a supplier and search for products to add return items
+      {/* ---------------- Detail ---------------- */}
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-xl">
+          {detail && (() => {
+            const s = STATUS[stKey(detail)]
+            return (
+              <>
+                <div className="border-b border-dash-border-soft px-6 py-4">
+                  <DialogTitle className="font-dash-display text-xl font-bold">{detail.returnNumber}</DialogTitle>
+                  <DialogDescription className="text-[13px]">{fmt(detail.returnDate ?? detail.createdAt)} · {detail.supplierName} · {detail.poNumber ?? "Not linked"}</DialogDescription>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {formData.items.map((item, index) => (
-                    <Card key={index} className="p-3">
-                      <div className="grid grid-cols-12 gap-3 items-start">
-                        {/* Product info */}
-                        <div className="col-span-4">
-                          <Label className="text-xs">Product</Label>
-                          <p className="text-sm font-medium text-gray-900 mt-1 leading-tight">{item.productName}</p>
-                          <p className="text-xs text-gray-500">ID: {item.productId}</p>
-                        </div>
-                        {/* Unit Price */}
-                        <div className="col-span-2">
-                          <Label className="text-xs">Unit Price</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.unitPrice}
-                            onChange={(e) => handleItemChange(index, "unitPrice", e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        {/* Qty */}
-                        <div className="col-span-2">
-                          <Label className="text-xs">Qty</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(index, "quantity", parseInt(e.target.value) || 1)}
-                            className="mt-1"
-                          />
-                        </div>
-                        {/* Reason */}
-                        <div className="col-span-3">
-                          <Label className="text-xs">Reason *</Label>
-                          <Select value={item.reason} onValueChange={(v) => handleItemChange(index, "reason", v)}>
-                            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select reason" /></SelectTrigger>
-                            <SelectContent>
-                              {RETURN_REASONS.map((r) => (
-                                <SelectItem key={r} value={r}>{r}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Remove */}
-                        <div className="col-span-1 flex justify-end pt-5">
-                          <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700 px-2">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                <div className="flex flex-col gap-3 p-6 text-sm">
+                  <div className="flex flex-col rounded-xl border border-dash-border">
+                    {detail.lines.map((l, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 border-b border-dash-border-soft px-3 py-2.5 last:border-0">
+                        <span className="font-semibold">{l.name}</span>
+                        <span className="text-dash-muted tabular-nums">{l.quantity} × {formatCurrency(l.unitCost)}</span>
+                        <span className="font-bold tabular-nums">{formatCurrency(l.total)}</span>
                       </div>
-                    </Card>
-                  ))}
-
-                  {/* Total */}
-                  <div className="flex justify-end pt-1">
-                    <p className="text-sm font-semibold text-gray-900">
-                      Total: {formatCurrency(formData.items.reduce((sum, i) => sum + (Number(i.unitPrice) * i.quantity), 0))}
-                    </p>
+                    ))}
                   </div>
+                  <div className="flex justify-between rounded-[10px] bg-dash-neutral-soft px-3.5 py-2.5"><span>Value ({CREDIT_LABEL[detail.creditType] ?? "Credit note"})</span><strong className="tabular-nums">{formatCurrency(detail.amount)}</strong></div>
+                  <div className="text-[13px] text-dash-muted">Status: <strong className="text-dash-ink">{s.label}</strong> · Return date: {fmt(detail.returnDate ?? detail.createdAt)} · Taken from: {detail.locationName ?? "—"}</div>
+                  <div className="text-[13px] text-dash-muted">Tracking: <span className="text-dash-ink">{detail.trackingNo || "—"}</span> · {timeline}</div>
+                  <div className="text-[13px] text-dash-muted">Reason: <span className="text-dash-ink">{detail.reason || "—"}</span></div>
+                  <div className="text-[13px] text-dash-muted">Note: <span className="text-dash-ink">{detail.note || "—"}</span></div>
+                  <div className="flex flex-col gap-2">
+                    <div className="text-[13px] font-semibold">Photos ({detail.attachments?.length ?? 0})</div>
+                    {(detail.attachments?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {detail.attachments!.map((a) => (
+                          <div key={a.id} className="relative">
+                            <a href={a.url} target="_blank" rel="noreferrer" className="flex size-20 items-center justify-center overflow-hidden rounded-lg border border-dash-border bg-dash-bg text-[11px] font-semibold text-dash-muted">
+                              {a.mime?.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-full object-cover" /> : "PDF"}
+                            </a>
+                            <button type="button" aria-label={`Remove ${a.name}`} disabled={photoBusy} onClick={() => removePhoto(detail, a.id)}
+                              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-dash-ink text-xs font-bold text-dash-bg disabled:opacity-40">×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <input type="file" accept="image/*,application/pdf" multiple disabled={photoBusy} aria-label="Add photos"
+                      onChange={(e) => { addPhotos(detail, Array.from(e.target.files ?? [])); e.target.value = "" }}
+                      className="block text-xs file:mr-3 file:h-9 file:rounded-lg file:border file:border-dash-border file:bg-dash-card file:px-3 file:text-[13px] file:font-semibold" />
+                  </div>
+                  <div className="rounded-[10px] bg-dash-bg px-3 py-2 text-xs text-dash-muted">{creditEffect(detail.creditType, detail.amount, detail.supplierName)}</div>
                 </div>
-              )}
-            </div>
-
-            <div>
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Add any additional notes..."
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateReturn} disabled={createLoading} className="bg-emerald-600 hover:bg-emerald-700">
-              {createLoading ? "Creating..." : "Create Return"}
-            </Button>
-          </DialogFooter>
+                <div className="flex flex-wrap justify-end gap-2 border-t border-dash-border-soft px-6 py-4">
+                  {s.next && <button type="button" disabled={busyId === detail.id} onClick={() => advance(detail)} className={primaryBtn}>{s.nextLabel}</button>}
+                  <button type="button" onClick={() => printReturn(detail)} className={outlineBtn}><Printer className="size-4" aria-hidden /> Print</button>
+                  <button type="button" onClick={() => setDetail(null)} className={outlineBtn}>Close</button>
+                </div>
+              </>
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>

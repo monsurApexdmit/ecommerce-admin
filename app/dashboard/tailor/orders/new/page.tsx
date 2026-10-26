@@ -1,635 +1,535 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, Trash2, User, Ruler, Package, ChevronRight, Search } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { tailorApi, TailorFabric, TailorMeasurement, TailorCustomer, PRODUCT_TYPES } from "@/lib/tailorApi"
+import { Search } from "lucide-react"
+import { toast } from "sonner"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { apiError, tInput, tOutlineBtn, tPrimaryBtn, todayIso } from "@/components/tailor/order-ui"
+import {
+  GARMENT_DEFAULTS, PRODUCT_TYPES, TAILOR_PAY_METHODS, tailorApi, tailorCustomerSummary, tailorOrdersApi,
+  type TailorCustomer, type TailorFabric, type TailorMeasurement, type TailorOrderFormOptions,
+} from "@/lib/tailorApi"
+import { measurementText, printJobCard } from "@/lib/tailorOrderPrint"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
-import { toast } from "sonner"
+import { useModuleGuard } from "@/hooks/use-module-guard"
+import { cn } from "@/lib/utils"
 
-interface OrderItem {
-  productType: string
-  fabricId: string
-  fabricQuantity: number
-  fabricUnitPrice: number
-  measurementId: string
-  notes: string
+/** Style-option chips offered per garment (labels only; saved with the item). */
+const STYLE_OPTS: Record<string, string[]> = {
+  shirt: ["Mandarin collar", "Double cuff", "Pocket"],
+  panjabi: ["Embroidery", "Side pocket", "Hidden placket"],
+  pant: ["Pleated", "Side pocket", "Belt loop"],
+  blouse: ["Boat neck", "Back zip", "Lining", "Puff sleeve"],
+  "salwar kameez": ["Churidar", "Piping", "Lining"],
+  coat: ["Two button", "Lining", "Vent"],
+  pajama: ["Elastic waist", "Drawstring", "Side pocket"],
+  jama: ["Embroidery", "Lining", "Collar"],
+  kurta: ["Mandarin collar", "Side slit", "Embroidery"],
 }
 
-const emptyItem = (): OrderItem => ({
-  productType: "",
-  fabricId: "none",
-  fabricQuantity: 1,
-  fabricUnitPrice: 0,
-  measurementId: "none",
-  notes: "",
-})
+interface Line {
+  g: string
+  qty: number
+  own: boolean
+  fabricId: string
+  meters: number
+  ownNote: string
+  rate: number
+  opts: Record<string, boolean>
+  note: string
+  price?: number
+  measId?: string
+}
 
-const TODAY_STR = new Date().toISOString().split("T")[0]
+const r2 = (v: number) => Math.round(v * 100) / 100
+const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+const addDays = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` }
+const ini = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("")
+const same = (a: string, b: string) => { const n = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "").replace(/^sh/, "s").replace(/s$/, ""); return n(a) === n(b) }
+
+const label = "flex flex-col gap-1.5 text-[13px] font-semibold"
+const card = "flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5"
+const h2 = "flex items-center gap-2.5 font-dash-display text-lg font-bold"
+const caption = "text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted"
+const chip = (on: boolean) => cn("rounded-[10px] border-2 px-3 py-2 text-left text-[13px] font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card hover:bg-dash-neutral-soft")
+const stepper = "flex h-9 w-9 items-center justify-center border border-dash-border bg-dash-card text-base font-semibold hover:bg-dash-neutral-soft"
 
 export default function NewTailorOrderPage() {
+  const { formatCurrency: fc } = useCompanySettings()
   const { canWrite } = useSaasAuth()
-  const { formatCurrency } = useCompanySettings()
   const router = useRouter()
+  const blocked = useModuleGuard("TailorOrders")
+  const writable = canWrite("TailorOrders")
 
-  if (!canWrite("TailorOrders")) return <AccessDenied />
-
-  // Fabrics
   const [fabrics, setFabrics] = useState<TailorFabric[]>([])
-  const [fabricSearch, setFabricSearch] = useState<string[]>([])
+  const [opts, setOpts] = useState<TailorOrderFormOptions | null>(null)
 
-  // Customer section
-  const [phoneSearch, setPhoneSearch] = useState("")
-  const [searchingPhone, setSearchingPhone] = useState(false)
-  const [foundCustomer, setFoundCustomer] = useState<TailorCustomer | null>(null)
-  const [customerNotFound, setCustomerNotFound] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<TailorCustomer | null>(null)
-  const [newCustomerName, setNewCustomerName] = useState("")
-  const [newCustomerPhone, setNewCustomerPhone] = useState("")
-  const [newCustomerAddress, setNewCustomerAddress] = useState("")
-  const [measurements, setMeasurements] = useState<TailorMeasurement[]>([])
+  // customer
+  const [cq, setCq] = useState("")
+  const [results, setResults] = useState<TailorCustomer[]>([])
+  const [searched, setSearched] = useState(false)
+  const [cust, setCust] = useState<TailorCustomer | null>(null)
+  const [custMeas, setCustMeas] = useState<TailorMeasurement[]>([])
+  const [custInfo, setCustInfo] = useState<{ orders: number; due: number } | null>(null)
+  const [nc, setNc] = useState({ name: "", phone: "", addr: "" })
+  const [ncErr, setNcErr] = useState("")
+  const [ncSaving, setNcSaving] = useState(false)
+  const [showNew, setShowNew] = useState(false)
 
-  // Items
-  const [items, setItems] = useState<OrderItem[]>([emptyItem()])
+  // items
+  const blank = (): Line => ({ g: "Shirt", qty: 1, own: true, fabricId: "", meters: 0, ownNote: "", rate: 0, opts: {}, note: "" })
+  const [its, setIts] = useState<Line[]>([blank()])
 
-  // Charges & dates
-  const [orderDate, setOrderDate] = useState(TODAY_STR)
-  const [deliveryDate, setDeliveryDate] = useState("")
-  const [stitchingCharge, setStitchingCharge] = useState(0)
-  const [extraCharge, setExtraCharge] = useState(0)
-  const [discount, setDiscount] = useState(0)
+  // delivery
+  const [orderDate, setOrderDate] = useState(todayIso())
+  const [date, setDate] = useState(addDays(7))
+  const [urgent, setUrgent] = useState(false)
+  const [dz, setDz] = useState<number | null>(null)
+  const [orderNote, setOrderNote] = useState("")
 
-  // Advance payment
-  const [advancePayment, setAdvancePayment] = useState(0)
-  const [advancePaymentMethod, setAdvancePaymentMethod] = useState("Cash")
-
-  // Notes
-  const [notes, setNotes] = useState("")
-
-  // Submission
-  const [submitting, setSubmitting] = useState(false)
+  // charges / advance
+  const [extra, setExtra] = useState(0)
+  const [disc, setDisc] = useState(0)
+  const [advMode, setAdvMode] = useState<"none" | "half" | "full">("none")
+  const [advManual, setAdvManual] = useState<number | undefined>(undefined)
+  const [method, setMethod] = useState("cash")
+  const [printAfter, setPrintAfter] = useState(true)
+  const [err, setErr] = useState("")
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    tailorApi.getFabrics({ limit: 200, status: "active" })
-      .then(r => {
-        const list: TailorFabric[] = r.data?.data?.data ?? r.data?.data ?? []
-        setFabrics(list)
-        setFabricSearch(Array(items.length).fill(""))
-      })
-      .catch(() => toast.error("Failed to load fabrics"))
+    tailorApi.getFabrics({ limit: 200, status: "active" }).then((r) => setFabrics(r.data?.data?.data ?? [])).catch(() => toast.error("Failed to load fabrics"))
+    tailorOrdersApi.formOptions().then(setOpts).catch(() => toast.error("Failed to load order options"))
+    const id = Number(new URLSearchParams(window.location.search).get("customerId"))
+    if (id > 0) tailorApi.getCustomers().then((r) => { const c = (r.data?.data as TailorCustomer[]).find((x) => x.id === id); if (c) pickCustomer(c) }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handlePhoneSearch = async () => {
-    if (!phoneSearch.trim()) return
-    setSearchingPhone(true)
-    setFoundCustomer(null)
-    setCustomerNotFound(false)
-    setSelectedCustomer(null)
-    setMeasurements([])
+  // first line starts as a Shirt: give it its price once the form options are in
+  useEffect(() => {
+    if (!opts) return
+    setIts((p) => p.length === 1 && p[0].rate === 0 && p[0].g === "Shirt" ? [{ ...p[0], rate: hint("Shirt")?.lastPrice ?? 0 }] : p)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opts])
+
+  // customer search
+  useEffect(() => {
+    const q = cq.trim()
+    if (!q) { setResults([]); setSearched(false); return }
+    const t = setTimeout(() => {
+      tailorApi.getCustomers({ search: q }).then((r) => { setResults(((r.data?.data as TailorCustomer[]) ?? []).slice(0, 6)); setSearched(true) }).catch(() => {})
+    }, 250)
+    return () => clearTimeout(t)
+  }, [cq])
+
+  const pickCustomer = (c: TailorCustomer) => {
+    setCust(c); setCq(""); setErr("")
+    setIts((p) => p.map((x) => ({ ...x, measId: undefined })))
+    setCustMeas([]); setCustInfo(null)
+    tailorApi.getMeasurementsByCustomer(c.id).then((r) => setCustMeas(r.data?.data ?? [])).catch(() => {})
+    tailorCustomerSummary(c.id).then(setCustInfo).catch(() => {})
+  }
+
+  const saveNewCustomer = async () => {
+    const phoneGuess = /^[0-9+\-\s]+$/.test(cq.trim()) ? cq.trim() : ""
+    const name = (nc.name || (phoneGuess ? "" : cq.trim())).trim()
+    const phone = (nc.phone || phoneGuess).trim()
+    if (!name) return setNcErr("Customer name is required.")
+    if (!phone) return setNcErr("Phone is required.")
+    if (!/^[0-9+\-\s]{6,20}$/.test(phone)) return setNcErr("Enter a valid phone number.")
+    setNcSaving(true); setNcErr("")
     try {
-      const r = await tailorApi.findCustomerByPhone(phoneSearch.trim())
-      const customer: TailorCustomer | null = r.data?.data ?? r.data ?? null
-      if (customer && customer.id) {
-        setFoundCustomer(customer)
-        setCustomerNotFound(false)
-        // Load measurements
-        tailorApi.getMeasurementsByCustomer(customer.id)
-          .then(mr => setMeasurements(mr.data?.data ?? mr.data ?? []))
-          .catch(() => {})
-      } else {
-        setCustomerNotFound(true)
-        setNewCustomerPhone(phoneSearch.trim())
-      }
-    } catch {
-      setCustomerNotFound(true)
-      setNewCustomerPhone(phoneSearch.trim())
+      const existing = await tailorApi.findCustomerByPhone(phone).then((r) => r.data?.data ?? null).catch(() => null)
+      if (existing) return setNcErr("A customer with this phone already exists. Search by phone to select them.")
+      const res = await tailorApi.saveCustomer({ name, phone, address: nc.addr.trim() || undefined })
+      const c = res.data?.data ?? res.data
+      pickCustomer({ id: c.id, companyId: c.company_id, name: c.name, phone: c.phone, address: c.address })
+      setNc({ name: "", phone: "", addr: "" }); setShowNew(false)
+      toast.success(`Customer ${c.name} added`)
+    } catch (e) {
+      setNcErr(apiError(e, "Failed to add customer"))
     } finally {
-      setSearchingPhone(false)
+      setNcSaving(false)
     }
   }
 
-  const useFoundCustomer = () => {
-    if (!foundCustomer) return
-    setSelectedCustomer(foundCustomer)
+  // garment list = known types + anything the shop has used before
+  const garmentList = useMemo(() => {
+    const extraTypes = (opts?.garments ?? []).map((g) => g.productType).filter((g) => !PRODUCT_TYPES.some((p) => same(p, g)))
+    return [...PRODUCT_TYPES, ...extraTypes]
+  }, [opts])
+  // learned-from-history values win; the reference defaults fill the gaps
+  const hint = (g: string) => {
+    const learned = opts?.garments.find((x) => same(x.productType, g))
+    const def = GARMENT_DEFAULTS.find((x) => same(x.name, g))
+    const price = learned?.lastPrice || def?.price || 0
+    const fabric = learned?.avgFabricEach || def?.fabric || 0
+    return price || fabric ? { productType: g, lastPrice: price, avgFabricEach: fabric } : undefined
   }
+  const suggest = (g: string, qty: number) => r2((hint(g)?.avgFabricEach ?? 0) * qty)
+  const autoMeas = (g: string) => custMeas.filter((m) => same(m.productType, g)).sort((a, b) => (a.measuredAt < b.measuredAt ? 1 : -1))[0]?.id
 
-  const updateItem = useCallback((idx: number, field: keyof OrderItem, value: string | number) => {
-    setItems(prev => {
-      const next = [...prev]
-      if (field === "fabricId") {
-        const fab = fabrics.find(f => String(f.id) === value)
-        next[idx] = {
-          ...next[idx],
-          fabricId: value as string,
-          fabricUnitPrice: fab ? fab.sellingPrice : next[idx].fabricUnitPrice,
-        }
-      } else {
-        next[idx] = { ...next[idx], [field]: value }
+  const setIt = (i: number, patch: Partial<Line>) => { setIts((p) => p.map((x, j) => (j === i ? { ...x, ...patch } : x))); setErr("") }
+
+  // totals
+  const calc = its.map((it) => {
+    const qty = Math.max(1, it.qty)
+    const f = !it.own && it.fabricId ? fabrics.find((x) => String(x.id) === it.fabricId) : undefined
+    const unitPrice = f ? (it.price !== undefined ? it.price : f.sellingPrice || f.purchasePrice) : 0
+    const fabCost = f ? r2(it.meters * unitPrice) : 0
+    return { qty, f, unitPrice, fabCost, stitch: qty * it.rate }
+  })
+  const stitch = calc.reduce((a, c) => a + c.stitch, 0)
+  const fab = calc.reduce((a, c) => a + c.fabCost, 0)
+  const urgFee = urgent ? opts?.urgentFee ?? 0 : 0
+  const subtotal = stitch + fab + urgFee + extra
+  const discount = Math.min(Math.max(0, disc), subtotal)
+  const total = r2(Math.max(0, subtotal - discount))
+  const advRaw = advManual !== undefined ? advManual : advMode === "half" ? Math.round(total / 2) : advMode === "full" ? total : 0
+  const adv = Math.min(Math.max(0, advRaw), total)
+  const due = r2(Math.max(0, total - adv))
+
+  const sameDay = opts?.dueByDate?.[date] ?? 0
+  const today = todayIso()
+  const loadHint = !date ? "Pick a delivery date." : date < orderDate ? "Delivery cannot be before the order date." : date < today ? "That date is in the past."
+    : sameDay ? `${sameDay} open order${sameDay > 1 ? "s" : ""} already due that day. Consider Urgent.` : "No other orders due that day."
+
+  const save = async () => {
+    if (saving) return
+    if (!cust) return setErr("Select a customer.")
+    for (let i = 0; i < its.length; i++) {
+      const it = its[i], c = calc[i]
+      if (it.rate < 0) return setErr(`Item ${i + 1}: stitching price cannot be negative.`)
+      if (!it.own) {
+        if (!c.f) return setErr(`Item ${i + 1}: choose a fabric or switch to customer’s fabric.`)
+        if (!(it.meters > 0)) return setErr(`Item ${i + 1}: enter fabric quantity.`)
       }
-      return next
-    })
-  }, [fabrics])
-
-  const addItem = () => {
-    setItems(prev => [...prev, emptyItem()])
-    setFabricSearch(prev => [...prev, ""])
-  }
-
-  const removeItem = (idx: number) => {
-    if (items.length === 1) return
-    setItems(prev => prev.filter((_, i) => i !== idx))
-    setFabricSearch(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const fabricTotal = items.reduce((sum, it) => sum + it.fabricQuantity * it.fabricUnitPrice, 0)
-  const grandTotal = fabricTotal + stitchingCharge + extraCharge - discount
-  const dueAfterAdvance = grandTotal - advancePayment
-
-  const handleSubmit = async () => {
-    const custName = selectedCustomer?.name || newCustomerName.trim()
-    const custPhone = selectedCustomer?.phone || newCustomerPhone.trim()
-    const custAddress = selectedCustomer?.address || newCustomerAddress.trim()
-
-    if (!custPhone) { toast.error("Customer phone required"); return }
-    if (!custName) { toast.error("Customer name required"); return }
-    if (items.some(it => !it.productType)) { toast.error("All items need a product type"); return }
-
-    setSubmitting(true)
+    }
+    if (!orderDate) return setErr("Pick the order date.")
+    if (orderDate > today) return setErr("Order date cannot be in the future.")
+    if (!date) return setErr("Pick a delivery date.")
+    if (date < orderDate) return setErr("Delivery date cannot be before the order date.")
+    if (date < today) return setErr("Delivery date cannot be in the past.")
+    if (!(total > 0)) return setErr("Order total must be greater than 0.")
+    if (advRaw > total + 0.005) return setErr("Advance cannot be more than the total.")
+    setSaving(true); setErr("")
     try {
-      const payload = {
-        customer_name: custName,
-        customer_phone: custPhone,
-        customer_address: custAddress,
-        order_date: orderDate,
-        delivery_date: deliveryDate || undefined,
-        stitching_charge: stitchingCharge,
-        extra_charge: extraCharge,
-        discount,
-        advance_payment: advancePayment,
-        advance_payment_method: advancePayment > 0 ? advancePaymentMethod : undefined,
-        notes: notes || undefined,
-        items: items.map(it => ({
-          product_type: it.productType,
-          fabric_id: it.fabricId && it.fabricId !== "none" ? Number(it.fabricId) : undefined,
-          fabric_quantity: it.fabricQuantity,
-          fabric_unit_price: it.fabricUnitPrice,
-          measurement_id: it.measurementId && it.measurementId !== "none" ? Number(it.measurementId) : undefined,
-          notes: it.notes || undefined,
-        })),
+      const created = await tailorOrdersApi.place({
+        customerId: cust.id, orderDate, deliveryDate: date, isUrgent: urgent, dorjiId: dz ?? undefined,
+        notes: orderNote.trim() || undefined, extraCharge: extra, discount, advancePayment: adv, advancePaymentMethod: method,
+        items: its.map((it, i) => {
+          const c = calc[i]
+          const measId = it.measId === undefined ? autoMeas(it.g) : it.measId
+          return {
+            productType: it.g, quantity: c.qty, stitchingPrice: it.rate, fabricSource: it.own ? "own" : "shop",
+            fabricId: c.f?.id, fabricQuantity: c.f ? it.meters : undefined, fabricUnitPrice: c.f ? c.unitPrice : undefined,
+            ownFabricNote: it.own ? it.ownNote.trim() || undefined : undefined,
+            measurementId: measId ? Number(measId) : undefined,
+            styleOptions: Object.keys(it.opts).filter((k) => it.opts[k]),
+            notes: it.note.trim() || undefined,
+          }
+        }),
+      })
+      toast.success(`Order ${created.order_number} created`)
+      if (printAfter) {
+        try { const d = await tailorOrdersApi.detail(created.id); if (!printJobCard(d)) toast.error("Allow pop-ups to print the job card.") } catch { /* printing is best-effort */ }
       }
-      const r = await tailorApi.createOrder(payload)
-      const created = r.data?.data ?? r.data
-      toast.success("Order created successfully")
-      if (created?.id) router.push(`/dashboard/tailor/orders/${created.id}`)
-      else router.push("/dashboard/tailor/orders")
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? "Failed to create order")
-    } finally {
-      setSubmitting(false)
+      router.push("/dashboard/tailor/orders")
+    } catch (e) {
+      setErr(apiError(e, "Failed to create order"))
+      setSaving(false)
     }
   }
 
-  const customerResolved = selectedCustomer !== null
-  const effectiveMeasurements = measurements
+  if (blocked) return blocked
+  if (!writable) return <div className="p-6 text-sm text-dash-muted">You do not have permission to create tailor orders.</div>
+
+  const garmentsSaved = Array.from(new Set(custMeas.map((m) => m.productType))).join(", ")
+  const phoneGuess = /^[0-9+\-\s]+$/.test(cq.trim()) ? cq.trim() : ""
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6 pb-16">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.push("/dashboard/tailor/orders")}
-          className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-black text-gray-900">New Tailor Order</h1>
-          <p className="text-sm text-gray-500">Fill in details below</p>
-        </div>
+    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+      <div>
+        <h1 className="font-dash-display text-[32px] font-bold tracking-tight">New tailor order</h1>
+        <p className="mt-1 text-sm text-dash-muted">Customer, garments, delivery — then take the advance.</p>
       </div>
 
-      {/* SECTION 1 — Customer */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <User className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Customer</h2>
-        </div>
-
-        {/* Phone search */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Label className="text-xs text-gray-500 mb-1 block">Search by phone</Label>
-            <Input
-              placeholder="Enter phone number..."
-              value={phoneSearch}
-              onChange={e => setPhoneSearch(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handlePhoneSearch()}
-            />
-          </div>
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-50"
-              onClick={handlePhoneSearch}
-              disabled={searchingPhone}
-            >
-              <Search className="w-4 h-4" />
-              {searchingPhone ? "Searching..." : "Search"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Found customer */}
-        {foundCustomer && !customerResolved && (
-          <div className="border border-green-200 bg-green-50 rounded-lg p-4 flex items-start justify-between gap-3">
-            <div className="space-y-0.5">
-              <p className="font-semibold text-gray-900">{foundCustomer.name}</p>
-              <p className="text-sm text-gray-500">{foundCustomer.phone}</p>
-              {foundCustomer.address && <p className="text-sm text-gray-500">{foundCustomer.address}</p>}
-            </div>
-            <Button
-              size="sm"
-              className="bg-purple-600 hover:bg-purple-700 shrink-0"
-              onClick={useFoundCustomer}
-            >
-              Use this customer
-            </Button>
-          </div>
-        )}
-
-        {/* Selected customer */}
-        {customerResolved && (
-          <div className="border border-purple-200 bg-purple-50 rounded-lg p-4 flex items-start justify-between gap-3">
-            <div className="space-y-0.5">
-              <Badge className="bg-purple-100 text-purple-700 mb-1">Selected</Badge>
-              <p className="font-semibold text-gray-900">{selectedCustomer.name}</p>
-              <p className="text-sm text-gray-500">{selectedCustomer.phone}</p>
-              {selectedCustomer.address && <p className="text-sm text-gray-500">{selectedCustomer.address}</p>}
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="shrink-0"
-              onClick={() => { setSelectedCustomer(null); setFoundCustomer(null); setCustomerNotFound(false) }}
-            >
-              Change
-            </Button>
-          </div>
-        )}
-
-        {/* New customer mini form */}
-        {customerNotFound && !customerResolved && (
-          <div className="border border-orange-200 bg-orange-50 rounded-lg p-4 space-y-3">
-            <p className="text-xs font-semibold text-orange-700">Customer not found — enter details to create</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Name *</Label>
-                <Input
-                  placeholder="Full name"
-                  value={newCustomerName}
-                  onChange={e => setNewCustomerName(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Phone *</Label>
-                <Input
-                  placeholder="Phone"
-                  value={newCustomerPhone}
-                  onChange={e => setNewCustomerPhone(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs text-gray-600 mb-1 block">Address</Label>
-              <Input
-                placeholder="Address (optional)"
-                value={newCustomerAddress}
-                onChange={e => setNewCustomerAddress(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Measurements */}
-        {customerResolved && effectiveMeasurements.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Ruler className="w-3.5 h-3.5" /> Existing Measurements
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {effectiveMeasurements.map(m => (
-                <div key={m.id} className="border rounded-lg p-3 bg-gray-50 text-xs space-y-0.5">
-                  <p className="font-semibold text-gray-800 capitalize">{m.productType?.replace(/_/g, " ")}</p>
-                  <p className="text-gray-400 text-[10px]">{new Date(m.measuredAt).toLocaleDateString()}</p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-gray-600 mt-1">
-                    {m.chest && <span>Chest: {m.chest}</span>}
-                    {m.waist && <span>Waist: {m.waist}</span>}
-                    {m.hip && <span>Hip: {m.hip}</span>}
-                    {m.shoulder && <span>Shoulder: {m.shoulder}</span>}
-                    {m.sleeve && <span>Sleeve: {m.sleeve}</span>}
-                    {m.length && <span>Length: {m.length}</span>}
-                    {m.neck && <span>Neck: {m.neck}</span>}
-                    {m.inseam && <span>Inseam: {m.inseam}</span>}
-                    {m.bottomLength && <span>Bottom L: {m.bottomLength}</span>}
-                    {m.pajamaWaist && <span>Paj. Waist: {m.pajamaWaist}</span>}
-                    {m.pajamaLength && <span>Paj. Length: {m.pajamaLength}</span>}
-                  </div>
-                  {m.notes && <p className="text-gray-400 italic mt-1">{m.notes}</p>}
+      <div className="grid items-start gap-5 lg:grid-cols-[1fr_340px]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {/* 1 · Customer */}
+          <section className={card}>
+            <h2 className={h2}><StepNo n={1} />Customer</h2>
+            {!cust && (
+              <>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+                    <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search</span>
+                    <input type="search" value={cq} onChange={(e) => setCq(e.target.value)} placeholder="Phone number or name"
+                      className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
+                  </label>
+                  <button type="button" onClick={() => setShowNew((v) => !v)} className="text-[13px] font-semibold text-dash-accent hover:underline">{showNew ? "Hide new customer" : "+ New customer"}</button>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* SECTION 2 — Order Items */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-purple-600" />
-            <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Order Items</h2>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50"
-            onClick={addItem}
-          >
-            <Plus className="w-3.5 h-3.5" /> Add Item
-          </Button>
-        </div>
-
-        {items.map((item, idx) => {
-          const filteredFabrics = fabrics.filter(f =>
-            !fabricSearch[idx] || f.name.toLowerCase().includes(fabricSearch[idx].toLowerCase())
-          )
-          const subtotal = item.fabricQuantity * item.fabricUnitPrice
-          const itemMeasurements = effectiveMeasurements.filter(
-            m => !item.productType || m.productType === item.productType
-          )
-
-          return (
-            <div key={idx} className="border rounded-lg p-4 space-y-3 bg-gray-50 relative">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-gray-500">Item {idx + 1}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-purple-700">{formatCurrency(subtotal)}</span>
-                  {items.length > 1 && (
-                    <button
-                      onClick={() => removeItem(idx)}
-                      className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Product Type *</Label>
-                  <Select value={item.productType} onValueChange={v => updateItem(idx, "productType", v)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select type..." /></SelectTrigger>
-                    <SelectContent>
-                      {PRODUCT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Measurement (optional)</Label>
-                  <Select
-                    value={item.measurementId}
-                    onValueChange={v => updateItem(idx, "measurementId", v)}
-                    disabled={!customerResolved}
-                  >
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {itemMeasurements.map(m => (
-                        <SelectItem key={m.id} value={String(m.id)}>
-                          {m.productType} — {new Date(m.measuredAt).toLocaleDateString()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Fabric</Label>
-                <Input
-                  placeholder="Search fabric..."
-                  value={fabricSearch[idx] ?? ""}
-                  onChange={e => setFabricSearch(prev => {
-                    const next = [...prev]
-                    next[idx] = e.target.value
-                    return next
-                  })}
-                  className="mb-1.5"
-                />
-                <Select value={item.fabricId} onValueChange={v => updateItem(idx, "fabricId", v)}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select fabric..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No fabric</SelectItem>
-                    {filteredFabrics.map(f => (
-                      <SelectItem key={f.id} value={String(f.id)}>
-                        {f.name} — stock: {f.stockQuantity} {f.unit}
-                      </SelectItem>
+                {results.length > 0 && (
+                  <div className="flex flex-col overflow-hidden rounded-xl border border-dash-border">
+                    {results.map((c) => (
+                      <button key={c.id} type="button" onClick={() => pickCustomer(c)} className="flex items-center gap-3 border-b border-dash-border-soft px-3 py-2.5 text-left last:border-0 hover:bg-dash-neutral-soft">
+                        <span className="flex size-8 items-center justify-center rounded-full bg-dash-accent-soft text-xs font-bold text-dash-accent-fg">{ini(c.name)}</span>
+                        <span className="flex-1 text-sm font-semibold">{c.name}</span>
+                        <span className="text-xs text-dash-muted">{c.phone}</span>
+                      </button>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Quantity</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.5"
-                    value={item.fabricQuantity}
-                    onChange={e => updateItem(idx, "fabricQuantity", parseFloat(e.target.value) || 0)}
-                  />
+                  </div>
+                )}
+                {(showNew || (searched && cq.trim() && results.length === 0)) && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-dashed border-dash-border bg-dash-bg p-4">
+                    <span className="text-[13px] font-semibold text-dash-muted">{showNew ? "New customer" : "No customer matches — add them now"}</span>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className={label}>Name *<input className={tInput} value={nc.name} onChange={(e) => { setNc({ ...nc, name: e.target.value }); setNcErr("") }} placeholder="Full name" /></label>
+                      <label className={label}>Phone *<input type="tel" className={tInput} value={nc.phone || phoneGuess} onChange={(e) => { setNc({ ...nc, phone: e.target.value }); setNcErr("") }} placeholder="01XXX-XXXXXX" /></label>
+                    </div>
+                    <label className={label}>Address<input className={tInput} value={nc.addr} onChange={(e) => setNc({ ...nc, addr: e.target.value })} placeholder="Optional" /></label>
+                    <span role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{ncErr}</span>
+                    <div><button type="button" disabled={ncSaving} onClick={saveNewCustomer} className={tPrimaryBtn}>{ncSaving ? "Saving…" : "Save & select customer"}</button></div>
+                  </div>
+                )}
+                {!cq.trim() && <span className="text-[13px] text-dash-muted">Search and select a customer to start the order.</span>}
+              </>
+            )}
+            {cust && (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dash-border bg-dash-bg px-3.5 py-3">
+                <span className="flex size-10 items-center justify-center rounded-full bg-dash-accent-soft text-sm font-bold text-dash-accent-fg">{ini(cust.name)}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold">{cust.name}{cust.phone ? ` · ${cust.phone}` : ""}</div>
+                  <div className="text-xs text-dash-muted">{custInfo ? `${custInfo.orders} tailor order${custInfo.orders === 1 ? "" : "s"} · ` : ""}saved measurements: {garmentsSaved || "none"}{custInfo ? ` · ${fc(custInfo.due)} due` : ""}</div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-600 mb-1 block">Unit Price</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={item.fabricUnitPrice}
-                    onChange={e => updateItem(idx, "fabricUnitPrice", parseFloat(e.target.value) || 0)}
-                  />
-                </div>
+                <button type="button" onClick={() => { setCust(null); setCustMeas([]); setCustInfo(null) }} className="text-[13px] font-semibold text-dash-accent hover:underline">Change</button>
+                <Link href="/dashboard/tailor/measurements" className="text-[13px] font-semibold text-dash-accent hover:underline">View measurements</Link>
               </div>
+            )}
+          </section>
 
-              <div>
-                <Label className="text-xs text-gray-600 mb-1 block">Item Notes</Label>
-                <Input
-                  placeholder="Optional notes for this item..."
-                  value={item.notes}
-                  onChange={e => updateItem(idx, "notes", e.target.value)}
-                />
+          {/* 2 · What to make */}
+          <section className={card}>
+            <h2 className={h2}><StepNo n={2} />What to make</h2>
+            {its.map((it, i) => {
+              const c = calc[i]
+              const measId = it.measId === undefined ? autoMeas(it.g) : it.measId
+              const meas = measId ? custMeas.find((m) => m.id === Number(measId)) : undefined
+              const short = c.f && it.meters > c.f.stockQuantity
+              const sug = suggest(it.g, c.qty)
+              const styleOpts = Object.entries(STYLE_OPTS).find(([k]) => same(k, it.g))?.[1] ?? []
+              return (
+                <article key={i} className="flex flex-col gap-4 rounded-xl border border-dash-border bg-dash-bg p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold">Item {i + 1} · {it.g}</span>
+                    <span className="flex items-center gap-3">
+                      {its.length > 1 && <button type="button" onClick={() => setIts((p) => p.filter((_, j) => j !== i))} className="text-[13px] font-semibold text-dash-danger-fg hover:underline">Remove</button>}
+                      <span className="font-bold tabular-nums">{fc(c.stitch + c.fabCost)}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className={caption}>Garment</span>
+                    <div className="flex flex-wrap gap-2">
+                      {garmentList.map((g) => {
+                        const on = same(it.g, g)
+                        const rate = hint(g)?.lastPrice
+                        return (
+                          <button key={g} type="button" aria-pressed={on} className={chip(on)}
+                            onClick={() => setIt(i, { g, opts: {}, rate: rate ?? 0, measId: undefined, meters: it.own ? 0 : suggest(g, c.qty) })}>
+                            <span className="block">{g}</span>{rate ? <span className="block text-[11px] font-normal opacity-70">{fc(rate)}</span> : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className={caption}>Measurement</span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <select aria-label="Measurement profile" className={cn(tInput, "w-auto min-w-[220px]")} value={measId ?? ""} onChange={(e) => setIt(i, { measId: e.target.value })}>
+                        <option value="">{custMeas.length ? "No measurement" : "No saved measurements"}</option>
+                        {custMeas.map((m) => <option key={m.id} value={m.id}>{m.productType} · {new Date(m.measuredAt).toLocaleDateString()}</option>)}
+                      </select>
+                      <span className="min-w-0 flex-1 text-xs text-dash-muted">{meas ? measurementText(meas) : cust ? "No measurement selected" : "Pick a customer first"}</span>
+                      <Link href="/dashboard/tailor/measurements" className="text-[13px] font-semibold text-dash-accent hover:underline">Change / new</Link>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <span className={caption}>Fabric</span>
+                    <div role="radiogroup" aria-label="Fabric source" className="inline-flex w-fit rounded-[10px] bg-dash-neutral-soft p-1">
+                      {([[true, "Customer’s fabric"], [false, "From shop stock"]] as const).map(([own, l]) => (
+                        <button key={l} type="button" role="radio" aria-checked={it.own === own}
+                          onClick={() => setIt(i, { own, meters: own ? 0 : suggest(it.g, c.qty), fabricId: own ? "" : it.fabricId })}
+                          className={cn("rounded-lg px-3 py-1.5 text-[13px] font-semibold", it.own === own ? "bg-dash-card shadow-sm" : "text-dash-muted")}>{l}</button>
+                      ))}
+                    </div>
+                    {!it.own && (
+                      <div className="flex flex-col gap-2.5">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <select aria-label="Fabric" className={cn(tInput, "min-w-[260px] flex-1")} value={it.fabricId}
+                            onChange={(e) => setIt(i, { fabricId: e.target.value, price: undefined, meters: it.meters || suggest(it.g, c.qty) })}>
+                            <option value="">{fabrics.length ? "Choose fabric…" : "No fabrics in stock list"}</option>
+                            {fabrics.map((f) => <option key={f.id} value={f.id}>{f.name}{f.color ? ` · ${f.color}` : ""} — {fc(f.sellingPrice)}/{f.unit} · {f.stockQuantity} {f.unit} left</option>)}
+                          </select>
+                          <span className="flex items-center gap-2 text-sm">
+                            <span className="flex">
+                              <button type="button" aria-label="Decrease quantity" className={cn(stepper, "rounded-l-lg")} onClick={() => setIt(i, { meters: Math.max(0.5, r2(it.meters - 0.5)) })}>−</button>
+                              <span className="flex h-9 min-w-12 items-center justify-center border-y border-dash-border bg-dash-card px-2 tabular-nums">{it.meters}</span>
+                              <button type="button" aria-label="Increase quantity" className={cn(stepper, "rounded-r-lg")} onClick={() => setIt(i, { meters: r2(it.meters + 0.5) })}>+</button>
+                            </span>
+                            {c.f?.unit ?? "m"}
+                          </span>
+                        </div>
+                        {c.f && (
+                          <label className={cn(label, "max-w-[220px]")}>Fabric price / {c.f.unit}
+                            <input type="number" min={0} className={tInput} aria-label="Fabric price per unit" value={c.unitPrice} onChange={(e) => setIt(i, { price: Math.max(0, num(e.target.value)) })} />
+                          </label>
+                        )}
+                        <span className="text-xs text-dash-muted">
+                          {sug > 0 ? `Suggested ${sug} ${c.f?.unit ?? ""} for ${c.qty} ${it.g} (from past orders)` : ""}
+                          {c.f ? ` ${sug > 0 ? "· " : ""}${fc(c.fabCost)} fabric${short ? ` · only ${c.f.stockQuantity} ${c.f.unit} in stock (cutting will be blocked until restocked)` : ""}` : ""}
+                        </span>
+                      </div>
+                    )}
+                    {it.own && <input className={tInput} value={it.ownNote} onChange={(e) => setIt(i, { ownNote: e.target.value })} placeholder="Describe the customer’s fabric, e.g. 2.5 m red georgette" />}
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-[auto_180px_1fr]">
+                    <div className="flex flex-col gap-1.5">
+                      <span className={caption}>Quantity</span>
+                      <span className="flex">
+                        <button type="button" aria-label="Decrease quantity" className={cn(stepper, "rounded-l-lg")}
+                          onClick={() => setIt(i, { qty: Math.max(1, c.qty - 1), meters: !it.own && it.meters === suggest(it.g, c.qty) ? suggest(it.g, Math.max(1, c.qty - 1)) : it.meters })}>−</button>
+                        <span className="flex h-9 min-w-12 items-center justify-center border-y border-dash-border bg-dash-card px-2 tabular-nums">{c.qty}</span>
+                        <button type="button" aria-label="Increase quantity" className={cn(stepper, "rounded-r-lg")}
+                          onClick={() => setIt(i, { qty: c.qty + 1, meters: !it.own && it.meters === suggest(it.g, c.qty) ? suggest(it.g, c.qty + 1) : it.meters })}>+</button>
+                      </span>
+                    </div>
+                    <label className={label}>Stitching (each)<input type="number" min={0} className={tInput} value={it.rate} onChange={(e) => setIt(i, { rate: Math.max(0, num(e.target.value)) })} /></label>
+                    {styleOpts.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className={caption}>Style options</span>
+                        <div role="group" aria-label="Style options" className="flex flex-wrap gap-1.5">
+                          {styleOpts.map((o) => {
+                            const on = !!it.opts[o]
+                            return <button key={o} type="button" aria-pressed={on} onClick={() => setIt(i, { opts: { ...it.opts, [o]: !on } })}
+                              className={cn("h-8 rounded-full border px-3 text-xs font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{on ? "✓ " : ""}{o}</button>
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <label className={label}>Note for dorji<input className={tInput} value={it.note} onChange={(e) => setIt(i, { note: e.target.value })} placeholder="e.g. Boat neck, back zip, no lining" /></label>
+                </article>
+              )
+            })}
+            <button type="button" onClick={() => setIts((p) => [...p, blank()])} className={cn(tOutlineBtn, "w-fit")}>+ Add another garment</button>
+          </section>
+
+          {/* 3 · Delivery & dorji */}
+          <section className={card}>
+            <h2 className={h2}><StepNo n={3} />Delivery &amp; dorji</h2>
+            <label className={cn(label, "max-w-[220px]")}>Order date<input type="date" max={today} className={tInput} value={orderDate} onChange={(e) => { setOrderDate(e.target.value); setErr("") }} /></label>
+            <div className="flex flex-col gap-1.5">
+              <span className={caption}>Delivery date</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div role="group" aria-label="Delivery date" className="flex flex-wrap gap-1.5">
+                  {[3, 5, 7, 10].map((n) => {
+                    const v = addDays(n), on = date === v
+                    return <button key={n} type="button" aria-pressed={on} onClick={() => { setDate(v); setErr("") }}
+                      className={cn("h-9 rounded-[10px] border px-3 text-[13px] font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>+{n} days</button>
+                  })}
+                </div>
+                <input type="date" aria-label="Delivery date" className={cn(tInput, "w-auto")} value={date} onChange={(e) => { setDate(e.target.value); setErr("") }} />
+              </div>
+              <span className="text-xs text-dash-muted">{loadHint}</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className={caption}>Urgency</span>
+              <div role="radiogroup" aria-label="Urgency" className="flex flex-wrap gap-2">
+                <button type="button" role="radio" aria-checked={!urgent} onClick={() => setUrgent(false)} className={chip(!urgent)}>Normal</button>
+                <button type="button" role="radio" aria-checked={urgent} onClick={() => setUrgent(true)} className={chip(urgent)}>
+                  Urgent<span className="block text-[11px] font-normal opacity-70">+{fc(opts?.urgentFee ?? 0)} · jumps the queue</span>
+                </button>
               </div>
             </div>
-          )
-        })}
-      </Card>
-
-      {/* SECTION 3 — Charges & Dates */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <ChevronRight className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Charges & Dates</h2>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Order Date</Label>
-            <Input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
-          </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Delivery Date</Label>
-            <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Stitching Charge</Label>
-            <Input
-              type="number"
-              min={0}
-              value={stitchingCharge}
-              onChange={e => setStitchingCharge(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Extra Charge</Label>
-            <Input
-              type="number"
-              min={0}
-              value={extraCharge}
-              onChange={e => setExtraCharge(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Discount</Label>
-            <Input
-              type="number"
-              min={0}
-              value={discount}
-              onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
-            />
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <span className={caption}>Assign to dorji (optional)</span>
+              <div className="flex flex-wrap gap-2">
+                {(opts?.dorjis ?? []).map((d) => {
+                  const on = dz === d.id
+                  return (
+                    <button key={d.id} type="button" aria-pressed={on} onClick={() => setDz(on ? null : d.id)} className={chip(on)}>
+                      <span className="block">{d.name}</span>
+                      <span className={cn("block text-[11px] font-normal", d.open >= 6 ? "text-dash-danger" : "text-dash-success-fg")}>{d.open} open order{d.open === 1 ? "" : "s"}{d.speciality.length ? ` · ${d.speciality.join(", ")}` : ""}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {opts && opts.dorjis.length === 0 && <span className="text-xs text-dash-muted">No active dorjis yet. Add them under Dorjis, or leave unassigned.</span>}
+            </div>
+            <label className={label}>Order notes
+              <textarea rows={2} className={cn(tInput, "h-auto py-2.5")} value={orderNote} onChange={(e) => setOrderNote(e.target.value)} placeholder="Anything the shop should remember about this order" />
+            </label>
+          </section>
         </div>
 
         {/* Order summary */}
-        <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Fabric Total</span>
-            <span>{formatCurrency(fabricTotal)}</span>
+        <aside className="flex flex-col gap-4 rounded-[14px] border border-dash-border bg-dash-card p-5 lg:sticky lg:top-4">
+          <h2 className="font-dash-display text-lg font-bold">Order summary</h2>
+          <div className="flex flex-col gap-2 text-[13px]">
+            <Row l="Stitching" v={fc(stitch)} />
+            <Row l="Fabric" v={fc(fab)} />
+            <Row l="Urgent charge" v={fc(urgFee)} />
+            <div className="flex items-center justify-between gap-3"><label htmlFor="t-extra" className="text-dash-muted">Extra charge</label>
+              <input id="t-extra" type="number" min={0} className={cn(tInput, "h-9 w-28 text-right")} value={extra} onChange={(e) => setExtra(Math.max(0, num(e.target.value)))} /></div>
+            <div className="flex items-center justify-between gap-3"><label htmlFor="t-disc" className="text-dash-muted">Discount</label>
+              <input id="t-disc" type="number" min={0} className={cn(tInput, "h-9 w-28 text-right")} value={disc} onChange={(e) => setDisc(Math.max(0, num(e.target.value)))} /></div>
+            <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
+              <span className="font-bold">Total</span><span className="font-dash-display text-2xl font-bold tabular-nums">{fc(total)}</span>
+            </div>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Stitching</span>
-            <span>+ {formatCurrency(stitchingCharge)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Extra</span>
-            <span>+ {formatCurrency(extraCharge)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Discount</span>
-            <span>− {formatCurrency(discount)}</span>
-          </div>
-          <div className="flex justify-between font-bold text-gray-900 border-t pt-2 mt-1">
-            <span>Grand Total</span>
-            <span className="text-purple-700">{formatCurrency(grandTotal)}</span>
-          </div>
-        </div>
-      </Card>
 
-      {/* SECTION 4 — Advance Payment */}
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <ChevronRight className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Advance Payment</h2>
-          <Badge className="bg-gray-100 text-gray-500 text-xs">optional</Badge>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Advance Amount</Label>
-            <Input
-              type="number"
-              min={0}
-              value={advancePayment}
-              onChange={e => setAdvancePayment(parseFloat(e.target.value) || 0)}
-            />
+          <div className="flex flex-col gap-2">
+            <span className={caption}>Advance</span>
+            <div role="group" aria-label="Advance" className="flex gap-1.5">
+              {([["none", "None"], ["half", "50%"], ["full", "Full"]] as const).map(([id, l]) => {
+                const on = advMode === id && advManual === undefined
+                return <button key={id} type="button" aria-pressed={on} onClick={() => { setAdvMode(id); setAdvManual(undefined); setErr("") }}
+                  className={cn("h-9 flex-1 rounded-[10px] border text-[13px] font-semibold", on ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{l}</button>
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="number" min={0} aria-label="Advance amount" className={tInput} value={adv} onChange={(e) => { setAdvManual(Math.max(0, num(e.target.value))); setErr("") }} />
+              <select aria-label="Method" className={tInput} value={method} onChange={(e) => setMethod(e.target.value)}>{TAILOR_PAY_METHODS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+            </div>
           </div>
-          <div>
-            <Label className="text-xs text-gray-600 mb-1 block">Payment Method</Label>
-            <Select value={advancePaymentMethod} onValueChange={setAdvancePaymentMethod}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Cash">Cash</SelectItem>
-                <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                <SelectItem value="Mobile Banking">Mobile Banking</SelectItem>
-                <SelectItem value="Card">Card</SelectItem>
-              </SelectContent>
-            </Select>
+
+          <div className={cn("flex items-center justify-between rounded-[10px] px-3.5 py-2.5 text-sm font-semibold", due ? "bg-dash-warn-soft text-dash-warn-fg" : "bg-dash-success-soft text-dash-success-fg")}>
+            <span>Due on delivery</span><span className="tabular-nums">{fc(due)}</span>
           </div>
-        </div>
-
-        <div className="flex justify-between text-sm font-semibold bg-red-50 rounded-lg p-3">
-          <span className="text-gray-700">Due after advance</span>
-          <span className={dueAfterAdvance > 0 ? "text-red-600" : "text-green-600"}>
-            {formatCurrency(Math.max(0, dueAfterAdvance))}
-          </span>
-        </div>
-      </Card>
-
-      {/* SECTION 5 — Notes */}
-      <Card className="p-5 space-y-3">
-        <div className="flex items-center gap-2 mb-1">
-          <ChevronRight className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Notes</h2>
-          <Badge className="bg-gray-100 text-gray-500 text-xs">optional</Badge>
-        </div>
-        <textarea
-          placeholder="Order-level notes..."
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          rows={3}
-          className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
-        />
-      </Card>
-
-      {/* Submit */}
-      <div className="flex items-center justify-between pt-2">
-        <Button
-          variant="outline"
-          onClick={() => router.push("/dashboard/tailor/orders")}
-          disabled={submitting}
-        >
-          Cancel
-        </Button>
-        <Button
-          className="bg-purple-600 hover:bg-purple-700 min-w-36 gap-2"
-          onClick={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? "Creating..." : "Create Order"}
-        </Button>
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" className="size-4" checked={printAfter} onChange={() => setPrintAfter((v) => !v)} />Print job card after saving</label>
+          {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+          <div className="flex gap-2">
+            <Link href="/dashboard/tailor/orders" className={cn(tOutlineBtn, "flex-1")}>Cancel</Link>
+            <button type="button" disabled={saving} onClick={save} className={cn(tPrimaryBtn, "flex-1")}>{saving ? "Creating…" : "Create order"}</button>
+          </div>
+        </aside>
       </div>
     </div>
   )
+}
+
+function StepNo({ n }: { n: number }) {
+  return <span className="flex size-7 items-center justify-center rounded-full bg-dash-accent-soft text-[13px] font-bold text-dash-accent-fg">{n}</span>
+}
+
+function Row({ l, v }: { l: string; v: string }) {
+  return <div className="flex justify-between"><span className="text-dash-muted">{l}</span><span className="font-semibold tabular-nums">{v}</span></div>
 }

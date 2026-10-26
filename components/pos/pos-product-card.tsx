@@ -1,83 +1,125 @@
 "use client"
 
-import { Plus } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import { useState } from "react"
+import { Package } from "lucide-react"
 import type { Product } from "@/contexts/product-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
+import { cn } from "@/lib/utils"
+
+export interface PosTint {
+    bg: string
+    fg: string
+}
 
 interface PosProductCardProps {
     product: Product
+    /** Units still available to add (stock minus what is already in the cart) */
+    available: number
+    inCartQty: number
+    tint: PosTint
     onAddToCart: (product: Product) => void
-    large?: boolean
+    compact?: boolean
+    /** Low-stock threshold (product reorder point, 5 when unset) */
+    lowAt?: number
 }
 
-export function PosProductCard({ product, onAddToCart, large }: PosProductCardProps) {
+const applyOffer = (base: number, offer?: number | null, type?: string | null) => {
+    if (!offer) return base
+    return Math.max(0, type === "percentage" ? base * (1 - offer / 100) : base - offer)
+}
+
+export function productUnitPrice(product: Product): number {
+    return applyOffer(product.salePrice || product.price || 0, product.offerPrice, product.offerType)
+}
+
+/** Price of one variant (variant offer first, then the product's). */
+export function variantUnitPrice(product: Product, v: NonNullable<Product["variants"]>[number]): number {
+    const base = v.salePrice || v.price || product.salePrice || product.price || 0
+    return applyOffer(base, v.offerPrice ?? product.offerPrice, v.offerType ?? product.offerType)
+}
+
+/** Lowest price shown on the card; products with variants read "From ৳X". */
+export function cardPrice(product: Product): { price: number; from: boolean } {
+    const vs = product.variants ?? []
+    if (vs.length === 0) return { price: productUnitPrice(product), from: false }
+    const prices = vs.map((v) => variantUnitPrice(product, v))
+    return { price: Math.min(...prices), from: vs.length > 1 }
+}
+
+export function stockPill(available: number, lowAt = 5) {
+    if (available <= 0) return { text: "Out of stock", short: "Out", cls: "bg-dash-danger-soft text-dash-danger-fg" }
+    if (available <= lowAt) return { text: `Only ${available} left`, short: `${available} left`, cls: "bg-dash-warn-soft text-dash-warn-fg" }
+    return { text: `${available} in stock`, short: `${available} left`, cls: "bg-dash-neutral-soft text-dash-neutral-fg" }
+}
+
+export function PosProductCard({ product, available, inCartQty, tint, onAddToCart, compact, lowAt }: PosProductCardProps) {
     const { formatCurrency } = useCompanySettings()
-    const isOutOfStock = product.stock <= 0
+    const [imgFailed, setImgFailed] = useState(false)
+    const out = available <= 0
+    const pill = stockPill(available, lowAt)
+    const cp = cardPrice(product)
+    const price = `${cp.from ? "From " : ""}${formatCurrency(cp.price)}`
+    const original = product.salePrice || product.price || 0
+    const offerNote = !(product.variants?.length) && cp.price < original - 0.005 ? `Offer · was ${formatCurrency(original)}` : ""
+    const hasImage = !!product.image && product.image !== "/placeholder.svg" && !imgFailed
 
     return (
-        <Card
-            className={`overflow-hidden cursor-pointer group transition-all duration-200 h-full flex flex-col rounded-2xl border-border bg-card hover:-translate-y-1 hover:shadow-xl hover:border-brand/50 ${isOutOfStock ? 'opacity-75' : ''}`}
-            onClick={() => !isOutOfStock && onAddToCart(product)}
+        <button
+            type="button"
+            onClick={() => !out && onAddToCart(product)}
+            disabled={out}
+            aria-label={`Add ${product.name}, ${price}`}
+            className={cn(
+                "relative flex flex-col text-left font-dash-body text-dash-ink transition-colors",
+                compact ? "min-h-[88px] justify-between gap-1.5 rounded-xl px-3 py-2.5" : "gap-2.5 rounded-[14px] p-2.5",
+                inCartQty > 0 ? "border-2 border-dash-accent" : "border border-dash-border hover:border-dash-accent/50",
+                out ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+            )}
+            style={{ background: compact && !out ? tint.bg : "var(--dash-card)" }}
         >
-            <div
-                className={`relative w-full overflow-hidden bg-gradient-to-b from-muted/80 to-card ${large ? 'h-[160px]' : 'h-[92px]'}`}
-            >
-                {/* Soft radial glow behind the product (mockup) */}
-                <div
-                    className="pointer-events-none absolute inset-x-0 top-0 h-2/3 opacity-70"
-                    style={{ background: "radial-gradient(120px 90px at 50% 38%, var(--brand-soft), transparent 70%)" }}
-                    aria-hidden
-                />
-                <img
-                    src={product.image || "/placeholder.svg"}
-                    alt={product.name}
-                    className={`relative w-full h-full object-contain ${large ? 'p-3' : 'p-2'} drop-shadow-md transition-transform duration-300 group-hover:scale-110 ${isOutOfStock ? 'grayscale' : ''}`}
-                />
-                {/* Stock pill (mockup) */}
-                {!isOutOfStock && (
-                    <span className={`absolute top-2 left-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
-                        product.stock <= 10
-                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                            : 'bg-money-soft text-money-fg'
-                    }`}>
-                        <span className={`size-1.5 rounded-full ${product.stock <= 10 ? 'bg-amber-500' : 'bg-money'}`} />
-                        {product.stock <= 10 ? `Low · ${product.stock}` : `In stock · ${product.stock}`}
+            {compact ? (
+                <>
+                    <span className="pr-6 text-[13px] font-semibold leading-snug">{product.name}</span>
+                    <span className="flex items-baseline justify-between gap-2">
+                        <span className="text-[15px] font-bold tabular-nums">{price}</span>
+                        <span className={cn("text-[11px] font-semibold", pill.cls.split(" ")[1])}>{pill.short}</span>
                     </span>
-                )}
-                {/* Category tag (mockup) */}
-                {product.category && (
-                    <span className="absolute top-2 right-2 rounded-full bg-background/60 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {product.category}
+                </>
+            ) : (
+                <>
+                    <span
+                        className="flex h-24 items-center justify-center overflow-hidden rounded-[10px]"
+                        style={{ background: tint.bg, color: tint.fg }}
+                    >
+                        {hasImage ? (
+                            <img
+                                src={product.image}
+                                alt=""
+                                className="h-full w-full object-contain p-2"
+                                onError={() => setImgFailed(true)}
+                            />
+                        ) : (
+                            <Package className="size-8" strokeWidth={1.6} aria-hidden />
+                        )}
                     </span>
-                )}
-                {isOutOfStock && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
-                        <span className="bg-background/90 text-foreground text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded shadow-sm">
-                            Out of Stock
+                    <span className="flex flex-col gap-0.5">
+                        <span className="line-clamp-2 text-sm font-semibold leading-snug">{product.name}</span>
+                        <span className="text-xs text-dash-muted">{product.sku || "—"}</span>
+                    </span>
+                    <span className="flex items-center justify-between gap-1.5">
+                        <span className="flex flex-col">
+                            <span className="font-dash-display text-[17px] font-bold tabular-nums">{price}</span>
+                            {offerNote && <span className="text-[11px] font-semibold text-dash-success-fg">{offerNote}</span>}
                         </span>
-                    </div>
-                )}
-            </div>
-            <div className={`flex flex-col flex-1 gap-1 ${large ? 'p-3' : 'p-2'}`}>
-                <h3 className={`font-medium text-foreground leading-snug line-clamp-2 ${large ? 'text-sm' : 'text-xs'}`} title={product.name}>
-                    {product.name}
-                </h3>
-                {product.sku && (
-                    <p className="text-[11px] text-muted-foreground -mt-0.5">SKU · {product.sku}</p>
-                )}
-                <div className="mt-auto pt-1.5">
-                    <div className="flex items-center justify-between">
-                        <p className={`font-bold text-money-fg ${large ? 'text-base' : 'text-sm'}`}>
-                            {formatCurrency(product.salePrice || product.price || 0)}
-                            <span className="text-[11px] font-normal text-muted-foreground"> /unit</span>
-                        </p>
-                        <div className={`${large ? 'size-9' : 'size-7'} rounded-lg bg-brand text-brand-foreground flex items-center justify-center shadow-sm shadow-brand/30 transition-transform group-hover:scale-110 active:scale-90`}>
-                            <Plus className={large ? 'size-[18px]' : 'size-4'} />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </Card>
+                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", pill.cls)}>{pill.text}</span>
+                    </span>
+                </>
+            )}
+            {inCartQty > 0 && (
+                <span className="absolute right-2 top-2 flex h-[26px] min-w-[26px] items-center justify-center rounded-full bg-dash-accent px-1.5 text-xs font-bold text-white">
+                    ×{inCartQty}
+                </span>
+            )}
+        </button>
     )
 }

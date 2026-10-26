@@ -47,7 +47,7 @@ export function BarcodeScanner({
     let foundVariant: Variant | null = null
 
     // First, search by product barcode
-    foundProduct = products.find(p => p.barcode === value)
+    foundProduct = products.find(p => p.barcode === value) ?? null
 
     // If not found, search by variant barcode
     if (!foundProduct) {

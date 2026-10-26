@@ -35,7 +35,8 @@ api.interceptors.response.use(
   }
 )
 
-export type PageTemplate = 'about' | 'faq' | 'policy'
+export type PageTemplate = 'about' | 'faq' | 'policy' | 'custom'
+export type PagePlace = 'footer' | 'header' | 'checkout' | 'none'
 
 export interface PageSeo {
   title?: string
@@ -106,13 +107,22 @@ export interface PolicyPageContent {
   seo?: PageSeo
 }
 
-export type PageContent = AboutPageContent | FaqPageContent | PolicyPageContent
+export interface CustomPageContent {
+  template: 'custom'
+  hero: PageHeroContent
+  seo?: PageSeo
+}
+
+export type PageContent = AboutPageContent | FaqPageContent | PolicyPageContent | CustomPageContent
 
 export interface ContentPage {
   id: number
   title: string
   slug: string
   summary: string | null
+  type?: PageTemplate
+  place?: PagePlace
+  body?: string | null
   isPublished: boolean
   publishedAt: string | null
   createdAt: string
@@ -124,6 +134,9 @@ export interface ContentPagePayload {
   title: string
   slug: string
   summary?: string
+  type?: PageTemplate
+  place?: PagePlace
+  body?: string
   isPublished?: boolean
   content: PageContent
 }
@@ -141,6 +154,9 @@ const serializePayload = (data: Partial<ContentPagePayload>) => {
   if (data.title !== undefined) payload.title = data.title
   if (data.slug !== undefined) payload.slug = data.slug
   if (data.summary !== undefined) payload.summary = data.summary
+  if (data.type !== undefined) payload.type = data.type
+  if (data.place !== undefined) payload.place = data.place
+  if (data.body !== undefined) payload.body = data.body
   if (data.content !== undefined) payload.content = data.content
   if (data.isPublished !== undefined) payload.is_published = data.isPublished
 

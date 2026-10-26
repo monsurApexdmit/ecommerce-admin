@@ -61,6 +61,36 @@ export interface NotificationListResponse {
     currentPage: number;
     lastPage: number;
     unreadCount: number;
+    counts?: Record<'all' | NotificationType, number>;
+  };
+}
+
+export type AlertKind = 'out_of_stock' | 'low_stock' | 'pending_order' | 'customer_overdue' | 'po_overdue';
+
+export interface LiveAlert {
+  key: string;
+  kind: AlertKind;
+  priority: NotificationPriority;
+  title: string;
+  message: string;
+  actionUrl: string;
+  ctaLabel: string;
+  since: string | null;
+}
+
+export interface LiveAlertsResult {
+  alerts: LiveAlert[];
+  total: number;
+  counts: Partial<Record<AlertKind, number>>;
+  dismissedCount: number;
+  attention: {
+    customerDue: number;
+    customerDueInvoices: number;
+    vendorDue: number;
+    vendorDueOrders: number;
+    salariesUnpaid: number;
+    salaryMonth: string;
+    pendingOrders: number;
   };
 }
 
@@ -75,9 +105,23 @@ export const notificationApi = {
     limit?: number;
     type?: string;
     status?: 'read' | 'unread';
+    sort?: 'newest' | 'oldest';
   }): Promise<NotificationListResponse> => {
     const response = await api.get('/notifications', { params });
     return response.data;
+  },
+
+  getAlerts: async (): Promise<LiveAlertsResult> => {
+    const response = await api.get('/notifications/alerts');
+    return response.data.data;
+  },
+
+  dismissAlert: async (key: string): Promise<void> => {
+    await api.post('/notifications/alerts/dismiss', { key });
+  },
+
+  restoreAlerts: async (key?: string): Promise<void> => {
+    await api.post('/notifications/alerts/restore', key ? { key } : {});
   },
 
   getUnreadCount: async (): Promise<UnreadCountResponse> => {
@@ -102,6 +146,11 @@ export const notificationApi = {
 
   delete: async (id: number): Promise<{ message: string }> => {
     const response = await api.delete(`/notifications/${id}`);
+    return response.data;
+  },
+
+  deleteAll: async (): Promise<{ message: string }> => {
+    const response = await api.delete('/notifications/bulk', { data: { all: true } });
     return response.data;
   },
 

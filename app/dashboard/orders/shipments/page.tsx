@@ -1,796 +1,509 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { Textarea } from "@/components/ui/textarea"
-import { Skeleton } from "@/components/ui/skeleton"
-import { PaginationControl } from "@/components/ui/pagination-control"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
-  Search, Plus, Trash2, Edit, Eye, Package, Truck,
-  CheckCircle, XCircle, Clock, MapPin, Calendar,
+  Banknote, CheckCircle2, Clock, Download, MapPin, MoreHorizontal, Package, Plus, Printer, Search, Truck, X, XCircle,
 } from "lucide-react"
-import { shipmentsApi, ShipmentResponse, ShipmentStatus, CreateShipmentData } from "@/lib/shipmentsApi"
-import { sellsApi, SellResponse } from "@/lib/sellsApi"
+import { Skeleton } from "@/components/ui/skeleton"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { StatsCards } from "@/components/ui/stats-card"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { COURIERS, CreateShipmentModal, courierStyle } from "@/components/shipments/create-shipment-modal"
+import { shipmentsApi, type ShipmentResponse, type ShipmentStatus } from "@/lib/shipmentsApi"
+import { printShippingLabel, printShippingLabels } from "@/lib/shipping-label"
+import { ShipmentDetailDialog, type StatusPayload } from "@/components/shipments/shipment-detail-dialog"
+import { NEXT_STEP_LABEL, STATUS_LABEL, STATUS_STYLE, codView, nextStep, shortDate, validNextStatuses } from "@/components/shipments/shipment-utils"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
-// Ordered progression — status can only move forward
-const STATUS_ORDER: ShipmentStatus[] = [
-  'pending',
-  'picked_up',
-  'in_transit',
-  'out_for_delivery',
-  'delivered',
-  'failed',
-  'returned',
-]
+type Tab = "all" | "pending" | "picked_up" | "in_transit" | "delivered" | "failed"
 
-const STATUS_LABELS: Record<ShipmentStatus, string> = {
-  pending: 'Pending',
-  picked_up: 'Picked Up',
-  in_transit: 'In Transit',
-  out_for_delivery: 'Out for Delivery',
-  delivered: 'Delivered',
-  failed: 'Failed',
-  returned: 'Returned',
+/** Tab → API status filter (comma-separated groups are supported by the backend). */
+const TAB_STATUS: Record<Tab, string | undefined> = {
+  all: undefined,
+  pending: "pending",
+  picked_up: "picked_up",
+  in_transit: "in_transit,out_for_delivery",
+  delivered: "delivered",
+  failed: "failed,returned",
 }
 
-function allowedNextStatuses(current: ShipmentStatus): ShipmentStatus[] {
-  const idx = STATUS_ORDER.indexOf(current)
-  // Only statuses from current index onward (no going back)
-  return STATUS_ORDER.slice(idx)
+/** How many of the 4 progress segments are filled: Booked, Picked up, In transit, Delivered */
+const STEP: Record<ShipmentStatus, number> = {
+  pending: 1, picked_up: 2, in_transit: 3, out_for_delivery: 3, delivered: 4, failed: 3, returned: 3,
 }
 
-const STATUS_CONFIG: Record<ShipmentStatus, { color: string; icon: React.ElementType }> = {
-  pending:           { color: "bg-gray-100 text-gray-700",    icon: Clock },
-  picked_up:         { color: "bg-blue-100 text-blue-700",    icon: Package },
-  in_transit:        { color: "bg-amber-100 text-amber-700",  icon: Truck },
-  out_for_delivery:  { color: "bg-purple-100 text-purple-700",icon: Truck },
-  delivered:         { color: "bg-emerald-100 text-emerald-700", icon: CheckCircle },
-  failed:            { color: "bg-red-100 text-red-700",      icon: XCircle },
-  returned:          { color: "bg-orange-100 text-orange-700",icon: Package },
-}
+const iconBtn =
+  "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
+const filterSelect = "h-11 rounded-[10px] border-dash-border bg-dash-card text-[13px] font-semibold"
 
-function StatusBadge({ status }: { status: ShipmentStatus }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending
-  const Icon = cfg.icon
-  return (
-    <Badge className={`${cfg.color} hover:${cfg.color} flex items-center gap-1 w-fit`}>
-      <Icon className="h-3 w-3" />
-      <span className="capitalize">{status.replace(/_/g, " ")}</span>
-    </Badge>
-  )
-}
-
-function formatDate(dateString?: string) {
-  if (!dateString) return "N/A"
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  })
-}
-
-const EMPTY_FORM: CreateShipmentData = {
-  sellId: 0,
-  trackingNumber: "",
-  carrier: "",
-  shippingMethod: "",
-  status: "pending",
-  shippingCost: 0,
-  weight: 0,
-  dimensions: "",
-  notes: "",
-  estimatedDelivery: "",
+interface Stats {
+  total: number
+  pending: number
+  pickedUp: number
+  inTransit: number
+  outForDelivery: number
+  delivered: number
+  failed: number
+  returned: number
+  readyToShip: number
+  codWithCouriers: number
 }
 
 export default function ShipmentsPage() {
-  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
+  const { toast } = useToast()
+  const searchParams = useSearchParams()
+
   const [shipments, setShipments] = useState<ShipmentResponse[]>([])
-  const [stats, setStats] = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, failed: 0 })
-  const [orders, setOrders] = useState<SellResponse[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
 
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [tab, setTab] = useState<Tab>("all")
+  const [search, setSearch] = useState("")
+  const [courierFilter, setCourierFilter] = useState("all")
+  const [days, setDays] = useState("any")
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
-  const [isUpdateStatusDialogOpen, setIsUpdateStatusDialogOpen] = useState(false)
-
-  const [viewingShipment, setViewingShipment] = useState<ShipmentResponse | null>(null)
-  const [editingShipment, setEditingShipment] = useState<ShipmentResponse | null>(null)
-  const [formData, setFormData] = useState<CreateShipmentData>(EMPTY_FORM)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [preselectOrder, setPreselectOrder] = useState<number | null>(null)
+  const [viewing, setViewing] = useState<ShipmentResponse | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const [statusUpdateData, setStatusUpdateData] = useState({
-    status: "pending" as ShipmentStatus,
-    location: "",
-    description: "",
-  })
+  const blocked = useModuleGuard("Shipments")
 
-  const [orderSearch, setOrderSearch] = useState("")
-  const [filteredOrders, setFilteredOrders] = useState<SellResponse[]>([])
-  const [showOrderDropdown, setShowOrderDropdown] = useState(false)
-
-  // Load orders for the sell selector
+  // ?new=1&order=ID (from the Orders page)
   useEffect(() => {
-    sellsApi.getAll({ limit: 100 }).then((res) => setOrders(res.data ?? [])).catch(() => {})
-  }, [])
-
-  // Filter orders based on search query
-  useEffect(() => {
-    if (!orderSearch.trim()) {
-      setFilteredOrders(orders.slice(0, 20)) // Show first 20 if search is empty
-      return
+    if (searchParams.get("new") === "1") {
+      const o = Number(searchParams.get("order"))
+      setPreselectOrder(o > 0 ? o : null)
+      setCreateOpen(true)
     }
-    const query = orderSearch.toLowerCase().replace(/^#/, '') // Remove # if user types it
-    const filtered = orders.filter((o) =>
-      String(o.invoiceNo).toLowerCase().includes(query) ||
-      (o.customerName?.toLowerCase().includes(query) ?? false)
-    )
-    setFilteredOrders(filtered)
-  }, [orderSearch, orders])
+  }, [searchParams])
 
-  const fetchShipments = useCallback(async () => {
-    setIsLoading(true)
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
     try {
-      const params: Record<string, string | number> = { page: currentPage, limit: itemsPerPage }
-      if (searchQuery) params.search = searchQuery
-      if (statusFilter !== "all") params.status = statusFilter
-
-      const [listRes, statsRes] = await Promise.all([
-        shipmentsApi.getAll(params),
-        shipmentsApi.getStats(),
-      ])
-
-      setShipments(listRes.data ?? [])
-      setTotal(listRes.pagination?.total ?? listRes.data?.length ?? 0)
-
-      const s = statsRes.data
+      const params: Record<string, string | number> = { page, limit: perPage }
+      if (search) params.search = search
+      const status = TAB_STATUS[tab]
+      if (status) params.status = status
+      if (courierFilter !== "all") params.carrier = courierFilter
+      if (days !== "any") params.days = Number(days)
+      const [list, st] = await Promise.all([shipmentsApi.getAll(params), shipmentsApi.getStats()])
+      setShipments(list.data ?? [])
+      setSelected(new Set())
+      setTotal(list.pagination?.total ?? list.data?.length ?? 0)
+      const d = st.data
       setStats({
-        total: Number(s?.total ?? 0),
-        pending: Number(s?.pending ?? 0),
-        inTransit: Number(s?.inTransit ?? s?.in_transit ?? 0),
-        delivered: Number(s?.delivered ?? 0),
-        failed: Number(s?.failed ?? 0),
+        total: Number(d?.total ?? 0),
+        pending: Number(d?.pending ?? 0),
+        pickedUp: Number(d?.pickedUp ?? 0),
+        inTransit: Number(d?.inTransit ?? 0),
+        outForDelivery: Number(d?.outForDelivery ?? 0),
+        delivered: Number(d?.delivered ?? 0),
+        failed: Number(d?.failed ?? 0),
+        returned: Number(d?.returned ?? 0),
+        readyToShip: Number(d?.readyToShip ?? 0),
+        codWithCouriers: Number(d?.codWithCouriers ?? 0),
       })
-    } catch (err) {
-      console.error("Failed to fetch shipments:", err)
+    } catch {
       setShipments([])
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [currentPage, itemsPerPage, searchQuery, statusFilter])
+  }, [page, perPage, search, tab, courierFilter, days])
 
-  useEffect(() => { fetchShipments() }, [fetchShipments])
+  useEffect(() => { fetchAll() }, [fetchAll])
 
-  const blocked = useModuleGuard('Shipments')
   if (blocked) return blocked
 
-  const handleViewShipment = async (shipment: ShipmentResponse) => {
-    setViewingShipment(shipment)
-    setIsViewDialogOpen(true)
+  const hasFilters = !!(search || courierFilter !== "all" || tab !== "all" || days !== "any")
+  const resetFilters = () => { setSearch(""); setCourierFilter("all"); setDays("any"); setTab("all"); setPage(1) }
+  const changeTab = (t: string) => { setTab(t as Tab); setPage(1) }
+
+  const openView = async (s: ShipmentResponse) => {
+    setViewing(s)
     try {
-      const res = await shipmentsApi.getById(shipment.id)
-      setViewingShipment((res.data ?? res) as ShipmentResponse)
-    } catch (err) {
-      console.error("Failed to fetch shipment details:", err)
+      const res = await shipmentsApi.getById(s.id)
+      setViewing((res.data ?? res) as ShipmentResponse)
+    } catch { /* keep list row */ }
+  }
+
+  const printLabel = (s: ShipmentResponse) => {
+    const cod = codView(s)
+    printShippingLabel(s, { cod: cod.kind === "to_collect" ? cod.amount : 0, formatCurrency })
+  }
+
+  const printSelected = () => {
+    const rows = shipments.filter((x) => selected.has(x.id))
+    printShippingLabels(rows.map((x) => {
+      const cod = codView(x)
+      return { shipment: x, opts: { cod: cod.kind === "to_collect" ? cod.amount : 0, formatCurrency } }
+    }))
+  }
+
+  /** Applies a status change; returns true on success. */
+  const doStatus = async (s: ShipmentResponse, p: StatusPayload): Promise<boolean> => {
+    if (!validNextStatuses(s.status).includes(p.status)) {
+      toast({ variant: "destructive", title: "Not allowed", description: `Cannot move from ${STATUS_LABEL[s.status]} to ${STATUS_LABEL[p.status]}` })
+      return false
     }
-  }
-
-  const handleOpenCreate = () => {
-    setEditingShipment(null)
-    setFormData(EMPTY_FORM)
-    setIsAddDialogOpen(true)
-  }
-
-  const handleSaveShipment = async () => {
-    if (!formData.sellId) return
+    if (p.status === "failed" && !p.description?.trim()) {
+      toast({ variant: "destructive", title: "Note required", description: "Explain why the delivery failed" })
+      return false
+    }
+    if ((p.status === "failed" || p.status === "returned") &&
+      !window.confirm(`Mark shipment ${s.trackingNumber || `#${s.id}`} as ${STATUS_LABEL[p.status]}?`)) return false
     setSaving(true)
     try {
-      const payload = {
-        ...formData,
-        // Backend requires RFC3339 format; convert "YYYY-MM-DD" → "YYYY-MM-DDT00:00:00Z"
-        estimatedDelivery: formData.estimatedDelivery
-          ? `${formData.estimatedDelivery.split("T")[0]}T00:00:00Z`
-          : undefined,
-      }
-      await shipmentsApi.create(payload)
-      setIsAddDialogOpen(false)
-      fetchShipments()
-    } catch (err) {
-      console.error("Failed to create shipment:", err)
+      const res = await shipmentsApi.updateStatus(s.id, p)
+      const next = (res.data ?? res) as ShipmentResponse
+      if (viewing?.id === next.id) setViewing(await shipmentsApi.getById(next.id).then((r) => (r.data ?? r) as ShipmentResponse).catch(() => next))
+      toast({ title: "Shipment updated", description: STATUS_LABEL[next.status] })
+      fetchAll()
+      return true
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not update", description: err?.response?.data?.message || "Please try again" })
+      return false
     } finally {
       setSaving(false)
     }
   }
 
-  const handleUpdateStatusOpen = (shipment: ShipmentResponse) => {
-    setEditingShipment(shipment)
-    setStatusUpdateData({ status: shipment.status, location: "", description: "" })
-    setIsUpdateStatusDialogOpen(true)
-  }
-
-  const handleUpdateStatusSave = async () => {
-    if (!editingShipment) return
+  const recordCod = async (s: ShipmentResponse) => {
     setSaving(true)
     try {
-      const updated = await shipmentsApi.updateStatus(editingShipment.id, statusUpdateData)
-      const updatedShipment = (updated.data ?? updated) as ShipmentResponse
-      setShipments((prev) => prev.map((s) => s.id === updatedShipment.id ? updatedShipment : s))
-      if (viewingShipment?.id === updatedShipment.id) setViewingShipment(updatedShipment)
-      setIsUpdateStatusDialogOpen(false)
-    } catch (err) {
-      console.error("Failed to update status:", err)
+      const res = await shipmentsApi.recordCodPayment(s.id)
+      const next = (res.data ?? res) as ShipmentResponse
+      if (viewing?.id === next.id) setViewing(next)
+      toast({ title: "COD payment recorded", description: formatCurrency(codView(s).amount) })
+      fetchAll()
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not record payment", description: err?.response?.data?.message || "Please try again" })
     } finally {
       setSaving(false)
     }
   }
 
-  const totalPages = Math.ceil(total / itemsPerPage)
+  const csvCell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`
+  const exportCod = async () => {
+    setExporting(true)
+    try {
+      const params: Record<string, string | number> = { cod: 1, per_page: 2000 }
+      if (days !== "any") params.days = Number(days)
+      if (courierFilter !== "all") params.carrier = courierFilter
+      const res = await shipmentsApi.getAll(params)
+      const rows = (res.data ?? []).filter((x) => codView(x).amount > 0)
+      if (rows.length === 0) { toast({ title: "Nothing to export", description: "No COD shipments match" }); return }
+      const head = ["Invoice", "Customer", "Courier", "Tracking", "COD amount", "Collected state", "Delivery charge", "COD fee (1%)", "Net"]
+      const lines = rows.map((x) => {
+        const c = codView(x)
+        const fee = Number(x.shippingCost) || 0
+        const codFee = Math.round(c.amount * 1) / 100
+        return [x.sell?.invoiceNo ?? x.sellId, x.sell?.customerName ?? "", x.carrier ?? "", x.trackingNumber ?? "", c.amount, c.label, fee, codFee.toFixed(2), (c.amount - fee - codFee).toFixed(2)]
+      })
+      const csv = [head, ...lines].map((r) => r.map(csvCell).join(",")).join("\n")
+      const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `cod-report-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast({ variant: "destructive", title: "Export failed", description: "Please try again" })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const allSelected = shipments.length > 0 && shipments.every((x) => selected.has(x.id))
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(shipments.map((x) => x.id)))
+  const toggleOne = (id: number) =>
+    setSelected((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  const inTransitTotal = stats ? stats.pickedUp + stats.inTransit + stats.outForDelivery : 0
 
   return (
-    <div className="space-y-6">
+    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Shipments</h1>
-          <p className="text-gray-500 text-sm mt-1">Track and manage order shipments</p>
+          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Shipments</h1>
+          <p className="mt-1 text-sm text-dash-muted">Track every parcel from booking to delivery, including cash on delivery.</p>
         </div>
-        <Button onClick={handleOpenCreate} className="bg-emerald-600 hover:bg-emerald-700">
-          <Plus className="mr-2 h-4 w-4" />
-          Create Shipment
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/orders"
+            className="inline-flex h-11 items-center rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft">
+            All orders
+          </Link>
+          <button type="button" onClick={exportCod} disabled={exporting}
+            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft disabled:opacity-50">
+            <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export COD report"}
+          </button>
+          <button type="button" onClick={() => { setPreselectOrder(null); setCreateOpen(true) }}
+            className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">
+            <Plus className="size-4" aria-hidden /> Create shipment
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {[
-          { label: "Total", value: stats.total, icon: Package, color: "text-gray-400" },
-          { label: "Pending", value: stats.pending, icon: Clock, color: "text-gray-400" },
-          { label: "In Transit", value: stats.inTransit, icon: Truck, color: "text-amber-500" },
-          { label: "Delivered", value: stats.delivered, icon: CheckCircle, color: "text-emerald-500" },
-          { label: "Failed", value: stats.failed, icon: XCircle, color: "text-red-500" },
-        ].map((s) => (
-          <Card key={s.label} className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">{s.label}</p>
-                <p className="text-2xl font-bold">{isLoading ? "—" : s.value}</p>
-              </div>
-              <s.icon className={`h-8 w-8 ${s.color}`} />
-            </div>
-          </Card>
-        ))}
-      </div>
+      {stats && stats.readyToShip > 0 && (
+        <button type="button" onClick={() => { setPreselectOrder(null); setCreateOpen(true) }}
+          className="flex items-center gap-3 rounded-[14px] border border-dash-accent/30 bg-dash-accent-soft px-4 py-3 text-left text-sm text-dash-accent-fg hover:opacity-90">
+          <Package className="size-5 shrink-0" aria-hidden />
+          <span className="flex-1 font-semibold">{stats.readyToShip} order{stats.readyToShip === 1 ? " is" : "s are"} ready to ship</span>
+          <span className="font-bold">Create shipment →</span>
+        </button>
+      )}
 
-      {/* Filters */}
-      <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Search by tracking, order, or customer..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
-              className="pl-10"
+      {/* KPIs */}
+      {!stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}
+        </div>
+      ) : (
+        <div className="[&>div]:xl:grid-cols-6">
+          <StatsCards stats={[
+            { label: "Ready to ship", value: stats.readyToShip, icon: <Package className="size-4" />, color: "blue", hint: "Orders without shipment",
+              onClick: () => { setPreselectOrder(null); setCreateOpen(true) } },
+            { label: "Pending pickup", value: stats.pending, icon: <Clock className="size-4" />, color: "yellow", hint: "Waiting for rider",
+              active: tab === "pending", onClick: () => changeTab("pending") },
+            { label: "In transit", value: inTransitTotal, icon: <Truck className="size-4" />, color: "purple", hint: "With couriers",
+              active: tab === "in_transit", onClick: () => changeTab("in_transit") },
+            { label: "Delivered", value: stats.delivered, icon: <CheckCircle2 className="size-4" />, color: "green",
+              hint: stats.total ? `${Math.round((stats.delivered / stats.total) * 100)}% of all shipments` : "No deliveries yet",
+              active: tab === "delivered", onClick: () => changeTab("delivered") },
+            { label: "Failed / returned", value: stats.failed + stats.returned, icon: <XCircle className="size-4" />, color: "red",
+              hint: stats.failed + stats.returned > 0 ? "Needs follow-up" : "—",
+              active: tab === "failed", onClick: () => changeTab("failed") },
+            { label: "COD with couriers", value: formatCurrency(stats.codWithCouriers), icon: <Banknote className="size-4" />, color: "yellow", hint: "Not yet collected" },
+          ]} />
+        </div>
+      )}
+
+      {/* Table card */}
+      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+        <div className="px-4">
+          <StatusTabs
+            value={tab}
+            onChange={changeTab}
+            tabs={[
+              { value: "all", label: "All", count: stats?.total },
+              { value: "pending", label: "Pending pickup", count: stats?.pending },
+              { value: "picked_up", label: "Picked up", count: stats?.pickedUp },
+              { value: "in_transit", label: "In transit", count: stats ? stats.inTransit + stats.outForDelivery : undefined },
+              { value: "delivered", label: "Delivered", count: stats?.delivered },
+              { value: "failed", label: "Failed / returned", count: stats ? stats.failed + stats.returned : undefined },
+            ]}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 p-4">
+          <label className="flex h-11 min-w-[260px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+            <Search className="size-[18px]" aria-hidden />
+            <span className="sr-only">Search shipments</span>
+            <input
+              type="search"
+              placeholder="Search tracking number, order, customer or phone…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted"
             />
-          </div>
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1) }}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+          </label>
+          <Select value={courierFilter} onValueChange={(v) => { setCourierFilter(v); setPage(1) }}>
+            <SelectTrigger aria-label="Courier" className={cn(filterSelect, "w-[160px]")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="picked_up">Picked Up</SelectItem>
-              <SelectItem value="in_transit">In Transit</SelectItem>
-              <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
-              <SelectItem value="delivered">Delivered</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="returned">Returned</SelectItem>
+              <SelectItem value="all">Courier: All</SelectItem>
+              {COURIERS.filter((c) => c.name !== "Other").map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Tracking / Order</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Customer</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Carrier</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Dates</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading
-                ? Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">
-                    {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></td>
-                    ))}
-                  </tr>
-                ))
-                : shipments.map((shipment) => (
-                  <tr key={shipment.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => handleViewShipment(shipment)}>
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-sm">{shipment.trackingNumber || "—"}</div>
-                      <div className="text-xs text-gray-500">#{shipment.sell?.invoiceNo ?? shipment.sellId}</div>
-                    </td>
-                    <td className="py-3 px-4 text-sm">{shipment.sell?.customerName || "—"}</td>
-                    <td className="py-3 px-4">
-                      <div className="text-sm">{shipment.carrier || "—"}</div>
-                      {shipment.shippingMethod && <div className="text-xs text-gray-500">{shipment.shippingMethod}</div>}
-                    </td>
-                    <td className="py-3 px-4"><StatusBadge status={shipment.status} /></td>
-                    <td className="py-3 px-4 text-xs">
-                      {shipment.shippedAt && <div className="text-gray-600">Shipped: {new Date(shipment.shippedAt).toLocaleDateString()}</div>}
-                      {shipment.estimatedDelivery && <div className="text-gray-500">Est: {new Date(shipment.estimatedDelivery).toLocaleDateString()}</div>}
-                      {shipment.deliveredAt && <div className="text-emerald-600">Delivered: {new Date(shipment.deliveredAt).toLocaleDateString()}</div>}
-                      {!shipment.shippedAt && !shipment.estimatedDelivery && !shipment.deliveredAt && (
-                        <span className="text-gray-400">{new Date(shipment.createdAt).toLocaleDateString()}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="sm" className="p-2 h-8 w-8 hover:bg-emerald-50 hover:text-emerald-600" onClick={() => handleViewShipment(shipment)} title="View">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="p-2 h-8 w-8 hover:bg-blue-50 hover:text-blue-600" onClick={() => handleUpdateStatusOpen(shipment)} title="Update Status">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-
-          {!isLoading && shipments.length === 0 && (
-            <div className="text-center py-12">
-              <Package className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No shipments found</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {searchQuery || statusFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Get started by creating a new shipment"}
-              </p>
-            </div>
+          <Select value={days} onValueChange={(v) => { setDays(v); setPage(1) }}>
+            <SelectTrigger aria-label="Date" className={cn(filterSelect, "w-[160px]")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Date: Any</SelectItem>
+              <SelectItem value="7">Last 7 days</SelectItem>
+              <SelectItem value="30">Last 30 days</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasFilters && (
+            <button type="button" onClick={resetFilters} className="inline-flex h-11 items-center gap-1 px-2 text-[13px] font-semibold text-dash-muted hover:text-dash-ink">
+              <X className="size-4" aria-hidden /> Clear
+            </button>
           )}
         </div>
-      </Card>
 
-      <PaginationControl
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-        itemsPerPage={itemsPerPage}
-        onItemsPerPageChange={(v) => { setItemsPerPage(v); setCurrentPage(1) }}
-        totalItems={total}
+        {selected.size > 0 && (
+          <div className="mx-4 mb-3 flex flex-wrap items-center gap-3 rounded-[10px] bg-dash-accent-soft px-3.5 py-2 text-[13px] font-semibold text-dash-accent-fg">
+            <span>{selected.size} selected</span>
+            <button type="button" onClick={printSelected} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-dash-accent px-3 text-white">
+              <Printer className="size-4" aria-hidden /> Print labels
+            </button>
+            <button type="button" onClick={() => setSelected(new Set())} className="h-9 px-2 hover:underline">Clear</button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="space-y-2 p-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 rounded" />)}</div>
+        ) : shipments.length === 0 ? (
+          <div className="flex flex-col items-center gap-2.5 px-6 py-14 text-center">
+            <span className="flex size-16 items-center justify-center rounded-2xl bg-dash-accent-soft text-dash-accent-fg">
+              <Truck className="size-[30px]" aria-hidden />
+            </span>
+            <h2 className="mt-1 text-lg font-bold">{hasFilters ? "No shipments match" : "No shipments yet"}</h2>
+            <p className="max-w-[420px] text-sm leading-relaxed text-dash-muted">
+              {hasFilters
+                ? "Try a different search or clear the filters."
+                : `You have ${stats?.readyToShip ?? 0} order${stats?.readyToShip === 1 ? "" : "s"} waiting for delivery. Create a shipment to record the courier and tracking number.`}
+            </p>
+            {!hasFilters && (
+              <button type="button" onClick={() => { setPreselectOrder(null); setCreateOpen(true) }}
+                className="mt-1.5 h-11 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white">
+                Create first shipment
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1180px] border-collapse text-sm">
+                <thead>
+                  <tr className="bg-dash-bg text-left text-xs text-dash-muted">
+                    <th scope="col" className="w-10 py-3 pl-4 pr-1">
+                      <input type="checkbox" aria-label="Select all shipments" checked={allSelected} onChange={toggleAll} className="size-4 accent-[var(--dash-accent)]" />
+                    </th>
+                    <th scope="col" className="py-3 pl-2 pr-2 font-semibold">Tracking / order</th>
+                    <th scope="col" className="px-2 py-3 font-semibold">Customer</th>
+                    <th scope="col" className="px-2 py-3 font-semibold">Courier</th>
+                    <th scope="col" className="min-w-[220px] px-2 py-3 font-semibold">Progress</th>
+                    <th scope="col" className="px-2 py-3 text-right font-semibold">COD</th>
+                    <th scope="col" className="px-2 py-3 font-semibold">Dates</th>
+                    <th scope="col" className="py-3 pl-2 pr-4 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shipments.map((s) => {
+                    const c = courierStyle(s.carrier)
+                    const cod = codView(s)
+                    const nxt = nextStep(s.status)
+                    const step = STEP[s.status] ?? 1
+                    const fail = s.status === "failed" || s.status === "returned"
+                    const note = s.trackingHistory?.[0]?.description
+                    return (
+                      <tr key={s.id}>
+                        <td className="border-b border-dash-border-soft py-3.5 pl-4 pr-1">
+                          <input type="checkbox" aria-label={`Select ${s.trackingNumber || s.id}`} checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} className="size-4 accent-[var(--dash-accent)]" />
+                        </td>
+                        <td className="border-b border-dash-border-soft py-3.5 pl-2 pr-2">
+                          <div className="font-bold">{s.trackingNumber || "No tracking yet"}</div>
+                          <Link href="/dashboard/orders" className="text-xs text-dash-accent hover:underline">#{s.sell?.invoiceNo ?? s.sellId}</Link>
+                        </td>
+                        <td className="border-b border-dash-border-soft px-2 py-3.5">
+                          <div className="font-semibold">{s.sell?.customerName ?? "—"}</div>
+                          <div className="text-xs text-dash-muted">{[s.sell?.area, s.sell?.customerPhone].filter(Boolean).join(" · ") || "—"}</div>
+                        </td>
+                        <td className="border-b border-dash-border-soft px-2 py-3.5">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="flex size-7 items-center justify-center rounded-lg text-[11px] font-bold text-white" style={{ background: c.color }}>{c.ini}</span>
+                            <span>
+                              <span className="block font-semibold">{c.name}</span>
+                              <span className="text-xs text-dash-muted">{[s.shippingMethod || "Standard", s.rider].filter(Boolean).join(" · ")}</span>
+                            </span>
+                          </span>
+                        </td>
+                        <td className="border-b border-dash-border-soft px-2 py-3.5">
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", STATUS_STYLE[s.status])}>{STATUS_LABEL[s.status]}</span>
+                            {note && <span className="max-w-[160px] truncate text-xs text-dash-muted" title={note}>{note}</span>}
+                          </div>
+                          <div className="grid grid-cols-4 gap-1" role="img" aria-label={`Progress: ${STATUS_LABEL[s.status]}`}>
+                            {["Booked", "Picked up", "In transit", "Delivered"].map((label, i) => (
+                              <span key={label} title={label} className="h-1.5 rounded-full"
+                                style={{
+                                  background: i < step
+                                    ? fail && i === step - 1 ? "var(--dash-danger)" : step === 4 ? "var(--dash-success)" : "var(--dash-accent)"
+                                    : "var(--dash-border)",
+                                }} />
+                            ))}
+                          </div>
+                        </td>
+                        <td className="border-b border-dash-border-soft px-2 py-3.5 text-right">
+                          <div className="font-bold tabular-nums">{cod.amount > 0 ? formatCurrency(cod.amount) : "—"}</div>
+                          {cod.kind === "delivered_unpaid" ? (
+                            <button type="button" disabled={saving} onClick={() => recordCod(s)} className={cn("text-xs font-semibold underline-offset-2 hover:underline", cod.cls)}>{cod.label}</button>
+                          ) : (
+                            <div className={cn("text-xs", cod.cls)}>{cod.label}</div>
+                          )}
+                        </td>
+                        <td className="border-b border-dash-border-soft px-2 py-3.5 text-[13px]">
+                          <div>Created {shortDate(s.createdAt)}</div>
+                          <div className="text-dash-muted">
+                            {s.status === "delivered" ? `Delivered ${shortDate(s.deliveredAt)}` : s.estimatedDelivery ? `ETA ${shortDate(s.estimatedDelivery)}` : "No ETA"}
+                          </div>
+                        </td>
+                        <td className="border-b border-dash-border-soft py-3.5 pl-2 pr-4">
+                          <div className="flex items-center justify-end gap-1">
+                            {nxt && (
+                              <button type="button" disabled={saving} onClick={() => doStatus(s, { status: nxt })}
+                                className="h-9 whitespace-nowrap rounded-lg bg-dash-accent px-2.5 text-xs font-semibold text-white disabled:opacity-50">
+                                {NEXT_STEP_LABEL[nxt]}
+                              </button>
+                            )}
+                            <button type="button" aria-label="Track shipment" className={iconBtn} onClick={() => openView(s)}><MapPin className="size-4" /></button>
+                            <button type="button" aria-label="Print label" className={iconBtn} onClick={() => printLabel(s)}><Printer className="size-4" /></button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button type="button" aria-label="More actions" className={iconBtn}><MoreHorizontal className="size-4" /></button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openView(s)}>Update status</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openView(s)}>View tracking history</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t border-dash-border-soft p-4 pt-3">
+              <PaginationControl
+                currentPage={page}
+                totalPages={Math.max(1, Math.ceil(total / perPage))}
+                itemsPerPage={perPage}
+                totalItems={total}
+                onPageChange={setPage}
+                onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }}
+              />
+            </div>
+          </>
+        )}
+      </section>
+
+      <ShipmentDetailDialog
+        shipment={viewing}
+        formatCurrency={formatCurrency}
+        busy={saving}
+        onClose={() => setViewing(null)}
+        onPrint={printLabel}
+        onUpdateStatus={doStatus}
+        onRecordCod={recordCod}
       />
 
-      {/* Create Shipment Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Shipment</DialogTitle>
-            <DialogDescription>Enter shipment details below</DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Order *</Label>
-              <div className="relative">
-                <Input
-                  placeholder="Search by invoice number or customer name..."
-                  value={orderSearch}
-                  onChange={(e) => {
-                    setOrderSearch(e.target.value)
-                    setShowOrderDropdown(true)
-                  }}
-                  onFocus={() => {
-                    setOrderSearch("")
-                    setShowOrderDropdown(true)
-                  }}
-                  onBlur={() => setTimeout(() => setShowOrderDropdown(false), 200)}
-                  className="w-full"
-                />
-                {showOrderDropdown && filteredOrders.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md mt-1 max-h-48 overflow-y-auto z-[9999] shadow-lg">
-                    {filteredOrders.map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault()
-                          setFormData({ ...formData, sellId: o.id })
-                          setOrderSearch(`#${o.invoiceNo} — ${o.customerName}`)
-                          setShowOrderDropdown(false)
-                        }}
-                        className="w-full text-left px-4 py-2 hover:bg-emerald-50 border-b last:border-b-0 transition-colors"
-                      >
-                        <div className="font-medium text-sm">#{o.invoiceNo}</div>
-                        <div className="text-xs text-gray-500">{o.customerName}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {showOrderDropdown && orderSearch && filteredOrders.length === 0 && orders.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md mt-1 p-3 z-[9999] shadow-lg text-center text-sm text-gray-500">
-                    No orders found matching "{orderSearch}"
-                  </div>
-                )}
-                {formData.sellId > 0 && (
-                  <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-md text-sm">
-                    <div className="font-medium text-emerald-900">
-                      Selected: #{orders.find(o => o.id === formData.sellId)?.invoiceNo}
-                    </div>
-                    <div className="text-xs text-emerald-700">
-                      {orders.find(o => o.id === formData.sellId)?.customerName}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tracking Number</Label>
-              <Input
-                value={formData.trackingNumber}
-                onChange={(e) => setFormData({ ...formData, trackingNumber: e.target.value })}
-                placeholder="DHL-BD-123456789"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Carrier</Label>
-              <Input
-                value={formData.carrier}
-                onChange={(e) => setFormData({ ...formData, carrier: e.target.value })}
-                placeholder="DHL Express"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Shipping Method</Label>
-              <Input
-                value={formData.shippingMethod}
-                onChange={(e) => setFormData({ ...formData, shippingMethod: e.target.value })}
-                placeholder="Express Delivery"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Estimated Delivery</Label>
-              <Input
-                type="date"
-                value={formData.estimatedDelivery?.split("T")[0] ?? ""}
-                onChange={(e) => setFormData({ ...formData, estimatedDelivery: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Shipping Cost</Label>
-              <Input
-                type="number" min="0" step="0.01"
-                value={formData.shippingCost}
-                onChange={(e) => setFormData({ ...formData, shippingCost: parseFloat(e.target.value) || 0 })}
-                placeholder="150.00"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Weight (kg)</Label>
-              <Input
-                type="number" min="0" step="0.1"
-                value={formData.weight}
-                onChange={(e) => setFormData({ ...formData, weight: parseFloat(e.target.value) || 0 })}
-                placeholder="2.5"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Dimensions (LxWxH cm)</Label>
-              <Input
-                value={formData.dimensions}
-                onChange={(e) => setFormData({ ...formData, dimensions: e.target.value })}
-                placeholder="30x20x15"
-              />
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Notes</Label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Special handling instructions..."
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleSaveShipment}
-              className="bg-emerald-600 hover:bg-emerald-700"
-              disabled={!formData.sellId || saving}
-            >
-              {saving ? "Creating..." : "Create Shipment"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Shipment Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Shipment Details</DialogTitle>
-            <DialogDescription>Track your package journey</DialogDescription>
-          </DialogHeader>
-
-          {viewingShipment && (
-            <div className="space-y-5">
-              {/* Header Card with Key Info */}
-              <div className="bg-gradient-to-r from-blue-50 to-emerald-50 rounded-lg p-4 border border-blue-200">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase">Order Number</p>
-                    <p className="text-lg font-bold text-gray-900 mt-1">#{viewingShipment.sell?.invoiceNo ?? viewingShipment.sellId}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase">Tracking Number</p>
-                    <p className="text-lg font-bold text-blue-600 mt-1 font-mono">{viewingShipment.trackingNumber || "N/A"}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status Card - Prominent */}
-              <div className="bg-white rounded-lg p-4 border-2 border-emerald-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Current Status</p>
-                    <StatusBadge status={viewingShipment.status} />
-                  </div>
-                  <Truck className="w-12 h-12 text-emerald-400 opacity-30" />
-                </div>
-              </div>
-
-              {/* Main Info Cards Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <Card className="p-3 border-l-4 border-l-blue-500">
-                  <p className="text-xs font-semibold text-gray-600 uppercase">Customer</p>
-                  <p className="text-sm font-bold text-gray-900 mt-1">{viewingShipment.sell?.customerName || "—"}</p>
-                </Card>
-                <Card className="p-3 border-l-4 border-l-purple-500">
-                  <p className="text-xs font-semibold text-gray-600 uppercase">Carrier</p>
-                  <p className="text-sm font-bold text-gray-900 mt-1">{viewingShipment.carrier || "—"}</p>
-                </Card>
-                <Card className="p-3 border-l-4 border-l-amber-500">
-                  <p className="text-xs font-semibold text-gray-600 uppercase">Method</p>
-                  <p className="text-sm font-bold text-gray-900 mt-1">{viewingShipment.shippingMethod || "—"}</p>
-                </Card>
-                <Card className="p-3 border-l-4 border-l-emerald-500">
-                  <p className="text-xs font-semibold text-gray-600 uppercase">Cost</p>
-                  <p className="text-lg font-bold text-emerald-600 mt-1">{formatCurrency(Number(viewingShipment.shippingCost ?? 0))}</p>
-                </Card>
-              </div>
-
-              {/* Timeline Cards */}
-              <Card className="p-4 bg-gray-50">
-                <p className="text-sm font-semibold text-gray-900 mb-3">Shipment Timeline</p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 flex items-center gap-2"><Package className="w-4 h-4" /> Shipped At</span>
-                    <span className="font-medium">{formatDate(viewingShipment.shippedAt)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 flex items-center gap-2"><Truck className="w-4 h-4" /> Estimated Delivery</span>
-                    <span className="font-medium">{formatDate(viewingShipment.estimatedDelivery)}</span>
-                  </div>
-                  {viewingShipment.deliveredAt && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600 flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-600" /> Delivered At</span>
-                      <span className="font-medium text-emerald-600">{formatDate(viewingShipment.deliveredAt)}</span>
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              {/* Package Details */}
-              {(viewingShipment.weight || viewingShipment.dimensions) && (
-                <Card className="p-4 bg-blue-50 border border-blue-200">
-                  <p className="text-sm font-semibold text-gray-900 mb-3">Package Details</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    {viewingShipment.weight && (
-                      <div>
-                        <p className="text-gray-600">Weight</p>
-                        <p className="font-bold text-gray-900">{viewingShipment.weight} kg</p>
-                      </div>
-                    )}
-                    {viewingShipment.dimensions && (
-                      <div>
-                        <p className="text-gray-600">Dimensions</p>
-                        <p className="font-bold text-gray-900">{viewingShipment.dimensions} cm</p>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )}
-
-              {/* Notes Section */}
-              {viewingShipment.notes && (
-                <Card className="p-4 bg-amber-50 border border-amber-200">
-                  <p className="text-sm font-semibold text-gray-900 mb-2">Notes</p>
-                  <p className="text-sm text-gray-700">{viewingShipment.notes}</p>
-                </Card>
-              )}
-
-              {/* Tracking History - Enhanced */}
-              {viewingShipment.trackingHistory && viewingShipment.trackingHistory.length > 0 && (
-                <Card className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-300">
-                  <p className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-emerald-600" />
-                    Tracking History
-                  </p>
-                  <div className="space-y-0">
-                    {viewingShipment.trackingHistory.map((event, index) => {
-                      const isLatest = index === 0
-                      const isDelivered = event.status === 'delivered'
-                      return (
-                        <div key={event.id} className="relative">
-                          {/* Timeline line */}
-                          {index < viewingShipment.trackingHistory!.length - 1 && (
-                            <div className="absolute left-6 top-12 w-0.5 h-12 bg-gradient-to-b from-emerald-300 to-gray-200" />
-                          )}
-
-                          {/* Event Card */}
-                          <div className={`ml-0 p-3 rounded-lg transition-all ${
-                            isLatest
-                              ? 'bg-white border-2 border-emerald-500 shadow-md'
-                              : isDelivered
-                              ? 'bg-emerald-50 border border-emerald-200'
-                              : 'bg-white border border-gray-200'
-                          } mb-3`}>
-                            <div className="flex gap-3">
-                              {/* Timeline dot */}
-                              <div className="flex flex-col items-center pt-1 flex-shrink-0">
-                                <div className={`w-4 h-4 rounded-full flex items-center justify-center border-2 ${
-                                  isLatest
-                                    ? 'bg-emerald-500 border-emerald-600'
-                                    : isDelivered
-                                    ? 'bg-emerald-400 border-emerald-500'
-                                    : 'bg-gray-300 border-gray-400'
-                                }`}>
-                                  {isLatest && <div className="w-2 h-2 bg-white rounded-full" />}
-                                </div>
-                              </div>
-
-                              {/* Content */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2 mb-1">
-                                  <p className={`font-semibold capitalize text-sm ${
-                                    isLatest ? 'text-emerald-700' : 'text-gray-900'
-                                  }`}>
-                                    {event.status.replace(/_/g, " ")}
-                                  </p>
-                                  <p className="text-xs font-medium text-gray-600 whitespace-nowrap flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" />
-                                    {formatDate(event.eventTime)}
-                                  </p>
-                                </div>
-
-                                {event.location && (
-                                  <p className="text-xs text-gray-700 flex items-center gap-1 mb-1">
-                                    <MapPin className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                                    <span className="font-medium">{event.location}</span>
-                                  </p>
-                                )}
-
-                                {event.description && (
-                                  <p className="text-xs text-gray-600 leading-snug">{event.description}</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </Card>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
-            {viewingShipment && (
-              <Button
-                onClick={() => { setIsViewDialogOpen(false); handleUpdateStatusOpen(viewingShipment) }}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                Update Status
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Update Status Dialog */}
-      <Dialog open={isUpdateStatusDialogOpen} onOpenChange={setIsUpdateStatusDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Shipment Status</DialogTitle>
-            <DialogDescription>Update the status and add tracking information</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>New Status *</Label>
-              <Select
-                value={statusUpdateData.status}
-                onValueChange={(v) => setStatusUpdateData({ ...statusUpdateData, status: v as ShipmentStatus })}
-              >
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {allowedNextStatuses(editingShipment?.status ?? 'pending').map((s) => (
-                    <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Location</Label>
-              <Input
-                value={statusUpdateData.location}
-                onChange={(e) => setStatusUpdateData({ ...statusUpdateData, location: e.target.value })}
-                placeholder="Dhaka Distribution Center"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea
-                value={statusUpdateData.description}
-                onChange={(e) => setStatusUpdateData({ ...statusUpdateData, description: e.target.value })}
-                placeholder="Package in transit to destination..."
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsUpdateStatusDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleUpdateStatusSave}
-              className="bg-emerald-600 hover:bg-emerald-700"
-              disabled={saving || statusUpdateData.status === editingShipment?.status}
-            >
-              {saving ? "Updating..." : "Update Status"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CreateShipmentModal open={createOpen} onOpenChange={setCreateOpen} preselectOrderId={preselectOrder} onCreated={fetchAll} />
     </div>
   )
 }

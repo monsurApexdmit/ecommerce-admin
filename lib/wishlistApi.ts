@@ -74,6 +74,11 @@ export const wishlistApi = {
     const res = await api.get('/wishlists/analytics');
     return res.data.data;
   },
+  /** Delete every wishlist row of the current company */
+  clear: async (): Promise<{ deleted: number }> => {
+    const res = await api.delete('/wishlists/clear');
+    return res.data.data;
+  },
 };
 
 export default wishlistApi;

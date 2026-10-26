@@ -3,7 +3,6 @@
 import * as React from "react"
 import { Check, ChevronsUpDown, UserPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import {
     Command,
     CommandEmpty,
@@ -37,15 +36,22 @@ export function CustomerCombobox({ value, onValueChange }: CustomerComboboxProps
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
+                <button
+                    type="button"
                     role="combobox"
                     aria-expanded={open}
-                    className="w-full justify-between h-12 bg-white border-gray-200"
+                    aria-label="Select customer"
+                    className="flex min-h-[52px] w-full min-w-0 items-center gap-2.5 rounded-xl border border-dash-border bg-dash-card px-3 py-1.5 text-left font-dash-body text-dash-ink hover:bg-dash-neutral-soft"
                 >
-                    {selectedLabel}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
+                    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-dash-accent-soft text-xs font-bold text-dash-accent-fg">
+                        {selectedLabel.split(" ").map((w) => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-sm font-semibold">{selectedLabel}</span>
+                        <span className="text-xs text-dash-muted">Search by name or phone</span>
+                    </span>
+                    <ChevronsUpDown className="size-4 shrink-0 text-dash-muted" aria-hidden />
+                </button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
                 <Command>

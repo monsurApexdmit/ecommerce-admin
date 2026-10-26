@@ -52,8 +52,8 @@ api.interceptors.response.use(
   }
 );
 
-export type PaymentMethod = 'cash' | 'bank' | 'card' | 'other';
-export type RecurringFrequency = 'weekly' | 'monthly' | 'yearly';
+export type PaymentMethod = string;
+export type RecurringFrequency = string;
 
 export interface ExpenseResponse {
   id: number;
@@ -70,8 +70,15 @@ export interface ExpenseResponse {
   notes?: string | null;
   receiptPath?: string | null;
   isRecurring: boolean;
-  recurringFrequency?: RecurringFrequency | null;
+  recurringFrequency?: RecurringFrequency | string | null;
   recurringEndDate?: string | null;
+  locationId?: number | null;
+  locationName?: string | null;
+  paidTo?: string | null;
+  nextDueDate?: string | null;
+  source?: 'manual' | 'salary' | 'recurring' | string;
+  locked?: boolean;
+  categoryColor?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,6 +97,9 @@ export interface ExpenseListResponse {
 }
 
 export interface CreateExpenseData {
+  locationId?: number | null;
+  paidTo?: string;
+  nextDueDate?: string | null;
   expenseCategoryId: number;
   vendorId?: number | null;
   title: string;
@@ -105,6 +115,9 @@ export interface CreateExpenseData {
 }
 
 export interface UpdateExpenseData {
+  locationId?: number | null;
+  paidTo?: string;
+  nextDueDate?: string | null;
   expenseCategoryId?: number;
   vendorId?: number | null;
   title?: string;
@@ -154,7 +167,54 @@ function mapExpense(raw: any): ExpenseResponse {
   };
 }
 
+export interface ExpenseLogStats {
+  spentThisMonth: number;
+  prevMonthSpent: number;
+  deltaPct: number | null;
+  yearTotal: number;
+  yearCount: number;
+  recurringMonthly: number;
+  recurringCount: number;
+  billsDueThisWeek: { id: number; title: string; nextDueDate: string }[];
+  profitAfterExpenses: number;
+  monthRevenue: number;
+}
+
+export interface ExpenseTemplate {
+  title: string;
+  categoryId: number;
+  amount: number;
+  paymentMethod: string;
+  paidTo?: string | null;
+  vendorId?: number | null;
+  locationId?: number | null;
+  isRecurring?: boolean;
+  recurringFrequency?: string | null;
+  recurringEndDate?: string | null;
+}
+
 export const expenseApi = {
+  getLog: async (params?: Record<string, any>): Promise<{
+    data: ExpenseResponse[]; total: number;
+    stats: ExpenseLogStats;
+    counts: Record<'all' | 'rec' | 'salary' | 'manual', number>;
+    byCategory: { categoryId: number | null; name: string; color?: string | null; amount: number; pct: number }[];
+    trend: { month: string; label: string; amount: number }[];
+  }> => {
+    const response = await api.get('/expenses/', { params });
+    const raw = response.data.data;
+    const rows = Array.isArray(raw) ? raw : raw?.data ?? [];
+    const meta = response.data.meta ?? raw?.meta ?? {};
+    return {
+      data: rows.map(mapExpense), total: meta.total ?? rows.length, stats: meta.stats ?? ({} as ExpenseLogStats),
+      counts: meta.counts ?? { all: 0, rec: 0, salary: 0, manual: 0 }, byCategory: meta.byCategory ?? [], trend: meta.trend ?? [],
+    };
+  },
+  getTemplates: async (): Promise<ExpenseTemplate[]> => {
+    const response = await api.get('/expenses/templates');
+    return response.data.data ?? [];
+  },
+
   /**
    * Get all expenses
    */

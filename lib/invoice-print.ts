@@ -1,4 +1,5 @@
 import type { SellResponse, SellItem } from "@/lib/sellsApi"
+import { getCachedReceiptPrefs } from "@/lib/receipt-prefs"
 
 const SELLER = {
   name: "Admin",
@@ -201,6 +202,10 @@ export function printSaleInvoice(order: SellResponse, ctx: PrintCtx): void {
         </div>
       </section>`
 
+    const prefs = getCachedReceiptPrefs()
+    const paper = prefs?.paper ?? "a4"
+    const pageCss = paper === "a4" ? "@page{size:A4;margin:10mm}" : `@page{size:${paper}mm auto;margin:3mm} .page{max-width:${paper === "58" ? 52 : 74}mm !important;zoom:.5}`
+    const footerHtml = prefs?.footer ? `<p style="text-align:center;font-size:11px;margin:10px 0 0">${esc(prefs.footer)}</p>` : ""
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
 
@@ -287,7 +292,7 @@ export function printSaleInvoice(order: SellResponse, ctx: PrintCtx): void {
   .sum-total b{font-size:18px;font-weight:800;letter-spacing:-.02em}
   .sum-note{margin-top:5px;font-size:10px;color:var(--warn);text-align:right}
 
-  @page{size:A4;margin:10mm}
+  ${pageCss}
   @media print{
     body{background:#fff;padding:0}
     .page{max-width:none}
@@ -304,6 +309,7 @@ export function printSaleInvoice(order: SellResponse, ctx: PrintCtx): void {
       Cut here
     </div>
     ${copy("Merchant Copy")}
+    ${footerHtml}
   </div>
 </body>
 </html>

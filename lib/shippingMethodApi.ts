@@ -38,8 +38,11 @@ api.interceptors.response.use(
 export interface ShippingMethod {
   id: number
   name: string
+  type: 'delivery' | 'pickup'
   description: string | null
+  areasCovered: string | null
   price: number
+  expressRate: number
   estimatedDays: string | null
   icon: string | null
   isActive: boolean
@@ -48,12 +51,15 @@ export interface ShippingMethod {
 
 export interface ShippingMethodPayload {
   name: string
+  type?: 'delivery' | 'pickup'
   description?: string
+  areas_covered?: string
   price: number
-  estimatedDays?: string
+  express_rate?: number
+  estimated_days?: string
   icon?: string
-  isActive?: boolean
-  sortOrder?: number
+  is_active?: boolean
+  sort_order?: number
 }
 
 export const shippingMethodApi = {
@@ -80,6 +86,24 @@ export const shippingMethodApi = {
     const res = await api.patch(`/shipping-methods/${id}/toggle`)
     return res.data.data
   },
+}
+
+export interface CourierAccount {
+  id: number
+  provider: string
+  accountId: string | null
+  apiKey: string | null
+  hasKey: boolean
+  isActive: boolean
+}
+
+export const courierAccountApi = {
+  getAll: async (): Promise<CourierAccount[]> => (await api.get('/courier-accounts')).data.data ?? [],
+  create: async (data: { provider: string; accountId?: string; apiKey?: string; isActive?: boolean }): Promise<CourierAccount> =>
+    (await api.post('/courier-accounts', data)).data.data,
+  update: async (id: number, data: { accountId?: string; apiKey?: string; isActive?: boolean }): Promise<CourierAccount> =>
+    (await api.put(`/courier-accounts/${id}`, data)).data.data,
+  delete: async (id: number): Promise<void> => { await api.delete(`/courier-accounts/${id}`) },
 }
 
 export default shippingMethodApi

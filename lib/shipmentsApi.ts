@@ -70,6 +70,12 @@ export interface ShipmentSell {
   amount: number;
   status: string;
   shippedAt?: string;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  area?: string;
+  source?: string | null;
+  paymentStatus?: string;
+  dueAmount?: number;
 }
 
 export interface ShipmentResponse {
@@ -82,6 +88,17 @@ export interface ShipmentResponse {
   status: ShipmentStatus;
   estimatedDelivery?: string;
   shippingCost?: number;
+  codAmount?: number;
+  codCollected?: boolean | number | null;
+  codCollectedAmount?: number | null;
+  codCollectedAt?: string | null;
+  /** Server-derived COD state */
+  codState?: string | null;
+  rider?: string | null;
+  package?: string | null;
+  deliveryPayer?: 'customer' | 'us';
+  deliverySpeed?: 'regular' | 'express' | null;
+  pickupDate?: string | null;
   weight?: number;
   dimensions?: string;
   notes?: string;
@@ -92,17 +109,42 @@ export interface ShipmentResponse {
   updatedAt: string;
 }
 
+export interface ReadyOrder {
+  id: number;
+  sellId: number;
+  invoiceNo: string;
+  customerName: string;
+  customerPhone?: string | null;
+  address?: string | null;
+  amount: number;
+  paidAmount?: number;
+  dueAmount: number;
+  shippingCost?: number;
+  paymentMethod?: string;
+  paymentLabel: 'Paid' | 'COD' | 'Unpaid' | string;
+  isCod: boolean;
+  itemCount: number;
+  shippingMethod?: string | null;
+  status?: string;
+  orderTime?: string;
+}
+
 export interface ShipmentStatsResponse {
   message: string;
   data: {
     total: number;
     pending: number;
-    in_transit: number;
+    pickedUp: number;
+    inTransit: number;
+    outForDelivery: number;
     delivered: number;
     failed: number;
-    picked_up?: number;
-    out_for_delivery?: number;
-    returned?: number;
+    returned: number;
+    totalShippingCost?: number;
+    /** Orders that still need a shipment */
+    readyToShip?: number;
+    /** Unpaid COD cash still with couriers */
+    codWithCouriers?: number;
   };
 }
 
@@ -121,9 +163,16 @@ export interface CreateShipmentData {
   trackingNumber?: string;
   carrier?: string;
   shippingMethod?: string;
+  markShipped?: boolean;
   status?: ShipmentStatus;
   estimatedDelivery?: string;
   shippingCost?: number;
+  codAmount?: number;
+  deliveryPayer?: 'customer' | 'us';
+  deliverySpeed?: 'regular' | 'express';
+  pickupDate?: string;
+  rider?: string;
+  package?: string;
   weight?: number;
   dimensions?: string;
   notes?: string;
@@ -143,6 +192,9 @@ export const shipmentsApi = {
     search?: string;
     status?: string;
     carrier?: string;
+    days?: number;
+    cod?: number;
+    per_page?: number;
   }): Promise<ShipmentListResponse> => {
     const response = await api.get('/shipments', { params });
     // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
@@ -173,9 +225,26 @@ export const shipmentsApi = {
     return response.data;
   },
 
+  /** Orders without a live shipment (server-side search, no cap) */
+  getReadyToShip: async (params?: { search?: string; per_page?: number; page?: number }): Promise<{ orders: ReadyOrder[]; total: number }> => {
+    const response = await api.get('/shipments/ready-to-ship', { params });
+    const d = response.data?.data;
+    const orders: ReadyOrder[] = (Array.isArray(d) ? d : d?.data) ?? [];
+    return { orders, total: Number(d?.total ?? orders.length) };
+  },
+
+  /** Record that the courier handed over the COD cash */
+  recordCodPayment: async (
+    id: number,
+    data?: { paymentMethod?: string; notes?: string }
+  ): Promise<{ message: string; data: ShipmentResponse }> => {
+    const response = await api.post(`/shipments/${id}/cod-payment`, data ?? {});
+    return response.data;
+  },
+
   updateStatus: async (
     id: number,
-    data: { status: ShipmentStatus; location?: string; description?: string }
+    data: { status: ShipmentStatus; location?: string; description?: string; rider?: string }
   ): Promise<{ message: string; data: ShipmentResponse }> => {
     const response = await api.patch(`/shipments/${id}/status`, data);
     return response.data;

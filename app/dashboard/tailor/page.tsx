@@ -1,176 +1,229 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Scissors, ShoppingBag, Clock, CheckCircle, Truck, AlertTriangle, Users, TrendingUp, Plus } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { tailorApi, TailorDashboardStats, TailorOrder, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, PAYMENT_STATUS_COLORS } from "@/lib/tailorApi"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import { tailorApi, type TailorBoardOrder, type TailorDashboardData, type TailorBoardStage, type TailorTone } from "@/lib/tailorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
-import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { KpiIcon } from "@/components/tailor/kpi-icon"
 
-function StatCard({ icon: Icon, label, value, color, href }: {
-  icon: React.ElementType; label: string; value: string | number; color: string; href?: string
-}) {
-  const inner = (
-    <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
-        <Icon className="w-6 h-6" />
-      </div>
-      <div>
-        <p className="text-2xl font-black text-gray-900">{value}</p>
-        <p className="text-sm text-gray-500">{label}</p>
-      </div>
-    </Card>
-  )
-  return href ? <Link href={href}>{inner}</Link> : inner
+const TONE: Record<TailorTone, string> = {
+  blue: "bg-dash-accent-soft text-dash-accent-fg",
+  teal: "bg-dash-success-soft text-dash-success-fg",
+  purple: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300",
+  amber: "bg-dash-warn-soft text-dash-warn-fg",
+  red: "bg-dash-danger-soft text-dash-danger-fg",
+}
+const SUB_TONE: Record<string, string> = { muted: "text-dash-muted", red: "text-dash-danger-fg", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
+const STAGE_DOT: Record<string, string> = { new: "#7C8AA8", cutting: "#F59E0B", stitching: "#2449E8", trial: "#7C3AED", ready: "#0F766E" }
+const STAGE_PILL: Record<TailorBoardStage, string> = {
+  new: "bg-dash-neutral-soft text-dash-neutral-fg", cutting: "bg-dash-warn-soft text-dash-warn-fg", stitching: "bg-dash-accent-soft text-dash-accent-fg",
+  trial: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300", ready: "bg-dash-success-soft text-dash-success-fg",
+  delivered: "bg-dash-neutral-soft text-dash-muted", cancelled: "bg-dash-danger-soft text-dash-danger-fg",
+}
+const PAY_PILL: Record<string, [string, string]> = {
+  unpaid: ["Unpaid", "bg-dash-danger-soft text-dash-danger-fg"], partial: ["Partial", "bg-dash-warn-soft text-dash-warn-fg"], paid: ["Paid", "bg-dash-success-soft text-dash-success-fg"],
+}
+const SWATCH: Record<string, string> = {
+  white: "#F4F1EA", "off-white": "#EDE6D6", beige: "#D9C7A4", cream: "#F2E8CF", black: "#1F2430", grey: "#9AA3B2", gray: "#9AA3B2", blue: "#3B5BA9", navy: "#1F2F5C",
+  red: "#B42318", maroon: "#7B1E2B", green: "#2E7D5B", yellow: "#E8C547", pink: "#E8A0B4", brown: "#7A5230", purple: "#6D3FA0", orange: "#E8833A",
 }
 
+const whenTxt = (d: number | null) => (d === null ? "No due date" : d < 0 ? `Overdue ${-d}d` : d === 0 ? "Due today" : d === 1 ? "Tomorrow" : `In ${d} days`)
+const whenCls = (d: number | null) => (d === null ? "text-dash-muted" : d < 0 ? "text-dash-danger-fg" : d <= 1 ? "text-dash-warn-fg" : "text-dash-muted")
+const fmtDate = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+
+const card = "rounded-[14px] border border-dash-border bg-dash-card"
+const h2 = "font-dash-display text-lg font-bold"
+const linkCls = "text-[13px] font-semibold text-dash-accent hover:underline"
+const ghostBtn = "inline-flex h-11 items-center rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
+
 export default function TailorDashboardPage() {
-  const { canRead } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
-  const [stats, setStats] = useState<TailorDashboardStats | null>(null)
+  const blocked = useModuleGuard("TailorDashboard")
+  const [data, setData] = useState<TailorDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-  if (!canRead("TailorDashboard")) return <AccessDenied />
-
-  useEffect(() => {
-    tailorApi.getDashboard()
-      .then(r => {
-        const d = r.data?.data ?? r.data
-        setStats({
-          todayOrders:      d.today_orders      ?? d.todayOrders      ?? 0,
-          pendingOrders:    d.pending_orders     ?? d.pendingOrders    ?? 0,
-          readyForDelivery: d.ready_for_delivery ?? d.readyForDelivery ?? 0,
-          deliveredOrders:  d.delivered_orders   ?? d.deliveredOrders  ?? 0,
-          totalDue:         parseFloat(d.total_due ?? d.totalDue ?? 0) || 0,
-          lowStockFabrics:  d.low_stock_fabrics  ?? d.lowStockFabrics  ?? 0,
-          activeDorjis:     d.active_dorjis      ?? d.activeDorjis     ?? 0,
-          recentOrders:     (d.recent_orders     ?? d.recentOrders     ?? []).map((o: any) => ({
-            id:            o.id,
-            orderNumber:   o.order_number   ?? o.orderNumber,
-            customer:      o.customer ? { name: o.customer.name, phone: o.customer.phone } : undefined,
-            totalAmount:   parseFloat(o.total_amount ?? o.totalAmount ?? 0) || 0,
-            paidAmount:    parseFloat(o.paid_amount  ?? o.paidAmount  ?? 0) || 0,
-            dueAmount:     parseFloat(o.due_amount   ?? o.dueAmount   ?? 0) || 0,
-            orderStatus:   o.order_status   ?? o.orderStatus,
-            paymentStatus: o.payment_status ?? o.paymentStatus,
-            orderDate:     o.order_date     ?? o.orderDate,
-            deliveryDate:  o.delivery_date  ?? o.deliveryDate,
-          })),
-        })
-      })
-      .catch(() => toast.error("Failed to load dashboard"))
-      .finally(() => setLoading(false))
+  const load = useCallback(async () => {
+    setLoading(true); setError("")
+    try { setData(await tailorApi.getDashboardData()) }
+    catch (e: any) { setError(e?.response?.data?.message || "Could not load the tailor dashboard.") }
+    finally { setLoading(false) }
   }, [])
+  useEffect(() => { load() }, [load])
+
+  if (blocked) return blocked
+
+  const fmtKpi = (k: TailorDashboardData["kpis"][number]) => (k.kind === "money" ? formatCurrency(Number(k.value) || 0) : k.kind === "int" ? String(Math.round(Number(k.value) || 0)) : String(k.value))
+  // Server sub-lines embed raw numbers for money ("1,000.00 collected"); keep as provided.
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-            <Scissors className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-gray-900">Tailor Shop</h1>
-            <p className="text-sm text-gray-500">Dashboard overview</p>
-          </div>
+    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Tailor shop</h1>
+          <p className="mt-1 text-sm text-dash-muted">Today’s work, who is doing it, and what is due.</p>
         </div>
-        <Link href="/dashboard/tailor/orders/new">
-          <Button className="bg-purple-600 hover:bg-purple-700 gap-2">
-            <Plus className="w-4 h-4" /> New Order
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/tailor/measurements" className={ghostBtn}>Measurements</Link>
+          <Link href="/dashboard/tailor/fabrics" className={ghostBtn}>Fabrics</Link>
+          <Link href="/dashboard/tailor/orders/new" className="inline-flex h-11 items-center rounded-[10px] bg-dash-accent px-[18px] text-sm font-semibold text-white">+ New tailor order</Link>
+        </div>
       </div>
 
-      {/* Stat Cards */}
-      {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={ShoppingBag}    label="Today's Orders"     value={stats?.todayOrders ?? 0}      color="bg-blue-100 text-blue-600"    href="/dashboard/tailor/orders" />
-          <StatCard icon={Clock}          label="Pending Orders"     value={stats?.pendingOrders ?? 0}    color="bg-yellow-100 text-yellow-600" href="/dashboard/tailor/orders?order_status=pending" />
-          <StatCard icon={CheckCircle}    label="Ready for Delivery" value={stats?.readyForDelivery ?? 0} color="bg-green-100 text-green-600"   href="/dashboard/tailor/orders?order_status=ready" />
-          <StatCard icon={Truck}          label="Delivered"          value={stats?.deliveredOrders ?? 0}  color="bg-emerald-100 text-emerald-600" href="/dashboard/tailor/orders?order_status=delivered" />
-          <StatCard icon={TrendingUp}     label="Total Due"          value={formatCurrency(stats?.totalDue ?? 0)} color="bg-red-100 text-red-600" href="/dashboard/tailor/payments" />
-          <StatCard icon={AlertTriangle}  label="Low Stock Fabrics"  value={stats?.lowStockFabrics ?? 0}  color="bg-orange-100 text-orange-600" href="/dashboard/tailor/fabrics" />
-          <StatCard icon={Users}          label="Active Dorjis"      value={stats?.activeDorjis ?? 0}     color="bg-purple-100 text-purple-600" href="/dashboard/tailor/dorjis" />
-        </div>
+      {error && (
+        <p role="alert" className="flex items-center justify-between gap-3 rounded-[10px] bg-dash-danger-soft px-3.5 py-3 text-sm font-semibold text-dash-danger-fg">
+          {error}<button type="button" onClick={load} className="underline">Retry</button>
+        </p>
       )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Fabric Inventory", href: "/dashboard/tailor/fabrics",      color: "border-blue-200 hover:bg-blue-50 text-blue-700" },
-          { label: "Measurements",     href: "/dashboard/tailor/measurements", color: "border-green-200 hover:bg-green-50 text-green-700" },
-          { label: "Dorji / Tailors",  href: "/dashboard/tailor/dorjis",       color: "border-purple-200 hover:bg-purple-50 text-purple-700" },
-          { label: "Reports",          href: "/dashboard/tailor/reports",      color: "border-gray-200 hover:bg-gray-50 text-gray-700" },
-        ].map(a => (
-          <Link key={a.href} href={a.href}>
-            <Card className={`p-4 text-center text-sm font-semibold border-2 cursor-pointer transition-colors ${a.color}`}>
-              {a.label}
-            </Card>
-          </Link>
-        ))}
-      </div>
+      {loading && !data ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-[110px] rounded-[14px]" />)}</div>
+          <Skeleton className="h-[260px] rounded-[14px]" />
+          <div className="grid gap-4 lg:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[220px] rounded-[14px]" />)}</div>
+        </>
+      ) : data ? (
+        <>
+          <section aria-label="Summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {data.kpis.map((k) => (
+              <article key={k.label} className={cn(card, "flex flex-col gap-2 p-[18px]")}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-dash-muted">{k.label}</span>
+                  <span className={cn("flex size-8 items-center justify-center rounded-lg", TONE[k.tone])} aria-hidden><KpiIcon label={k.label} /></span>
+                </div>
+                <span className="font-dash-display text-[26px] font-bold tracking-tight tabular-nums">{fmtKpi(k)}</span>
+                <span className={cn("text-xs", SUB_TONE[k.subTone ?? "muted"])}>{k.sub}</span>
+              </article>
+            ))}
+          </section>
 
-      {/* Recent Orders */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-gray-900">Recent Orders</h2>
-          <Link href="/dashboard/tailor/orders" className="text-sm text-purple-600 hover:underline">View all</Link>
-        </div>
-        {loading ? (
-          <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
-        ) : !stats?.recentOrders?.length ? (
-          <p className="text-sm text-gray-400 text-center py-8">No orders yet</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-wide">
-                  <th className="pb-2 pr-4">Order #</th>
-                  <th className="pb-2 pr-4">Customer</th>
-                  <th className="pb-2 pr-4">Total</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2">Payment</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {stats.recentOrders.map((order: TailorOrder) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="py-3 pr-4 font-mono text-xs">
-                      <Link href={`/dashboard/tailor/orders/${order.id}`} className="text-purple-600 hover:underline">
-                        {order.orderNumber}
-                      </Link>
-                    </td>
-                    <td className="py-3 pr-4 font-medium">{order.customer?.name}</td>
-                    <td className="py-3 pr-4">{formatCurrency(order.totalAmount)}</td>
-                    <td className="py-3 pr-4">
-                      <Badge className={`text-xs ${ORDER_STATUS_COLORS[order.orderStatus]}`}>
-                        {ORDER_STATUS_LABELS[order.orderStatus]}
-                      </Badge>
-                    </td>
-                    <td className="py-3">
-                      <Badge className={`text-xs ${PAYMENT_STATUS_COLORS[order.paymentStatus]}`}>
-                        {order.paymentStatus}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <section className={cn(card, "p-5")}>
+            <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
+              <h2 className={h2}>Production board</h2>
+              <span className="text-[13px] text-dash-muted">Open an order to move it along</span>
+            </div>
+            <div className="grid gap-3 overflow-x-auto" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+              {data.board.map((col) => (
+                <div key={col.key} className="flex min-h-[160px] flex-col gap-2 rounded-xl bg-dash-bg p-2.5">
+                  <div className="flex items-center justify-between px-1 py-0.5">
+                    <span className="flex items-center gap-1.5 text-[13px] font-bold"><span className="size-2 rounded-full" style={{ background: STAGE_DOT[col.key] }} />{col.label}</span>
+                    <span className="text-xs font-bold text-dash-muted">{col.count}</span>
+                  </div>
+                  {col.orders.map((o) => <BoardCard key={o.id} o={o} />)}
+                </div>
+              ))}
+            </div>
+            {!data.has_orders && (
+              <p className="mt-3.5 text-sm text-dash-muted">No tailor orders yet. <Link href="/dashboard/tailor/orders/new" className="font-semibold text-dash-accent">Create the first order</Link> and it will appear on this board.</p>
+            )}
+          </section>
+
+          <div className="flex flex-wrap gap-4">
+            <section className={cn(card, "flex flex-1 basis-[420px] flex-col gap-2.5 p-5")}>
+              <div className="flex items-center justify-between"><h2 className={h2}>Collect payment</h2><Link href="/dashboard/tailor/payments" className={linkCls}>All payments →</Link></div>
+              {data.dues.map((d) => (
+                <div key={d.id} className="flex items-center gap-3 border-b border-dash-border-soft py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{d.customer} · {d.order_no}</div>
+                    <div className="text-xs text-dash-muted">{d.stage_label}{d.phone ? ` · ${d.phone}` : ""}</div>
+                  </div>
+                  <span className="font-bold tabular-nums text-dash-danger-fg">{formatCurrency(d.due)}</span>
+                  <Link href="/dashboard/tailor/payments" className="inline-flex h-9 items-center rounded-lg border border-dash-border px-3 text-[13px] font-semibold hover:bg-dash-neutral-soft">Collect</Link>
+                </div>
+              ))}
+              {data.dues.length === 0 && <p className="text-sm text-dash-muted">Nothing to collect. Every order is paid up.</p>}
+            </section>
+
+            <section className={cn(card, "flex flex-1 basis-[420px] flex-col gap-3 p-5")}>
+              <div className="flex items-center justify-between"><h2 className={h2}>Dorji workload</h2><Link href="/dashboard/tailor/dorjis" className={linkCls}>Manage →</Link></div>
+              {data.workload.map((d) => {
+                const c = d.percent >= 100 && d.open > 0 ? "#B42318" : d.percent >= 75 ? "#F59E0B" : "#0F766E"
+                return (
+                  <div key={d.id}>
+                    <div className="flex justify-between text-sm"><span className="font-semibold">{d.name}</span><span className="font-bold" style={{ color: c }}>{d.open} {d.open === 1 ? "piece" : "pieces"} open</span></div>
+                    <div className="mt-1.5 h-2 rounded-full bg-dash-neutral-soft"><div className="h-full rounded-full" style={{ width: `${d.percent}%`, background: c }} /></div>
+                  </div>
+                )
+              })}
+              {data.workload.length === 0 && <p className="text-sm text-dash-muted">No dorjis yet. <Link href="/dashboard/tailor/dorjis" className="font-semibold text-dash-accent">Add a dorji</Link> to track workload.</p>}
+              {data.advice && <div className="rounded-[10px] bg-dash-warn-soft px-3 py-2.5 text-[13px] text-dash-warn-fg"><strong>{data.advice.head}</strong> {data.advice.body}</div>}
+            </section>
+
+            <section className={cn(card, "flex flex-1 basis-[300px] flex-col gap-2.5 p-5")}>
+              <h2 className={h2}>Fabric alerts</h2>
+              {data.fabric_alerts.map((f) => (
+                <div key={f.id} className="flex items-center gap-2.5">
+                  <span className="size-7 shrink-0 rounded-lg border border-dash-border" style={{ background: f.hex_color || SWATCH[(f.color ?? "").toLowerCase()] || "#E3E6EE" }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{f.name}{f.color ? ` · ${f.color}` : ""}</div>
+                    <div className={cn("text-xs font-semibold", f.out ? "text-dash-danger-fg" : "text-dash-warn-fg")}>
+                      {f.out ? "Out of stock" : `${f.stock} ${f.unit ?? ""} left (reorder at ${f.reorder_level})`}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {data.fabric_alerts.length === 0 && <p className="text-sm text-dash-muted">{data.fabrics_count ? "No fabric is running low." : "No fabrics added yet."}</p>}
+              <Link href="/dashboard/vendors/purchase-orders" className={cn(ghostBtn, "mt-auto")}>Order fabric</Link>
+            </section>
           </div>
-        )}
-      </Card>
+
+          <section className={cn(card, "flex flex-col gap-2.5 p-5")}>
+            <div className="flex items-center justify-between"><h2 className={h2}>Recent orders</h2><Link href="/dashboard/tailor/orders" className={linkCls}>View all →</Link></div>
+            {data.recent_orders.map((r) => {
+              const pay = r.payment ? PAY_PILL[r.payment] : null
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-3 border-b border-dash-border-soft py-2.5">
+                  <div className="min-w-[200px] flex-1">
+                    <Link href={`/dashboard/tailor/orders/${r.id}`} className="font-bold hover:underline">{r.order_no}</Link> <span className="font-semibold">{r.customer}</span>
+                  </div>
+                  <span className="font-bold tabular-nums">{formatCurrency(r.total)}</span>
+                  <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", STAGE_PILL[r.stage])}>{r.stage_label}</span>
+                  <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold", pay ? pay[1] : "bg-dash-neutral-soft text-dash-muted")}>{pay ? pay[0] : "—"}</span>
+                </div>
+              )
+            })}
+            {data.recent_orders.length === 0 && <p className="text-sm text-dash-muted">No orders yet.</p>}
+          </section>
+
+          <section className={cn(card, "flex flex-col gap-2.5 p-5")}>
+            <div className="flex items-center justify-between"><h2 className={h2}>Due soon</h2><Link href="/dashboard/tailor/orders" className={linkCls}>All orders →</Link></div>
+            {data.due_soon.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-3 border-b border-dash-border-soft py-2.5">
+                <div className="min-w-[200px] flex-1">
+                  <Link href={`/dashboard/tailor/orders/${r.id}`} className="font-bold hover:underline">{r.order_no}</Link> <span className="font-semibold">{r.customer}</span>
+                  <div className="text-xs text-dash-muted">{r.items}</div>
+                </div>
+                <span className="text-[13px] text-dash-muted">{fmtDate(r.delivery_date)}</span>
+                <span className={cn("font-bold", whenCls(r.days_left))}>{whenTxt(r.days_left)}</span>
+              </div>
+            ))}
+            {data.due_soon.length === 0 && <p className="text-sm text-dash-muted">No orders due in the next 7 days.</p>}
+          </section>
+        </>
+      ) : null}
     </div>
+  )
+}
+
+function BoardCard({ o }: { o: TailorBoardOrder }) {
+  return (
+    <article className="flex flex-col gap-1.5 rounded-[10px] border border-dash-border bg-dash-card p-2.5">
+      <div className="flex justify-between gap-1.5">
+        <Link href={`/dashboard/tailor/orders/${o.id}`} className="text-xs font-bold hover:underline">{o.order_no}</Link>
+        {o.urgent && <span className="rounded-md bg-dash-danger-soft px-1.5 py-px text-[10px] font-bold text-dash-danger-fg">URGENT</span>}
+      </div>
+      <span className="text-[13px] font-semibold">{o.customer}</span>
+      <span className="text-xs text-dash-neutral-fg">{o.items}</span>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-dash-muted">{o.dorji || "Not assigned"}</span>
+        <span className={cn("font-bold", whenCls(o.days_left))}>{whenTxt(o.days_left)}</span>
+      </div>
+      <Link href={`/dashboard/tailor/orders/${o.id}`} className="flex h-8 items-center justify-center rounded-lg border border-dash-border text-xs font-bold hover:bg-dash-neutral-soft">Open order →</Link>
+    </article>
   )
 }

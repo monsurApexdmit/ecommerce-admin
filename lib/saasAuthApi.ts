@@ -84,6 +84,13 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface PinLoginPayload {
+  companyId: number;
+  /** staff phone, email or staff id */
+  identifier: string;
+  pin: string;
+}
+
 export interface LoginResponse {
   message: string;
   data: {
@@ -136,7 +143,9 @@ export interface User {
   joinedDate: string;
   lastLogin?: string;
   /** null = full access (owner/admin). Object = per-module flags. Missing key = no access. */
-  permissions: Record<string, { read: boolean; write: boolean; delete: boolean }> | null;
+  permissions: Record<string, { read: boolean; write: boolean; delete: boolean; create?: boolean; edit?: boolean }> | null;
+  /** Sensitive-action flags of the user's role; all true for owners and admins. */
+  sensitive?: { cost: boolean; discount: boolean; refund: boolean; export: boolean; void: boolean } | null;
   roleId?: number | null;
 }
 
@@ -213,6 +222,15 @@ export const saasAuthApi = {
    */
   login: async (payload: LoginPayload) => {
     const response = await api.post<LoginResponse>('/auth/login', payload);
+    return response.data;
+  },
+
+  /**
+   * POST /auth/pin-login
+   * Staff PIN login (returns the same token payload as login, plus staffId)
+   */
+  pinLogin: async (payload: PinLoginPayload) => {
+    const response = await api.post<LoginResponse & { data: { staffId?: number } }>('/auth/pin-login', payload);
     return response.data;
   },
 

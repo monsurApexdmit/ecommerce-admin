@@ -10,11 +10,18 @@ export interface Product {
     category: string        // display name
     categoryId?: string     // backend id
     unitId?: string
+    unitName?: string
     brandId?: string
+    brandName?: string
+    tag?: string
+    gallery?: string[]
     price: number
     salePrice: number
     offerPrice?: number | null
     offerType?: string | null
+    offerEndsAt?: string | null
+    wholesalePrice?: number | null
+    minWholesaleQty?: number | null
     costPrice?: number
     profitMargin?: number
     marginType?: string
@@ -55,6 +62,10 @@ export interface Product {
         quantity: number
     }[]
     reorderPoint?: number
+    stockByLocation?: { locationId: string; locationName: string; quantity: number }[]
+    stockState?: "ok" | "low" | "out"
+    availableInPos?: boolean
+    visibleOnline?: boolean
     trackingType?: "none" | "serial" | "batch"
     isBundle?: boolean
     bundlePriceOverride?: number
@@ -100,11 +111,12 @@ interface ProductContextType {
     getProductsByVendor: (vendorId: string) => Product[]
     deductStock: (cartItems: { productId: string; variantId?: string; quantity: number }[], warehouseId: string) => void
     refreshProducts: () => Promise<void>
+    fetchAllProducts: () => Promise<Product[]>
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined)
 
-function convertToProduct(p: ProductResponse): Product {
+export function convertToProduct(p: ProductResponse): Product {
     const categoryObj = typeof p.category === "object" && p.category !== null ? p.category : null
     // DTO returns camelCase IDs
     const categoryId = categoryObj ? String(categoryObj.id) : ((p as any).categoryId ? String((p as any).categoryId) : undefined)
@@ -119,11 +131,21 @@ function convertToProduct(p: ProductResponse): Product {
         category: categoryName,
         categoryId,
         unitId: (p as any).unitId ? String((p as any).unitId) : undefined,
+        unitName: (p as any).unitName || (p as any).unit?.name || undefined,
+        brandName: (p as any).brandName || (p as any).brand?.name || undefined,
+        tag: (p as any).tag || (p as any).customTag || undefined,
+        gallery: Array.isArray(p.images)
+            ? p.images.map((i: any) => i?.path).filter((x: any) => typeof x === "string" && x.trim())
+                .map((x: string) => (x.startsWith("/api/proxy/") || x.startsWith("http") ? x : `/api/proxy/uploads/${x}`))
+            : [],
         brandId: (p as any).brandId ? String((p as any).brandId) : undefined,
         price: p.price,
         salePrice: p.salePrice ?? p.sale_price,
         offerPrice: (p as any).offerPrice ?? (p as any).offer_price ?? undefined,
         offerType: (p as any).offerType ?? (p as any).offer_type ?? undefined,
+        offerEndsAt: (p as any).offerEndsAt ?? (p as any).offer_ends_at ?? undefined,
+        wholesalePrice: (p as any).wholesalePrice ?? (p as any).wholesale_price ?? undefined,
+        minWholesaleQty: (p as any).minWholesaleQty ?? (p as any).min_wholesale_qty ?? undefined,
         costPrice: (p as any).costPrice ?? p.cost_price,
         profitMargin: (p as any).profitMargin ?? p.profit_margin,
         marginType: (p as any).marginType ?? p.margin_type,
@@ -194,6 +216,12 @@ function convertToProduct(p: ProductResponse): Product {
             warehouseId: String(i.warehouse_id),
             quantity: i.quantity,
         })) || [],
+        stockByLocation: Array.isArray((p as any).stockByLocation)
+            ? (p as any).stockByLocation.map((l: any) => ({ locationId: String(l.locationId), locationName: l.locationName || "", quantity: Number(l.quantity) || 0 }))
+            : undefined,
+        stockState: (p as any).stockState,
+        availableInPos: (p as any).availableInPos,
+        visibleOnline: (p as any).visibleOnline,
         reorderPoint: (p as any).reorderPoint ?? (p as any).reorder_point ?? undefined,
         trackingType: (p as any).trackingType ?? (p as any).tracking_type ?? "none",
         isBundle: (p as any).isBundle ?? (p as any).is_bundle ?? false,
@@ -215,12 +243,24 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
+    // Walks every page so lists/exports are never truncated at the page size.
+    const fetchAllProducts = async (): Promise<Product[]> => {
+        const out: Product[] = []
+        let page = 1
+        for (;;) {
+            const res = await productApi.getAll({ limit: 200, page })
+            out.push(...(res.data ?? []).map(convertToProduct))
+            if (!res.pagination?.has_next || page >= 50) break
+            page++
+        }
+        return out
+    }
+
     const refreshProducts = async () => {
         try {
             setIsLoading(true)
             setError(null)
-            const res = await productApi.getAll({ limit: 200 })
-            setProducts((res.data ?? []).map(convertToProduct))
+            setProducts(await fetchAllProducts())
         } catch (err: any) {
             if (err.response?.status !== 403) {
                 console.error("Failed to fetch products:", err)
@@ -251,6 +291,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 sale_price: product.salePrice,
                 offer_price: product.offerPrice,
                 offer_type: product.offerType,
+                offer_ends_at: product.offerEndsAt,
+                wholesale_price: product.wholesalePrice,
+                min_wholesale_qty: product.minWholesaleQty,
                 cost_price: product.costPrice,
                 profit_margin: product.profitMargin,
                 margin_type: product.marginType,
@@ -269,6 +312,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 is_best_seller: product.isBestSeller,
                 is_featured: product.isFeatured,
                 deal_label: product.dealLabel,
+                tag: product.tag,
+                available_in_pos: (product as any).availableInPos,
+                visible_online: (product as any).visibleOnline,
                 attributes: product.attributes,
                 variants: product.variants?.map(v => ({
                     name: v.name,
@@ -315,6 +361,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 sale_price: product.salePrice,
                 offer_price: product.offerPrice,
                 offer_type: product.offerType,
+                offer_ends_at: product.offerEndsAt,
+                wholesale_price: product.wholesalePrice,
+                min_wholesale_qty: product.minWholesaleQty,
                 cost_price: product.costPrice,
                 profit_margin: product.profitMargin,
                 margin_type: product.marginType,
@@ -329,6 +378,9 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 is_best_seller: product.isBestSeller,
                 is_featured: product.isFeatured,
                 deal_label: product.dealLabel,
+                tag: product.tag,
+                available_in_pos: (product as any).availableInPos,
+                visible_online: (product as any).visibleOnline,
                 attributes: product.attributes,
                 variants: product.variants?.map(v => {
                     const numericId = parseInt(v.id)
@@ -434,6 +486,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
                 getProductsByVendor,
                 deductStock,
                 refreshProducts,
+                fetchAllProducts,
             }}
         >
             {children}

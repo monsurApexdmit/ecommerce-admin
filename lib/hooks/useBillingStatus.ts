@@ -52,7 +52,8 @@ export function useBillingStatus(): BillingStatusResult {
       const response = await saasBillingApi.getCurrentSubscription()
       setPlanId(response.data.planId)
       setPlanName(response.data.planName)
-      setSubscriptionStatus(response.data.status)
+      const rawStatus = response.data.status
+      setSubscriptionStatus(rawStatus === "trialing" ? "active" : rawStatus === "past_due" ? "pending" : rawStatus)
       setSubscriptionEndDate(response.data.currentPeriodEnd)
     } catch (err: any) {
       if (err.response?.status !== 404) {
@@ -68,11 +69,9 @@ export function useBillingStatus(): BillingStatusResult {
   }, [company?.id])
 
   // Calculate days until renewal
-  const daysUntilRenewal =
-    subscriptionEndDate &&
-    Math.ceil(
-      (new Date(subscriptionEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-    )
+  const daysUntilRenewal: number | null = subscriptionEndDate
+    ? Math.ceil((new Date(subscriptionEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null
 
   const isRenewingSoon = daysUntilRenewal ? daysUntilRenewal <= 7 && daysUntilRenewal > 0 : false
   const isSubscriptionExpired = daysUntilRenewal ? daysUntilRenewal <= 0 : false

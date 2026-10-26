@@ -57,7 +57,7 @@ export interface AttributeResponse {
   name: string;
   display_name: string;
   option_type: string;
-  values: string;
+  values: string | { label: string; color?: string | null }[];
   status: boolean;
   created_at: string;
   updated_at: string;
@@ -81,7 +81,7 @@ export interface CreateAttributeData {
   name: string;
   displayName: string;
   optionType: string;
-  values: string;
+  values: string | { label: string; color?: string | null }[];
   status?: boolean;
 }
 
@@ -89,7 +89,7 @@ export interface UpdateAttributeData {
   name?: string;
   displayName?: string;
   optionType?: string;
-  values?: string;
+  values?: string | { label: string; color?: string | null }[];
   status?: boolean;
 }
 

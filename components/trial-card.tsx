@@ -63,18 +63,18 @@ export function TrialCard() {
 
   return (
     <div
-      className="rounded-xl border border-border bg-card p-3 group-data-[collapsible=icon]:hidden"
+      className="rounded-xl border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden"
       role="region"
       aria-label="Trial status"
     >
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-brand-fg shrink-0" />
-        <p className="text-[13px] font-medium text-foreground">
+        <p className="text-[13px] font-medium text-white">
           {expired ? "Trial expired" : "Free trial"}
         </p>
       </div>
 
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-1 text-xs text-[#8C96AD]">
         {expired
           ? "Upgrade to keep your data."
           : `${remaining} ${remaining === 1 ? "day" : "days"} remaining`}

@@ -21,7 +21,7 @@ export function ThemeAccentControls() {
   }, [])
 
   if (!mounted) {
-    return <div className="size-8" aria-hidden />
+    return <div className="size-11" aria-hidden />
   }
 
   const isDark = resolvedTheme === "dark"
@@ -31,9 +31,10 @@ export function ThemeAccentControls() {
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="shell-btn"
     >
-      {isDark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
+      {isDark ? <Sun className="size-[18px] text-amber-400" /> : <Moon className="size-[18px]" />}
     </button>
   )
 }

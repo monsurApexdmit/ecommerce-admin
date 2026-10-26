@@ -117,7 +117,101 @@ export interface CreateCustomerReturnData {
   }[];
 }
 
+
+export interface ReturnLine { name: string; quantity: number; price: number; total: number; reason: string }
+
+export interface CustomerReturnRow {
+  id: number
+  returnNumber: string
+  createdAt: string
+  customerId: number | null
+  customerName: string | null
+  orderId: number | null
+  invoiceNo: string | null
+  itemsSummary: string
+  lines: ReturnLine[]
+  reason: string | null
+  restocked: boolean
+  condition: 'restock' | 'writeoff'
+  amount: number
+  refundMethod: 'cash' | 'original' | 'credit' | 'none' | string | null
+  status: 'pending' | 'completed' | 'rejected' | string
+  isRequest: boolean
+  locationId: number | null
+  locationName: string | null
+  note: string | null
+  rejectionReason: string | null
+  processedAt: string | null
+  refundedVia?: string | null
+  refundAmount?: number
+}
+
+export interface CustomerReturnLogStats {
+  returns30d: number
+  ordersPct30d: string | null
+  pendingCount: number
+  pendingAmount: number
+  restockedUnits: number
+  refundedAmount: number
+  refundedCount: number
+  topReason: string | null
+  topReasonCount: number
+  writtenOffValue: number
+}
+
+export interface ReturnableOrder {
+  id: number
+  invoiceNo: string
+  customerId: number | null
+  customerName: string
+  date: string
+  amount: number
+  ageDays: number
+  locationId: number | null
+  paidVia?: string | null
+  items: { sellItemId: number; productId: number; variantId: number | null; name: string; bought: number; returned: number; returnable: number; price: number }[]
+}
+
+export interface CreateReturnRequest {
+  orderId: number
+  items: { sellItemId?: number; productId: number; variantId?: number | null; quantity: number; price?: number; reason: string }[]
+  refundMethod: 'cash' | 'original' | 'credit' | 'none'
+  restock: boolean
+  locationId?: number
+  note?: string
+  mode: 'complete' | 'request'
+}
+
+
 export const customerReturnsApi = {
+  getLog: async (params?: Record<string, any>): Promise<{
+    data: CustomerReturnRow[]; total: number; lastPage: number
+    counts: Record<'all' | 'pending' | 'completed' | 'rejected' | 'restocked' | 'written_off', number>
+    stats: CustomerReturnLogStats
+  }> => {
+    const res = await api.get('/customer-returns', { params })
+    const raw = res.data.data
+    const rows = Array.isArray(raw) ? raw : raw?.data ?? []
+    const meta = res.data.meta ?? raw?.meta ?? {}
+    return { data: rows, total: meta.total ?? rows.length, lastPage: meta.last_page ?? 1, counts: meta.counts ?? {}, stats: meta.stats ?? {} }
+  },
+  getReturnableOrders: async (search?: string): Promise<ReturnableOrder[]> => {
+    const res = await api.get('/customer-returns/returnable-orders', { params: { search: search || undefined, limit: 20 } })
+    return res.data.data ?? []
+  },
+  createReturn: async (data: CreateReturnRequest): Promise<CustomerReturnRow> => {
+    const res = await api.post('/customer-returns', data)
+    return res.data.data
+  },
+  approveReturn: async (id: number): Promise<CustomerReturnRow> => {
+    const res = await api.post(`/customer-returns/${id}/approve`)
+    return res.data.data
+  },
+  rejectReturn: async (id: number, reason: string): Promise<CustomerReturnRow> => {
+    const res = await api.post(`/customer-returns/${id}/reject`, { reason, notes: reason })
+    return res.data.data
+  },
+
   getAll: async (params?: {
     page?: number;
     limit?: number;
@@ -126,7 +220,11 @@ export const customerReturnsApi = {
   }): Promise<CustomerReturnListResponse> => {
     const response = await api.get('/customer-returns', { params });
     // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
-    const laravelData = response.data.data || {};
+    const rawData = response.data.data;
+    const meta = response.data.meta || {};
+    const laravelData = Array.isArray(rawData)
+      ? { data: rawData, total: meta.total, per_page: meta.per_page, current_page: meta.current_page }
+      : rawData || {};
     return {
       message: response.data.message || '',
       data: laravelData.data || [],

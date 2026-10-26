@@ -25,9 +25,9 @@ interface CompanySettingsContextType {
 const defaultSettings: CompanySettingsContextType = {
   settings: null,
   taxRate: 0,
-  currency: "USD",
-  timezone: "UTC",
-  formatCurrency: (amount) => `${CURRENCY_SYMBOLS["USD"]}${amount.toFixed(2)}`,
+  currency: "BDT",
+  timezone: "Asia/Dhaka",
+  formatCurrency: (amount) => `${CURRENCY_SYMBOLS["BDT"]}${amount.toFixed(2)}`,
   formatTaxLabel: () => "Tax",
   refreshSettings: async () => {},
 }
@@ -39,7 +39,7 @@ export function CompanySettingsProvider({ children }: { children: React.ReactNod
 
   const buildFormatter = useCallback((s: CompanySettings | null) => {
     return (amount: number): string => {
-      if (!s) return `${CURRENCY_SYMBOLS["USD"]}${amount.toFixed(2)}`
+      if (!s) return `${CURRENCY_SYMBOLS["BDT"]}${amount.toFixed(2)}`
 
       const decimalPlaces = s.currencyDecimalPlaces ?? 2
       const decSep = s.currencyDecimalSeparator ?? "."
@@ -51,7 +51,9 @@ export function CompanySettingsProvider({ children }: { children: React.ReactNod
 
       let formattedInt = intPart
       if (thouSep) {
-        formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thouSep)
+        formattedInt = s.numberFormat === "lakh"
+          ? intPart.replace(/\B(?=(\d\d)*\d{3}(?!\d))/g, thouSep) // 1,00,000
+          : intPart.replace(/\B(?=(\d{3})+(?!\d))/g, thouSep)
       }
 
       const formatted = decimalPlaces > 0 ? `${formattedInt}${decSep}${decPart}` : formattedInt
@@ -75,8 +77,8 @@ export function CompanySettingsProvider({ children }: { children: React.ReactNod
   }, [fetchSettings])
 
   const taxRate = settings?.taxRate ?? 0
-  const currency = settings?.currency ?? "USD"
-  const timezone = settings?.timezone ?? "UTC"
+  const currency = settings?.currency ?? "BDT"
+  const timezone = settings?.timezone ?? "Asia/Dhaka"
   const formatCurrency = buildFormatter(settings)
   const formatTaxLabel = () =>
     taxRate > 0 ? `Tax (${taxRate}%)` : "Tax"

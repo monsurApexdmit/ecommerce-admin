@@ -124,7 +124,59 @@ export interface LocationProduct {
   stock: number;
 }
 
+export interface TransferDocument {
+  id: number;
+  transferNo: string;
+  status: 'completed' | 'cancelled';
+  from: { id: number; name: string };
+  to: { id: number; name: string };
+  reason: string;
+  sentWith: string | null;
+  note: string | null;
+  units: number;
+  itemsSummary: string;
+  lines: { productId: number; variantId: number | null; name: string; quantity: number }[];
+  createdAt: string;
+  createdBy: string | null;
+  canCancel: boolean;
+  isReversal?: boolean;
+  reversedBy?: string | null;
+}
+
+export interface CreateTransferDocument {
+  fromLocationId: number;
+  toLocationId: number;
+  reason: string;
+  sentWith?: string;
+  note?: string;
+  items: { productId: number; variantId?: number; quantity: number }[];
+}
+
 export const transferApi = {
+  createDocument: async (data: CreateTransferDocument): Promise<TransferDocument> => {
+    const response = await api.post('/transfers/document', data);
+    return response.data.data;
+  },
+
+  getDocuments: async (params?: { search?: string; status?: string; location_id?: number; page?: number; per_page?: number }): Promise<{
+    data: TransferDocument[]; total: number; stats: { count: number; unitsMoved: number };
+  }> => {
+    const response = await api.get('/transfers/documents', { params });
+    const d = response.data.data ?? {};
+    const body = response.data;
+    const rows = Array.isArray(d) ? d : d.data ?? [];
+    return {
+      data: rows,
+      total: body.meta?.total ?? d.total ?? rows.length,
+      stats: body.meta?.stats ?? body.stats ?? d.stats ?? { count: rows.length, unitsMoved: 0 },
+    };
+  },
+
+  cancelDocument: async (id: number): Promise<TransferDocument> => {
+    const response = await api.put(`/transfers/documents/${id}/cancel`);
+    return response.data.data;
+  },
+
   getAll: async (): Promise<TransferListResponse> => {
     const response = await api.get('/transfers');
     // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }

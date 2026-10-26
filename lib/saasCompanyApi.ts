@@ -147,8 +147,15 @@ export interface CompanyUser {
   } | null;
   status: 'active' | 'invited' | 'inactive';
   joinedDate: string;
-  lastLogin?: string;
+  lastLogin?: string | null;
   avatar?: string;
+  phone?: string | null;
+  /** 'user' = saas user row, 'invitation' = pending invitation (id is the invitation id) */
+  rowType?: 'user' | 'invitation';
+  invitationId?: number | null;
+  isOwner?: boolean;
+  invitationExpired?: boolean;
+  invitedAt?: string | null;
 }
 
 export interface GetTeamUsersResponse {
@@ -158,6 +165,10 @@ export interface GetTeamUsersResponse {
     totalUsers: number;
     maxUsers: number;
     canAddMore: boolean;
+    activeUsers?: number;
+    invitedUsers?: number;
+    seatsUsed?: number;
+    planName?: string | null;
   };
 }
 
@@ -165,6 +176,14 @@ export interface InviteUserPayload {
   email: string;
   fullName: string;
   roleId: number;
+  phone?: string;
+}
+
+export interface UpdateTeamMemberPayload {
+  email?: string;
+  fullName?: string;
+  phone?: string;
+  roleId?: number;
 }
 
 export interface InviteUserResponse {
@@ -180,7 +199,8 @@ export interface InviteUserResponse {
 }
 
 export interface UpdateUserRolePayload {
-  role: 'admin' | 'manager' | 'staff';
+  role?: 'admin' | 'manager' | 'staff';
+  roleId?: number;
 }
 
 export interface UpdateUserRoleResponse {
@@ -252,8 +272,14 @@ export interface CompanySettingsPayload {
   currencyDecimalPlaces?: 0 | 1 | 2;
   weightUnit?: 'kg' | 'lb' | 'g' | 'oz';
   dimensionUnit?: 'cm' | 'in' | 'mm';
-  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD' | 'D MMM YYYY';
   timeFormat?: '12h' | '24h';
+  /** 'intl' = 100,000.00 | 'lakh' = 1,00,000.00 */
+  numberFormat?: 'intl' | 'lakh';
+  accentName?: string;
+  brandPrimaryColor?: string;
+  brandAccentColor?: string;
+  brandBackgroundColor?: string;
 }
 
 export interface CompanySettings {
@@ -271,8 +297,13 @@ export interface CompanySettings {
   currencyDecimalPlaces?: 0 | 1 | 2;
   weightUnit?: 'kg' | 'lb' | 'g' | 'oz';
   dimensionUnit?: 'cm' | 'in' | 'mm';
-  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD';
+  dateFormat?: 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD' | 'D MMM YYYY';
   timeFormat?: '12h' | '24h';
+  numberFormat?: 'intl' | 'lakh';
+  accentName?: string | null;
+  brandPrimaryColor?: string | null;
+  brandAccentColor?: string | null;
+  brandBackgroundColor?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -311,7 +342,9 @@ export const saasCompanyApi = {
    * Update company profile
    */
   updateProfile: async (payload: UpdateCompanyPayload) => {
-    const response = await api.put<UpdateCompanyResponse>('/auth/company/profile', payload);
+    // The backend expects the profile fields at the top level (not wrapped in `companyProfile`).
+    const body = (payload as any)?.companyProfile ?? payload;
+    const response = await api.put<UpdateCompanyResponse>('/auth/company/profile', body);
     return response.data;
   },
 
@@ -438,6 +471,39 @@ export const saasCompanyApi = {
    */
   resendInvitation: async (userId: number) => {
     const response = await api.post(`/auth/team/${userId}/resend-invitation`);
+    return response.data;
+  },
+
+  /**
+   * PUT /auth/team/:userId
+   * Update a team member's name, phone or role
+   */
+  updateTeamMember: async (userId: number, payload: UpdateTeamMemberPayload) => {
+    const response = await api.put(`/auth/team/${userId}`, payload);
+    return response.data;
+  },
+
+  /**
+   * PATCH /auth/team/:userId/status
+   * Activate or deactivate a team member
+   */
+  setTeamMemberStatus: async (userId: number, status: 'active' | 'inactive') => {
+    const response = await api.patch(`/auth/team/${userId}/status`, { status });
+    return response.data;
+  },
+
+  /** PUT /auth/team/invitations/:invitationId - edit a pending invitation (no email sent) */
+  updateInvitation: async (invitationId: number, payload: UpdateTeamMemberPayload) => {
+    const response = await api.put(`/auth/team/invitations/${invitationId}`, payload);
+    return response.data;
+  },
+
+  /**
+   * DELETE /auth/team/invitations/:invitationId
+   * Revoke a pending invitation
+   */
+  revokeInvitation: async (invitationId: number) => {
+    const response = await api.delete(`/auth/team/invitations/${invitationId}`);
     return response.data;
   },
 

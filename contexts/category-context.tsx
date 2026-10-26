@@ -10,6 +10,12 @@ export interface Category {
   Parent: Category | null
   Children: Category[] | null
   status: boolean
+  description?: string | null
+  image?: string | null
+  imageFile?: File | null
+  products_count?: number | null
+  color?: string | null
+  sort_order?: number
   created_at: string
   updated_at: string
   deleted_at: string | null
@@ -22,6 +28,8 @@ interface CategoryContextType {
   addCategory: (category: Omit<Category, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'Children' | 'Parent'>) => Promise<void>
   updateCategory: (id: string, updates: Partial<Category>) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
+  bulkDeleteCategories: (ids: string[]) => Promise<{ deleted: number; kept: number; keptNames: string[] }>
+  reorderCategories: (ids: string[]) => Promise<void>
   getCategoryById: (id: string) => Category | undefined
   getParentCategories: () => Category[]
   getChildCategories: (parentId: string) => Category[]
@@ -40,6 +48,11 @@ function convertToCategory(backendCategory: CategoryResponse): Category {
     Parent: backendCategory.parent ? convertToCategory(backendCategory.parent) : null,
     Children: backendCategory.children?.map(convertToCategory) || null,
     status: backendCategory.status,
+    description: backendCategory.description ?? null,
+    image: backendCategory.image ?? null,
+    products_count: backendCategory.productsCount ?? null,
+    color: backendCategory.color ?? null,
+    sort_order: backendCategory.sortOrder ?? 0,
     created_at: backendCategory.createdAt || '',
     updated_at: backendCategory.updatedAt || '',
     deleted_at: null,
@@ -54,12 +67,11 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
   // Fetch categories from backend
   const refreshCategories = async () => {
     try {
-      setIsLoading(true)
       setError(null)
 
       const response = await categoryApi.getAll({
         view: 'flat',
-        limit: 100,
+        limit: 1000,
         include_inactive: true,
       })
 
@@ -86,6 +98,9 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
         category_name: category.category_name,
         parent_id: category.parent_id ? parseInt(category.parent_id) : null,
         status: category.status,
+        description: category.description,
+        color: category.color,
+        imageFile: category.imageFile,
       })
 
       // Refresh categories to get updated tree structure
@@ -108,6 +123,9 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       if (updates.status !== undefined) {
         updateData.status = updates.status
       }
+      if (updates.description !== undefined) updateData.description = updates.description
+      if (updates.color !== undefined) updateData.color = updates.color
+      if (updates.imageFile) updateData.imageFile = updates.imageFile
 
       await categoryApi.update(parseInt(id), updateData)
 
@@ -126,6 +144,25 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
       await refreshCategories()
     } catch (err: any) {
       throw new Error(err.response?.data?.message || err.response?.data?.error || 'Failed to delete category')
+    }
+  }
+
+  const bulkDeleteCategories = async (ids: string[]) => {
+    try {
+      const res = await categoryApi.bulkDelete(ids.map((i) => parseInt(i)))
+      await refreshCategories()
+      return res
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || 'Failed to delete categories')
+    }
+  }
+
+  const reorderCategories = async (ids: string[]) => {
+    try {
+      await categoryApi.reorder(ids.map((i) => parseInt(i)))
+      await refreshCategories()
+    } catch (err: any) {
+      throw new Error(err.response?.data?.message || 'Failed to save the order')
     }
   }
 
@@ -186,6 +223,8 @@ export function CategoryProvider({ children }: { children: React.ReactNode }) {
         addCategory,
         updateCategory,
         deleteCategory,
+        bulkDeleteCategories,
+        reorderCategories,
         getCategoryById,
         getParentCategories,
         getChildCategories,

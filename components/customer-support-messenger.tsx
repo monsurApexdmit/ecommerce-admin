@@ -60,7 +60,7 @@ function toUiMsg(m: SupportMessage): UiMessage {
   return {
     id: String(m.id),
     type: m.senderType === "staff" ? "staff" : "customer",
-    text: m.body,
+    text: m.body ?? "",
     senderName: m.senderName,
     timestamp: new Date(m.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
   }

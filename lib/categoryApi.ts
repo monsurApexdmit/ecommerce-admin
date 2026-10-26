@@ -56,9 +56,14 @@ export interface CategoryResponse {
   id: number;
   categoryName: string;
   parentId: number | null;
+  description?: string | null;
+  image?: string | null;
+  color?: string | null;
+  sortOrder?: number;
   parent?: CategoryResponse;
   children?: CategoryResponse[];
   status: boolean;
+  productsCount?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,12 +96,20 @@ export interface CreateCategoryData {
   category_name: string;
   parent_id?: number | null;
   status?: boolean;
+  description?: string | null;
+  image?: string | null;
+  color?: string | null;
+  imageFile?: File | null;
 }
 
 export interface UpdateCategoryData {
   category_name?: string;
   parent_id?: number | null;
   status?: boolean;
+  description?: string | null;
+  image?: string | null;
+  color?: string | null;
+  imageFile?: File | null;
 }
 
 export const categoryApi = {
@@ -156,6 +169,16 @@ export const categoryApi = {
       parentId: data.parent_id === undefined ? null : data.parent_id,
       status: data.status,
     };
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.color) payload.color = data.color;
+    if (data.imageFile) {
+      const fd = new FormData();
+      Object.entries(payload).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, String(v)); });
+      fd.append('image', data.imageFile);
+      const res = await api.post('/categories/with-image', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      return res.data;
+    }
+    if (data.image !== undefined) payload.image = data.image;
     const response = await api.post('/categories/', payload);
     return response.data;
   },
@@ -168,6 +191,17 @@ export const categoryApi = {
     if (data.category_name !== undefined) payload.categoryName = data.category_name;
     if ('parent_id' in data) payload.parentId = data.parent_id === undefined ? null : data.parent_id;
     if (data.status !== undefined) payload.status = data.status;
+    if (data.description !== undefined) payload.description = data.description;
+    if (data.color !== undefined) payload.color = data.color;
+    if (data.imageFile) {
+      const fd = new FormData();
+      Object.entries(payload).forEach(([k, v]) => { if (v !== undefined && v !== null) fd.append(k, String(v)); });
+      fd.append('image', data.imageFile);
+      fd.append('_method', 'PUT');
+      const res = await api.post(`/categories/${id}/with-image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      return res.data;
+    }
+    if (data.image !== undefined) payload.image = data.image;
     const response = await api.put(`/categories/${id}`, payload);
     return response.data;
   },
@@ -189,11 +223,19 @@ export const categoryApi = {
   },
 
   /**
-   * Bulk delete
+   * Bulk delete: removes what it can; categories with products or sub-categories are kept.
    */
-  bulkDelete: async (ids: number[]): Promise<{ message: string; deleted: number }> => {
+  bulkDelete: async (ids: number[]): Promise<{ deleted: number; kept: number; keptNames: string[] }> => {
     const response = await api.post('/categories/bulk-delete', { ids });
-    return response.data;
+    const d = response.data?.data ?? {};
+    return { deleted: d.deleted ?? 0, kept: d.kept ?? 0, keptNames: d.keptNames ?? [] };
+  },
+
+  /**
+   * Save a manual order for a set of sibling categories (ids in the desired order).
+   */
+  reorder: async (ids: number[]): Promise<void> => {
+    await api.post('/categories/reorder', { ids });
   },
 };
 

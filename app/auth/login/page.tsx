@@ -12,7 +12,11 @@ import { useSaasAuth } from "@/contexts/saas-auth-context"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useSaasAuth()
+  const { login, pinLogin } = useSaasAuth()
+  const [mode, setMode] = useState<"password" | "pin">("password")
+  const [companyId, setCompanyId] = useState("")
+  const [identifier, setIdentifier] = useState("")
+  const [pin, setPin] = useState("")
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -26,10 +30,25 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      if (mode === "pin") {
+        const cid = parseInt(companyId, 10)
+        if (!cid || cid < 1) throw { local: "Enter a valid numeric Company ID." }
+        if (!identifier.trim()) throw { local: "Enter your phone, email or staff ID." }
+        if (!/^\d{4,6}$/.test(pin)) throw { local: "PIN must be 4 to 6 digits." }
+        await pinLogin(cid, identifier.trim(), pin)
+        try { localStorage.setItem("last_pin_company_id", String(cid)) } catch {}
+        return
+      }
       await login(email, password)
       // Navigation is handled in login function
     } catch (err: any) {
-      const errorMessage =
+      const status = err.response?.status
+      let errorMessage: string
+      if (err.local) errorMessage = err.local
+      else if (mode === "pin" && status === 401) errorMessage = err.response?.data?.message || "Incorrect PIN or staff details."
+      else if (mode === "pin" && status === 422) errorMessage = err.response?.data?.message || "Invalid details. PIN must be 4 to 6 digits."
+      else if (mode === "pin" && (status === 429 || status === 423)) errorMessage = err.response?.data?.message || "Too many failed attempts. Try again in 15 minutes."
+      else errorMessage =
         err.response?.data?.message ||
         err.response?.data?.errors?.email?.[0] ||
         "Login failed. Please check your credentials."
@@ -62,7 +81,79 @@ export default function LoginPage() {
           <p className="text-sm text-gray-600 mt-2">Sign in to your account</p>
         </div>
 
+        <div className="grid grid-cols-2 gap-1 p-1 mb-6 bg-gray-100 rounded-lg" role="tablist">
+          {(["password", "pin"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => {
+                setMode(m)
+                setError("")
+                if (m === "pin" && !companyId) {
+                  try { setCompanyId(localStorage.getItem("last_pin_company_id") || "") } catch {}
+                }
+              }}
+              className={`h-9 rounded-md text-sm font-medium transition-colors ${
+                mode === m ? "bg-white text-emerald-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {m === "password" ? "Email & Password" : "Staff PIN"}
+            </button>
+          ))}
+        </div>
+
         <form onSubmit={handleLogin} className="space-y-6">
+          {mode === "pin" ? (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="companyId" className="text-sm font-medium">Company ID</Label>
+                <Input
+                  id="companyId"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="e.g. 12"
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value.replace(/\D/g, ""))}
+                  required
+                  className="h-11"
+                  disabled={loading}
+                />
+                <p className="text-xs text-gray-500">Ask your manager for your company&apos;s numeric ID.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="identifier" className="text-sm font-medium">Phone, Email or Staff ID</Label>
+                <Input
+                  id="identifier"
+                  autoComplete="username"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  required
+                  className="h-11"
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pin" className="text-sm font-medium">PIN</Label>
+                <Input
+                  id="pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  maxLength={6}
+                  placeholder="4-6 digit PIN"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  className="h-11 tracking-widest"
+                  disabled={loading}
+                />
+              </div>
+            </>
+          ) : (
+          <>
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm font-medium">
               Email Address
@@ -108,6 +199,8 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          </>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">

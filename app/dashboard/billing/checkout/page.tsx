@@ -45,7 +45,7 @@ export default function CheckoutPage() {
       try {
         setLoading(true)
         const response = await saasBillingApi.getPlans()
-        const selectedPlan = response.data.plans.find((p) => p.id === parseInt(planId))
+        const selectedPlan = response.data.plans.find((p: { id: number }) => p.id === parseInt(planId))
 
         if (!selectedPlan) {
           setError("Plan not found")

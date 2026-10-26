@@ -1,809 +1,544 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { customerReturnsApi, CustomerReturnResponse } from "@/lib/customerReturnsApi"
-import { sellsApi } from "@/lib/sellsApi"
-import { useCustomer } from "@/contexts/customer-context"
-import { useCompanySettings } from "@/contexts/company-settings-context"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Search, Check, X, Eye, Download, RotateCcw, Plus, Trash2 } from "lucide-react"
-import { PaginationControl } from "@/components/ui/pagination-control"
+import { useCallback, useEffect, useState } from "react"
+import Link from "next/link"
+import { Banknote, Download, Eye, Package, Printer, RotateCcw, Search, Trash2, Clock, Tag } from "lucide-react"
+import { toast } from "sonner"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useToast } from "@/hooks/use-toast"
-import { useSaasAuth } from "@/contexts/saas-auth-context"
-import { AccessDenied } from "@/components/ui/access-denied"
+import { StatsCards } from "@/components/ui/stats-card"
+import { StatusTabs } from "@/components/ui/status-tabs"
+import { PaginationControl } from "@/components/ui/pagination-control"
+import { bricolage, instrument } from "@/components/dashboard/fonts"
+import customerReturnsApi, { type CustomerReturnLogStats, type CustomerReturnRow, type ReturnableOrder } from "@/lib/customerReturnsApi"
+import { exportToCSV } from "@/lib/export-import-utils"
+import { useCompanySettings } from "@/contexts/company-settings-context"
+import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { cn } from "@/lib/utils"
 
-const fmt = (val: unknown) => Number(val ?? 0).toFixed(2)
+type Tab = "all" | "pending" | "completed" | "rejected" | "restocked" | "written_off"
 
-function formatDate(dateString?: string) {
-  if (!dateString) return "N/A"
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-function ReturnStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { color: string; label: string }> = {
-    pending: { color: "bg-yellow-100 text-yellow-800 border-yellow-200", label: "Pending" },
-    approved: { color: "bg-green-100 text-green-800 border-green-200", label: "Approved" },
-    rejected: { color: "bg-red-100 text-red-800 border-red-200", label: "Rejected" },
-    completed: { color: "bg-blue-100 text-blue-800 border-blue-200", label: "Completed" },
-  }
-  const cfg = config[status] || config.pending
-  return (
-    <Badge variant="outline" className={cfg.color}>
-      {cfg.label}
-    </Badge>
-  )
-}
-
-const RETURN_REASONS = [
-  "Size mismatch",
-  "Defective product",
-  "Not as described",
-  "Changed my mind",
-  "Package damaged",
-  "Wrong item received",
-  "Other",
+const TABS: [Tab, string][] = [
+  ["all", "All"], ["pending", "Pending"], ["completed", "Completed"], ["rejected", "Rejected"], ["restocked", "Restocked"], ["written_off", "Written off"],
 ]
+const REASONS = ["Size mismatch", "Defective product", "Not as described", "Changed my mind", "Package damaged", "Wrong item received", "Late delivery", "Other"]
+const METHODS: { id: "cash" | "original" | "credit" | "none"; label: string; sub: string }[] = [
+  { id: "cash", label: "Cash refund", sub: "Paid back now" },
+  { id: "original", label: "Original payment", sub: "Back to how they paid" },
+  { id: "credit", label: "Store credit", sub: "Customer balance" },
+  { id: "none", label: "No refund", sub: "Exchange / adjust only" },
+]
+const METHOD_LABEL: Record<string, string> = { cash: "Cash", original: "Original payment", credit: "Store credit", none: "No refund" }
+const DATE_OPTS = [["all", "All time"], ["7", "Last 7 days"], ["30", "Last 30 days"]] as const
+const POLICY_DAYS = 30
+const DEFAULT_REASON = "Changed my mind"
 
-const ITEMS_PER_PAGE = 10
+const input = "h-[42px] w-full rounded-[10px] border border-dash-border bg-dash-card px-3 text-sm outline-none focus-visible:border-dash-accent"
+const outlineBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-dash-border bg-dash-card px-3.5 text-[13px] font-semibold hover:bg-dash-neutral-soft"
+const primaryBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-dash-accent px-4 text-sm font-semibold text-white disabled:opacity-40"
+const iconBtn = "flex size-9 items-center justify-center rounded-lg border border-dash-border bg-dash-card text-dash-ink hover:bg-dash-neutral-soft"
+const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 
-type ReturnFormItem = {
-  productId: string
-  productName?: string
-  variantId?: number
-  quantity: number
-  reason: string
-  unitPrice: string
+function statusOf(r: CustomerReturnRow): { label: string; cls: string } {
+  if (r.status === "pending") return { label: "Pending approval", cls: "bg-dash-warn-soft text-dash-warn-fg" }
+  if (r.status === "rejected") return { label: "Rejected", cls: "bg-dash-danger-soft text-dash-danger-fg" }
+  if (r.refundMethod === "cash" || r.refundMethod === "original") return { label: "Refunded", cls: "bg-dash-success-soft text-dash-success-fg" }
+  if (r.refundMethod === "credit") return { label: "Credited", cls: "bg-purple-100 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300" }
+  return { label: "Completed", cls: "bg-dash-neutral-soft text-dash-neutral-fg" }
 }
 
-const defaultFormData = {
-  customerId: "",
-  customerName: "", // filled from the loaded order — supports guest (no account) orders
-  orderNumber: "",
-  sellId: undefined as number | undefined,
-  refundMethod: "original_payment",
-  notes: "",
-  items: [{ productId: "", quantity: 1, reason: "", unitPrice: "" }] as ReturnFormItem[],
-}
+interface PickLine { sellItemId: number; productId: number; variantId: number | null; name: string; bought: number; returnable: number; price: number; on: boolean; qty: number; reason: string }
 
 export default function CustomerReturnsPage() {
-  const { canRead } = useSaasAuth()
-  const { customers } = useCustomer()
-  const { toast } = useToast()
   const { formatCurrency } = useCompanySettings()
+  const { warehouses } = useWarehouse()
+  const blocked = useModuleGuard("Customer Returns")
 
-  const [returns, setReturns] = useState<CustomerReturnResponse[]>([])
-  const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, completed: 0, total_refund_amount: 0 })
-  const [isLoading, setIsLoading] = useState(true)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [totalItems, setTotalItems] = useState(0)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [rows, setRows] = useState<CustomerReturnRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({})
+  const [stats, setStats] = useState<CustomerReturnLogStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<Tab>("all")
+  const [search, setSearch] = useState("")
+  const [searchD, setSearchD] = useState("")
+  const [reasonF, setReasonF] = useState("all")
+  const [dateF, setDateF] = useState<"all" | "7" | "30">("all")
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [detail, setDetail] = useState<CustomerReturnRow | null>(null)
+  const [busyId, setBusyId] = useState<number | null>(null)
 
-  const [selectedReturn, setSelectedReturn] = useState<CustomerReturnResponse | null>(null)
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false)
-  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
-  const [rejectNotes, setRejectNotes] = useState("")
-  const [actionLoading, setActionLoading] = useState(false)
+  // ---- new return form
+  const [formOpen, setFormOpen] = useState(false)
+  const [saleQ, setSaleQ] = useState("")
+  const [recent, setRecent] = useState<ReturnableOrder[]>([])
+  const [recentLoading, setRecentLoading] = useState(false)
+  const [order, setOrder] = useState<ReturnableOrder | null>(null)
+  const [lines, setLines] = useState<PickLine[]>([])
+  const [method, setMethod] = useState<"cash" | "original" | "credit" | "none">("cash")
+  const [restock, setRestock] = useState(true)
+  const [printReceipt, setPrintReceipt] = useState(true)
+  const [locId, setLocId] = useState("")
+  const [note, setNote] = useState("")
+  const [err, setErr] = useState("")
+  const [saving, setSaving] = useState(false)
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [createLoading, setCreateLoading] = useState(false)
-  const [orderLookupLoading, setOrderLookupLoading] = useState(false)
-  const [formData, setFormData] = useState(defaultFormData)
-  const [loadedOrder, setLoadedOrder] = useState<import("@/lib/sellsApi").SellResponse | null>(null)
+  useEffect(() => { const t = setTimeout(() => setSearchD(search.trim()), 250); return () => clearTimeout(t) }, [search])
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true)
+  const load = useCallback(async () => {
+    setLoading(true)
     try {
-      const [listRes, statsRes] = await Promise.all([
-        customerReturnsApi.getAll({
-          page: currentPage,
-          limit: ITEMS_PER_PAGE,
-          search: searchQuery || undefined,
-          status: statusFilter !== "all" ? statusFilter : undefined,
-        }),
-        customerReturnsApi.getStats(),
-      ])
-      setReturns(listRes.data ?? [])
-      setTotalItems(listRes.pagination?.total ?? listRes.total ?? listRes.data?.length ?? 0)
-      if (statsRes.data) setStats({ ...statsRes.data, total_refund_amount: statsRes.data.totalRefundAmount ?? statsRes.data.total_refund_amount ?? 0 })
+      const params: Record<string, any> = { page, per_page: perPage }
+      if (tab !== "all") params.status = tab
+      if (searchD) params.search = searchD
+      if (reasonF !== "all") params.reason = reasonF
+      if (dateF !== "all") params.from = new Date(Date.now() - Number(dateF) * 864e5).toISOString().slice(0, 10)
+      const res = await customerReturnsApi.getLog(params)
+      setRows(res.data); setTotal(res.total); setCounts(res.counts); setStats(res.stats)
     } catch {
-      setReturns([])
+      setRows([])
+      toast.error("Failed to load returns")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }, [currentPage, searchQuery, statusFilter])
+  }, [page, perPage, tab, searchD, reasonF, dateF])
+  useEffect(() => { load() }, [load])
 
+  // recent returnable orders for the form
+  const loadRecent = useCallback(async (q: string) => {
+    setRecentLoading(true)
+    try { setRecent(await customerReturnsApi.getReturnableOrders(q)) } catch { setRecent([]) } finally { setRecentLoading(false) }
+  }, [])
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    if (!formOpen || order) return
+    const t = setTimeout(() => loadRecent(saleQ.trim()), 250)
+    return () => clearTimeout(t)
+  }, [formOpen, order, saleQ, loadRecent])
 
-  const blocked = useModuleGuard('Customer Returns')
+  const openForm = () => {
+    setSaleQ(""); setOrder(null); setLines([]); setMethod("cash"); setRestock(true); setPrintReceipt(true); setNote(""); setErr("")
+    setLocId(warehouses[0] ? String(warehouses[0].id) : "")
+    setFormOpen(true)
+  }
+  const pickOrder = (o: ReturnableOrder) => {
+    setOrder(o)
+    if (o.locationId) setLocId(String(o.locationId))
+    setLines(o.items.filter((i) => i.returnable > 0).map((i) => ({
+      sellItemId: i.sellItemId, productId: i.productId, variantId: i.variantId, name: i.name, bought: i.bought,
+      returnable: i.returnable, price: i.price, on: false, qty: 1, reason: DEFAULT_REASON,
+    })))
+    setErr("")
+  }
+  const findOrder = () => {
+    const q = saleQ.trim().toLowerCase()
+    if (!q) return
+    const exact = recent.filter((o) => o.invoiceNo.toLowerCase() === q)
+    const hit = exact.length === 1 ? exact : recent.length === 1 ? recent : []
+    if (hit.length === 1) pickOrder(hit[0])
+    else setErr(recent.length === 0 ? "No matching order with returnable items." : "More than one order matches — pick one from the list.")
+  }
+  const patch = (idx: number, p: Partial<PickLine>) => setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...p } : l)))
+
+  const picked = lines.filter((l) => l.on)
+  const units = picked.reduce((a, l) => a + l.qty, 0)
+  const subtotal = Math.round(picked.reduce((a, l) => a + l.qty * l.price, 0) * 100) / 100
+  const refund = method === "none" ? 0 : subtotal
+
+  const validate = (): string => {
+    if (!order) return "Find an order first."
+    if (picked.length === 0) return "Select at least one item to return."
+    if (picked.some((l) => !l.reason)) return "Pick a reason for every item."
+    if (method === "credit" && !order.customerId) return "Store credit needs a named customer. Use cash refund for walk-in sales."
+    if (!locId && restock) return "Choose where the stock goes back to."
+    return ""
+  }
+
+  const submit = async (mode: "complete" | "request") => {
+    const v = validate()
+    if (v) { setErr(v); return }
+    setSaving(true); setErr("")
+    try {
+      const res = await customerReturnsApi.createReturn({
+        orderId: order!.id,
+        items: picked.map((l) => ({ sellItemId: l.sellItemId, productId: l.productId, variantId: l.variantId, quantity: l.qty, price: l.price, reason: l.reason })),
+        refundMethod: method, restock, locationId: locId ? Number(locId) : undefined, note: note.trim() || undefined, mode,
+      })
+      toast.success(mode === "request" ? `${res.returnNumber} submitted for approval` : `${res.returnNumber} recorded`)
+      setFormOpen(false)
+      if (printReceipt && mode === "complete") printReturn(res)
+      setPage(1)
+      load()
+    } catch (e: any) {
+      setErr(e?.response?.data?.message ?? "Could not save the return.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const approve = async (r: CustomerReturnRow) => {
+    const how = r.refundMethod === "cash" ? "refund it in cash" : r.refundMethod === "original" ? "reverse the original payment" : r.refundMethod === "credit" ? "add store credit" : "reduce the invoice total"
+    if (!window.confirm(`Approve ${r.returnNumber} for ${formatCurrency(r.amount)}? This will ${r.restocked ? "return the items to stock and " : "write the items off and "}${how}.`)) return
+    setBusyId(r.id)
+    try {
+      await customerReturnsApi.approveReturn(r.id)
+      toast.success(`${r.returnNumber} approved`)
+      setDetail(null); load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Could not approve")
+    } finally { setBusyId(null) }
+  }
+  const reject = async (r: CustomerReturnRow) => {
+    const reason = window.prompt(`Why reject ${r.returnNumber}? (a reason is required)`)
+    if (reason === null) return
+    if (!reason.trim()) { toast.error("Enter a reason to reject this return"); return }
+    setBusyId(r.id)
+    try {
+      await customerReturnsApi.rejectReturn(r.id, reason.trim())
+      toast.success(`${r.returnNumber} rejected`)
+      setDetail(null); load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? "Could not reject")
+    } finally { setBusyId(null) }
+  }
+
+  const printReturn = (r: CustomerReturnRow) => {
+    const w = window.open("", "_blank", "width=720,height=800")
+    if (!w) { toast.error("Allow pop-ups to print"); return }
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string))
+    w.document.write(`<!doctype html><title>${esc(r.returnNumber)}</title><body style="font-family:sans-serif;padding:24px">
+      <h2 style="margin:0">Return ${esc(r.returnNumber)}</h2>
+      <p style="color:#5B6478">${fmt(r.createdAt)} · ${esc(r.customerName ?? "Walk-in")} · ${esc(r.invoiceNo ?? "No invoice")}</p>
+      <table style="width:100%;border-collapse:collapse">${r.lines.map((l) => `<tr><td style="padding:6px 0">${esc(l.name)}<br><small>${esc(l.reason ?? "")}</small></td><td>${l.quantity} × ${formatCurrency(l.price)}</td><td style="text-align:right">${formatCurrency(l.total)}</td></tr>`).join("")}</table>
+      <h3 style="text-align:right">Refund (${esc(METHOD_LABEL[r.refundMethod ?? ""] ?? "—")}): ${formatCurrency(r.amount)}</h3>
+      <p>${r.restocked ? "Returned to stock" : "Written off (not restocked)"}</p>${r.note ? `<p>Note: ${esc(r.note)}</p>` : ""}</body>`)
+    w.document.close(); w.focus(); w.print()
+  }
+
+  const handleExport = async () => {
+    try {
+      const params: Record<string, any> = { page: 1, per_page: 500 }
+      if (tab !== "all") params.status = tab
+      if (searchD) params.search = searchD
+      if (reasonF !== "all") params.reason = reasonF
+      if (dateF !== "all") params.from = new Date(Date.now() - Number(dateF) * 864e5).toISOString().slice(0, 10)
+      const all: CustomerReturnRow[] = []
+      for (let p = 1; p <= 40; p++) {
+        const res = await customerReturnsApi.getLog({ ...params, page: p })
+        all.push(...res.data)
+        if (p >= res.lastPage) break
+      }
+      if (all.length === 0) { toast.error("Nothing to export"); return }
+      exportToCSV(all.map((r) => ({
+        return: r.returnNumber, date: r.createdAt, customer: r.customerName ?? "", invoice: r.invoiceNo ?? "", items: r.itemsSummary, reason: r.reason ?? "",
+        status: statusOf(r).label, rejection_reason: r.rejectionReason ?? "", restocked: r.restocked ? "Yes" : "No",
+        method: METHOD_LABEL[r.refundMethod ?? ""] ?? "", refunded_via: r.refundedVia ?? "", amount: r.amount, note: r.note ?? "",
+      })), "customer-returns", ["return", "date", "customer", "invoice", "items", "reason", "status", "rejection_reason", "restocked", "method", "refunded_via", "amount", "note"])
+    } catch {
+      toast.error("Could not export returns")
+    }
+  }
+
+  const cycleReason = () => {
+    const opts = ["all", ...REASONS]
+    setReasonF(opts[(opts.indexOf(reasonF) + 1) % opts.length]); setPage(1)
+  }
+  const cycleDate = () => {
+    const ids = DATE_OPTS.map((d) => d[0])
+    setDateF(ids[(ids.indexOf(dateF) + 1) % ids.length] as "all" | "7" | "30"); setPage(1)
+  }
+  const hasFilter = !!(searchD || reasonF !== "all" || dateF !== "all")
+
   if (blocked) return blocked
 
-  const handleViewDetails = async (ret: CustomerReturnResponse) => {
-    try {
-      const res = await customerReturnsApi.getById(ret.id)
-      setSelectedReturn(res.data)
-    } catch {
-      setSelectedReturn(ret)
-    }
-    setIsDetailsOpen(true)
-  }
-
-  const handleApproveClick = (ret: CustomerReturnResponse) => {
-    setSelectedReturn(ret)
-    setIsApproveDialogOpen(true)
-  }
-
-  const handleRejectClick = (ret: CustomerReturnResponse) => {
-    setSelectedReturn(ret)
-    setRejectNotes("")
-    setIsRejectDialogOpen(true)
-  }
-
-  const confirmApprove = async () => {
-    if (!selectedReturn) return
-    setActionLoading(true)
-    try {
-      await customerReturnsApi.approve(selectedReturn.id)
-      toast({ title: "Return approved successfully" })
-      setIsApproveDialogOpen(false)
-      setSelectedReturn(null)
-      fetchData()
-    } catch {
-      toast({ title: "Failed to approve return", variant: "destructive" })
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const confirmReject = async () => {
-    if (!selectedReturn) return
-    setActionLoading(true)
-    try {
-      await customerReturnsApi.reject(selectedReturn.id, rejectNotes)
-      toast({ title: "Return rejected" })
-      setIsRejectDialogOpen(false)
-      setSelectedReturn(null)
-      setRejectNotes("")
-      fetchData()
-    } catch {
-      toast({ title: "Failed to reject return", variant: "destructive" })
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleDownloadReport = () => {
-    const csvContent = [
-      ["Return #", "Customer", "Order #", "Amount", "Status", "Date"],
-      ...returns.map((ret) => [
-        ret.returnNumber ?? ret.id,
-        ret.customerName ?? ret.customerId,
-        ret.orderNumber ?? "N/A",
-        formatCurrency(Number(fmt(ret.totalAmount))),
-        ret.status,
-        formatDate(ret.createdAt),
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `customer-returns-${new Date().toISOString().split("T")[0]}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
-
-  const handleAddItem = () => {
-    setFormData((prev) => ({
-      ...prev,
-      items: [...prev.items, { productId: "", quantity: 1, reason: "", unitPrice: "" }],
-    }))
-  }
-
-  const handleRemoveItem = (index: number) => {
-    setFormData((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }))
-  }
-
-  const handleItemChange = (index: number, field: string, value: string | number) => {
-    setFormData((prev) => ({
-      ...prev,
-      items: prev.items.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
-    }))
-  }
-
-  const handleCreateReturn = async () => {
-    if (!formData.customerId && !formData.customerName.trim()) {
-      toast({ title: "Select a customer or enter a name", variant: "destructive" })
-      return
-    }
-    if (formData.items.some((item) => !item.productId || !item.quantity || !item.reason)) {
-      toast({ title: "Please fill in all item details", variant: "destructive" })
-      return
-    }
-
-    const totalAmount = formData.items.reduce((sum, item) => {
-      const price = item.unitPrice ? parseFloat(item.unitPrice) : 0
-      return sum + (price * item.quantity)
-    }, 0)
-
-    setCreateLoading(true)
-    try {
-      await customerReturnsApi.create({
-        ...(formData.customerId ? { customerId: Number(formData.customerId) } : {}),
-        // For guest orders there's no account — carry the name from the order so
-        // the return still records who returned it.
-        ...(formData.customerName ? { customerName: formData.customerName } : {}),
-        sellId: formData.sellId,
-        orderNumber: formData.orderNumber || undefined,
-        refundMethod: formData.refundMethod,
-        notes: formData.notes || undefined,
-        totalAmount: totalAmount > 0 ? totalAmount : undefined,
-        items: formData.items.map((item) => ({
-          productId: Number(item.productId),
-          variantId: item.variantId,
-          quantity: item.quantity,
-          reason: item.reason,
-          ...(item.unitPrice ? { price: parseFloat(item.unitPrice) } : {}),
-        })),
-      })
-      toast({ title: "Return created successfully" })
-      setIsCreateDialogOpen(false)
-      fetchData()
-    } catch {
-      toast({ title: "Failed to create return", variant: "destructive" })
-    } finally {
-      setCreateLoading(false)
-    }
-  }
-
-  const handleLoadOrderDetails = async () => {
-    const orderNumber = formData.orderNumber.trim()
-    if (!orderNumber) {
-      toast({ title: "Please enter invoice number", variant: "destructive" })
-      return
-    }
-    setOrderLookupLoading(true)
-    setLoadedOrder(null)
-    try {
-      const detailsRes = await sellsApi.getByInvoice(orderNumber)
-      const order = detailsRes.data
-      const returnItems: ReturnFormItem[] = (order.items ?? []).map((item) => ({
-        productId: String(item.productId ?? ""),
-        productName: item.productName,
-        variantId: item.variantId ?? item.variant_id,
-        quantity: item.quantity || 1,
-        reason: "",
-        unitPrice: String(item.price ?? item.unitPrice ?? item.unit_price ?? ""),
-      }))
-
-      setLoadedOrder(order)
-      setFormData((prev) => ({
-        ...prev,
-        customerId: order.customerId ? String(order.customerId) : "",
-        customerName: order.customerName || prev.customerName,
-        sellId: order.id,
-        orderNumber: order.invoiceNo || order.invoice_no || orderNumber,
-        items: returnItems.length > 0 ? returnItems : prev.items,
-      }))
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status
-      if (status === 404) {
-        toast({ title: "Invoice not found", description: `No order found for "${orderNumber}"`, variant: "destructive" })
-      } else {
-        toast({ title: "Failed to load invoice details", variant: "destructive" })
-      }
-    } finally {
-      setOrderLookupLoading(false)
-    }
-  }
-
-  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE)
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className={`${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`}>
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Customer Returns</h1>
-          <p className="text-gray-600 mt-1">Manage product returns from customers</p>
+          <h1 className="font-dash-display text-[32px] font-bold tracking-tight">Customer returns</h1>
+          <p className="mt-1 text-sm text-dash-muted">Take items back, decide what returns to stock, and refund the right way.</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={() => {
-              setFormData(defaultFormData)
-              setLoadedOrder(null)
-              setIsCreateDialogOpen(true)
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Return
-          </Button>
-          <Button onClick={handleDownloadReport} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => toast.message(`Returns accepted up to ${POLICY_DAYS} days after purchase; items return to stock unless damaged.`)} className={outlineBtn}>Return policy</button>
+          <button type="button" onClick={handleExport} className={outlineBtn}><Download className="size-4" aria-hidden /> Export</button>
+          <button type="button" onClick={openForm} className={primaryBtn}>New return</button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        {[
-          { label: "Total Returns", value: stats.total, color: "text-gray-900", icon: <RotateCcw className="w-8 h-8 text-gray-400" /> },
-          { label: "Pending", value: stats.pending, color: "text-yellow-600" },
-          { label: "Approved", value: stats.approved, color: "text-green-600" },
-          { label: "Rejected", value: stats.rejected, color: "text-red-600" },
-          { label: "Total Refunds", value: formatCurrency(stats.total_refund_amount), color: "text-blue-600" },
-        ].map((s) => (
-          <Card key={s.label} className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">{s.label}</p>
-                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-              </div>
-              {s.icon}
-            </div>
-          </Card>
-        ))}
-      </div>
+      {loading && !stats ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px] rounded-[14px]" />)}</div>
+      ) : stats ? (
+        <StatsCards stats={[
+          { label: "Returns (30 days)", value: stats.returns30d, icon: <RotateCcw className="size-4" />, color: "blue", hint: stats.ordersPct30d ?? undefined },
+          { label: "Pending approval", value: stats.pendingCount, icon: <Clock className="size-4" />, color: "yellow",
+            hint: stats.pendingCount ? `${formatCurrency(stats.pendingAmount)} awaiting decision` : "Nothing waiting",
+            onClick: () => { setTab("pending"); setPage(1) }, active: tab === "pending" },
+          { label: "Restocked units", value: stats.restockedUnits, icon: <Package className="size-4" />, color: "purple", hint: "Back on the shelf" },
+          { label: "Refunded (cash / original)", value: formatCurrency(stats.refundedAmount), icon: <Banknote className="size-4" />, color: "green", hint: `${stats.refundedCount} return(s)` },
+          { label: "Top reason", value: stats.topReason ?? "—", icon: <Tag className="size-4" />, color: "blue", hint: stats.topReason ? `${stats.topReasonCount} return(s)` : "No returns yet" },
+          { label: "Written off", value: formatCurrency(stats.writtenOffValue), icon: <Trash2 className="size-4" />, color: "red", hint: "At cost, not restocked" },
+        ]} />
+      ) : null}
 
-      {/* Filters + Table */}
-      <Card className="p-6">
-        <div className="flex flex-wrap items-center gap-4 mb-6">
-          <div className="relative flex-1 min-w-[300px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search by return #, customer, or order #"
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1) }}
-              className="pl-10"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1) }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
+      <section className="rounded-[14px] border border-dash-border bg-dash-card">
+        <div className="px-4">
+          <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
+            tabs={TABS.map(([v, label]) => ({ value: v, label, count: counts[v] }))} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5 p-4">
+          <label className="flex h-11 min-w-[240px] flex-1 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+            <Search className="size-[18px]" aria-hidden />
+            <span className="sr-only">Search returns</span>
+            <input type="search" placeholder="Search return #, invoice or customer…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
+          </label>
+          <button type="button" onClick={cycleReason} className={outlineBtn}>{reasonF === "all" ? "Reason: All" : reasonF} ▾</button>
+          <button type="button" onClick={cycleDate} className={outlineBtn}>{DATE_OPTS.find((d) => d[0] === dateF)?.[1]} ▾</button>
         </div>
 
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Return #</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Customer</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Order #</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Amount</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Date</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-700 uppercase">Actions</th>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px] border-collapse text-sm">
+            <thead>
+              <tr className="bg-dash-bg text-left text-xs text-dash-muted">
+                <th className="py-3 pl-4 pr-2 font-semibold">Return</th><th className="px-2 py-3 font-semibold">Customer / invoice</th>
+                <th className="px-2 py-3 font-semibold">Items &amp; reason</th><th className="px-2 py-3 font-semibold">Condition</th>
+                <th className="px-2 py-3 text-right font-semibold">Refund</th><th className="px-2 py-3 font-semibold">Status</th>
+                <th className="py-3 pl-2 pr-4 text-right font-semibold">Next step</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
-                      <td key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></td>
-                    ))}
-                  </tr>
-                ))
-              ) : returns.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500">No returns found</td>
-                </tr>
-              ) : (
-                returns.map((ret) => (
-                  <tr key={ret.id} className="hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-gray-900">{ret.returnNumber ?? `#${ret.id}`}</td>
-                    <td className="py-3 px-4 text-sm text-gray-900">{ret.customerName ?? ret.customerId}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{ret.orderNumber ?? "N/A"}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-gray-900">{formatCurrency(Number(fmt(ret.totalAmount)))}</td>
-                    <td className="py-3 px-4 text-center"><ReturnStatusBadge status={ret.status} /></td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{formatDate(ret.createdAt)}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(ret)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {ret.status === "pending" && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleApproveClick(ret)}
-                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                            >
-                              <Check className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRejectClick(ret)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+            <tbody>
+              {loading ? [1, 2, 3, 4, 5].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-3"><Skeleton className="h-10 rounded" /></td></tr>) :
+                rows.length === 0 ? (
+                  <tr><td colSpan={7} className="py-14 text-center">
+                    <RotateCcw className="mx-auto mb-2 size-8 text-dash-muted/50" aria-hidden />
+                    <p className="font-semibold">No returns found</p>
+                    <p className="text-sm text-dash-muted">{hasFilter || tab !== "all" ? "Try clearing the filters." : "Record a return with New return."}</p>
+                  </td></tr>
+                ) : rows.map((r) => {
+                  const s = statusOf(r)
+                  const pending = r.status === "pending"
+                  const cond = pending ? (r.restocked ? "Restock on approval" : "Write off on approval") : r.restocked ? "Restocked" : "Written off"
+                  return (
+                    <tr key={r.id}>
+                      <td className="border-b border-dash-border-soft py-3 pl-4 pr-2">
+                        <button type="button" onClick={() => setDetail(r)} className="font-bold hover:underline">{r.returnNumber}</button>
+                        <div className="text-xs text-dash-muted">{fmt(r.createdAt)}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="font-semibold">{r.customerName || "Walk-in"}</div>
+                        {r.invoiceNo ? <Link href="/dashboard/orders" className="text-xs font-semibold text-dash-accent hover:underline">{r.invoiceNo}</Link> : <span className="text-xs text-dash-muted">No invoice</span>}
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <div className="max-w-[220px] truncate">{r.itemsSummary}</div>
+                        <div className="text-xs text-dash-muted">{r.reason || "—"}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3">
+                        <span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", r.restocked ? "bg-dash-success-soft text-dash-success-fg" : "bg-dash-danger-soft text-dash-danger-fg")}>{cond}</span>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3 text-right tabular-nums">
+                        <div className="font-bold">{formatCurrency(r.amount)}</div>
+                        <div className="text-xs text-dash-muted">{METHOD_LABEL[r.refundMethod ?? ""] ?? "—"}{r.refundedVia ? ` · ${r.refundedVia}` : ""}</div>
+                      </td>
+                      <td className="border-b border-dash-border-soft px-2 py-3"><span className={cn("rounded-full px-2.5 py-[3px] text-xs font-bold", s.cls)}>{s.label}</span></td>
+                      <td className="border-b border-dash-border-soft py-3 pl-2 pr-4">
+                        <div className="flex items-center justify-end gap-1">
+                          {pending && <button type="button" disabled={busyId === r.id} onClick={() => approve(r)} className="mr-1 h-9 rounded-lg bg-dash-ink px-3 text-[13px] font-semibold text-dash-bg disabled:opacity-40">Approve</button>}
+                          {pending && <button type="button" disabled={busyId === r.id} onClick={() => reject(r)} className="mr-1 text-[13px] font-semibold text-dash-danger-fg hover:underline">Reject</button>}
+                          <button type="button" aria-label="View return" className={iconBtn} onClick={() => setDetail(r)}><Eye className="size-4" /></button>
+                          <button type="button" aria-label="Print return" className={iconBtn} onClick={() => printReturn(r)}><Printer className="size-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
             </tbody>
           </table>
         </div>
 
-        {!isLoading && totalItems > 0 && (
-          <div className="mt-4">
-            <PaginationControl
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onItemsPerPageChange={() => {}}
-              totalItems={totalItems}
-            />
+        {!loading && total > 0 && (
+          <div className="border-t border-dash-border-soft p-4 pt-3">
+            <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
+              onPageChange={setPage} onItemsPerPageChange={(n) => { setPerPage(n); setPage(1) }} />
           </div>
         )}
-      </Card>
+      </section>
 
-      {/* Details Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="sm:max-w-5xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Return Details — {selectedReturn?.returnNumber ?? `#${selectedReturn?.id}`}</DialogTitle>
-            <DialogDescription>Complete information about this return request</DialogDescription>
-          </DialogHeader>
-          {selectedReturn && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div><p className="text-sm font-medium text-gray-700">Customer</p><p className="text-sm text-gray-900">{selectedReturn.customerName ?? selectedReturn.customerId}</p></div>
-                <div><p className="text-sm font-medium text-gray-700">Order Number</p><p className="text-sm text-gray-900">{selectedReturn.orderNumber ?? "N/A"}</p></div>
-                <div><p className="text-sm font-medium text-gray-700">Status</p><div className="mt-1"><ReturnStatusBadge status={selectedReturn.status} /></div></div>
-                <div><p className="text-sm font-medium text-gray-700">Refund Method</p><p className="text-sm text-gray-900 capitalize">{(selectedReturn.refundMethod ?? "N/A").replace("_", " ")}</p></div>
-                <div><p className="text-sm font-medium text-gray-700">Created</p><p className="text-sm text-gray-900">{formatDate(selectedReturn.createdAt)}</p></div>
-                {selectedReturn.processedAt && (
-                  <div><p className="text-sm font-medium text-gray-700">Processed</p><p className="text-sm text-gray-900">{formatDate(selectedReturn.processedAt)}</p></div>
-                )}
-                {selectedReturn.rejectionReason && (
-                  <div className="col-span-2"><p className="text-sm font-medium text-gray-700">Rejection Reason</p><p className="text-sm text-red-600">{selectedReturn.rejectionReason}</p></div>
-                )}
-              </div>
-
-              {selectedReturn.items && selectedReturn.items.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-3">Return Items</p>
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Product</th>
-                          <th className="text-center py-2 px-3 text-xs font-semibold text-gray-700">Qty</th>
-                          <th className="text-right py-2 px-3 text-xs font-semibold text-gray-700">Unit Price</th>
-                          <th className="text-right py-2 px-3 text-xs font-semibold text-gray-700">Subtotal</th>
-                          <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {selectedReturn.items.map((item, i) => (
-                          <tr key={i}>
-                            <td className="py-2 px-3 text-sm">
-                              <p className="font-medium text-gray-900">{item.productName ?? `Product #${item.productId}`}</p>
-                              {item.variantName && <p className="text-xs text-gray-500">{item.variantName}</p>}
-                            </td>
-                            <td className="py-2 px-3 text-center text-sm">{item.quantity}</td>
-                            <td className="py-2 px-3 text-right text-sm font-medium">{formatCurrency(Number(fmt(item.price)))}</td>
-                            <td className="py-2 px-3 text-right text-sm font-medium">{formatCurrency(Number(fmt((item.price ?? 0) * item.quantity)))}</td>
-                            <td className="py-2 px-3 text-sm text-gray-600">{item.reason}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Total Refund Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(fmt(selectedReturn.totalAmount)))}</p>
-                </div>
-              </div>
-
-              {selectedReturn.notes && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Notes</p>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{selectedReturn.notes}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Approve Dialog */}
-      <Dialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Approve Return?</DialogTitle>
-            <DialogDescription>This will approve the return and process the refund.</DialogDescription>
-          </DialogHeader>
-          {selectedReturn && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-              <p className="text-sm"><span className="font-medium">Return:</span> {selectedReturn.returnNumber ?? `#${selectedReturn.id}`}</p>
-              <p className="text-sm"><span className="font-medium">Customer:</span> {selectedReturn.customerName ?? selectedReturn.customerId}</p>
-              <p className="text-sm"><span className="font-medium">Amount:</span> {formatCurrency(Number(fmt(selectedReturn.totalAmount)))}</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsApproveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={confirmApprove} disabled={actionLoading} className="bg-green-600 hover:bg-green-700">
-              {actionLoading ? "Approving..." : "Approve Return"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject Dialog */}
-      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Return?</DialogTitle>
-            <DialogDescription>Please provide a reason for rejecting this return request.</DialogDescription>
-          </DialogHeader>
-          {selectedReturn && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <p className="text-sm"><span className="font-medium">Return:</span> {selectedReturn.returnNumber ?? `#${selectedReturn.id}`}</p>
-                <p className="text-sm"><span className="font-medium">Customer:</span> {selectedReturn.customerName ?? selectedReturn.customerId}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">Rejection Reason</label>
-                <Textarea
-                  value={rejectNotes}
-                  onChange={(e) => setRejectNotes(e.target.value)}
-                  placeholder="Enter reason for rejection..."
-                  rows={4}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRejectDialogOpen(false)}>Cancel</Button>
-            <Button onClick={confirmReject} disabled={actionLoading || !rejectNotes.trim()} className="bg-red-600 hover:bg-red-700">
-              {actionLoading ? "Rejecting..." : "Reject Return"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => { setIsCreateDialogOpen(open); if (!open) setLoadedOrder(null) }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Customer Return</DialogTitle>
-            <DialogDescription>Enter the invoice number to load order details, then select items to return</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5">
-            {/* Invoice lookup */}
-            <div>
-              <Label>Invoice Number *</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  placeholder="e.g. INV-12345"
-                  value={formData.orderNumber}
-                  onChange={(e) => {
-                    setFormData({ ...formData, orderNumber: e.target.value, sellId: undefined })
-                    setLoadedOrder(null)
-                  }}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLoadOrderDetails() } }}
-                />
-                <Button type="button" variant="outline" onClick={handleLoadOrderDetails} disabled={orderLookupLoading || !formData.orderNumber.trim()}>
-                  {orderLookupLoading ? "Loading..." : "Fetch"}
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Press Enter or click Fetch to load order details</p>
-            </div>
-
-            {/* Order summary card */}
-            {loadedOrder && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-emerald-800">Order Found</p>
-                  <Badge variant="outline" className="text-emerald-700 border-emerald-300">{loadedOrder.invoiceNo || loadedOrder.invoice_no}</Badge>
-                </div>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div><p className="text-xs text-gray-500">Customer</p><p className="font-medium text-gray-900">{loadedOrder.customerName}</p></div>
-                  <div><p className="text-xs text-gray-500">Order Date</p><p className="font-medium text-gray-900">{formatDate(loadedOrder.orderTime || loadedOrder.createdAt)}</p></div>
-                  <div><p className="text-xs text-gray-500">Order Total</p><p className="font-medium text-gray-900">{formatCurrency(Number(fmt(loadedOrder.amount)))}</p></div>
-                </div>
-              </div>
-            )}
-
-            {/* Customer + Refund Method */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Customer *</Label>
-                {loadedOrder && !formData.customerId ? (
-                  // Guest order (no linked account): use the name from the order.
-                  <>
-                    <Input
-                      className="mt-1"
-                      value={formData.customerName}
-                      onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                      placeholder="Customer name"
-                    />
-                    <p className="text-xs text-amber-600 mt-1">Guest order — no linked account. Return is recorded against this name.</p>
-                  </>
-                ) : (
-                  <Select value={formData.customerId} onValueChange={(v) => {
-                    const c = customers.find((x) => String(x.id) === v)
-                    setFormData({ ...formData, customerId: v, customerName: c?.name ?? formData.customerName })
-                  }}>
-                    <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select customer" /></SelectTrigger>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <div>
-                <Label>Refund Method *</Label>
-                <Select value={formData.refundMethod} onValueChange={(v) => setFormData({ ...formData, refundMethod: v })}>
-                  <SelectTrigger className="mt-1 w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="original_payment">Original Payment</SelectItem>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="store_credit">Store Credit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Return Items */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <Label>Return Items *</Label>
-                <Button type="button" onClick={handleAddItem} variant="outline" size="sm">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Item
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {formData.items.map((item, index) => (
-                  <Card key={index} className="p-4">
-                    <div className="grid grid-cols-12 gap-3 items-start">
-                      {/* Product info */}
-                      <div className="col-span-4">
-                        <Label className="text-xs">Product</Label>
-                        {item.productName ? (
-                          <div className="mt-1">
-                            <p className="text-sm font-medium text-gray-900 leading-tight">{item.productName}</p>
-                            <p className="text-xs text-gray-500">ID: {item.productId}</p>
-                          </div>
-                        ) : (
-                          <Input
-                            type="number"
-                            placeholder="Product ID"
-                            value={item.productId}
-                            onChange={(e) => handleItemChange(index, "productId", e.target.value)}
-                            className="mt-1"
-                          />
-                        )}
-                      </div>
-                      {/* Unit Price */}
-                      <div className="col-span-2">
-                        <Label className="text-xs">Unit Price</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={item.unitPrice}
-                          onChange={(e) => handleItemChange(index, "unitPrice", e.target.value)}
-                          className="mt-1"
-                        />
-                      </div>
-                      {/* Qty */}
-                      <div className="col-span-2">
-                        <Label className="text-xs">Return Qty</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(index, "quantity", parseInt(e.target.value) || 1)}
-                          className="mt-1"
-                        />
-                      </div>
-                      {/* Reason */}
-                      <div className="col-span-3">
-                        <Label className="text-xs">Reason *</Label>
-                        <Select value={item.reason} onValueChange={(v) => handleItemChange(index, "reason", v)}>
-                          <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select reason" /></SelectTrigger>
-                          <SelectContent>
-                            {RETURN_REASONS.map((r) => (
-                              <SelectItem key={r} value={r}>{r}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {/* Remove */}
-                      <div className="col-span-1 flex justify-end pt-5">
-                        {formData.items.length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700 px-2">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Add any additional notes..."
-                rows={3}
-              />
-            </div>
+      {/* ---------------- New return ---------------- */}
+      <Dialog open={formOpen} onOpenChange={(o) => !o && setFormOpen(false)}>
+        <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[980px]">
+          <div className="border-b border-dash-border-soft px-6 py-4">
+            <DialogTitle className="font-dash-display text-xl font-bold">New customer return</DialogTitle>
+            <DialogDescription className="text-[13px]">{order ? `${order.invoiceNo} · ${order.customerName}` : "Find the order the items came from."}</DialogDescription>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateReturn} disabled={createLoading} className="bg-emerald-600 hover:bg-emerald-700">
-              {createLoading ? "Creating..." : "Create Return"}
-            </Button>
-          </DialogFooter>
+          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_320px]">
+            <div className="flex min-w-0 flex-col gap-5">
+              <fieldset className="flex flex-col gap-3">
+                <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">1 · Find the order</legend>
+                {order ? (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-dash-border bg-dash-bg px-3.5 py-3">
+                    <div>
+                      <div className="text-sm font-bold">{order.invoiceNo} · {order.customerName}</div>
+                      <div className="text-xs text-dash-muted">
+                        {fmt(order.date)} · {formatCurrency(order.amount)} ·{" "}
+                        <span className={order.ageDays > POLICY_DAYS ? "font-semibold text-dash-warn-fg" : "font-semibold text-dash-success-fg"}>
+                          {order.ageDays <= 0 ? "Today" : `${order.ageDays} days ago`}{order.ageDays > POLICY_DAYS ? ` — outside ${POLICY_DAYS}-day policy` : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => { setOrder(null); setLines([]) }} className="text-[13px] font-semibold text-dash-accent hover:underline">Change</button>
+                  </div>
+                ) : (
+                  <>
+                    <label className="flex h-11 items-center gap-2 rounded-[10px] border border-dash-border bg-dash-bg px-3.5 text-dash-muted">
+                      <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search orders</span>
+                      <input type="search" value={saleQ} onChange={(e) => { setSaleQ(e.target.value); setErr("") }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); findOrder() } }} placeholder="Invoice number or customer name"
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm text-dash-ink outline-none placeholder:text-dash-muted" />
+                      <button type="button" onClick={findOrder} className="rounded-md bg-dash-ink px-3 py-1 text-xs font-semibold text-dash-bg">Find</button>
+                    </label>
+                    {err && !order && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+                    <div className="text-xs font-semibold text-dash-muted">Recent orders</div>
+                    {recentLoading ? <Skeleton className="h-16 rounded-xl" /> : recent.length === 0 ? (
+                      <span className="text-[13px] text-dash-muted">No matching sales with returnable items.</span>
+                    ) : (
+                      <div className="flex flex-col overflow-hidden rounded-xl border border-dash-border">
+                        {recent.map((o) => (
+                          <button key={o.id} type="button" onClick={() => pickOrder(o)} className="flex items-center justify-between gap-3 border-b border-dash-border-soft px-3 py-2.5 text-left last:border-0 hover:bg-dash-neutral-soft">
+                            <span className="flex flex-col"><span className="text-sm font-bold">{o.invoiceNo}</span><span className="text-xs text-dash-muted">{o.customerName} · {fmt(o.date)}</span></span>
+                            <span className="text-sm font-semibold tabular-nums">{formatCurrency(o.amount)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </fieldset>
+
+              {order && (
+                <>
+                  <fieldset className="flex flex-col gap-3">
+                    <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">2 · What is coming back?</legend>
+                    <div className="flex flex-col rounded-xl border border-dash-border">
+                      {lines.map((l, i) => (
+                        <div key={l.sellItemId} className="flex flex-col gap-2 border-b border-dash-border-soft px-3 py-3 last:border-0">
+                          <div className="flex items-center gap-3">
+                            <input type="checkbox" checked={l.on} onChange={() => patch(i, { on: !l.on })} aria-label={`Return ${l.name}`} className="size-4" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold">{l.name}</div>
+                              <div className="text-xs text-dash-muted">Bought {l.bought} × {formatCurrency(l.price)} · {l.returnable} can still be returned</div>
+                            </div>
+                            <div className="flex items-center">
+                              <button type="button" aria-label="Decrease return quantity" onClick={() => patch(i, { qty: Math.max(1, l.qty - 1), on: true })} className="h-9 w-8 rounded-l-lg border border-dash-border">−</button>
+                              <span className="flex h-9 w-10 items-center justify-center border-y border-dash-border text-sm tabular-nums">{l.qty}</span>
+                              <button type="button" aria-label="Increase return quantity" onClick={() => patch(i, { qty: Math.min(l.returnable, l.qty + 1), on: true })} className="h-9 w-8 rounded-r-lg border border-dash-border">+</button>
+                            </div>
+                            <span className="w-24 text-right text-sm font-bold tabular-nums">{formatCurrency(l.qty * l.price)}</span>
+                          </div>
+                          {l.on && (
+                            <div className="flex flex-wrap gap-1.5 pl-7">
+                              {REASONS.map((r) => (
+                                <button key={r} type="button" aria-pressed={l.reason === r} onClick={() => patch(i, { reason: r })}
+                                  className={cn("h-8 rounded-full border px-3 text-xs font-semibold", l.reason === r ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>{r}</button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <span className="text-xs text-dash-muted">Items go back into stock unless you turn off “Return items to stock”.</span>
+                  </fieldset>
+                  <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Note
+                    <textarea rows={2} className={cn(input, "h-auto py-2.5")} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional — what the customer said" />
+                  </label>
+                </>
+              )}
+            </div>
+
+            <aside className="flex flex-col gap-3 rounded-xl border border-dash-border-soft bg-dash-bg p-4 lg:self-start">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-dash-muted">3 · Refund</span>
+              <div role="radiogroup" aria-label="Refund method" className="grid grid-cols-2 gap-1.5">
+                {METHODS.map((m) => (
+                  <button key={m.id} type="button" role="radio" aria-checked={method === m.id} onClick={() => { setMethod(m.id); setErr("") }}
+                    className={cn("flex flex-col rounded-[10px] border-2 px-2.5 py-2 text-left text-[13px] font-semibold", method === m.id ? "border-dash-accent bg-dash-accent-soft text-dash-accent-fg" : "border-dash-border bg-dash-card")}>
+                    {m.label}<span className="text-[11px] font-normal opacity-80">{m.sub}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-col gap-1.5 text-[13px]">
+                <div className="flex justify-between"><span className="text-dash-muted">Items · {units} units</span><span className="font-semibold tabular-nums">{formatCurrency(subtotal)}</span></div>
+                <div className="flex justify-between"><span className="text-dash-muted">Restocking fee</span><span className="font-semibold tabular-nums">{formatCurrency(0)}</span></div>
+                <div className="flex items-baseline justify-between border-t border-dashed border-dash-border pt-2">
+                  <span className="font-bold">{method === "credit" ? "Store credit" : method === "none" ? "No refund" : "Refund"}</span>
+                  <span className="font-dash-display text-2xl font-bold tabular-nums">{formatCurrency(refund)}</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 rounded-[10px] bg-dash-card px-3 py-2.5 text-xs text-dash-muted">
+                <span className="font-semibold text-dash-ink">What happens</span>
+                <span>{picked.length ? (restock ? `↩ Back to stock: ${picked.map((l) => `${l.name} ×${l.qty}`).join(", ")}` : "↩ Nothing goes back to stock") : "↩ Select items to see the effect"}</span>
+                <span>{picked.length && !restock ? `✕ Written off: ${picked.map((l) => `${l.name} ×${l.qty}`).join(", ")}` : ""}</span>
+                <span>{method === "cash" ? `${formatCurrency(refund)} paid back in cash` : method === "original" ? `${formatCurrency(refund)} returned to the original payment${order?.paidVia ? ` (${order.paidVia})` : ""}, reversing it on the invoice` : method === "credit" ? `${formatCurrency(refund)} added to the customer's balance` : `No money moves — the invoice total drops by ${formatCurrency(subtotal)}`}</span>
+              </div>
+              {restock && warehouses.length > 1 && (
+                <label className="flex flex-col gap-1.5 text-[13px] font-semibold">Return stock to
+                  <select className={input} value={locId} onChange={(e) => setLocId(e.target.value)}>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
+                </label>
+              )}
+              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={restock} onChange={() => setRestock((v) => !v)} className="size-4" />Return items to stock</label>
+              <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={printReceipt} onChange={() => setPrintReceipt((v) => !v)} className="size-4" />Print return receipt</label>
+              {err && <p role="alert" className="text-[13px] font-semibold text-dash-danger-fg">{err}</p>}
+            </aside>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-dash-border-soft px-6 py-4">
+            <span className="text-xs text-dash-muted">{order ? "" : "Pick an order to continue."}</span>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <button type="button" onClick={() => setFormOpen(false)} className={outlineBtn}>Cancel</button>
+              <button type="button" disabled={saving || picked.length === 0} onClick={() => submit("request")} className={outlineBtn}>Submit for approval</button>
+              <button type="button" disabled={saving || picked.length === 0} onClick={() => submit("complete")} className={primaryBtn}>
+                {saving ? "Saving…" : method === "none" ? "Record return" : `Approve & refund ${formatCurrency(refund)}`}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------- Detail ---------------- */}
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-xl">
+          {detail && (
+            <>
+              <div className="border-b border-dash-border-soft px-6 py-4">
+                <DialogTitle className="font-dash-display text-xl font-bold">{detail.returnNumber}</DialogTitle>
+                <DialogDescription className="text-[13px]">{fmt(detail.createdAt)} · {detail.customerName || "Walk-in"} · {detail.invoiceNo || "No invoice"}</DialogDescription>
+              </div>
+              <div className="flex flex-col gap-3 p-6 text-sm">
+                <div className="flex flex-col rounded-xl border border-dash-border">
+                  {detail.lines.map((l, i) => (
+                    <div key={i} className="flex items-start justify-between gap-3 border-b border-dash-border-soft px-3 py-2.5 last:border-0">
+                      <span className="flex flex-col"><span className="font-semibold">{l.name}</span><span className="text-xs text-dash-muted">{l.reason}</span></span>
+                      <span className="text-dash-muted tabular-nums">{l.quantity} × {formatCurrency(l.price)}</span>
+                      <span className="font-bold tabular-nums">{formatCurrency(l.total)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between rounded-[10px] bg-dash-neutral-soft px-3.5 py-2.5"><span>Refund ({METHOD_LABEL[detail.refundMethod ?? ""] ?? "—"}{detail.refundedVia ? ` · ${detail.refundedVia}` : ""})</span><strong className="tabular-nums">{formatCurrency(detail.amount)}</strong></div>
+                <div className="text-[13px] text-dash-muted">
+                  {detail.status === "pending" ? (detail.restocked ? "Will return to stock on approval" : "Will be written off on approval") : detail.restocked ? "Returned to stock" : "Written off (not restocked)"} · Location: {detail.locationName ?? "—"}
+                </div>
+                <div className="text-[13px] text-dash-muted">Status: <strong className="text-dash-ink">{statusOf(detail).label}</strong>{detail.processedAt ? ` · Processed ${fmt(detail.processedAt)}` : ""}</div>
+                <div className="text-[13px] text-dash-muted">Reason: <span className="text-dash-ink">{detail.reason || "—"}</span></div>
+                <div className="text-[13px] text-dash-muted">Note: <span className="text-dash-ink">{detail.note || "—"}</span></div>
+                {detail.status === "rejected" && <div className="text-[13px] text-dash-danger-fg">Rejection reason: {detail.rejectionReason || "—"}</div>}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2 border-t border-dash-border-soft px-6 py-4">
+                {detail.status === "pending" && <button type="button" disabled={busyId === detail.id} onClick={() => reject(detail)} className={cn(outlineBtn, "text-dash-danger-fg")}>Reject</button>}
+                {detail.status === "pending" && <button type="button" disabled={busyId === detail.id} onClick={() => approve(detail)} className={primaryBtn}>Approve &amp; refund</button>}
+                <button type="button" onClick={() => printReturn(detail)} className={outlineBtn}><Printer className="size-4" aria-hidden /> Print</button>
+                <button type="button" onClick={() => setDetail(null)} className={outlineBtn}>Close</button>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
