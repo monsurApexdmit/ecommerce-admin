@@ -26,6 +26,9 @@ export default function AccountTab() {
         <Text style={styles.meta}>Company: {company?.name ?? session?.companyName ?? "—"}</Text>
         <Text style={styles.meta}>Status: {company?.status ?? "—"}</Text>
         <Text style={styles.meta}>Company ID: {session?.companyId ?? "—"}</Text>
+        <Text style={styles.meta}>
+          Signed in with: {session?.loginMethod === "pin" ? `Staff PIN${session.staffId ? ` (staff #${session.staffId})` : ""}` : "Email & password"}
+        </Text>
       </ListCard>
 
       <ListCard title="API Configuration" subtitle="Expo connects directly to Laravel, not the Next proxy.">

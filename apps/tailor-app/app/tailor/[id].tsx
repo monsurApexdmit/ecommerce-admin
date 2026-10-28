@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,37 +16,37 @@ import {
 import { router, useLocalSearchParams } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
-import * as Print from "expo-print"
 import { useAuth } from "@/context/AuthContext"
 import { useCurrency } from "@/context/CurrencyContext"
 import {
-  getTailorOrder,
-  updateTailorOrderStatus,
-  createTailorPayment,
-  getMeasurementsByCustomer,
-  getTailorDorjis,
-  createTailorAssignment,
+  assignTailorWork,
+  getTailorAssignmentOptions,
+  getTailorOrderDetail,
+  recordTailorOrderPayment,
+  tailorApiError,
+  transitionTailorOrder,
 } from "@/services/tailor"
-import type {
-  TailorOrder,
-  TailorOrderStatus,
-  TailorMeasurement,
-  TailorDorji,
-} from "@/types/tailor"
+import type { TailorAssignmentDorjiOption, TailorOrderDetail, TailorStage } from "@/types/tailor"
 import {
-  ORDER_STATUS_LABELS,
-  ORDER_STATUS_COLORS,
   PAYMENT_STATUS_COLORS,
+  TAILOR_PAY_METHODS,
+  TAILOR_STAGES,
+  TAILOR_STAGE_COLORS,
+  TAILOR_STAGE_LABEL,
   WORK_STATUS_LABELS,
+  tailorMethodLabel,
+  tailorPayLabel,
 } from "@/types/tailor"
 import { TailorStatusBadge } from "@/components/tailor/TailorStatusBadge"
+import {
+  ago, askPrintOrShare, fmtDate, invoiceHtml, isIsoDate, jobCardHtml, measurementText, stageName, todayIso, whenText,
+} from "@/components/tailor/tailorHelpers"
 import { AccessDenied } from "@/components/AccessDenied"
 import { colors } from "@/constants/theme"
 
-const ALL_STATUSES: TailorOrderStatus[] = [
-  "pending", "measurement_taken", "assigned", "cutting", "stitching", "ready", "delivered", "cancelled",
-]
-const PAYMENT_METHODS = ["Cash", "Card", "Bank Transfer", "Mobile Banking"]
+const WORK_COLORS: Record<string, string> = {
+  assigned: "#8b5cf6", in_progress: "#f59e0b", completed: "#22c55e", returned: "#ef4444", paid: "#0d9488",
+}
 
 function InfoRow({ label, value, valueStyle }: { label: string; value: string; valueStyle?: object }) {
   return (
@@ -55,595 +57,595 @@ function InfoRow({ label, value, valueStyle }: { label: string; value: string; v
   )
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <View style={s.card}>
-      <Text style={s.cardTitle}>{title}</Text>
+      <View style={s.cardHeader}>
+        <Text style={s.cardTitle}>{title}</Text>
+        {right}
+      </View>
       {children}
     </View>
   )
 }
 
+function Chip({ label, active, onPress, color = "#7c3aed" }: { label: string; active: boolean; onPress: () => void; color?: string }) {
+  return (
+    <TouchableOpacity
+      style={[s.chip, active && { backgroundColor: color, borderColor: color }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Text style={[s.chipText, active && s.chipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
 export default function TailorOrderDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
-  const { canRead, canWrite } = useAuth()
+  const { id, pay } = useLocalSearchParams<{ id: string; pay?: string }>()
+  const { canRead, canWrite, company, session } = useAuth()
   const { formatCurrency } = useCurrency()
+  const fc = (n: number) => formatCurrency(n)
+  const writable = canWrite("TailorOrders")
+  const businessName = company?.name ?? session?.companyName ?? ""
 
-  const [order, setOrder] = useState<TailorOrder | null>(null)
+  const [d, setD] = useState<TailorOrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [statusLoading, setStatusLoading] = useState(false)
-  const [itemsExpanded, setItemsExpanded] = useState(false)
-  const [payModalVisible, setPayModalVisible] = useState(false)
-  const [payAmount, setPayAmount] = useState("")
-  const [payMethod, setPayMethod] = useState("Cash")
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
-  const [paySubmitting, setPaySubmitting] = useState(false)
+  const [loadErr, setLoadErr] = useState("")
 
-  // Measurements
-  const [measurements, setMeasurements] = useState<TailorMeasurement[]>([])
-  const [measurementsExpanded, setMeasurementsExpanded] = useState(false)
+  // status
+  const [sel, setSel] = useState<TailorStage>("new")
+  const [sNote, setSNote] = useState("")
+  const [sErr, setSErr] = useState("")
+  const [moving, setMoving] = useState(false)
 
-  // Assign dorji
-  const [dorjis, setDorjis] = useState<TailorDorji[]>([])
-  const [assignModalVisible, setAssignModalVisible] = useState(false)
-  const [assignDorjiId, setAssignDorjiId] = useState<number | null>(null)
-  const [assignDate, setAssignDate] = useState(new Date().toISOString().slice(0, 10))
-  const [assignCharge, setAssignCharge] = useState("")
-  const [assignSubmitting, setAssignSubmitting] = useState(false)
-  const [dorjiPickerVisible, setDorjiPickerVisible] = useState(false)
+  // cancel
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelErr, setCancelErr] = useState("")
+
+  // payment
+  const [payOpen, setPayOpen] = useState(false)
+  const [amt, setAmt] = useState("")
+  const [method, setMethod] = useState("cash")
+  const [payDate, setPayDate] = useState(todayIso())
+  const [ref, setRef] = useState("")
+  const [payNotes, setPayNotes] = useState("")
+  const [payErr, setPayErr] = useState("")
+  const [paying, setPaying] = useState(false)
+
+  // assign
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [dorjiOpts, setDorjiOpts] = useState<TailorAssignmentDorjiOption[]>([])
+  const [aDorji, setADorji] = useState<number | null>(null)
+  const [aLine, setALine] = useState<number | null>(null)
+  const [aTask, setATask] = useState("")
+  const [aPieces, setAPieces] = useState("1")
+  const [aRate, setARate] = useState("")
+  const [aBack, setABack] = useState("")
+  const [aErr, setAErr] = useState("")
+  const [assigning, setAssigning] = useState(false)
 
   const orderId = Number(id)
 
   const load = useCallback(async () => {
     try {
-      setLoading(true)
-      const data = await getTailorOrder(orderId)
-      setOrder(data)
-      if (data.customerId) {
-        getMeasurementsByCustomer(data.customerId)
-          .then(setMeasurements)
-          .catch(() => {})
-      }
-    } catch {
-      Alert.alert("Error", "Failed to load order")
+      setLoadErr("")
+      const o = await getTailorOrderDetail(orderId)
+      setD(o)
+      setSel(o.stage)
+      setAmt(o.dueAmount > 0 ? String(o.dueAmount) : "")
+      return o
+    } catch (e) {
+      setLoadErr(tailorApiError(e, "Failed to load order"))
+      return null
     } finally {
       setLoading(false)
     }
   }, [orderId])
 
   useEffect(() => {
-    void load()
-    getTailorDorjis({ status: "active" }).then(setDorjis).catch(() => {})
-  }, [load])
+    void load().then((o) => { if (o && pay === "1" && o.dueAmount > 0 && o.stage !== "cancelled") setPayOpen(true) })
+  }, [load, pay])
 
   if (!canRead("TailorOrders")) return <AccessDenied />
 
-  if (loading || !order) {
+  const topBar = (
+    <View style={s.topBar}>
+      <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
+        <Ionicons name="arrow-back" size={22} color={colors.text} />
+      </TouchableOpacity>
+      <Text style={s.topBarTitle} numberOfLines={1}>{d?.orderNumber ?? "Order Detail"}</Text>
+      {d ? (
+        <View style={s.topActions}>
+          <TouchableOpacity
+            style={s.iconBtn}
+            hitSlop={6}
+            onPress={() => askPrintOrShare(`Invoice ${d.orderNumber}`, () => invoiceHtml(d, businessName, fc))}
+          >
+            <Ionicons name="receipt-outline" size={16} color="#7c3aed" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.iconBtn}
+            hitSlop={6}
+            onPress={() => askPrintOrShare(`Job card ${d.orderNumber}`, () => jobCardHtml(d))}
+          >
+            <Ionicons name="clipboard-outline" size={16} color="#7c3aed" />
+          </TouchableOpacity>
+          {writable && d.stage !== "delivered" && d.stage !== "cancelled" && (
+            <TouchableOpacity style={s.iconBtn} hitSlop={6} onPress={() => router.push(`/tailor/edit/${d.id}` as any)}>
+              <Ionicons name="create-outline" size={17} color="#7c3aed" />
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : <View style={{ width: 40 }} />}
+    </View>
+  )
+
+  if (loading || !d) {
     return (
       <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
-        <View style={s.topBar}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={s.topBarTitle}>Order Detail</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        {topBar}
         <View style={s.center}>
-          <ActivityIndicator size="large" color="#7c3aed" />
+          {loading ? <ActivityIndicator size="large" color="#7c3aed" /> : (
+            <>
+              <Ionicons name="alert-circle-outline" size={40} color={colors.danger} />
+              <Text style={s.errText}>{loadErr || "Order not found"}</Text>
+              <TouchableOpacity style={s.smallBtn} onPress={() => { setLoading(true); void load() }}>
+                <Text style={s.smallBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </SafeAreaView>
     )
   }
 
-  const isOverdue =
-    order.deliveryDate &&
-    order.orderStatus !== "delivered" &&
-    order.orderStatus !== "cancelled" &&
-    new Date(order.deliveryDate) < new Date()
+  const open = d.stage !== "delivered" && d.stage !== "cancelled"
+  const when = whenText(d.daysLeft, d.stage)
+  const c = d.charges
+  const stitch = c.stitching || c.stitchingOrderLevel
+  const hasShopFabric = d.items.some((i) => i.fabricSource === "shop" && i.fabricQuantity > 0)
 
-  const handleStatusUpdate = async (newStatus: TailorOrderStatus) => {
-    if (newStatus === order.orderStatus) return
-    try {
-      setStatusLoading(true)
-      const updated = await updateTailorOrderStatus(orderId, newStatus)
-      setOrder(updated)
-    } catch {
-      Alert.alert("Error", "Failed to update status")
-    } finally {
-      setStatusLoading(false)
-    }
-  }
+  // ── actions ──────────────────────────────────────────────────────────────
 
-  const handleRecordPayment = async () => {
-    const amt = parseFloat(payAmount)
-    if (!amt || amt <= 0) {
-      Alert.alert("Invalid amount")
-      return
-    }
+  const applyStatus = async () => {
+    if (sel === d.stage) { setSErr("Pick a different status."); return }
+    setMoving(true); setSErr("")
     try {
-      setPaySubmitting(true)
-      await createTailorPayment({
-        orderId,
-        amount: amt,
-        paymentMethod: payMethod,
-        paymentDate: payDate,
-      })
-      setPayModalVisible(false)
-      setPayAmount("")
-      setPayDate(new Date().toISOString().slice(0, 10))
+      await transitionTailorOrder(d.id, sel, sNote.trim())
+      setSNote("")
       await load()
-    } catch {
-      Alert.alert("Error", "Failed to record payment")
+      Alert.alert("Status updated", `${d.orderNumber} moved to ${TAILOR_STAGE_LABEL[sel].toLowerCase()}.`)
+    } catch (e) {
+      // e.g. 422 "Not enough Cotton: need 3, only 1.5 in stock"
+      setSErr(tailorApiError(e, "Failed to update status"))
     } finally {
-      setPaySubmitting(false)
+      setMoving(false)
     }
   }
 
-  const handleAssign = async () => {
-    if (!assignDorjiId) { Alert.alert("Select a dorji"); return }
-    if (!assignDate) { Alert.alert("Enter assigned date"); return }
-    setAssignSubmitting(true)
+  const cancelOrder = async () => {
+    const reason = cancelReason.trim()
+    if (!reason) { setCancelErr("Enter a reason for cancelling."); return }
+    setMoving(true); setCancelErr("")
     try {
-      await createTailorAssignment({
-        orderId,
-        dorjiId: assignDorjiId,
-        assignedDate: assignDate,
-        dorjiCharge: parseFloat(assignCharge) || 0,
-        workStatus: "assigned",
-      })
-      setAssignModalVisible(false)
-      setAssignDorjiId(null)
-      setAssignCharge("")
+      await transitionTailorOrder(d.id, "cancelled", `Cancelled: ${reason}`)
+      setCancelOpen(false); setCancelReason("")
       await load()
-    } catch {
-      Alert.alert("Error", "Failed to assign dorji")
+      Alert.alert("Order cancelled", `${d.orderNumber} was cancelled.`)
+    } catch (e) {
+      setCancelErr(tailorApiError(e, "Failed to cancel order"))
     } finally {
-      setAssignSubmitting(false)
+      setMoving(false)
     }
   }
 
-  const handlePrintInvoice = async () => {
-    const fabricTotal = (order.items ?? []).reduce((s, i) => s + (i.fabricQuantity ?? 0) * (i.fabricUnitPrice ?? 0), 0)
-    const itemsHtml = (order.items ?? []).map((item, idx) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${(item.productType ?? "").replace(/_/g, " ")}</td>
-        <td>${item.fabric?.name ?? "—"}</td>
-        <td style="text-align:center">${item.fabricQuantity} ${item.fabric?.unit ?? ""}</td>
-        <td style="text-align:right">${formatCurrency(item.fabricUnitPrice ?? 0)}</td>
-        <td style="text-align:right;font-weight:600">${formatCurrency((item.fabricQuantity ?? 0) * (item.fabricUnitPrice ?? 0))}</td>
-      </tr>`).join("")
-    const trackingUrl = order.trackingToken
-      ? `https://yourdomain.com/track/tailor/${order.trackingToken}`
-      : null
-    const qrSection = trackingUrl ? `
-      <div style="display:flex;flex-direction:column;align-items:center;margin-top:32px;padding:20px;border:1px dashed #d8b4fe;border-radius:12px;background:#faf5ff;">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(trackingUrl)}" width="120" height="120" />
-        <p style="margin-top:10px;font-size:12px;font-weight:700;color:#7c3aed;">Scan to track your order</p>
-        <p style="font-size:10px;color:#9ca3af;">${trackingUrl}</p>
-      </div>` : ""
-    const html = `
-      <html><head><style>
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:Arial,sans-serif; padding:32px; color:#374151; }
-        .header { display:flex; justify-content:space-between; border-bottom:2px solid #7c3aed; padding-bottom:20px; margin-bottom:24px; }
-        .title { font-size:28px; font-weight:900; color:#111; }
-        .num { font-size:13px; color:#6b7280; margin-top:4px; }
-        .cname { font-size:18px; font-weight:800; color:#7c3aed; text-align:right; }
-        .meta { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:24px; }
-        .mbox { background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:12px; }
-        .mbox h3 { font-size:10px; font-weight:700; color:#9ca3af; text-transform:uppercase; margin-bottom:6px; }
-        .mbox p { font-size:13px; font-weight:700; }
-        table { width:100%; border-collapse:collapse; margin-bottom:16px; }
-        thead { background:#7c3aed; }
-        th { padding:10px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; color:#fff; }
-        td { padding:10px 12px; border-bottom:1px solid #f3f4f6; font-size:13px; }
-        .totals { margin-left:auto; width:260px; }
-        .trow { display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }
-        .grand { font-size:15px; font-weight:800; border-top:2px solid #7c3aed; margin-top:6px; padding-top:8px; }
-        .footer { margin-top:32px; border-top:1px solid #e5e7eb; padding-top:12px; text-align:center; font-size:11px; color:#9ca3af; }
-      </style></head><body>
-        <div class="header">
-          <div><div class="title">INVOICE</div><div class="num">${order.orderNumber}</div></div>
-          <div><div class="cname">Tailor Shop</div></div>
-        </div>
-        <div class="meta">
-          <div class="mbox"><h3>Customer</h3><p>${order.customer?.name ?? "—"}</p><p style="font-weight:400;font-size:12px">${order.customer?.phone ?? ""}</p></div>
-          <div class="mbox"><h3>Order Date</h3><p>${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : "—"}</p></div>
-          <div class="mbox"><h3>Delivery Date</h3><p>${order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—"}</p></div>
-        </div>
-        <table>
-          <thead><tr><th>#</th><th>Type</th><th>Fabric</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Amount</th></tr></thead>
-          <tbody>${itemsHtml || '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No items</td></tr>'}</tbody>
-        </table>
-        <div class="totals">
-          <div class="trow"><span>Fabric Total</span><span>${formatCurrency(fabricTotal)}</span></div>
-          <div class="trow"><span>Stitching</span><span>+ ${formatCurrency(order.stitchingCharge ?? 0)}</span></div>
-          ${(order.extraCharge ?? 0) > 0 ? `<div class="trow"><span>Extra</span><span>+ ${formatCurrency(order.extraCharge ?? 0)}</span></div>` : ""}
-          ${(order.discount ?? 0) > 0 ? `<div class="trow"><span>Discount</span><span>− ${formatCurrency(order.discount ?? 0)}</span></div>` : ""}
-          <div class="trow grand"><span>Grand Total</span><span>${formatCurrency(order.totalAmount ?? 0)}</span></div>
-          <div class="trow" style="color:#16a34a"><span>Paid</span><span>${formatCurrency(order.paidAmount ?? 0)}</span></div>
-          ${(order.dueAmount ?? 0) > 0 ? `<div class="trow" style="color:#dc2626;font-weight:700"><span>Due</span><span>${formatCurrency(order.dueAmount ?? 0)}</span></div>` : ""}
-        </div>
-        ${qrSection}
-        <div class="footer">Thank you for your business</div>
-      </body></html>`
+  const recordPay = async () => {
+    const a = Number(amt)
+    if (!(a > 0)) { setPayErr("Enter an amount greater than 0."); return }
+    if (a > d.dueAmount + 0.005) { setPayErr(`Amount is more than the balance (${fc(d.dueAmount)}).`); return }
+    if (!isIsoDate(payDate)) { setPayErr("Enter the date as YYYY-MM-DD."); return }
+    if (payDate > todayIso()) { setPayErr("Payment date cannot be in the future."); return }
+    setPaying(true); setPayErr("")
     try {
-      await Print.printAsync({ html })
+      await recordTailorOrderPayment(d.id, { amount: a, paymentMethod: method, paymentDate: payDate, reference: ref.trim(), notes: payNotes.trim() })
+      setPayOpen(false); setRef(""); setPayNotes("")
+      await load()
+      Alert.alert("Payment recorded", `${fc(a)} recorded for ${d.orderNumber}.`)
+    } catch (e) {
+      setPayErr(tailorApiError(e, "Failed to record payment"))
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  const openAssign = async () => {
+    setAErr(""); setADorji(null); setARate("")
+    const first = d.items[0]
+    setALine(first ? first.id : null)
+    setATask(first ? first.productType : "")
+    setAPieces(String(first?.quantity ?? 1))
+    setABack(d.deliveryDate ?? "")
+    setAssignOpen(true)
+    try {
+      const o = await getTailorAssignmentOptions()
+      setDorjiOpts(o.dorjis.filter((x) => x.status === "active"))
     } catch {
-      Alert.alert("Print failed", "Could not open print dialog")
+      setAErr("Could not load dorjis.")
+    }
+  }
+
+  const pickLine = (itemId: number) => {
+    const it = d.items.find((x) => x.id === itemId)
+    setALine(itemId)
+    if (it) { setATask(it.productType); setAPieces(String(it.quantity)) }
+  }
+
+  const pickDorji = (o: TailorAssignmentDorjiOption) => {
+    setADorji(o.id)
+    if (o.ratePerPiece) setARate(String(o.ratePerPiece))
+  }
+
+  const saveAssign = async () => {
+    const dz = dorjiOpts.find((x) => x.id === aDorji)
+    const pieces = Number(aPieces), rate = Number(aRate)
+    if (!dz) { setAErr("Select a dorji."); return }
+    if (!aTask.trim()) { setAErr("Describe the task."); return }
+    if (!(pieces > 0) || !Number.isInteger(pieces)) { setAErr("Pieces must be a whole number above 0."); return }
+    if (aRate === "" || !isFinite(rate) || rate < 0) { setAErr("Enter a valid rate per piece."); return }
+    if (aBack && !isIsoDate(aBack)) { setAErr("Enter the back date as YYYY-MM-DD."); return }
+    const today = todayIso()
+    if (aBack && aBack < today) { setAErr("Expected back date cannot be before today."); return }
+    const payload = {
+      orderId: d.id, dorjiId: dz.id, task: aTask.trim(), pieces, ratePerPiece: rate,
+      assignedDate: today, expectedCompletion: aBack || null,
+    }
+    const done = async () => {
+      setAssignOpen(false)
+      await load()
+    }
+    setAssigning(true); setAErr("")
+    try {
+      await assignTailorWork(payload)
+      await done()
+    } catch (e: any) {
+      if (e?.response?.status === 409) {
+        Alert.alert("Over capacity", e.response.data?.message || "This dorji is over capacity. Assign anyway?", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Assign anyway",
+            onPress: async () => {
+              try { await assignTailorWork({ ...payload, force: true }); await done() } catch (er) { setAErr(tailorApiError(er, "Could not assign the work.")) }
+            },
+          },
+        ])
+      } else {
+        setAErr(tailorApiError(e, "Could not assign the work."))
+      }
+    } finally {
+      setAssigning(false)
     }
   }
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
-      {/* Top bar */}
-      <View style={s.topBar}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={s.topBarTitle} numberOfLines={1}>{order.orderNumber}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <TailorStatusBadge
-            label={ORDER_STATUS_LABELS[order.orderStatus]}
-            color={ORDER_STATUS_COLORS[order.orderStatus]}
-            small
-          />
-          <TouchableOpacity style={s.printBtn} onPress={() => void handlePrintInvoice()} hitSlop={8}>
-            <Ionicons name="print-outline" size={16} color="#7c3aed" />
-          </TouchableOpacity>
-          {canWrite("TailorOrders") && (
-            <TouchableOpacity
-              style={s.editBtn}
-              onPress={() => router.push(`/tailor/edit/${order.id}` as any)}
-              hitSlop={8}
-            >
-              <Ionicons name="create-outline" size={18} color="#7c3aed" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      {topBar}
 
       <ScrollView contentContainerStyle={s.content}>
-        {/* Customer card */}
-        <SectionCard title="Customer">
-          <InfoRow label="Name" value={order.customer?.name ?? "-"} />
-          <InfoRow label="Phone" value={order.customer?.phone ?? "-"} />
-          <InfoRow label="Address" value={order.customer?.address ?? "-"} />
-        </SectionCard>
-
-        {/* Summary card */}
-        <SectionCard title="Summary">
-          <InfoRow label="Order Date" value={order.orderDate ? new Date(order.orderDate).toLocaleDateString() : "-"} />
-          <InfoRow
-            label="Delivery Date"
-            value={order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "Not set"}
-            valueStyle={isOverdue ? s.overdueText : undefined}
+        {/* Badges */}
+        <View style={s.badgeRow}>
+          <TailorStatusBadge label={TAILOR_STAGE_LABEL[d.stage]} color={TAILOR_STAGE_COLORS[d.stage]} />
+          <TailorStatusBadge
+            label={d.paymentStatus.charAt(0).toUpperCase() + d.paymentStatus.slice(1)}
+            color={PAYMENT_STATUS_COLORS[d.paymentStatus] ?? "#94a3b8"}
           />
-          <InfoRow label="Stitching" value={formatCurrency(order.stitchingCharge)} />
-          <InfoRow label="Extra Charge" value={formatCurrency(order.extraCharge)} />
-          <InfoRow label="Discount" value={formatCurrency(order.discount)} />
-          <View style={s.divider} />
-          <InfoRow label="Total" value={formatCurrency(order.totalAmount)} valueStyle={s.totalText} />
-          <InfoRow label="Paid" value={formatCurrency(order.paidAmount)} valueStyle={s.paidText} />
-          <InfoRow
-            label="Due"
-            value={formatCurrency(order.dueAmount)}
-            valueStyle={order.dueAmount > 0 ? s.dueText : s.paidText}
-          />
-          <View style={{ alignSelf: "flex-end", marginTop: 4 }}>
-            <TailorStatusBadge
-              label={order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
-              color={PAYMENT_STATUS_COLORS[order.paymentStatus]}
-              small
-            />
-          </View>
-        </SectionCard>
-
-        {/* Items collapsible */}
-        <View style={s.card}>
-          <TouchableOpacity
-            style={s.collapsibleHeader}
-            onPress={() => setItemsExpanded((v) => !v)}
-            activeOpacity={0.75}
-          >
-            <Text style={s.cardTitle}>Items ({order.items?.length ?? 0})</Text>
-            <Ionicons
-              name={itemsExpanded ? "chevron-up" : "chevron-down"}
-              size={18}
-              color={colors.muted}
-            />
-          </TouchableOpacity>
-          {itemsExpanded && (
-            <>
-              {(order.items ?? []).length === 0 ? (
-                <Text style={s.mutedText}>No items</Text>
-              ) : (
-                order.items!.map((item) => (
-                  <View key={item.id} style={s.itemRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.itemType}>{item.productType}</Text>
-                      <Text style={s.itemFabric}>
-                        {item.fabric?.name ?? "No fabric"} · Qty {item.fabricQuantity}
-                      </Text>
-                    </View>
-                    <Text style={s.itemPrice}>{formatCurrency(item.fabricUnitPrice * item.fabricQuantity)}</Text>
-                  </View>
-                ))
-              )}
-            </>
-          )}
+          {d.isUrgent && <TailorStatusBadge label="URGENT" color="#dc2626" />}
         </View>
 
-        {/* Status update */}
-        {canWrite("TailorOrders") && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Update Status</Text>
-            {statusLoading && <ActivityIndicator color="#7c3aed" style={{ marginBottom: 8 }} />}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.statusRow}>
-              {ALL_STATUSES.map((st) => (
-                <TouchableOpacity
-                  key={st}
-                  style={[
-                    s.statusBtn,
-                    order.orderStatus === st && { backgroundColor: "#7c3aed", borderColor: "#7c3aed" },
-                  ]}
-                  onPress={() => void handleStatusUpdate(st)}
-                  disabled={statusLoading}
-                  activeOpacity={0.75}
-                >
-                  <Text
-                    style={[s.statusBtnText, order.orderStatus === st && { color: "#fff" }]}
-                  >
-                    {ORDER_STATUS_LABELS[st]}
-                  </Text>
-                </TouchableOpacity>
+        {/* Summary */}
+        <SectionCard title="Summary">
+          <InfoRow label="Customer" value={d.customer?.name ?? "—"} />
+          {d.customer?.phone ? <InfoRow label="Phone" value={d.customer.phone} /> : null}
+          {d.customer?.address ? <InfoRow label="Address" value={d.customer.address} /> : null}
+          <InfoRow label="Order date" value={fmtDate(d.orderDate)} />
+          <InfoRow label="Delivery" value={`${fmtDate(d.deliveryDate)}${open ? ` · ${when.text}` : ""}`} valueStyle={open ? { color: when.color } : undefined} />
+          <InfoRow label="Dorji" value={d.dorjiNames.join(", ") || "Not assigned"} />
+          <View style={s.divider} />
+          <InfoRow label="Total" value={fc(c.total)} valueStyle={s.totalText} />
+          <InfoRow label="Paid" value={fc(c.paid)} valueStyle={s.paidText} />
+          <InfoRow label="Due" value={fc(c.due)} valueStyle={c.due > 0 ? s.dueText : s.paidText} />
+        </SectionCard>
+
+        {d.notes ? (
+          <View style={s.noteBox}>
+            <Ionicons name="document-text-outline" size={14} color="#7c3aed" />
+            <Text style={s.noteText}>{d.notes}</Text>
+          </View>
+        ) : null}
+
+        {/* Items */}
+        <SectionCard title={`Items (${d.items.length})`}>
+          {d.items.length === 0 ? <Text style={s.mutedText}>No items</Text> : d.items.map((it) => {
+            const fabric = it.fabricSource === "shop" && it.fabric
+              ? `${it.fabric.name} · ${it.fabricQuantity} ${it.fabric.unit}${it.fabricUnitPrice ? ` @ ${fc(it.fabricUnitPrice)}` : ""}`
+              : `Customer fabric${it.ownFabricNote ? `: ${it.ownFabricNote}` : ""}`
+            const sub = [fabric, measurementText(it.measurement) || "No measurement", ...it.styleOptions, it.notes].filter(Boolean).join(" — ")
+            return (
+              <View key={it.id} style={s.lineRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lineTitle}>{it.productType} ×{it.quantity}</Text>
+                  <Text style={s.lineSub}>{sub}</Text>
+                </View>
+                <Text style={s.lineAmt}>{fc(it.lineTotal)}</Text>
+              </View>
+            )
+          })}
+        </SectionCard>
+
+        {/* Charges */}
+        <SectionCard title="Charges">
+          <InfoRow label="Stitching" value={fc(stitch)} />
+          <InfoRow label="Fabric" value={fc(c.fabric)} />
+          {c.urgent > 0 && <InfoRow label="Urgent charge" value={fc(c.urgent)} />}
+          {c.extra > 0 && <InfoRow label="Extra charge" value={fc(c.extra)} />}
+          {c.discount > 0 && <InfoRow label="Discount" value={`− ${fc(c.discount)}`} />}
+          <View style={s.divider} />
+          <InfoRow label="Grand total" value={fc(c.total)} valueStyle={s.totalText} />
+        </SectionCard>
+
+        {/* Dorji assignments */}
+        <SectionCard
+          title="Dorji assignments"
+          right={writable && open ? (
+            <TouchableOpacity style={s.smallBtn} onPress={() => void openAssign()} activeOpacity={0.8}>
+              <Ionicons name="add" size={14} color="#fff" />
+              <Text style={s.smallBtnText}>Assign</Text>
+            </TouchableOpacity>
+          ) : undefined}
+        >
+          {d.assignments.length === 0 ? (
+            <Text style={s.mutedText}>No dorji assigned yet.</Text>
+          ) : d.assignments.map((a) => (
+            <View key={a.id} style={s.lineRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.lineTitle}>
+                  {a.dorjiName ?? "Dorji"}{a.task ? ` · ${a.task} ×${a.pieces ?? 1}` : a.adminNotes ? ` · ${a.adminNotes}` : ""}
+                </Text>
+                <Text style={s.lineSub}>
+                  {a.expectedCompletion ? `Back by ${fmtDate(a.expectedCompletion)} · ` : ""}Charge {fc(a.dorjiCharge)}
+                </Text>
+              </View>
+              <TailorStatusBadge label={WORK_STATUS_LABELS[a.workStatus] ?? a.workStatus} color={WORK_COLORS[a.workStatus] ?? "#8b5cf6"} small />
+            </View>
+          ))}
+        </SectionCard>
+
+        {/* Customer payments */}
+        <SectionCard
+          title="Customer payments"
+          right={writable && d.dueAmount > 0 && d.stage !== "cancelled" ? (
+            <TouchableOpacity style={s.smallBtn} onPress={() => { setPayErr(""); setPayDate(todayIso()); setPayOpen(true) }} activeOpacity={0.8}>
+              <Ionicons name="add" size={14} color="#fff" />
+              <Text style={s.smallBtnText}>Record</Text>
+            </TouchableOpacity>
+          ) : undefined}
+        >
+          {d.payments.length === 0 ? (
+            <Text style={s.mutedText}>No payments recorded.</Text>
+          ) : d.payments.map((p) => {
+            const label = tailorPayLabel(p)
+            const extra = [p.reference, label !== "Payment" ? "" : p.notes].filter(Boolean).join(" · ")
+            return (
+              <View key={p.id} style={s.lineRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lineTitle}>{label} · {tailorMethodLabel(p.paymentMethod)}</Text>
+                  <Text style={s.lineSub}>{fmtDate(p.paymentDate)}{extra ? ` · ${extra}` : ""}</Text>
+                </View>
+                <Text style={[s.lineAmt, { color: "#16a34a" }]}>{fc(p.amount)}</Text>
+              </View>
+            )
+          })}
+        </SectionCard>
+
+        {/* Update status */}
+        {writable && open && (
+          <SectionCard title="Update status">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow}>
+              {TAILOR_STAGES.map((st) => (
+                <Chip
+                  key={st.id}
+                  label={st.label}
+                  active={sel === st.id}
+                  color={TAILOR_STAGE_COLORS[st.id]}
+                  onPress={() => { setSel(st.id); setSErr("") }}
+                />
               ))}
             </ScrollView>
-          </View>
+            <TextInput
+              style={s.input}
+              value={sNote}
+              onChangeText={setSNote}
+              placeholder="Note (optional), e.g. Trial done, collar to be fixed"
+              placeholderTextColor={colors.muted}
+            />
+            {sel === "delivered" && d.dueAmount > 0 && (
+              <Text style={s.hint}>Delivering collects the remaining {fc(d.dueAmount)} in cash and marks the order as paid.</Text>
+            )}
+            {sel !== "new" && !d.fabricDeducted && hasShopFabric && (
+              <Text style={s.hint}>Shop fabric is taken out of stock when the order first moves past Received.</Text>
+            )}
+            {sErr ? <Text style={s.errText}>{sErr}</Text> : null}
+            <View style={s.btnRow}>
+              <TouchableOpacity
+                style={[s.dangerOutlineBtn]}
+                onPress={() => { setCancelErr(""); setCancelOpen(true) }}
+                activeOpacity={0.8}
+              >
+                <Text style={s.dangerOutlineText}>Cancel order</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.primaryBtn, moving && s.disabled]}
+                onPress={() => void applyStatus()}
+                disabled={moving}
+                activeOpacity={0.85}
+              >
+                {moving ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Apply status</Text>}
+              </TouchableOpacity>
+            </View>
+          </SectionCard>
         )}
 
-        {/* Customer Measurements */}
-        <View style={s.card}>
-          <TouchableOpacity
-            style={s.collapsibleHeader}
-            onPress={() => setMeasurementsExpanded(v => !v)}
-            activeOpacity={0.75}
-          >
-            <Text style={s.cardTitle}>Measurements ({measurements.length})</Text>
-            <Ionicons name={measurementsExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} />
-          </TouchableOpacity>
-          {measurementsExpanded && (
-            measurements.length === 0 ? (
-              <Text style={s.mutedText}>No measurements for this customer</Text>
-            ) : measurements.map(m => (
-              <View key={m.id} style={s.measurementCard}>
-                <View style={s.measurementHeader}>
-                  <Text style={s.measurementType}>{m.productType?.replace(/_/g, " ")}</Text>
-                  <Text style={s.measurementDate}>{new Date(m.measuredAt).toLocaleDateString()}</Text>
-                </View>
-                <View style={s.measurementFields}>
-                  {m.chest ? <Text style={s.mField}>Chest: {m.chest}</Text> : null}
-                  {m.waist ? <Text style={s.mField}>Waist: {m.waist}</Text> : null}
-                  {m.hip ? <Text style={s.mField}>Hip: {m.hip}</Text> : null}
-                  {m.shoulder ? <Text style={s.mField}>Shoulder: {m.shoulder}</Text> : null}
-                  {m.sleeve ? <Text style={s.mField}>Sleeve: {m.sleeve}</Text> : null}
-                  {m.length ? <Text style={s.mField}>Length: {m.length}</Text> : null}
-                  {m.neck ? <Text style={s.mField}>Neck: {m.neck}</Text> : null}
-                  {m.inseam ? <Text style={s.mField}>Inseam: {m.inseam}</Text> : null}
-                  {m.bottomLength ? <Text style={s.mField}>Bottom L: {m.bottomLength}</Text> : null}
-                  {m.pajamaWaist ? <Text style={s.mField}>Paj.Waist: {m.pajamaWaist}</Text> : null}
-                  {m.pajamaLength ? <Text style={s.mField}>Paj.Length: {m.pajamaLength}</Text> : null}
-                </View>
-                {m.notes ? <Text style={s.mNotes}>{m.notes}</Text> : null}
+        {/* Timeline */}
+        <SectionCard title="Status timeline">
+          {d.statusLogs.length === 0 ? (
+            <Text style={s.mutedText}>No status changes yet.</Text>
+          ) : [...d.statusLogs].reverse().map((g, i, arr) => (
+            <View key={g.id} style={s.logRow}>
+              <View style={s.logDotCol}>
+                <View style={[s.logDot, i === 0 && s.logDotActive]} />
+                {i < arr.length - 1 && <View style={s.logLine} />}
               </View>
-            ))
-          )}
-        </View>
-
-        {/* Assignments */}
-        <View style={s.card}>
-          <View style={s.collapsibleHeader}>
-            <Text style={s.cardTitle}>Assignments</Text>
-            {canWrite("TailorOrders") && (
-              <TouchableOpacity
-                style={s.recordPayBtn}
-                onPress={() => setAssignModalVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={14} color="#fff" />
-                <Text style={s.recordPayText}>Assign</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {(order.assignments ?? []).length === 0 ? (
-            <Text style={s.mutedText}>No assignments</Text>
-          ) : (
-            order.assignments!.map((a) => (
-              <View key={a.id} style={s.assignmentRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.assignmentName}>{a.dorji?.name ?? `Dorji #${a.dorjiId}`}</Text>
-                  <TailorStatusBadge
-                    label={WORK_STATUS_LABELS[a.workStatus]}
-                    color="#8b5cf6"
-                    small
-                  />
-                </View>
-                <Text style={s.assignmentCharge}>{formatCurrency(a.dorjiCharge)}</Text>
+              <View style={s.logContent}>
+                <Text style={s.logStatus}>
+                  {g.fromStatus ? `${stageName(g.fromStatus)} → ${stageName(g.toStatus)}` : stageName(g.toStatus)}
+                </Text>
+                <Text style={s.logDate}>{fmtDate(g.createdAt)} · {ago(g.createdAt)}</Text>
+                {g.note ? <Text style={s.logNote}>{g.note}</Text> : null}
               </View>
-            ))
-          )}
-        </View>
-
-        {/* Payments */}
-        <View style={s.card}>
-          <View style={s.collapsibleHeader}>
-            <Text style={s.cardTitle}>Payments</Text>
-            {canWrite("TailorOrders") && (
-              <TouchableOpacity
-                style={s.recordPayBtn}
-                onPress={() => setPayModalVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={14} color="#fff" />
-                <Text style={s.recordPayText}>Record</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {(order.payments ?? []).length === 0 ? (
-            <Text style={s.mutedText}>No payments recorded</Text>
-          ) : (
-            order.payments!.map((p) => (
-              <View key={p.id} style={s.paymentRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.paymentMethod}>{p.paymentMethod}</Text>
-                  <Text style={s.paymentDate}>{new Date(p.paymentDate).toLocaleDateString()}</Text>
-                </View>
-                <Text style={s.paymentAmount}>{formatCurrency(p.amount)}</Text>
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Status Log */}
-        <SectionCard title="Status Log">
-          {(order.statusLogs ?? []).length === 0 ? (
-            <Text style={s.mutedText}>No log entries</Text>
-          ) : (
-            order.statusLogs!.map((log, i) => (
-              <View key={log.id} style={s.logRow}>
-                <View style={s.logDotCol}>
-                  <View style={[s.logDot, i === 0 && s.logDotActive]} />
-                  {i < order.statusLogs!.length - 1 && <View style={s.logLine} />}
-                </View>
-                <View style={s.logContent}>
-                  <Text style={s.logStatus}>
-                    {log.fromStatus ? `${log.fromStatus} → ` : ""}{log.toStatus}
-                  </Text>
-                  {log.note ? <Text style={s.logNote}>{log.note}</Text> : null}
-                  <Text style={s.logDate}>{new Date(log.createdAt).toLocaleString()}</Text>
-                </View>
-              </View>
-            ))
-          )}
+            </View>
+          ))}
         </SectionCard>
 
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      {/* Payment Modal */}
-      <Modal
-        visible={payModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPayModalVisible(false)}
-      >
-        <Pressable style={s.modalOverlay} onPress={() => setPayModalVisible(false)} />
-        <View style={s.bottomSheet}>
-          <View style={s.sheetHandle} />
-          <Text style={s.sheetTitle}>Record Payment</Text>
-
-          <Text style={s.inputLabel}>Amount</Text>
-          <TextInput
-            style={s.input}
-            placeholder="0.00"
-            placeholderTextColor={colors.muted}
-            keyboardType="decimal-pad"
-            value={payAmount}
-            onChangeText={setPayAmount}
-          />
-
-          <Text style={s.inputLabel}>Payment Method</Text>
-          <View style={s.methodRow}>
-            {PAYMENT_METHODS.map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[s.methodChip, payMethod === m && s.methodChipActive]}
-                onPress={() => setPayMethod(m)}
-                activeOpacity={0.75}
-              >
-                <Text style={[s.methodChipText, payMethod === m && s.methodChipTextActive]}>
-                  {m}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={s.inputLabel}>Date (YYYY-MM-DD)</Text>
-          <TextInput
-            style={s.input}
-            value={payDate}
-            onChangeText={setPayDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.muted}
-          />
-
-          <TouchableOpacity
-            style={[s.submitBtn, paySubmitting && s.submitBtnDisabled]}
-            onPress={() => void handleRecordPayment()}
-            disabled={paySubmitting}
-            activeOpacity={0.85}
-          >
-            {paySubmitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={s.submitBtnText}>Submit Payment</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </Modal>
-      {/* Assign Dorji Modal */}
-      <Modal visible={assignModalVisible} transparent animationType="slide" onRequestClose={() => setAssignModalVisible(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setAssignModalVisible(false)} />
-        <View style={s.bottomSheet}>
-          <View style={s.sheetHandle} />
-          <Text style={s.sheetTitle}>Assign Dorji</Text>
-
-          <Text style={s.inputLabel}>Dorji *</Text>
-          <TouchableOpacity style={s.pickerBtn} onPress={() => setDorjiPickerVisible(true)} activeOpacity={0.8}>
-            <Text style={assignDorjiId ? s.pickerText : s.pickerPlaceholder}>
-              {dorjis.find(d => d.id === assignDorjiId)?.name ?? "Select a dorji..."}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.muted} />
-          </TouchableOpacity>
-
-          <Text style={s.inputLabel}>Assigned Date</Text>
-          <TextInput style={s.input} value={assignDate} onChangeText={setAssignDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} />
-
-          <Text style={s.inputLabel}>Dorji Charge</Text>
-          <TextInput
-            style={s.input} placeholder="0.00" placeholderTextColor={colors.muted}
-            keyboardType="decimal-pad" value={assignCharge} onChangeText={setAssignCharge}
-          />
-
-          <TouchableOpacity
-            style={[s.submitBtn, assignSubmitting && s.submitBtnDisabled]}
-            onPress={handleAssign} disabled={assignSubmitting} activeOpacity={0.85}
-          >
-            {assignSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.submitBtnText}>Assign Dorji</Text>}
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {/* Dorji Picker Modal */}
-      <Modal visible={dorjiPickerVisible} transparent animationType="fade" onRequestClose={() => setDorjiPickerVisible(false)}>
-        <Pressable style={s.modalOverlay} onPress={() => setDorjiPickerVisible(false)} />
-        <View style={[s.bottomSheet, { maxHeight: "60%" }]}>
-          <View style={s.sheetHandle} />
-          <Text style={s.sheetTitle}>Select Dorji</Text>
-          {dorjis.map(d => (
-            <TouchableOpacity
-              key={d.id}
-              style={s.dorjiPickerItem}
-              onPress={() => { setAssignDorjiId(d.id); setDorjiPickerVisible(false) }}
-              activeOpacity={0.75}
-            >
-              <Text style={s.dorjiPickerName}>{d.name}</Text>
-              <Text style={s.dorjiPickerMeta}>{d.phone}{d.activeOrders != null ? ` · ${d.activeOrders} active` : ""}</Text>
+      {/* Record payment */}
+      <Modal visible={payOpen} transparent animationType="slide" onRequestClose={() => setPayOpen(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable style={s.overlay} onPress={() => setPayOpen(false)} />
+          <View style={s.sheet}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Record payment · due {fc(d.dueAmount)}</Text>
+            <Text style={s.inputLabel}>Amount</Text>
+            <TextInput style={s.input} keyboardType="decimal-pad" value={amt} onChangeText={(v) => { setAmt(v); setPayErr("") }} placeholder="0.00" placeholderTextColor={colors.muted} />
+            <Text style={s.inputLabel}>Method</Text>
+            <View style={s.wrapRow}>
+              {TAILOR_PAY_METHODS.map((m) => <Chip key={m.id} label={m.label} active={method === m.id} onPress={() => setMethod(m.id)} />)}
+            </View>
+            <Text style={s.inputLabel}>Date (YYYY-MM-DD)</Text>
+            <TextInput style={s.input} value={payDate} onChangeText={setPayDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} />
+            <Text style={s.inputLabel}>Reference</Text>
+            <TextInput style={s.input} value={ref} onChangeText={setRef} placeholder="Txn ID (optional)" placeholderTextColor={colors.muted} />
+            <Text style={s.inputLabel}>Notes</Text>
+            <TextInput style={s.input} value={payNotes} onChangeText={setPayNotes} placeholder="Optional" placeholderTextColor={colors.muted} />
+            {payErr ? <Text style={s.errText}>{payErr}</Text> : null}
+            <TouchableOpacity style={[s.submitBtn, paying && s.disabled]} onPress={() => void recordPay()} disabled={paying} activeOpacity={0.85}>
+              {paying ? <ActivityIndicator color="#fff" /> : <Text style={s.submitBtnText}>Record payment</Text>}
             </TouchableOpacity>
-          ))}
-          {dorjis.length === 0 && <Text style={s.mutedText}>No active dorjis found</Text>}
-        </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Cancel order */}
+      <Modal visible={cancelOpen} transparent animationType="slide" onRequestClose={() => !moving && setCancelOpen(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable style={s.overlay} onPress={() => !moving && setCancelOpen(false)} />
+          <View style={s.sheet}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Cancel {d.orderNumber}</Text>
+            <Text style={s.mutedText}>This cannot be undone from here.</Text>
+            {d.paidAmount > 0 && (
+              <View style={s.warnBox}>
+                <Ionicons name="warning-outline" size={14} color="#b45309" />
+                <Text style={s.warnText}>{fc(d.paidAmount)} already paid is not refunded automatically — refund the customer separately.</Text>
+              </View>
+            )}
+            {hasShopFabric && (
+              <View style={s.warnBox}>
+                <Ionicons name="layers-outline" size={14} color="#b45309" />
+                <Text style={s.warnText}>
+                  {d.fabricDeducted
+                    ? "The fabric already taken out of stock for this order will be returned to stock."
+                    : "The fabric for this order has not been cut yet, so no stock is touched."}
+                </Text>
+              </View>
+            )}
+            <Text style={s.inputLabel}>Reason *</Text>
+            <TextInput
+              style={[s.input, { minHeight: 70 }]}
+              value={cancelReason}
+              onChangeText={(v) => { setCancelReason(v); setCancelErr("") }}
+              placeholder="e.g. Customer changed their mind"
+              placeholderTextColor={colors.muted}
+              multiline
+              textAlignVertical="top"
+            />
+            {cancelErr ? <Text style={s.errText}>{cancelErr}</Text> : null}
+            <View style={s.btnRow}>
+              <TouchableOpacity style={s.outlineBtn} onPress={() => setCancelOpen(false)} disabled={moving}>
+                <Text style={s.outlineBtnText}>Keep order</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.dangerBtn, moving && s.disabled]} onPress={() => void cancelOrder()} disabled={moving}>
+                {moving ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Cancel order</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Assign work */}
+      <Modal visible={assignOpen} transparent animationType="slide" onRequestClose={() => setAssignOpen(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <Pressable style={s.overlay} onPress={() => setAssignOpen(false)} />
+          <View style={[s.sheet, { maxHeight: "85%" }]}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>Assign work</Text>
+            <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
+              {d.items.length > 0 && (
+                <>
+                  <Text style={s.inputLabel}>Garment line</Text>
+                  <View style={s.wrapRow}>
+                    {d.items.map((it) => (
+                      <Chip key={it.id} label={`${it.productType} ×${it.quantity}`} active={aLine === it.id} onPress={() => pickLine(it.id)} />
+                    ))}
+                  </View>
+                </>
+              )}
+              <Text style={s.inputLabel}>Dorji *</Text>
+              <View style={s.wrapRow}>
+                {dorjiOpts.map((o) => (
+                  <Chip
+                    key={o.id}
+                    label={`${o.name}${o.maxPieces ? ` (${o.piecesInHand}/${o.maxPieces})` : o.piecesInHand ? ` (${o.piecesInHand} in hand)` : ""}`}
+                    active={aDorji === o.id}
+                    onPress={() => pickDorji(o)}
+                  />
+                ))}
+                {dorjiOpts.length === 0 && <Text style={s.mutedText}>No active dorjis.</Text>}
+              </View>
+              <Text style={s.inputLabel}>Task *</Text>
+              <TextInput style={s.input} value={aTask} onChangeText={setATask} placeholder="e.g. Blouse stitching" placeholderTextColor={colors.muted} />
+              <View style={s.twoCol}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={s.inputLabel}>Pieces *</Text>
+                  <TextInput style={s.input} keyboardType="number-pad" value={aPieces} onChangeText={setAPieces} />
+                </View>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={s.inputLabel}>Rate / piece *</Text>
+                  <TextInput style={s.input} keyboardType="decimal-pad" value={aRate} onChangeText={setARate} placeholder="0" placeholderTextColor={colors.muted} />
+                </View>
+              </View>
+              <Text style={s.hint}>Dorji charge: {fc((Number(aPieces) || 0) * (Number(aRate) || 0))}</Text>
+              <Text style={s.inputLabel}>Expected back (YYYY-MM-DD)</Text>
+              <TextInput style={s.input} value={aBack} onChangeText={setABack} placeholder="Optional" placeholderTextColor={colors.muted} />
+              {aErr ? <Text style={s.errText}>{aErr}</Text> : null}
+              <TouchableOpacity style={[s.submitBtn, assigning && s.disabled]} onPress={() => void saveAssign()} disabled={assigning} activeOpacity={0.85}>
+                {assigning ? <ActivityIndicator color="#fff" /> : <Text style={s.submitBtnText}>Assign</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   )
@@ -652,182 +654,73 @@ export default function TailorOrderDetailScreen() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface,
+    borderBottomWidth: 1, borderBottomColor: colors.border, gap: 8,
   },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  topBarTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "800", color: colors.text },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  topBarTitle: { flex: 1, fontSize: 17, fontWeight: "800", color: colors.text },
+  topActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  iconBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: "#ede9fe", alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
   content: { padding: 16, gap: 14, paddingBottom: 32 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 10,
-  },
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  card: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
+  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cardTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   infoRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  infoLabel: { fontSize: 13, color: colors.muted, flex: 1 },
+  infoLabel: { fontSize: 13, color: colors.muted },
   infoValue: { fontSize: 14, fontWeight: "600", color: colors.text, flex: 1, textAlign: "right" },
-  overdueText: { color: "#ef4444", fontWeight: "700" },
   totalText: { fontSize: 16, fontWeight: "800", color: colors.text },
   paidText: { color: "#16a34a", fontWeight: "700" },
   dueText: { color: "#ef4444", fontWeight: "700" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
-  collapsibleHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  itemType: { fontSize: 14, fontWeight: "700", color: colors.text },
-  itemFabric: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  itemPrice: { fontSize: 14, fontWeight: "700", color: "#7c3aed" },
-  statusRow: { gap: 8, paddingVertical: 4 },
-  statusBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  statusBtnText: { fontSize: 12, fontWeight: "600", color: colors.text },
-  assignmentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 10,
-  },
-  assignmentName: { fontSize: 14, fontWeight: "700", color: colors.text, marginBottom: 4 },
-  assignmentCharge: { fontSize: 14, fontWeight: "700", color: "#7c3aed" },
-  recordPayBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#7c3aed",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  recordPayText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  paymentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  paymentMethod: { fontSize: 14, fontWeight: "600", color: colors.text },
-  paymentDate: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  paymentAmount: { fontSize: 14, fontWeight: "700", color: "#16a34a" },
+  noteBox: { flexDirection: "row", gap: 8, backgroundColor: "#f5f3ff", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#ddd6fe" },
+  noteText: { flex: 1, fontSize: 13, color: colors.text },
+  lineRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  lineTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+  lineSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  lineAmt: { fontSize: 14, fontWeight: "700", color: "#7c3aed" },
+  mutedText: { fontSize: 13, color: colors.muted },
+  hint: { fontSize: 12, color: colors.muted },
+  errText: { fontSize: 13, color: colors.danger, fontWeight: "600" },
+  chipRow: { gap: 8, paddingVertical: 2 },
+  wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  chipText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  chipTextActive: { color: "#fff" },
+  btnRow: { flexDirection: "row", gap: 10 },
+  primaryBtn: { flex: 1, backgroundColor: "#7c3aed", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  primaryBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  dangerBtn: { flex: 1, backgroundColor: colors.danger, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  dangerOutlineBtn: { flex: 1, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fef2f2", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  dangerOutlineText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
+  outlineBtn: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  outlineBtnText: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  disabled: { opacity: 0.6 },
+  smallBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#7c3aed", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  smallBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
   logRow: { flexDirection: "row", gap: 10 },
   logDotCol: { alignItems: "center", width: 16, paddingTop: 4 },
-  logDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.muted,
-  },
+  logDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.muted },
   logDotActive: { backgroundColor: "#7c3aed" },
   logLine: { width: 2, flex: 1, backgroundColor: colors.border, marginTop: 4 },
   logContent: { flex: 1, paddingBottom: 16 },
   logStatus: { fontSize: 13, fontWeight: "700", color: colors.text },
   logNote: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  logDate: { fontSize: 11, color: colors.muted, marginTop: 4 },
-  mutedText: { fontSize: 13, color: colors.muted },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
-  bottomSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: "center",
-    marginBottom: 8,
-  },
+  logDate: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, gap: 10 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 8 },
   sheetTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
   inputLabel: { fontSize: 13, fontWeight: "600", color: colors.muted },
   input: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text,
+    backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.text,
   },
-  methodRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  methodChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  methodChipActive: { backgroundColor: "#7c3aed", borderColor: "#7c3aed" },
-  methodChipText: { fontSize: 13, fontWeight: "600", color: colors.muted },
-  methodChipTextActive: { color: "#fff" },
-  submitBtn: {
-    backgroundColor: "#7c3aed",
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 6,
-  },
-  submitBtnDisabled: { opacity: 0.6 },
+  twoCol: { flexDirection: "row", gap: 10 },
+  warnBox: { flexDirection: "row", gap: 8, backgroundColor: "#fffbeb", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "#fde68a" },
+  warnText: { flex: 1, fontSize: 12, color: "#92400e" },
+  submitBtn: { backgroundColor: "#7c3aed", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 6 },
   submitBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
-  editBtn: {
-    width: 32, height: 32, borderRadius: 8,
-    backgroundColor: "#ede9fe", alignItems: "center", justifyContent: "center",
-  },
-  printBtn: {
-    width: 32, height: 32, borderRadius: 8,
-    backgroundColor: "#ede9fe", alignItems: "center", justifyContent: "center",
-  },
-  measurementCard: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    padding: 10, backgroundColor: colors.background, gap: 6,
-  },
-  measurementHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  measurementType: { fontSize: 13, fontWeight: "700", color: colors.text, textTransform: "capitalize" },
-  measurementDate: { fontSize: 11, color: colors.muted },
-  measurementFields: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  mField: { fontSize: 11, color: colors.text, backgroundColor: "#f3f4f6", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  mNotes: { fontSize: 11, color: colors.muted, fontStyle: "italic" },
-  pickerBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: colors.background, borderRadius: 12,
-    borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12,
-  },
-  pickerText: { fontSize: 13, color: colors.text, flex: 1 },
-  pickerPlaceholder: { fontSize: 13, color: colors.muted, flex: 1 },
-  dorjiPickerItem: {
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  dorjiPickerName: { fontSize: 14, fontWeight: "700", color: colors.text },
-  dorjiPickerMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
 })

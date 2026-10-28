@@ -23,7 +23,7 @@ export function SuccessModal({ visible, sale, onNewOrder }: Props) {
             <Ionicons name="checkmark-circle" size={64} color={colors.primary} />
           </View>
 
-          <Text style={styles.title}>Payment Successful!</Text>
+          <Text style={styles.title}>{sale.method === "COD" ? "Order Placed!" : "Payment Successful!"}</Text>
 
           {/* Invoice badge */}
           <View style={styles.invoiceBadge}>
@@ -45,7 +45,10 @@ export function SuccessModal({ visible, sale, onNewOrder }: Props) {
             </View>
             <View style={styles.summaryRow}>
               <Ionicons name="card-outline" size={14} color={colors.muted} />
-              <Text style={styles.summaryText}>{sale.method}</Text>
+              <Text style={styles.summaryText}>
+                {sale.method === "COD" ? "Cash on delivery" : sale.method}
+                {sale.transactionId ? ` · ${sale.transactionId}` : ""}
+              </Text>
             </View>
           </View>
 
@@ -69,7 +72,7 @@ export function SuccessModal({ visible, sale, onNewOrder }: Props) {
             )}
             <View style={styles.divider} />
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Paid</Text>
+              <Text style={styles.totalLabel}>{sale.method === "COD" ? "Due on delivery" : "Total Paid"}</Text>
               <Text style={styles.totalValue}>{formatCurrency(sale.total)}</Text>
             </View>
           </View>

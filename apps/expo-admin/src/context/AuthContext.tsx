@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { clearSession, getSession, saveSession } from "@/lib/storage";
 import { setApiSession } from "@/lib/api";
 import * as authService from "@/services/auth";
-import type { AuthSession, Company, LoginPayload, User } from "@/types/auth";
+import type { AuthSession, Company, LoginPayload, LoginResponse, PinLoginPayload, User } from "@/types/auth";
 
 type AuthContextValue = {
   bootstrapped: boolean;
@@ -11,6 +11,8 @@ type AuthContextValue = {
   user: User | null;
   company: Company | null;
   signIn: (payload: LoginPayload) => Promise<void>;
+  /** Staff PIN sign-in; the token is stored exactly like a password login */
+  signInWithPin: (payload: PinLoginPayload) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   hasPermission: (module: string, action?: "read" | "write" | "delete") => boolean;
@@ -46,20 +48,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCompany(response.data.company);
   };
 
+  const completeLogin = async (response: LoginResponse, loginMethod: "password" | "pin") => {
+    const nextSession: AuthSession = {
+      token: response.data.token,
+      companyId: response.data.companyId,
+      companyName: response.data.companyName,
+      userRole: response.data.userRole,
+      userEmail: response.data.userEmail,
+      loginMethod,
+      ...(response.data.staffId ? { staffId: response.data.staffId } : {}),
+    };
+
+    await applySession(nextSession);
+    try {
+      await refreshProfile();
+    } catch (error) {
+      // a session without a profile cannot check permissions: undo it
+      await applySession(null);
+      throw error;
+    }
+  };
+
   const signIn = async (payload: LoginPayload) => {
     setLoading(true);
     try {
       const response = await authService.login(payload);
-      const nextSession: AuthSession = {
-        token: response.data.token,
-        companyId: response.data.companyId,
-        companyName: response.data.companyName,
-        userRole: response.data.userRole,
-        userEmail: response.data.userEmail,
-      };
+      await completeLogin(response, "password");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      await applySession(nextSession);
-      await refreshProfile();
+  const signInWithPin = async (payload: PinLoginPayload) => {
+    setLoading(true);
+    try {
+      const response = await authService.pinLogin(payload);
+      await completeLogin(response, "pin");
     } finally {
       setLoading(false);
     }
@@ -128,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     company,
     signIn,
+    signInWithPin,
     signOut,
     refreshProfile,
     hasPermission,

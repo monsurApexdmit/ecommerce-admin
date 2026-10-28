@@ -5,10 +5,17 @@ import type {
   ForgotPasswordResponse,
   LoginPayload,
   LoginResponse,
+  PinLoginPayload,
 } from "@/types/auth";
 
 export async function login(payload: LoginPayload) {
   const response = await api.post<LoginResponse>("/auth/login", payload);
+  return response.data;
+}
+
+/** Staff PIN sign-in: returns the same token payload as a normal login (plus staffId). */
+export async function pinLogin(payload: PinLoginPayload) {
+  const response = await api.post<LoginResponse>("/auth/pin-login", payload);
   return response.data;
 }
 

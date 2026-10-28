@@ -6,22 +6,29 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatDateTime } from "@/lib/format";
+import { apiErrorMessage, apiFieldErrors, formatCompactDate, formatDateTime } from "@/lib/format";
 import { useCurrency } from "@/context/CurrencyContext";
 import {
   deleteCustomer,
   getCustomerById,
   getCustomerOrders,
   updateCustomer,
+  validateCustomer,
   type Customer,
 } from "@/services/customers";
+import {
+  CustomerFormFields,
+  customerToForm,
+  emptyCustomerForm,
+  formToInput,
+  type CustomerFormValues,
+} from "@/components/customers/CustomerForm";
 import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
@@ -40,45 +47,60 @@ export default function CustomerDetailScreen() {
   const [saving, setSaving] = useState(false);
 
   // Edit form
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
-  const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState<"active" | "inactive">("active");
+  const [form, setForm] = useState<CustomerFormValues>(emptyCustomerForm);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, o] = await Promise.all([
-        getCustomerById(Number(id)),
-        getCustomerOrders(Number(id)),
-      ]);
+      const c = await getCustomerById(Number(id));
       setCustomer(c);
-      setOrders(o);
-      setName(c.name); setEmail(c.email);
-      setPhone(c.phone ?? ""); setAddress(c.address ?? "");
-      setCity(c.city ?? ""); setCountry(c.country ?? "");
-      setNotes(c.notes ?? ""); setStatus(c.status);
+      setForm(customerToForm(c));
+      setErrors({});
+      // detail carries the 5 newest orders; fall back to the sales list for older servers
+      if (c.recentOrders) {
+        setOrders(c.recentOrders.map((o) => ({ id: o.id, invoiceNo: o.invoiceNo, orderTime: o.date, amount: o.amount, status: o.status })));
+      } else {
+        setOrders(await getCustomerOrders(Number(id)).catch(() => []));
+      }
+    } catch (err) {
+      Alert.alert("Could not load customer", apiErrorMessage(err));
     } finally { setLoading(false); }
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
 
-  const { canRead } = useAuth();
+  const { canRead, canWrite, canDelete } = useAuth();
   if (!canRead('Customers')) return <AccessDenied />;
+
+  const onFormChange = (patch: Partial<CustomerFormValues>) => {
+    setForm((v) => ({ ...v, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      Object.keys(patch).forEach((k) => delete next[k]);
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     if (!customer) return;
+    const input = formToInput(form, "update");
+    const local = validateCustomer(input, "update");
+    setErrors(local);
+    if (Object.keys(local).length) {
+      Alert.alert("Check the form", Object.values(local)[0]);
+      return;
+    }
     setSaving(true);
     try {
-      const updated = await updateCustomer(customer.id, { name, email, phone, address, city, country, notes, status });
-      setCustomer(updated);
+      const updated = await updateCustomer(customer.id, input);
+      setCustomer({ ...updated, recentOrders: customer.recentOrders });
+      setForm(customerToForm(updated));
       setEditing(false);
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message ?? "Update failed.");
+      const fields = apiFieldErrors(err);
+      if (Object.keys(fields).length) setErrors(fields);
+      Alert.alert("Could not save", apiErrorMessage(err, "Update failed."));
     } finally { setSaving(false); }
   };
 
@@ -87,8 +109,13 @@ export default function CustomerDetailScreen() {
     Alert.alert("Delete customer", `Delete ${customer.name}? This cannot be undone.`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
-        await deleteCustomer(customer.id);
-        router.replace("/customers/");
+        try {
+          await deleteCustomer(customer.id);
+          router.replace("/customers/");
+        } catch (err) {
+          // blocked when the customer has sales or returns
+          Alert.alert("Could not delete", apiErrorMessage(err));
+        }
       }},
     ]);
   };
@@ -119,7 +146,8 @@ export default function CustomerDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{customer.name}</Text>
         <Pressable
-          style={styles.editBtn}
+          style={[styles.editBtn, !canWrite("Customers") && { opacity: 0 }]}
+          disabled={!canWrite("Customers")}
           onPress={() => editing ? handleSave() : setEditing(true)}
         >
           {saving
@@ -130,107 +158,101 @@ export default function CustomerDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Profile card */}
-        <View style={styles.profileCard}>
-          <View style={[styles.avatar, { backgroundColor: bg }]}>
-            <Text style={styles.avatarText}>{avatarInitials(customer.name)}</Text>
+        {editing ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Edit customer</Text>
+            <CustomerFormFields values={form} onChange={onFormChange} errors={errors} mode="update" />
           </View>
-          {editing ? (
-            <View style={styles.editFields}>
-              <EditField value={name} onChange={setName} placeholder="Full name" />
-              <EditField value={email} onChange={setEmail} placeholder="Email" keyboardType="email-address" />
-              <EditField value={phone} onChange={setPhone} placeholder="Phone" keyboardType="phone-pad" />
-            </View>
-          ) : (
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{customer.name}</Text>
-              <Text style={styles.profileEmail}>{customer.email}</Text>
-              {customer.phone ? <Text style={styles.profileMeta}>{customer.phone}</Text> : null}
-              <View style={styles.profileBadges}>
-                <View style={[styles.badge, customer.status === "active" ? styles.badgeActive : styles.badgeInactive]}>
-                  <Text style={[styles.badgeText, customer.status === "active" ? styles.badgeTextActive : styles.badgeTextInactive]}>
-                    {customer.status}
-                  </Text>
-                </View>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{customer.customerType}</Text>
+        ) : (
+          <>
+            {/* Profile card */}
+            <View style={styles.profileCard}>
+              <View style={[styles.avatar, { backgroundColor: bg }]}>
+                <Text style={styles.avatarText}>{avatarInitials(customer.name)}</Text>
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>{customer.name}</Text>
+                {customer.type === "business" && customer.businessName ? (
+                  <Text style={styles.profileMeta}>{customer.businessName}{customer.licenceBin ? ` · BIN ${customer.licenceBin}` : ""}</Text>
+                ) : null}
+                {customer.phone ? <Text style={styles.profileMeta}>{customer.phone}</Text> : null}
+                {customer.email ? <Text style={styles.profileEmail}>{customer.email}</Text> : null}
+                <View style={styles.profileBadges}>
+                  <View style={[styles.badge, customer.status === "active" ? styles.badgeActive : styles.badgeInactive]}>
+                    <Text style={[styles.badgeText, customer.status === "active" ? styles.badgeTextActive : styles.badgeTextInactive]}>
+                      {customer.status}
+                    </Text>
+                  </View>
+                  <View style={[styles.badge, customer.customerGroup === "vip" && { backgroundColor: "#fae8ff" }]}>
+                    <Text style={[styles.badgeText, customer.customerGroup === "vip" && { color: "#a21caf" }]}>
+                      {customer.customerGroup === "vip" ? "VIP" : customer.customerGroup}
+                    </Text>
+                  </View>
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{customer.type}</Text>
+                  </View>
                 </View>
               </View>
             </View>
-          )}
-        </View>
 
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{customer.totalOrders ?? orders.length}</Text>
-            <Text style={styles.statLabel}>Orders</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{formatCurrency(customer.totalSpent ?? 0)}</Text>
-            <Text style={styles.statLabel}>Total Spent</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{formatCurrency(customer.storeCredit)}</Text>
-            <Text style={styles.statLabel}>Store Credit</Text>
-          </View>
-        </View>
-
-        {/* Address */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Address</Text>
-          {editing ? (
-            <View style={{ gap: 10 }}>
-              <EditField value={address} onChange={setAddress} placeholder="Street address" />
-              <EditField value={city} onChange={setCity} placeholder="City" />
-              <EditField value={country} onChange={setCountry} placeholder="Country" />
+            {/* Stats */}
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{customer.totalOrders ?? orders.length}</Text>
+                <Text style={styles.statLabel}>Orders</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{formatCurrency(customer.totalSpent ?? 0)}</Text>
+                <Text style={styles.statLabel}>Total Spent</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statBox}>
+                <Text style={[styles.statValue, Number(customer.dueAmount ?? 0) > 0 && { color: "#dc2626" }]}>
+                  {formatCurrency(Number(customer.dueAmount ?? 0))}
+                </Text>
+                <Text style={styles.statLabel}>Due</Text>
+              </View>
             </View>
-          ) : (
-            <>
+
+            {/* Account */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Account</Text>
+              <InfoRow label="Credit limit" value={customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "No limit"} />
+              {customer.creditLimit > 0 ? (
+                <InfoRow label="Credit used" value={`${formatCurrency(customer.creditUsed)} (${Math.round(customer.creditUsedPercent)}%)`} />
+              ) : null}
+              {customer.openingBalance > 0 ? <InfoRow label="Opening balance" value={formatCurrency(customer.openingBalance)} /> : null}
+              <InfoRow label="Store credit" value={formatCurrency(customer.storeCredit)} />
+              <InfoRow label="Birthday" value={customer.birthday ? formatCompactDate(customer.birthday) : "—"} />
+              <InfoRow label="SMS opt-in" value={customer.smsOptIn ? "Yes" : "No"} />
+              {customer.lastOrderAt ? <InfoRow label="Last order" value={formatDateTime(customer.lastOrderAt)} /> : null}
+              {customer.tags.length > 0 ? (
+                <View style={styles.tagRow}>
+                  {customer.tags.map((t) => (
+                    <View key={t} style={styles.tag}><Text style={styles.tagText}>{t}</Text></View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            {/* Address */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Address</Text>
               <InfoRow label="Address" value={customer.address || "—"} />
+              <InfoRow label="Area" value={customer.area || "—"} />
+              <InfoRow label="District" value={customer.district || "—"} />
               <InfoRow label="City" value={customer.city || "—"} />
               <InfoRow label="Country" value={customer.country || "—"} />
-            </>
-          )}
-        </View>
-
-        {/* Status toggle (edit mode) */}
-        {editing && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Status</Text>
-            <View style={styles.statusRow}>
-              {(["active", "inactive"] as const).map((s) => (
-                <Pressable
-                  key={s}
-                  style={[styles.statusChip, status === s && styles.statusChipActive]}
-                  onPress={() => setStatus(s)}
-                >
-                  <Text style={[styles.statusChipText, status === s && styles.statusChipTextActive]}>{s}</Text>
-                </Pressable>
-              ))}
             </View>
-          </View>
-        )}
 
-        {/* Notes */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Notes</Text>
-          {editing ? (
-            <TextInput
-              style={styles.notesInput}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Add a note..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={3}
-            />
-          ) : (
-            <Text style={styles.notesText}>{customer.notes || "No notes."}</Text>
-          )}
-        </View>
+            {/* Notes */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Notes</Text>
+              <Text style={styles.notesText}>{customer.notes || "No notes."}</Text>
+            </View>
+          </>
+        )}
 
         {/* Recent orders */}
         <View style={styles.card}>
@@ -258,7 +280,7 @@ export default function CustomerDetailScreen() {
         </View>
 
         {/* Delete */}
-        {!editing && (
+        {!editing && canDelete("Customers") && (
           <Pressable style={styles.deleteBtn} onPress={handleDelete}>
             <Ionicons name="trash-outline" size={17} color="#dc2626" />
             <Text style={styles.deleteBtnText}>Delete Customer</Text>
@@ -267,7 +289,7 @@ export default function CustomerDetailScreen() {
 
         {editing && (
           <View style={styles.editActions}>
-            <Pressable style={styles.cancelBtn} onPress={() => { setEditing(false); load(); }}>
+            <Pressable style={styles.cancelBtn} onPress={() => { setEditing(false); setForm(customerToForm(customer)); setErrors({}); }}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
             <Pressable style={[styles.saveBtn, saving && { opacity: 0.55 }]} onPress={handleSave} disabled={saving}>
@@ -288,22 +310,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value}</Text>
     </View>
-  );
-}
-
-function EditField({ value, onChange, placeholder, keyboardType }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; keyboardType?: any;
-}) {
-  return (
-    <TextInput
-      style={styles.editInput}
-      value={value}
-      onChangeText={onChange}
-      placeholder={placeholder}
-      placeholderTextColor="#94a3b8"
-      keyboardType={keyboardType}
-      autoCapitalize="none"
-    />
   );
 }
 
@@ -358,9 +364,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10,
   },
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  infoRow: { flexDirection: "row", justifyContent: "space-between" },
+  infoRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   infoLabel: { color: colors.muted, fontSize: 13 },
-  infoValue: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  infoValue: { color: colors.text, fontSize: 13, fontWeight: "600", flexShrink: 1, textAlign: "right" },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tag: { borderRadius: 999, backgroundColor: "#f1f5f9", paddingHorizontal: 10, paddingVertical: 4 },
+  tagText: { color: colors.text, fontSize: 12, fontWeight: "600" },
   statusRow: { flexDirection: "row", gap: 10 },
   statusChip: {
     flex: 1, borderRadius: 12, borderWidth: 1, borderColor: colors.border,

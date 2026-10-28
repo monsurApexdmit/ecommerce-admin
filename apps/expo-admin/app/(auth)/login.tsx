@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -17,15 +18,62 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 
+const LAST_PIN_COMPANY_KEY = "expo_admin_last_pin_company_id";
+
+type Mode = "password" | "pin";
+
 export default function LoginScreen() {
-  const { session, signIn, loading } = useAuth();
+  const { session, signIn, signInWithPin, loading } = useAuth();
+  const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [companyId, setCompanyId] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [pin, setPin] = useState("");
+
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_PIN_COMPANY_KEY)
+      .then((v) => { if (v) setCompanyId((cur) => cur || v); })
+      .catch(() => undefined);
+  }, []);
 
   if (session) {
     return <Redirect href="/(tabs)" />;
   }
+
+  const handlePinLogin = async () => {
+    const cid = Number(companyId.trim());
+    if (!companyId.trim() || !Number.isInteger(cid) || cid <= 0) {
+      Alert.alert("Company ID", "Enter your company ID (ask your manager).");
+      return;
+    }
+    if (!identifier.trim()) {
+      Alert.alert("Staff details", "Enter your phone, email or staff ID.");
+      return;
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      Alert.alert("PIN", "PIN must be 4 digits.");
+      return;
+    }
+    try {
+      await signInWithPin({ companyId: cid, identifier: identifier.trim(), pin });
+      AsyncStorage.setItem(LAST_PIN_COMPANY_KEY, String(cid)).catch(() => undefined);
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const serverMessage = error?.response?.data?.message;
+      const message =
+        status === 401 ? serverMessage || "Incorrect PIN or staff details."
+        : status === 422 ? serverMessage || "Invalid details. PIN must be 4 digits."
+        : status === 429 || status === 423 ? serverMessage || "Too many failed attempts. Try again in 15 minutes."
+        : serverMessage ??
+          (error?.request && !error?.response
+            ? "Unable to reach the server. Check that your phone and backend are on the same network and that the API URL uses your PC LAN IP."
+            : "Unable to sign in with PIN.");
+      setPin("");
+      Alert.alert("Login failed", message);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -68,6 +116,89 @@ export default function LoginScreen() {
 
           {/* Card */}
           <View style={styles.card}>
+            {/* Mode */}
+            <View style={styles.segment}>
+              {([
+                { value: "password", label: "Email & password", icon: "mail-outline" },
+                { value: "pin", label: "Staff PIN", icon: "keypad-outline" },
+              ] as const).map((m) => (
+                <Pressable
+                  key={m.value}
+                  style={[styles.segmentItem, mode === m.value && styles.segmentItemActive]}
+                  onPress={() => setMode(m.value)}
+                >
+                  <Ionicons name={m.icon} size={15} color={mode === m.value ? colors.primary : colors.muted} />
+                  <Text style={[styles.segmentText, mode === m.value && styles.segmentTextActive]}>{m.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {mode === "pin" ? (
+              <>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Company ID</Text>
+                  <View style={styles.inputWrap}>
+                    <Ionicons name="business-outline" size={18} color={colors.muted} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="number-pad"
+                      placeholder="e.g. 459"
+                      placeholderTextColor="#94a3b8"
+                      value={companyId}
+                      onChangeText={(v) => setCompanyId(v.replace(/\D/g, ""))}
+                    />
+                  </View>
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Phone, email or staff ID</Text>
+                  <View style={styles.inputWrap}>
+                    <Ionicons name="person-outline" size={18} color={colors.muted} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholder="01XXXXXXXXX"
+                      placeholderTextColor="#94a3b8"
+                      value={identifier}
+                      onChangeText={setIdentifier}
+                    />
+                  </View>
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.label}>PIN</Text>
+                  <View style={styles.inputWrap}>
+                    <Ionicons name="keypad-outline" size={18} color={colors.muted} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, styles.pinInput]}
+                      keyboardType="number-pad"
+                      secureTextEntry
+                      maxLength={4}
+                      placeholder="4-digit PIN"
+                      placeholderTextColor="#94a3b8"
+                      value={pin}
+                      onChangeText={(v) => setPin(v.replace(/\D/g, "").slice(0, 4))}
+                      onSubmitEditing={() => void handlePinLogin()}
+                    />
+                  </View>
+                </View>
+
+                <Pressable
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={() => void handlePinLogin()}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Text style={styles.buttonText}>Signing in...</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.buttonText}>Sign In with PIN</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#fff" />
+                    </>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+            <>
             {/* Email */}
             <View style={styles.field}>
               <Text style={styles.label}>Email</Text>
@@ -138,6 +269,8 @@ export default function LoginScreen() {
                 </>
               )}
             </Pressable>
+            </>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -201,6 +334,42 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: 8,
+  },
+  segment: {
+    flexDirection: "row",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: "#f8fafc",
+    padding: 4,
+    gap: 4,
+  },
+  segmentItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingVertical: 9,
+  },
+  segmentItemActive: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: "#a7f3d0",
+  },
+  segmentText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  segmentTextActive: {
+    color: colors.primary,
+  },
+  pinInput: {
+    letterSpacing: 6,
+    fontSize: 18,
+    fontWeight: "700",
   },
   label: {
     color: colors.text,

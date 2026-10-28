@@ -1,6 +1,17 @@
 import { api } from "@/lib/api";
 
-export type NotificationType = "order" | "stock_alert" | "payment" | "system" | "support" | "review";
+export type NotificationType =
+  | "order"
+  | "stock_alert"
+  | "payment"
+  | "system"
+  | "support"
+  | "review"
+  | "payment_received"
+  | "po_received"
+  | "tailor_ready"
+  | "daily_summary"
+  | "stock_adjustment";
 export type NotificationPriority = "low" | "medium" | "high";
 
 export interface Notification {
@@ -79,4 +90,52 @@ export async function deleteNotification(id: number): Promise<void> {
 
 export async function bulkDeleteNotifications(ids: number[]): Promise<void> {
   await api.delete("/notifications/bulk", { data: { ids } });
+}
+
+// ─── Live alerts (computed from current data, dismissable per user) ──────────
+
+export type AlertKind = "out_of_stock" | "low_stock" | "pending_order" | "customer_overdue" | "po_overdue" | string;
+
+export interface LiveAlert {
+  key: string;
+  kind: AlertKind;
+  priority: NotificationPriority;
+  title: string;
+  message: string;
+  actionUrl: string | null;
+  ctaLabel: string | null;
+  since: string | null;
+}
+
+export interface LiveAlertsResult {
+  alerts: LiveAlert[];
+  total: number;
+  dismissedCount: number;
+}
+
+export async function getLiveAlerts(): Promise<LiveAlertsResult> {
+  const response = await api.get("/notifications/alerts");
+  const d = response.data?.data ?? {};
+  const alerts: LiveAlert[] = Array.isArray(d.alerts)
+    ? d.alerts.map((a: any) => ({
+        key: String(a.key),
+        kind: a.kind ?? "system",
+        priority: a.priority ?? "medium",
+        title: a.title ?? "",
+        message: a.message ?? "",
+        actionUrl: a.actionUrl ?? null,
+        ctaLabel: a.ctaLabel ?? null,
+        since: a.since ?? null,
+      }))
+    : [];
+  return { alerts, total: Number(d.total ?? alerts.length), dismissedCount: Number(d.dismissedCount ?? 0) };
+}
+
+export async function dismissLiveAlert(key: string): Promise<void> {
+  await api.post("/notifications/alerts/dismiss", { key });
+}
+
+/** Bring back one dismissed alert, or all of them when no key is given. */
+export async function restoreLiveAlerts(key?: string): Promise<void> {
+  await api.post("/notifications/alerts/restore", key ? { key } : {});
 }

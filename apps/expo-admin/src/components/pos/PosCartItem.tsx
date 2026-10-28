@@ -20,7 +20,17 @@ export function PosCartItem({ item, onIncrement, onDecrement, onRemove }: Props)
         {item.variantName ? (
           <Text style={styles.variant}>{item.variantName}</Text>
         ) : null}
-        <Text style={styles.unitPrice}>{formatCurrency(item.price)} each</Text>
+        <Text style={styles.unitPrice}>
+          {formatCurrency(item.price)} each
+          {item.regularPrice && item.regularPrice > item.price ? `  (was ${formatCurrency(item.regularPrice)})` : ""}
+        </Text>
+        {item.wholesalePrice && item.minWholesaleQty && item.wholesalePrice < item.price ? (
+          <Text style={styles.wholesale}>
+            {item.quantity >= item.minWholesaleQty
+              ? `Wholesale ${formatCurrency(item.wholesalePrice)} applies at checkout`
+              : `Wholesale ${formatCurrency(item.wholesalePrice)} from ${item.minWholesaleQty} pcs`}
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.right}>
@@ -63,6 +73,11 @@ export function PosCartItem({ item, onIncrement, onDecrement, onRemove }: Props)
 }
 
 const styles = StyleSheet.create({
+  wholesale: {
+    color: "#0369a1",
+    fontSize: 11,
+    fontWeight: "600",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

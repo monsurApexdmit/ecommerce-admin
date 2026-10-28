@@ -23,7 +23,9 @@ import {
   createStaff,
   deleteStaff,
   getStaff,
+  getStaffOverviewFlags,
   getStaffStats,
+  STAFF_PHONE_PATTERN,
   type StaffMember,
 } from "@/services/staff";
 import { useAuth } from "@/context/AuthContext";
@@ -45,6 +47,7 @@ export default function StaffScreen() {
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
   const [addOpen, setAddOpen] = useState(false);
+  const [flags, setFlags] = useState<Awaited<ReturnType<typeof getStaffOverviewFlags>>>({});
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350);
@@ -54,10 +57,12 @@ export default function StaffScreen() {
   const load = useCallback(async (reset = true) => {
     if (reset) setLoading(true);
     try {
-      const [res, st] = await Promise.allSettled([
+      const [res, st, fl] = await Promise.allSettled([
         getStaff({ page: 1, limit: 20, search: debouncedSearch || undefined }),
         getStaffStats(),
+        getStaffOverviewFlags(),
       ]);
+      if (fl.status === "fulfilled") setFlags(fl.value);
       if (res.status === "fulfilled") {
         setStaff(res.value.data);
         setTotal(res.value.total);
@@ -90,15 +95,21 @@ export default function StaffScreen() {
   };
 
   const openMenu = (s: StaffMember) => {
+    const onlyOwner = flags[s.id]?.isOnlyOwner;
     Alert.alert(s.name, s.role ?? "", [
       { text: "View Details", onPress: () => router.push(`/staff/${s.id}` as any) },
-      {
-        text: "Delete", style: "destructive", onPress: () =>
+      ...(onlyOwner ? [] : [{
+        text: "Delete", style: "destructive" as const, onPress: () =>
           Alert.alert("Delete staff", `Delete ${s.name}? This cannot be undone.`, [
             { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: async () => { await deleteStaff(s.id); load(); } },
-          ])
-      },
+            {
+              text: "Delete", style: "destructive", onPress: async () => {
+                try { await deleteStaff(s.id); load(); }
+                catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Could not delete this team member."); }
+              },
+            },
+          ]),
+      }]),
       { text: "Cancel", style: "cancel" },
     ]);
   };
@@ -158,7 +169,11 @@ export default function StaffScreen() {
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.primaryDark} style={{ marginVertical: 12 }} /> : null}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const f = flags[item.id];
+            const loginMethod = item.loginMethod ?? f?.loginMethod;
+            const hasPin = item.hasPin ?? f?.hasPin;
+            return (
             <Pressable
               style={styles.card}
               onPress={() => router.push(`/staff/${item.id}` as any)}
@@ -189,9 +204,17 @@ export default function StaffScreen() {
                     <Text style={styles.cardMeta}>{item.contact}</Text>
                   </View>
                 )}
+                <View style={styles.contactRow}>
+                  <Ionicons name={loginMethod === "pin" ? "keypad-outline" : "mail-outline"} size={12} color={colors.muted} />
+                  <Text style={styles.cardMeta}>
+                    {loginMethod === "pin" ? `PIN login · ${hasPin ? "PIN set" : "no PIN yet"}` : "Email login"}
+                    {f?.isOwner ? " · Owner" : ""}
+                  </Text>
+                </View>
               </View>
             </Pressable>
-          )}
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="people-outline" size={44} color={colors.muted} />
@@ -245,6 +268,16 @@ function AddStaffModal({ visible, onClose, onCreated }: {
   const handleCreate = async () => {
     if (!name.trim()) { Alert.alert("Error", "Name is required."); return; }
     if (!email.trim()) { Alert.alert("Error", "Email is required."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { Alert.alert("Error", "Enter a valid email address."); return; }
+    if (!contact.trim()) { Alert.alert("Error", "Phone is required."); return; }
+    if (!STAFF_PHONE_PATTERN.test(contact.trim())) {
+      Alert.alert("Error", "Enter a valid phone number (digits, optional +, 6-20 characters).");
+      return;
+    }
+    if (salary && (!Number.isFinite(Number(salary)) || Number(salary) < 0)) {
+      Alert.alert("Error", "Salary cannot be negative.");
+      return;
+    }
     setSaving(true);
     try {
       await createStaff({
@@ -255,7 +288,9 @@ function AddStaffModal({ visible, onClose, onCreated }: {
       reset();
       onCreated();
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message ?? "Failed to create staff member.");
+      const fieldErrors = err?.response?.data?.errors;
+      const first = fieldErrors ? (Object.values(fieldErrors).flat()[0] as string | undefined) : undefined;
+      Alert.alert("Error", first ?? err?.response?.data?.message ?? "Failed to create staff member.");
     } finally { setSaving(false); }
   };
 
@@ -273,7 +308,7 @@ function AddStaffModal({ visible, onClose, onCreated }: {
           <ScrollView contentContainerStyle={mStyles.fields} keyboardShouldPersistTaps="handled">
             <ModalField label="Full Name *" value={name} onChange={setName} placeholder="John Doe" />
             <ModalField label="Email *" value={email} onChange={setEmail} placeholder="john@company.com" keyboardType="email-address" />
-            <ModalField label="Phone" value={contact} onChange={setContact} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
+            <ModalField label="Phone *" value={contact} onChange={setContact} placeholder="+880 1712 345678" keyboardType="phone-pad" />
             <ModalField label="Role / Position" value={role} onChange={setRole} placeholder="Manager, Cashier, etc." />
             <ModalField label="Monthly Salary" value={salary} onChange={setSalary} placeholder="0.00" keyboardType="decimal-pad" />
             <View>

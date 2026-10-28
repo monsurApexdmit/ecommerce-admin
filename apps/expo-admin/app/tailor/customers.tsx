@@ -10,10 +10,10 @@ import { router } from "expo-router"
 import { useAuth } from "@/context/AuthContext"
 import { useCurrency } from "@/context/CurrencyContext"
 import {
-  getTailorCustomers, saveTailorCustomer, updateTailorCustomer, deleteTailorCustomer, getCustomerOrders,
+  getTailorCustomers, saveTailorCustomer, updateTailorCustomer, deleteTailorCustomer, getCustomerOrders, tailorApiError,
 } from "@/services/tailor"
 import type { TailorCustomer, TailorOrder } from "@/types/tailor"
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types/tailor"
+import { TAILOR_STAGE_COLORS, TAILOR_STAGE_LABEL, stageOf } from "@/types/tailor"
 import { colors } from "@/constants/theme"
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ function CreateModal({
       })
       onCreated(created)
     } catch (err: any) {
-      Alert.alert("Error", err?.message ?? "Failed to create customer")
+      Alert.alert("Error", tailorApiError(err, "Failed to create customer"))
     } finally {
       setSaving(false)
     }
@@ -111,7 +111,7 @@ function EditModal({
       })
       onSaved(updated)
     } catch (err: any) {
-      Alert.alert("Error", err?.message ?? "Failed to update customer")
+      Alert.alert("Error", tailorApiError(err, "Failed to update customer"))
     } finally {
       setSaving(false)
     }
@@ -199,7 +199,7 @@ function OrdersModal({
               keyExtractor={item => String(item.id)}
               contentContainerStyle={{ padding: 16, gap: 10 }}
               renderItem={({ item }) => {
-                const statusColor = ORDER_STATUS_COLORS[item.orderStatus] ?? "#94a3b8"
+                const statusColor = TAILOR_STAGE_COLORS[stageOf(item.orderStatus)] ?? "#94a3b8"
                 return (
                   <TouchableOpacity
                     style={o.orderCard}
@@ -212,7 +212,7 @@ function OrdersModal({
                         <Text style={o.orderNum}>{item.orderNumber}</Text>
                         <View style={[o.statusPill, { backgroundColor: statusColor + "22" }]}>
                           <Text style={[o.statusText, { color: statusColor }]}>
-                            {ORDER_STATUS_LABELS[item.orderStatus]}
+                            {TAILOR_STAGE_LABEL[stageOf(item.orderStatus)]}
                           </Text>
                         </View>
                       </View>
@@ -281,7 +281,7 @@ export default function TailorCustomersScreen() {
               await deleteTailorCustomer(c.id)
               setCustomers(prev => prev.filter(x => x.id !== c.id))
             } catch (err: any) {
-              Alert.alert("Error", err?.message ?? "Failed to delete customer")
+              Alert.alert("Error", tailorApiError(err, "Failed to delete customer"))
             }
           },
         },

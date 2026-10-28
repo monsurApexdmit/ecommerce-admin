@@ -13,22 +13,13 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
-import { getTailorDashboard } from "@/services/tailor";
-import type { TailorDashboardStats } from "@/types/tailor";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/types/tailor";
+import { getTailorDashboardData, tailorApiError } from "@/services/tailor";
+import type { TailorDashboardData, TailorKpi } from "@/types/tailor";
+import { TAILOR_STAGE_COLORS, TAILOR_STAGE_LABEL } from "@/types/tailor";
 import { TailorStatusBadge } from "@/components/tailor/TailorStatusBadge";
+import { TONE_COLORS, kpiIcon, whenText } from "@/components/tailor/tailorHelpers";
 import { AccessDenied } from "@/components/AccessDenied";
 import { colors } from "@/constants/theme";
-
-const STAT_ITEMS = (stats: TailorDashboardStats, fmt: (n: number) => string) => [
-  { icon: "today-outline",            label: "Today",       value: String(stats.todayOrders),        accent: "#7c3aed", bg: "#ede9fe" },
-  { icon: "time-outline",             label: "Pending",     value: String(stats.pendingOrders),      accent: "#d97706", bg: "#fef3c7" },
-  { icon: "checkmark-circle-outline", label: "Ready",       value: String(stats.readyForDelivery),   accent: "#16a34a", bg: "#dcfce7" },
-  { icon: "car-outline",              label: "Delivered",   value: String(stats.deliveredOrders),    accent: "#059669", bg: "#d1fae5" },
-  { icon: "trending-up-outline",      label: "Total Due",   value: fmt(stats.totalDue),              accent: "#dc2626", bg: "#fee2e2" },
-  { icon: "warning-outline",          label: "Low Stock",   value: String(stats.lowStockFabrics),    accent: "#d97706", bg: "#fef3c7" },
-  { icon: "people-outline",           label: "Dorjis",      value: String(stats.activeDorjis),       accent: "#7c3aed", bg: "#ede9fe" },
-];
 
 const NAV_ITEMS = [
   { icon: "layers-outline",     label: "Fabrics",      route: "/tailor/fabrics",      accent: "#7c3aed", bg: "#ede9fe" },
@@ -55,7 +46,7 @@ export default function TailorTab() {
   const { canRead } = useAuth();
   const { formatCurrency } = useCurrency();
 
-  const [stats, setStats] = useState<TailorDashboardStats | null>(null);
+  const [stats, setStats] = useState<TailorDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,10 +54,10 @@ export default function TailorTab() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const data = await getTailorDashboard();
+      const data = await getTailorDashboardData();
       setStats(data);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load dashboard");
+      setError(tailorApiError(e, "Failed to load dashboard"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -81,6 +72,9 @@ export default function TailorTab() {
   }, [load]);
 
   if (!canRead("TailorDashboard")) return <AccessDenied />;
+
+  const fmtKpi = (k: TailorKpi) =>
+    k.kind === "money" ? formatCurrency(Number(k.value) || 0) : k.kind === "int" ? String(Math.round(Number(k.value) || 0)) : String(k.value);
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
@@ -118,21 +112,90 @@ export default function TailorTab() {
           </View>
         ) : stats ? (
           <>
-            {/* ── Stats Grid ── */}
+            {/* ── KPI Grid ── */}
             <View style={s.sectionWrap}>
               <Text style={s.sectionLabel}>Overview</Text>
               <View style={s.statsGrid}>
-                {STAT_ITEMS(stats, formatCurrency).map((item) => (
-                  <View key={item.label} style={[s.statCard, { borderLeftColor: item.accent }]}>
-                    <View style={[s.statIconBox, { backgroundColor: item.bg }]}>
-                      <Ionicons name={item.icon as any} size={18} color={item.accent} />
+                {stats.kpis.map((k) => {
+                  const tone = TONE_COLORS[k.tone] ?? TONE_COLORS.purple;
+                  const subTone = k.subTone && k.subTone !== "muted" ? TONE_COLORS[k.subTone]?.fg : colors.muted;
+                  return (
+                    <View key={k.label} style={[s.statCard, { borderLeftColor: tone.fg }]}>
+                      <View style={[s.statIconBox, { backgroundColor: tone.bg }]}>
+                        <Ionicons name={kpiIcon(k.label) as any} size={18} color={tone.fg} />
+                      </View>
+                      <Text style={[s.statValue, { color: tone.fg }]} numberOfLines={1} adjustsFontSizeToFit>{fmtKpi(k)}</Text>
+                      <Text style={s.statLabel}>{k.label}</Text>
+                      {k.sub ? <Text style={[s.statSub, { color: subTone }]} numberOfLines={1}>{k.sub}</Text> : null}
                     </View>
-                    <Text style={[s.statValue, { color: item.accent }]}>{item.value}</Text>
-                    <Text style={s.statLabel}>{item.label}</Text>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
+
+            {stats.advice ? (
+              <View style={s.sectionWrap}>
+                <View style={s.adviceCard}>
+                  <Ionicons name="bulb-outline" size={18} color="#7c3aed" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.adviceHead}>{stats.advice.head}</Text>
+                    <Text style={s.adviceBody}>{stats.advice.body}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {/* ── Production board ── */}
+            {stats.has_orders && (
+              <View style={s.sectionWrap}>
+                <Text style={s.sectionLabel}>Production board</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                  {stats.board.map((col) => (
+                    <View key={col.key} style={s.boardCol}>
+                      <View style={s.boardHead}>
+                        <View style={[s.boardDot, { backgroundColor: TAILOR_STAGE_COLORS[col.key] ?? "#94a3b8" }]} />
+                        <Text style={s.boardTitle}>{TAILOR_STAGE_LABEL[col.key] ?? col.label}</Text>
+                        <Text style={s.boardCount}>{col.count}</Text>
+                      </View>
+                      {col.orders.length === 0 ? (
+                        <Text style={s.boardEmpty}>Nothing here</Text>
+                      ) : col.orders.slice(0, 5).map((o) => {
+                        const w = whenText(o.days_left, col.key);
+                        return (
+                          <TouchableOpacity key={o.id} style={s.boardCard} onPress={() => router.push(`/tailor/${o.id}` as any)} activeOpacity={0.8}>
+                            <Text style={s.boardNo}>{o.order_no}{o.urgent ? "  · URGENT" : ""}</Text>
+                            <Text style={s.boardCust} numberOfLines={1}>{o.customer}</Text>
+                            <Text style={s.boardMeta} numberOfLines={1}>{o.items}</Text>
+                            <Text style={s.boardMeta} numberOfLines={1}>{o.dorji ? `Dorji: ${o.dorji}` : "No dorji"}</Text>
+                            {o.delivery_date ? <Text style={[s.boardMeta, { color: w.color, fontWeight: "700" }]}>{w.text}</Text> : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {stats.fabric_alerts.length > 0 && (
+              <View style={s.sectionWrap}>
+                <Text style={s.sectionLabel}>Fabric alerts</Text>
+                <View style={s.ordersCard}>
+                  {stats.fabric_alerts.slice(0, 5).map((f, idx) => (
+                    <View key={f.id}>
+                      {idx > 0 && <View style={s.divider} />}
+                      <TouchableOpacity style={s.orderRow} onPress={() => router.push("/tailor/fabrics" as any)} activeOpacity={0.75}>
+                        <Ionicons name="layers-outline" size={18} color={f.out ? "#dc2626" : "#d97706"} />
+                        <View style={s.orderInfo}>
+                          <Text style={s.orderNum}>{f.name}{f.color ? ` · ${f.color}` : ""}</Text>
+                          <Text style={s.orderCustomer}>{f.out ? "Out of stock" : `${f.stock} ${f.unit ?? ""} left · reorder at ${f.reorder_level}`}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* ── Quick Nav ── */}
             <View style={s.sectionWrap}>
@@ -164,14 +227,14 @@ export default function TailorTab() {
                 </TouchableOpacity>
               </View>
 
-              {stats.recentOrders.length === 0 ? (
+              {stats.recent_orders.length === 0 ? (
                 <View style={s.emptyCard}>
                   <Ionicons name="cut-outline" size={32} color={colors.muted} />
                   <Text style={s.emptyText}>No recent orders</Text>
                 </View>
               ) : (
                 <View style={s.ordersCard}>
-                  {stats.recentOrders.slice(0, 5).map((order, idx) => (
+                  {stats.recent_orders.slice(0, 5).map((order, idx) => (
                     <View key={order.id}>
                       {idx > 0 && <View style={s.divider} />}
                       <TouchableOpacity
@@ -179,23 +242,18 @@ export default function TailorTab() {
                         onPress={() => router.push(`/tailor/${order.id}` as any)}
                         activeOpacity={0.75}
                       >
-                        <Initials name={order.customer?.name ?? "?"} />
+                        <Initials name={order.customer || "?"} />
                         <View style={s.orderInfo}>
-                          <Text style={s.orderNum}>{order.orderNumber}</Text>
+                          <Text style={s.orderNum}>{order.order_no}</Text>
                           <Text style={s.orderCustomer} numberOfLines={1}>
-                            {order.customer?.name ?? "—"}
+                            {order.customer || "—"}
                           </Text>
-                          {order.deliveryDate ? (
-                            <Text style={s.orderDate}>
-                              Due {new Date(order.deliveryDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                            </Text>
-                          ) : null}
                         </View>
                         <View style={s.orderRight}>
-                          <Text style={s.orderAmt}>{formatCurrency(order.totalAmount)}</Text>
+                          <Text style={s.orderAmt}>{formatCurrency(Number(order.total) || 0)}</Text>
                           <TailorStatusBadge
-                            label={ORDER_STATUS_LABELS[order.orderStatus]}
-                            color={ORDER_STATUS_COLORS[order.orderStatus]}
+                            label={TAILOR_STAGE_LABEL[order.stage] ?? order.stage_label}
+                            color={TAILOR_STAGE_COLORS[order.stage] ?? "#94a3b8"}
                             small
                           />
                         </View>
@@ -288,6 +346,20 @@ const s = StyleSheet.create({
   },
   statValue: { fontSize: 22, fontWeight: "900" },
   statLabel: { fontSize: 11, color: colors.muted, fontWeight: "600" },
+  statSub: { fontSize: 10, fontWeight: "600" },
+  adviceCard: { flexDirection: "row", gap: 10, backgroundColor: "#f5f3ff", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#ddd6fe" },
+  adviceHead: { fontSize: 13, fontWeight: "800", color: colors.text },
+  adviceBody: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  boardCol: { width: 200, backgroundColor: "#fff", borderRadius: 14, padding: 10, gap: 8 },
+  boardHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  boardDot: { width: 8, height: 8, borderRadius: 4 },
+  boardTitle: { flex: 1, fontSize: 13, fontWeight: "800", color: colors.text },
+  boardCount: { fontSize: 12, fontWeight: "800", color: colors.muted },
+  boardEmpty: { fontSize: 12, color: colors.muted, paddingVertical: 6 },
+  boardCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 8, gap: 2, backgroundColor: "#f8fafc" },
+  boardNo: { fontSize: 12, fontWeight: "800", color: "#7c3aed" },
+  boardCust: { fontSize: 13, fontWeight: "700", color: colors.text },
+  boardMeta: { fontSize: 11, color: colors.muted },
 
   // Nav grid
   navGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },

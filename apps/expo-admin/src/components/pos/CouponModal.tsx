@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -11,19 +12,24 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { useCurrency } from "@/context/CurrencyContext";
-import { getActiveCoupons } from "@/services/pos";
+import { couponDiscountFor, getActiveCoupons } from "@/services/pos";
 import type { Coupon } from "@/types/pos";
 
 type Props = {
   visible: boolean;
   subtotal: number;
+  /** Cart lines, so a product/category-scoped coupon only counts eligible items */
+  lines: { productId: number; categoryId?: number; subtotal: number }[];
+  manualDiscount: number;
+  /** A per-customer coupon cannot be used on a walk-in sale */
+  hasCustomer: boolean;
   appliedCoupon: Coupon | null;
   onApply: (coupon: Coupon, discountAmount: number) => void;
   onRemove: () => void;
   onClose: () => void;
 };
 
-export function CouponModal({ visible, subtotal, appliedCoupon, onApply, onRemove, onClose }: Props) {
+export function CouponModal({ visible, subtotal, lines, manualDiscount, hasCustomer, appliedCoupon, onApply, onRemove, onClose }: Props) {
   const { formatCurrency } = useCurrency();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,19 +43,22 @@ export function CouponModal({ visible, subtotal, appliedCoupon, onApply, onRemov
       .finally(() => setLoading(false));
   }, [visible]);
 
-  const calcDiscount = (coupon: Coupon) => {
-    if (subtotal < coupon.minOrderAmount) return 0;
-    if (coupon.type === "percentage") {
-      const raw = (subtotal * coupon.discount) / 100;
-      return coupon.maxDiscount ? Math.min(raw, coupon.maxDiscount) : raw;
-    }
-    if (coupon.type === "fixed") return Math.min(coupon.discount, subtotal);
-    return 0;
+  const calcDiscount = (coupon: Coupon) => couponDiscountFor(coupon, lines, subtotal, manualDiscount).amount;
+  const blockReason = (coupon: Coupon) => {
+    const res = couponDiscountFor(coupon, lines, subtotal, manualDiscount);
+    if (res.problem === "min") return `Min. order ${formatCurrency(coupon.minOrderAmount)} — not eligible`;
+    if (res.problem) return res.problem;
+    if (coupon.perCustomer && !hasCustomer) return "Select a customer to use this coupon";
+    return "";
   };
 
   const handleSelect = (coupon: Coupon) => {
-    const amount = calcDiscount(coupon);
-    onApply(coupon, amount);
+    const reason = blockReason(coupon);
+    if (reason) {
+      Alert.alert(coupon.code, reason);
+      return;
+    }
+    onApply(coupon, calcDiscount(coupon));
     onClose();
   };
 
@@ -94,7 +103,8 @@ export function CouponModal({ visible, subtotal, appliedCoupon, onApply, onRemov
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderItem={({ item }) => {
               const discount = calcDiscount(item);
-              const eligible = subtotal >= item.minOrderAmount;
+              const reason = blockReason(item);
+              const eligible = !reason;
               const isApplied = appliedCoupon?.id === item.id;
 
               return (
@@ -104,19 +114,19 @@ export function CouponModal({ visible, subtotal, appliedCoupon, onApply, onRemov
                     isApplied && styles.couponCardActive,
                     !eligible && styles.couponCardDisabled,
                   ]}
-                  onPress={eligible ? () => handleSelect(item) : undefined}
+                  onPress={() => handleSelect(item)}
                 >
                   <View style={styles.couponLeft}>
                     <View style={styles.codeTag}>
                       <Text style={styles.codeText}>{item.code}</Text>
                     </View>
                     <Text style={styles.campaignName}>{item.campaignName}</Text>
-                    {item.minOrderAmount > 0 && (
-                      <Text style={styles.minOrder}>
-                        Min. order {formatCurrency(item.minOrderAmount)}
-                        {!eligible ? " — not eligible" : ""}
-                      </Text>
-                    )}
+                    {reason ? (
+                      <Text style={styles.minOrder}>{reason}</Text>
+                    ) : item.minOrderAmount > 0 ? (
+                      <Text style={styles.minOrder}>Min. order {formatCurrency(item.minOrderAmount)}</Text>
+                    ) : null}
+                    {item.perCustomer && !reason ? <Text style={styles.minOrder}>Once per customer</Text> : null}
                   </View>
                   <View style={styles.couponRight}>
                     <Text style={styles.discountLabel}>

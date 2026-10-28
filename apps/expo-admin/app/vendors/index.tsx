@@ -101,8 +101,12 @@ export default function VendorsScreen() {
           Alert.alert("Delete vendor", `Delete ${v.name}? This cannot be undone.`, [
             { text: "Cancel", style: "cancel" },
             { text: "Delete", style: "destructive", onPress: async () => {
-              await deleteVendor(v.id);
-              load();
+              try {
+                await deleteVendor(v.id);
+                load();
+              } catch (err: any) {
+                Alert.alert("Error", err?.response?.data?.message ?? "Could not delete this vendor.");
+              }
             }},
           ])
       },
@@ -230,15 +234,35 @@ function AddVendorModal({ visible, onClose, onCreated }: {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("");
+  const [leadTimeDays, setLeadTimeDays] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const reset = () => { setName(""); setEmail(""); setPhone(""); setAddress(""); setDescription(""); };
+  const reset = () => {
+    setName(""); setEmail(""); setPhone(""); setAddress(""); setDescription("");
+    setContactPerson(""); setPaymentTerms(""); setOpeningBalance(""); setLeadTimeDays("");
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) { Alert.alert("Error", "Vendor name is required."); return; }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert("Error", "Enter a valid email address."); return;
+    }
+    const opening = openingBalance.trim() === "" ? 0 : Number(openingBalance);
+    if (!Number.isFinite(opening) || opening < 0) { Alert.alert("Error", "Opening balance cannot be negative."); return; }
+    const lead = leadTimeDays.trim() === "" ? null : Number(leadTimeDays);
+    if (lead !== null && (!Number.isInteger(lead) || lead < 0)) {
+      Alert.alert("Error", "Lead time must be a whole number of days, 0 or more."); return;
+    }
     setSaving(true);
     try {
-      await createVendor({ name: name.trim(), email: email.trim(), phone: phone.trim(), address: address.trim(), description: description.trim() });
+      await createVendor({
+        name: name.trim(), email: email.trim(), phone: phone.trim(), address: address.trim(), description: description.trim(),
+        contactPerson: contactPerson.trim(), paymentTerms: paymentTerms.trim(),
+        openingBalance: opening, leadTimeDays: lead,
+      });
       reset();
       onCreated();
     } catch (err: any) {
@@ -265,8 +289,12 @@ function AddVendorModal({ visible, onClose, onCreated }: {
           <ScrollView contentContainerStyle={modalStyles.fields} keyboardShouldPersistTaps="handled">
             <Field label="Vendor Name *" value={name} onChange={setName} placeholder="Enter vendor name" />
             <Field label="Email" value={email} onChange={setEmail} placeholder="vendor@example.com" keyboardType="email-address" />
-            <Field label="Phone" value={phone} onChange={setPhone} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
+            <Field label="Phone" value={phone} onChange={setPhone} placeholder="+880 1712 345678" keyboardType="phone-pad" />
             <Field label="Address" value={address} onChange={setAddress} placeholder="Street address" />
+            <Field label="Contact Person" value={contactPerson} onChange={setContactPerson} placeholder="Optional" />
+            <Field label="Payment Terms" value={paymentTerms} onChange={setPaymentTerms} placeholder="e.g. Net 30, COD" />
+            <Field label="Opening Balance (owed to supplier)" value={openingBalance} onChange={setOpeningBalance} placeholder="0.00" keyboardType="decimal-pad" />
+            <Field label="Lead Time (days)" value={leadTimeDays} onChange={(v) => setLeadTimeDays(v.replace(/[^0-9]/g, ""))} placeholder="e.g. 7" keyboardType="number-pad" />
             <Field label="Description" value={description} onChange={setDescription} placeholder="Optional notes..." multiline />
             <Pressable
               style={[modalStyles.saveBtn, saving && { opacity: 0.55 }]}

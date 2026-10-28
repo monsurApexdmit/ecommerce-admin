@@ -1,5 +1,8 @@
 import { api } from "@/lib/api";
 
+/** UI status (the API uses "Active" / "Inactive" / "Blocked"). */
+export type VendorStatus = "active" | "inactive" | "blocked";
+
 export interface Vendor {
   id: number;
   name: string;
@@ -7,11 +10,50 @@ export interface Vendor {
   phone?: string;
   address?: string;
   logo?: string;
-  status: "active" | "inactive";
+  status: VendorStatus;
   description?: string;
   totalPaid: number;
   amountPayable: number;
+  contactPerson?: string;
+  paymentTerms?: string;
+  openingBalance?: number;
+  leadTimeDays?: number | null;
+  safetyDays?: number | null;
   createdAt: string;
+}
+
+export type VendorInput = {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  description: string;
+  status: VendorStatus;
+  contactPerson: string;
+  paymentTerms: string;
+  openingBalance: number;
+  leadTimeDays: number | null;
+  safetyDays: number | null;
+};
+
+function normalizeStatus(value: unknown): VendorStatus {
+  const v = String(value ?? "active").toLowerCase();
+  return v === "inactive" ? "inactive" : v === "blocked" ? "blocked" : "active";
+}
+
+/** "active" → "Active" (the API only accepts Active / Inactive / Blocked). */
+function toApiStatus(value: VendorStatus): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function toPayload(data: Partial<VendorInput>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...data };
+  if (data.status) out.status = toApiStatus(data.status);
+  // Empty strings mean "not provided".
+  for (const key of ["email", "phone", "address", "description", "contactPerson", "paymentTerms"] as const) {
+    if (key in out && typeof out[key] === "string" && !(out[key] as string).trim()) out[key] = null;
+  }
+  return out;
 }
 
 export interface VendorStats {
@@ -35,10 +77,15 @@ function normalize(v: any): Vendor {
     phone: v.phone,
     address: v.address,
     logo: v.logo,
-    status: v.status ?? "active",
+    status: normalizeStatus(v.status),
     description: v.description,
     totalPaid: Number(v.totalPaid ?? v.total_paid ?? 0),
     amountPayable: Number(v.amountPayable ?? v.amount_payable ?? 0),
+    contactPerson: v.contactPerson ?? undefined,
+    paymentTerms: v.paymentTerms ?? undefined,
+    openingBalance: v.openingBalance !== undefined && v.openingBalance !== null ? Number(v.openingBalance) : undefined,
+    leadTimeDays: v.leadTimeDays ?? null,
+    safetyDays: v.safetyDays ?? null,
     createdAt: v.createdAt ?? v.created_at ?? "",
   };
 }
@@ -74,23 +121,14 @@ export async function getVendorStats(): Promise<VendorStats> {
   };
 }
 
-export async function createVendor(data: {
-  name: string;
-  email: string;
-  phone?: string;
-  address?: string;
-  description?: string;
-  status?: string;
-}): Promise<Vendor> {
-  const response = await api.post("/vendors/", data);
+/** Duplicate supplier names → 422 "A supplier named 'X' already exists." */
+export async function createVendor(data: Partial<VendorInput> & { name: string }): Promise<Vendor> {
+  const response = await api.post("/vendors/", toPayload(data));
   return normalize(response.data?.data ?? response.data);
 }
 
-export async function updateVendor(id: number, data: Partial<{
-  name: string; email: string; phone: string; address: string;
-  description: string; status: string; totalPaid: number; amountPayable: number;
-}>): Promise<Vendor> {
-  const response = await api.put(`/vendors/${id}`, data);
+export async function updateVendor(id: number, data: Partial<VendorInput>): Promise<Vendor> {
+  const response = await api.put(`/vendors/${id}`, toPayload(data));
   return normalize(response.data?.data ?? response.data);
 }
 

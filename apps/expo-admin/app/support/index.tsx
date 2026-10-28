@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation, useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
@@ -69,31 +69,43 @@ export default function SupportScreen() {
   const [refreshing, setRefreshing]   = useState(false);
   const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("all");
+  const [unreadOnly, setUnreadOnly]   = useState(false);
   const [page, setPage]               = useState(1);
   const [hasNext, setHasNext]         = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const ticketsRef = useRef<SupportTicket[]>([]);
+  ticketsRef.current = tickets;
 
   const searchActive = search.trim().length > 0;
-  const filteredState = statusFilter !== "all";
+  const filteredState = statusFilter !== "all" || unreadOnly;
   const compactHeader = searchActive || filteredState;
 
   useEffect(() => { navigation.setOptions({ title: "Support" }); }, [navigation]);
 
   const load = useCallback(async (nextPage: number, mode: "reset" | "append") => {
     const [listRes, statsRes] = await Promise.all([
-      getTickets({ status: statusFilter, search: search || undefined, page: nextPage, per_page: 20 }),
+      getTickets({ status: statusFilter, search: search || undefined, page: nextPage, per_page: 20, unread: unreadOnly }),
       getTicketStats(),
     ]);
     setTickets((cur) => mode === "append" ? [...cur, ...listRes.data] : listRes.data);
     setStats(statsRes);
     setPage(listRes.page);
     setHasNext(listRes.page * listRes.perPage < listRes.total);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, unreadOnly]);
 
   useEffect(() => {
-    const run = async () => { try { setLoading(true); await load(1, "reset"); } finally { setLoading(false); } };
+    const run = async () => { try { setLoading(true); await load(1, "reset"); } catch { /* pull to refresh */ } finally { setLoading(false); } };
     void run();
   }, [load]);
+
+  // Opening a ticket clears its unread marker on the server: refresh when coming back
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) { firstFocus.current = false; return; }
+      void load(1, "reset").catch(() => undefined);
+    }, [load]),
+  );
 
   useEffect(() => {
     if (!session?.companyId) return;
@@ -121,6 +133,11 @@ export default function SupportScreen() {
       },
       onMessageSent: (ticketId, message) => {
         if (message.senderType === "customer") {
+          setStats((prev) => {
+            if (!prev) return prev;
+            const wasUnread = ticketsRef.current.find((t) => t.id === ticketId)?.adminUnread;
+            return wasUnread ? prev : { ...prev, unread: (prev.unread ?? 0) + 1 };
+          });
           void playIncomingSupportMessageSound(message.id);
           void presentSupportMessageNotification({
             ticketId,
@@ -137,6 +154,7 @@ export default function SupportScreen() {
           const target = prev[index];
           const nextTicket = {
             ...target,
+            adminUnread: message.senderType === "customer" ? true : target.adminUnread,
             messages: target.messages.some((item) => item.id === message.id)
               ? target.messages
               : [...target.messages, message],
@@ -229,6 +247,13 @@ export default function SupportScreen() {
 
       {!searchActive && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
+          <Pressable style={[s.tab, unreadOnly && s.tabUnreadActive]} onPress={() => setUnreadOnly((v) => !v)}>
+            <View style={[s.tabDot, { backgroundColor: unreadOnly ? "#fff" : "#ef4444" }]} />
+            <Text style={[s.tabText, unreadOnly && { color: "#fff" }]}>Unread</Text>
+            {stats?.unread != null ? (
+              <Text style={[s.tabText, unreadOnly ? { color: "#fff" } : stats.unread > 0 ? { color: "#ef4444" } : null]}>{stats.unread}</Text>
+            ) : null}
+          </Pressable>
           {STATUS_FILTERS.map(({ value, label }) => {
             const active = value === statusFilter;
             const dot = value !== "all" ? STATUS_COLOR[value].dot : colors.muted;
@@ -258,14 +283,27 @@ export default function SupportScreen() {
             const sc = STATUS_COLOR[item.status];
             const priorityDot = PRIORITY_DOT[item.priority];
             return (
-              <Pressable style={[s.card, { borderLeftColor: sc.dot }]} onPress={() => router.push(`/support/${item.id}` as any)}>
+              <Pressable
+                style={[s.card, { borderLeftColor: sc.dot }, item.adminUnread && s.cardUnread]}
+                onPress={() => {
+                  if (item.adminUnread) {
+                    setTickets((prev) => prev.map((t) => (t.id === item.id ? { ...t, adminUnread: false } : t)));
+                    setStats((prev) => (prev && prev.unread ? { ...prev, unread: prev.unread - 1 } : prev));
+                  }
+                  router.push(`/support/${item.id}` as any);
+                }}
+              >
                 {/* Row 1: ticket# + status */}
                 <View style={s.cardTop}>
                   <View style={[s.statusIcon, { backgroundColor: sc.bg }]}>
                     <Ionicons name="headset-outline" size={16} color={sc.dot} />
                   </View>
                   <View style={{ flex: 1, gap: 1 }}>
-                    <Text style={s.ticketNo} numberOfLines={1}>#{item.ticketNumber}</Text>
+                    <View style={s.ticketRow}>
+                      {item.adminUnread ? <View style={s.unreadDot} /> : null}
+                      <Text style={s.ticketNo} numberOfLines={1}>#{item.ticketNumber}</Text>
+                      {item.adminUnread ? <Text style={s.newLabel}>New message</Text> : null}
+                    </View>
                     <Text style={s.customer} numberOfLines={1}>{item.customerName || "Unknown"}</Text>
                   </View>
                   <View style={[s.statusBadge, { backgroundColor: sc.bg }]}>
@@ -274,7 +312,7 @@ export default function SupportScreen() {
                 </View>
 
                 {/* Subject */}
-                <Text style={s.subject} numberOfLines={2}>{item.subject}</Text>
+                <Text style={[s.subject, item.adminUnread && s.subjectUnread]} numberOfLines={2}>{item.subject}</Text>
 
                 {/* Row 3: priority + category + time + delete */}
                 <View style={s.cardBottom}>
@@ -337,6 +375,12 @@ const s = StyleSheet.create({
   tabDot: { width: 7, height: 7, borderRadius: 4 },
   tabText: { color: colors.muted, fontSize: 12, fontWeight: "700" },
   tabTextActive: { color: colors.primaryDark },
+  tabUnreadActive: { borderColor: "#ef4444", backgroundColor: "#ef4444" },
+  ticketRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#ef4444" },
+  newLabel: { color: "#ef4444", fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  cardUnread: { backgroundColor: "#fffbfb", borderColor: "#fecaca" },
+  subjectUnread: { fontWeight: "800" },
 
   list: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },

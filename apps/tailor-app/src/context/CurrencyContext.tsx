@@ -14,7 +14,7 @@ type CurrencyContextValue = {
 
 const CurrencyContext = createContext<CurrencyContextValue>({
   currency: "BDT",
-  formatCurrency: (v) => `৳${v.toFixed(2)}`,
+  formatCurrency: (v) => `৳${(Number(v) || 0).toFixed(2)}`,
 });
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {

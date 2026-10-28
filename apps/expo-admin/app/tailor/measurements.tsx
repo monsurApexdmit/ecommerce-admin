@@ -21,6 +21,9 @@ import {
   createTailorMeasurement,
   updateTailorMeasurement,
   getTailorCustomers,
+  deleteTailorMeasurement,
+  getMeasurementSetUsage,
+  tailorApiError,
 } from "@/services/tailor"
 import type { TailorMeasurement, TailorCustomer } from "@/types/tailor"
 import { PRODUCT_TYPES } from "@/types/tailor"
@@ -169,19 +172,28 @@ export default function TailorMeasurementsScreen() {
     if (!form.customerId) { Alert.alert("Select a customer"); return }
     if (!form.productType) { Alert.alert("Select a product type"); return }
 
+    const measuredAt = form.measuredAt.trim() || new Date().toISOString().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(measuredAt)) { Alert.alert("Enter the date as YYYY-MM-DD"); return }
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    if (measuredAt > today) { Alert.alert("Measured date cannot be in the future"); return }
+
+    // Send the full value set so cleared fields are removed on update.
+    const values: Record<string, number> = {}
+    for (const { key } of MEASURE_FIELDS) {
+      const raw = String((form as any)[key as string] ?? "").trim()
+      if (raw === "") continue
+      const n = parseFloat(raw)
+      if (isNaN(n) || n < 0) { Alert.alert("Measurements must be numbers of 0 or more"); return }
+      values[SNAKE[key as string]] = n
+    }
     const payload: Record<string, any> = {
       customer_id: form.customerId,
       product_type: form.productType,
-      notes: form.notes || undefined,
-      measured_at: form.measuredAt || undefined,
+      notes: form.notes || null,
+      measured_at: measuredAt,
+      values,
     }
-    MEASURE_FIELDS.forEach(({ key }) => {
-      const raw = (form as any)[key as string]
-      if (raw !== "") {
-        const n = parseFloat(raw)
-        if (!isNaN(n)) payload[SNAKE[key as string]] = n
-      }
-    })
 
     setSaving(true)
     try {
@@ -192,11 +204,35 @@ export default function TailorMeasurementsScreen() {
       }
       setModalVisible(false)
       await load()
-    } catch {
-      Alert.alert("Error", "Failed to save measurement")
+    } catch (e) {
+      Alert.alert("Error", tailorApiError(e, "Failed to save measurement"))
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleDelete = async (m: TailorMeasurement) => {
+    let used = 0
+    try { used = (await getMeasurementSetUsage(m.customerId))[m.id] ?? 0 } catch { /* count is informational */ }
+    const who = m.customer?.name ?? "this customer"
+    const msg = used > 0
+      ? `This set is used by ${used} tailor order${used === 1 ? "" : "s"}; ${used === 1 ? "that order keeps" : "those orders keep"} their copy.\n\nDelete "${m.productType}" for ${who}?`
+      : `Delete "${m.productType}" for ${who}? Orders keep their own copy.`
+    Alert.alert("Delete measurements", msg, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteTailorMeasurement(m.id)
+            await load()
+          } catch (e) {
+            Alert.alert("Could not delete", tailorApiError(e, "Could not delete"))
+          }
+        },
+      },
+    ])
   }
 
   const setField = (key: keyof FormState, value: string | number | null) =>
@@ -292,6 +328,12 @@ export default function TailorMeasurementsScreen() {
                   </View>
                 )}
                 {m.notes ? <Text style={s.noteText} numberOfLines={2}>{m.notes}</Text> : null}
+                {canWrite("TailorMeasurements") && (
+                  <TouchableOpacity style={s.deleteBtn} onPress={() => void handleDelete(m)} hitSlop={6}>
+                    <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                    <Text style={s.deleteText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
             )
           }}
@@ -453,6 +495,11 @@ export default function TailorMeasurementsScreen() {
 }
 
 const s = StyleSheet.create({
+  deleteBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-end",
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#fee2e2", marginTop: 6,
+  },
+  deleteText: { fontSize: 12, fontWeight: "700", color: colors.danger },
   safe: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",

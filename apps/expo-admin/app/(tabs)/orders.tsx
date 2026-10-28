@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -15,27 +16,45 @@ import {
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { formatDateTime } from "@/lib/format";
+import { apiErrorMessage, formatDateTime } from "@/lib/format";
 import { useCurrency } from "@/context/CurrencyContext";
-import { deleteOrder, getOrders, getOrderStats, updateOrderStatus } from "@/services/order-service";
-import type { Order, OrderStats } from "@/types/order";
-import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
+import { deleteOrder, getOrders } from "@/services/order-service";
+import type { Order, OrderKpis, OrderTab, OrderTabCounts } from "@/types/order";
 import { ProductStatusPill } from "@/components/products/ProductStatusPill";
+import { FollowUpSheet } from "@/components/orders/FollowUpSheet";
+import {
+  ORDER_TABS,
+  STAGE_COLOR,
+  canFollowUp,
+  followUpSummary,
+  orderPhone,
+  orderStage,
+  runStageAction,
+  stageActions,
+  telUrl,
+} from "@/components/orders/order-utils";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
 
-type MethodFilter = "" | "Cash" | "Card" | "Online";
+const METHOD_OPTIONS = ["", "Cash", "Card", "Online", "COD", "bKash", "Nagad", "Bank"];
+const PAYMENT_OPTIONS = ["", "paid", "partial", "unpaid"];
+const SOURCE_OPTIONS = ["", "sales", "pos", "online"];
+const PAGE_SIZE = 20;
+
+const optionLabel = (v: string) =>
+  v === "" ? "All" : v === "pos" ? "POS" : v.charAt(0).toUpperCase() + v.slice(1);
 
 export default function OrdersTab() {
   const router = useRouter();
   const { formatCurrency } = useCurrency();
+  const { canRead, canWrite, canDelete } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [stats, setStats] = useState<OrderStats | null>(null);
+  const [kpis, setKpis] = useState<OrderKpis | null>(null);
+  const [tabCounts, setTabCounts] = useState<OrderTabCounts>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -44,69 +63,91 @@ export default function OrdersTab() {
   const [hasNext, setHasNext] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [methodFilter, setMethodFilter] = useState<MethodFilter>("");
+  const [tab, setTab] = useState<OrderTab>("all");
+  const [dueOnly, setDueOnly] = useState(false);
+  const [methodFilter, setMethodFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [filterVisible, setFilterVisible] = useState(false);
+  const [followUpTarget, setFollowUpTarget] = useState<Order | null>(null);
   const searchActive = search.trim().length > 0;
+  const requestId = useRef(0);
+  const params = useLocalSearchParams<{ followUp?: string; status?: string }>();
+
+  // Deep links from the dashboard: ?followUp=due or ?status=pending
+  useEffect(() => {
+    if (params.followUp === "due") setDueOnly(true);
+    const st = String(params.status ?? "").toLowerCase();
+    if (st && ORDER_TABS.some((t) => t.value === st)) setTab(st as OrderTab);
+  }, [params.followUp, params.status]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 350);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const loadStats = useCallback(async () => {
-    setStats(await getOrderStats());
-  }, []);
-
   const loadOrders = useCallback(
     async (nextPage: number, mode: "reset" | "append") => {
+      const id = ++requestId.current;
       const result = await getOrders({
         page: nextPage,
-        limit: 20,
+        perPage: PAGE_SIZE,
         search: debouncedSearch || undefined,
-        status: statusFilter || undefined,
+        status: tab !== "all" ? tab : undefined,
+        followUp: dueOnly ? "due" : undefined,
         method: methodFilter || undefined,
+        payment: paymentFilter || undefined,
+        source: sourceFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
+      if (id !== requestId.current) return; // a newer filter won
 
       setOrders((current) => (mode === "append" ? [...current, ...result.data] : result.data));
       setPage(result.page);
       setTotal(result.total);
-      setHasNext(result.page * result.limit < result.total);
+      setHasNext(result.lastPage != null ? result.page < result.lastPage : result.page * result.limit < result.total);
+      if (result.tabCounts) setTabCounts(result.tabCounts);
+      if (result.kpis) setKpis(result.kpis);
     },
-    [debouncedSearch, statusFilter, methodFilter, startDate, endDate],
+    [debouncedSearch, tab, dueOnly, methodFilter, paymentFilter, sourceFilter, startDate, endDate],
   );
 
   const bootstrap = useCallback(async () => {
     try {
       setLoading(true);
-      await Promise.all([loadStats(), loadOrders(1, "reset")]);
+      await loadOrders(1, "reset");
+    } catch (err) {
+      Alert.alert("Could not load orders", apiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [loadOrders, loadStats]);
+  }, [loadOrders]);
 
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
 
+  const firstFocus = useRef(true);
   useFocusEffect(
     useCallback(() => {
-      void loadOrders(1, "reset");
+      if (firstFocus.current) { firstFocus.current = false; return; }
+      void loadOrders(1, "reset").catch(() => undefined);
     }, [loadOrders])
   );
 
   const onRefresh = useCallback(async () => {
     try {
       setRefreshing(true);
-      await Promise.all([loadStats(), loadOrders(1, "reset")]);
+      await loadOrders(1, "reset");
+    } catch (err) {
+      Alert.alert("Could not load orders", apiErrorMessage(err));
     } finally {
       setRefreshing(false);
     }
-  }, [loadOrders, loadStats]);
+  }, [loadOrders]);
 
   const onEndReached = useCallback(async () => {
     if (!hasNext || loadingMore || loading) return;
@@ -114,18 +155,21 @@ export default function OrdersTab() {
     try {
       setLoadingMore(true);
       await loadOrders(page + 1, "append");
+    } catch {
+      // keep what is shown; pull to refresh retries
     } finally {
       setLoadingMore(false);
     }
   }, [hasNext, loadingMore, loading, loadOrders, page]);
 
   const filtersApplied = useMemo(
-    () => Boolean(statusFilter || methodFilter || startDate || endDate),
-    [statusFilter, methodFilter, startDate, endDate],
+    () => Boolean(methodFilter || paymentFilter || sourceFilter || startDate || endDate),
+    [methodFilter, paymentFilter, sourceFilter, startDate, endDate],
   );
 
-  const { canRead } = useAuth();
   if (!canRead('Orders')) return <AccessDenied />;
+
+  const refreshAfterChange = () => { void loadOrders(1, "reset").catch(() => undefined); };
 
   const copyOrderNo = (invoiceNo: string) => {
     void Clipboard.setStringAsync(invoiceNo);
@@ -136,31 +180,56 @@ export default function OrdersTab() {
     }
   };
 
-  const openOrderMenu = (order: Order) => {
-    Alert.alert(`#${order.invoiceNo}`, "Choose an action", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Copy Order #", onPress: () => copyOrderNo(order.invoiceNo) },
-      { text: "View", onPress: () => router.push(`/orders/${order.id}`) },
-      {
-        text: order.status === "Delivered" ? "Mark Processing" : "Mark Delivered",
-        onPress: async () => {
-          const nextStatus = order.status === "Delivered" ? "Processing" : "Delivered";
-          await updateOrderStatus(order.id, nextStatus);
-          await loadOrders(1, "reset");
-          await loadStats();
-        },
-      },
+  const callCustomer = (order: Order) => {
+    const phone = orderPhone(order);
+    if (!phone) return;
+    Linking.openURL(telUrl(phone)).catch(() => Alert.alert("Cannot start a call", `Dial ${phone} manually.`));
+  };
+
+  const confirmDelete = (order: Order) => {
+    Alert.alert("Delete order", `Delete #${order.invoiceNo}? Only cancelled orders without payments or returns can be deleted.`, [
+      { text: "Back", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteOrder(order.id);
-          await loadOrders(1, "reset");
-          await loadStats();
+          try {
+            await deleteOrder(order.id);
+            refreshAfterChange();
+          } catch (err) {
+            Alert.alert("Could not delete", apiErrorMessage(err));
+          }
         },
       },
     ]);
   };
+
+  const openOrderMenu = (order: Order) => {
+    const buttons: { text: string; style?: "cancel" | "destructive" | "default"; onPress?: () => void }[] = [
+      { text: "View", onPress: () => router.push(`/orders/${order.id}`) },
+    ];
+    if (canWrite("Orders") && canFollowUp(order)) {
+      buttons.push({ text: "Follow up", onPress: () => setFollowUpTarget(order) });
+    }
+    if (canWrite("Orders")) {
+      for (const action of stageActions(order)) {
+        buttons.push({
+          text: action.label,
+          style: action.destructive ? "destructive" : "default",
+          onPress: () => { void runStageAction(order, action).then((r) => { if (r) refreshAfterChange(); }); },
+        });
+      }
+    }
+    buttons.push({ text: "Copy order #", onPress: () => copyOrderNo(order.invoiceNo) });
+    if (canDelete("Orders") && order.status === "Cancelled") {
+      buttons.push({ text: "Delete", style: "destructive", onPress: () => confirmDelete(order) });
+    }
+    buttons.push({ text: "Close", style: "cancel" });
+    Alert.alert(`#${order.invoiceNo}`, "Choose an action", buttons);
+  };
+
+  const changeTab = (next: OrderTab) => { setTab(next); };
+  const followUpDue = tabCounts.followUpDue;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -169,7 +238,7 @@ export default function OrdersTab() {
           <Text style={styles.title}>Orders</Text>
           {!searchActive && (
             <Text style={styles.subtitle} numberOfLines={1}>
-              Track &amp; manage orders, status, shipments
+              Confirm, follow up, pack and ship orders
             </Text>
           )}
         </View>
@@ -182,11 +251,13 @@ export default function OrdersTab() {
       {!searchActive && (
         <View style={styles.statsRow}>
           <ScrollViewRow>
-            <StatChip label="Total" value={stats ? String(stats.totalSells) : "—"} tone="info" />
-            <StatChip label="Pending" value={stats ? String(stats.pendingOrders) : "—"} tone="danger" />
-            <StatChip label="Processing" value={stats ? String(stats.processingOrders) : "—"} tone="warning" />
-            <StatChip label="Delivered" value={stats ? String(stats.deliveredOrders) : "—"} tone="success" />
-            <StatChip label="Revenue" value={stats ? formatCurrency(stats.totalRevenue) : "—"} tone="neutral" />
+            <StatChip label="Total" value={kpis ? String(kpis.totalOrders) : "—"} tone="info" />
+            <StatChip label="Pending" value={kpis ? String(kpis.pending) : "—"} tone="warning" />
+            <StatChip label="Confirmed/packed" value={kpis ? String(kpis.confirmedOrPacked) : "—"} tone="info" />
+            <StatChip label="Shipped" value={kpis ? String(kpis.shipped) : "—"} tone="neutral" />
+            <StatChip label="Delivered" value={kpis ? String(kpis.delivered) : "—"} tone="success" />
+            <StatChip label="Revenue" value={kpis ? formatCurrency(kpis.revenue) : "—"} tone="neutral" />
+            <StatChip label="Due" value={kpis ? formatCurrency(kpis.dueToCollect) : "—"} tone="danger" />
           </ScrollViewRow>
         </View>
       )}
@@ -197,7 +268,7 @@ export default function OrdersTab() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search by customer"
+            placeholder="Customer, phone or invoice"
             style={styles.searchInput}
           />
           {searchActive ? (
@@ -206,20 +277,50 @@ export default function OrdersTab() {
             </Pressable>
           ) : null}
         </View>
-        <Pressable style={styles.iconButton} onPress={() => setFilterVisible(true)}>
-          <Ionicons name="options-outline" size={18} color={colors.text} />
+        <Pressable style={[styles.iconButton, filtersApplied && styles.iconButtonActive]} onPress={() => setFilterVisible(true)}>
+          <Ionicons name="options-outline" size={18} color={filtersApplied ? colors.primaryDark : colors.text} />
         </Pressable>
       </View>
 
-      {!searchActive && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={styles.chipsScroll} alwaysBounceHorizontal={false}>
-          <ProductStatusPill label={`${total} total`} tone="neutral" />
-          {statusFilter ? <ProductStatusPill label={statusFilter} tone="info" /> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={styles.chipsScroll} alwaysBounceHorizontal={false}>
+        <Pressable
+          style={[styles.tabChip, dueOnly && styles.dueChipActive]}
+          onPress={() => setDueOnly((v) => !v)}
+        >
+          <Ionicons name="call-outline" size={13} color={dueOnly ? "#fff" : (followUpDue ?? 0) > 0 ? colors.danger : colors.muted} />
+          <Text style={[styles.tabChipText, dueOnly && { color: "#fff" }]}>Follow-up due</Text>
+          {followUpDue != null ? (
+            <View style={[styles.countBadge, dueOnly ? { backgroundColor: "rgba(255,255,255,0.25)" } : (followUpDue > 0 ? { backgroundColor: "#fee2e2" } : null)]}>
+              <Text style={[styles.countBadgeText, dueOnly ? { color: "#fff" } : followUpDue > 0 ? { color: colors.danger } : null]}>{followUpDue}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+        {ORDER_TABS.map((t) => {
+          const active = tab === t.value;
+          const count = tabCounts[t.value];
+          return (
+            <Pressable key={t.value} style={[styles.tabChip, active && styles.tabChipActive]} onPress={() => changeTab(t.value)}>
+              <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{t.label}</Text>
+              {count != null ? (
+                <View style={[styles.countBadge, active && { backgroundColor: "#d1fae5" }]}>
+                  <Text style={[styles.countBadgeText, active && { color: colors.primaryDark }]}>{count}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {filtersApplied ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterPills} contentContainerStyle={styles.chipsScroll}>
+          <ProductStatusPill label={`${total} found`} tone="neutral" />
           {methodFilter ? <ProductStatusPill label={methodFilter} tone="warning" /> : null}
+          {paymentFilter ? <ProductStatusPill label={optionLabel(paymentFilter)} tone="info" /> : null}
+          {sourceFilter ? <ProductStatusPill label={optionLabel(sourceFilter)} tone="info" /> : null}
           {startDate ? <ProductStatusPill label={`From ${startDate}`} tone="neutral" /> : null}
           {endDate ? <ProductStatusPill label={`To ${endDate}`} tone="neutral" /> : null}
         </ScrollView>
-      )}
+      ) : null}
 
       {loading ? (
         <View style={styles.center}>
@@ -230,10 +331,12 @@ export default function OrdersTab() {
           data={orders}
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => {
-            const statusAccent =
-              item.status === "Delivered" ? "#10b981"
-              : item.status === "Processing" ? "#f59e0b"
-              : "#6366f1";
+            const stage = orderStage(item);
+            const statusAccent = STAGE_COLOR[stage];
+            const followable = canFollowUp(item);
+            const fu = followable || (Number(item.followUpCount) || 0) > 0 ? followUpSummary(item) : null;
+            const phone = orderPhone(item);
+            const paid = String(item.paymentStatus ?? "").toLowerCase();
             return (
               <Pressable
                 style={[styles.card, { borderLeftColor: statusAccent }]}
@@ -249,7 +352,7 @@ export default function OrdersTab() {
                   </View>
                   <View style={styles.cardTopRight}>
                     <Text style={styles.amount}>{formatCurrency(item.amount)}</Text>
-                    <Pressable style={styles.menuButton} onPress={() => openOrderMenu(item)}>
+                    <Pressable style={styles.menuButton} onPress={() => openOrderMenu(item)} hitSlop={6}>
                       <Ionicons name="ellipsis-horizontal" size={18} color={colors.muted} />
                     </Pressable>
                   </View>
@@ -265,15 +368,16 @@ export default function OrdersTab() {
 
                 {/* Status pills */}
                 <View style={styles.pillRow}>
-                  <OrderDot status={item.status} accent={statusAccent} />
+                  <OrderDot status={stage} accent={statusAccent} />
                   {item.paymentStatus ? (
                     <StatusPill
                       label={item.paymentStatus}
-                      bg={item.paymentStatus === "paid" ? "#dcfce7" : "#fef3c7"}
-                      color={item.paymentStatus === "paid" ? "#166534" : "#92400e"}
+                      bg={paid === "paid" ? "#dcfce7" : "#fef3c7"}
+                      color={paid === "paid" ? "#166534" : "#92400e"}
                     />
                   ) : null}
                   <StatusPill label={item.method} bg="#ede9fe" color="#6d28d9" />
+                  {item.source === "pos" ? <StatusPill label="POS" bg="#e0f2fe" color="#0369a1" /> : null}
                   {item.shipments.length > 0 && (
                     <StatusPill
                       label={`${item.shipments.length} shipment${item.shipments.length > 1 ? "s" : ""}`}
@@ -282,6 +386,28 @@ export default function OrdersTab() {
                     />
                   )}
                 </View>
+
+                {/* Follow-up line + quick actions */}
+                {fu || followable ? (
+                  <View style={styles.followRow}>
+                    {fu ? (
+                      <Text style={[styles.followText, fu.overdue && styles.followTextOverdue]} numberOfLines={1}>
+                        {fu.text}{fu.overdue ? " (overdue)" : ""}
+                      </Text>
+                    ) : <View style={{ flex: 1 }} />}
+                    {followable && phone ? (
+                      <Pressable style={styles.followIconBtn} onPress={() => callCustomer(item)} hitSlop={6}>
+                        <Ionicons name="call-outline" size={15} color={colors.primaryDark} />
+                      </Pressable>
+                    ) : null}
+                    {followable && canWrite("Orders") ? (
+                      <Pressable style={styles.followBtn} onPress={() => setFollowUpTarget(item)}>
+                        <Ionicons name="chatbox-ellipses-outline" size={13} color={colors.primaryDark} />
+                        <Text style={styles.followBtnText}>Follow up</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
               </Pressable>
             );
           }}
@@ -307,13 +433,19 @@ export default function OrdersTab() {
               <Ionicons name="receipt-outline" size={36} color={colors.muted} />
               <Text style={styles.emptyTitle}>No orders found</Text>
               <Text style={styles.emptyText}>
-                {filtersApplied ? "Try adjusting the filters." : "Recent sells will appear here."}
+                {dueOnly ? "No calls are due right now." : filtersApplied || tab !== "all" ? "Try another tab or adjust the filters." : "Recent sells will appear here."}
               </Text>
             </View>
           }
           contentContainerStyle={styles.listContent}
         />
       )}
+
+      <FollowUpSheet
+        order={followUpTarget}
+        onClose={() => setFollowUpTarget(null)}
+        onSaved={() => refreshAfterChange()}
+      />
 
       <Modal visible={filterVisible} transparent animationType="slide" onRequestClose={() => setFilterVisible(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setFilterVisible(false)}>
@@ -325,44 +457,53 @@ export default function OrdersTab() {
               </Pressable>
             </View>
 
-            <FilterGroup
-              title="Status"
-              options={["", "Pending", "Processing", "Delivered"]}
-              value={statusFilter}
-              onChange={setStatusFilter}
-            />
-            <FilterGroup
-              title="Method"
-              options={["", "Cash", "Card", "Online"]}
-              value={methodFilter}
-              onChange={(value) => setMethodFilter(value as MethodFilter)}
-            />
+            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 18 }}>
+              <FilterGroup
+                title="Payment"
+                options={PAYMENT_OPTIONS}
+                value={paymentFilter}
+                onChange={setPaymentFilter}
+              />
+              <FilterGroup
+                title="Source"
+                options={SOURCE_OPTIONS}
+                value={sourceFilter}
+                onChange={setSourceFilter}
+              />
+              <FilterGroup
+                title="Method"
+                options={METHOD_OPTIONS}
+                value={methodFilter}
+                onChange={setMethodFilter}
+              />
 
-            <View style={styles.dateGroup}>
-              <Text style={styles.filterLabel}>Start date</Text>
-              <TextInput
-                value={startDate}
-                onChangeText={setStartDate}
-                placeholder="YYYY-MM-DD"
-                style={styles.dateInput}
-              />
-            </View>
-            <View style={styles.dateGroup}>
-              <Text style={styles.filterLabel}>End date</Text>
-              <TextInput
-                value={endDate}
-                onChangeText={setEndDate}
-                placeholder="YYYY-MM-DD"
-                style={styles.dateInput}
-              />
-            </View>
+              <View style={styles.dateGroup}>
+                <Text style={styles.filterLabel}>Start date</Text>
+                <TextInput
+                  value={startDate}
+                  onChangeText={setStartDate}
+                  placeholder="YYYY-MM-DD"
+                  style={styles.dateInput}
+                />
+              </View>
+              <View style={styles.dateGroup}>
+                <Text style={styles.filterLabel}>End date</Text>
+                <TextInput
+                  value={endDate}
+                  onChangeText={setEndDate}
+                  placeholder="YYYY-MM-DD"
+                  style={styles.dateInput}
+                />
+              </View>
+            </ScrollView>
 
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.secondaryButton}
                 onPress={() => {
-                  setStatusFilter("");
                   setMethodFilter("");
+                  setPaymentFilter("");
+                  setSourceFilter("");
                   setStartDate("");
                   setEndDate("");
                 }}
@@ -371,11 +512,7 @@ export default function OrdersTab() {
               </Pressable>
               <Pressable
                 style={styles.applyButton}
-                onPress={async () => {
-                  setFilterVisible(false);
-                  await loadOrders(1, "reset");
-                  await loadStats();
-                }}
+                onPress={() => setFilterVisible(false)}
               >
                 <Text style={styles.applyButtonText}>Apply</Text>
               </Pressable>
@@ -453,7 +590,7 @@ function FilterGroup({
       <Text style={styles.filterLabel}>{title}</Text>
       <View style={styles.filterOptions}>
         {options.map((option) => {
-          const label = option || "All";
+          const label = optionLabel(option);
           const active = option === value;
           return (
             <Pressable
@@ -539,6 +676,97 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: 15,
+  },
+  iconButtonActive: {
+    borderColor: colors.primaryDark,
+    backgroundColor: "#ecfdf5",
+  },
+  tabChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  tabChipActive: {
+    borderColor: colors.primaryDark,
+    backgroundColor: "#ecfdf5",
+  },
+  dueChipActive: {
+    borderColor: colors.danger,
+    backgroundColor: colors.danger,
+  },
+  tabChipText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  tabChipTextActive: {
+    color: colors.primaryDark,
+  },
+  countBadge: {
+    minWidth: 20,
+    borderRadius: 999,
+    backgroundColor: colors.background,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    alignItems: "center",
+  },
+  countBadgeText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  filterPills: {
+    height: 36,
+    flexGrow: 0,
+  },
+  followRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 8,
+  },
+  followText: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 12,
+  },
+  followTextOverdue: {
+    color: colors.danger,
+    fontWeight: "700",
+  },
+  followIconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.primaryDark + "44",
+    backgroundColor: "#ecfdf5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  followBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.primaryDark + "44",
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  followBtnText: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: "700",
   },
   iconButton: {
     width: 48,

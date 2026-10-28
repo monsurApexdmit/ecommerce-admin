@@ -16,26 +16,39 @@ import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
 import { useAuth } from "@/context/AuthContext"
+import { useCurrency } from "@/context/CurrencyContext"
 import {
   getTailorDorjis,
   createTailorDorji,
   updateTailorDorji,
   deleteTailorDorji,
+  tailorApiError,
 } from "@/services/tailor"
-import type { TailorDorji } from "@/types/tailor"
+import type { TailorDorji, TailorDorjiStatus } from "@/types/tailor"
 import { AccessDenied } from "@/components/AccessDenied"
 import { colors } from "@/constants/theme"
 
-const COMMISSION_TYPES: Array<"fixed" | "percentage"> = ["fixed", "percentage"]
-const STATUS_OPTIONS: Array<"active" | "inactive"> = ["active", "inactive"]
+type Comm = "fixed" | "percentage" | "salary"
+const COMMISSION_TYPES: Comm[] = ["fixed", "percentage", "salary"]
+const COMMISSION_LABEL: Record<Comm, string> = { fixed: "Per piece", percentage: "Percentage (%)", salary: "Salary" }
+const STATUS_OPTIONS: TailorDorjiStatus[] = ["active", "on_leave", "inactive"]
+const STATUS_LABEL: Record<TailorDorjiStatus, string> = { active: "Active", on_leave: "On leave", inactive: "Inactive" }
+
+/** Bangladesh local digits (no +880 / leading 0) for the phone field; other numbers keep their digits. */
+function localPhone(raw: string): string {
+  const digits = (raw ?? "").replace(/\D/g, "")
+  if ((raw ?? "").startsWith("+880") || digits.startsWith("880")) return digits.replace(/^880/, "")
+  return digits.replace(/^0+/, "")
+}
 
 const emptyForm = (): {
   name: string
   phone: string
   address: string
-  commissionType: "fixed" | "percentage"
+  commissionType: Comm
   commissionValue: string
-  status: "active" | "inactive"
+  maxPieces: string
+  status: TailorDorjiStatus
   notes: string
 } => ({
   name: "",
@@ -43,12 +56,14 @@ const emptyForm = (): {
   address: "",
   commissionType: "fixed",
   commissionValue: "",
+  maxPieces: "",
   status: "active",
   notes: "",
 })
 
 export default function TailorDorjisScreen() {
   const { canRead, canWrite } = useAuth()
+  const { formatCurrency } = useCurrency()
 
   const [dorjis, setDorjis] = useState<TailorDorji[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,10 +97,11 @@ export default function TailorDorjisScreen() {
     setEditTarget(d)
     setForm({
       name: d.name,
-      phone: d.phone,
+      phone: localPhone(d.phone),
       address: d.address ?? "",
       commissionType: d.commissionType,
       commissionValue: String(d.commissionValue),
+      maxPieces: d.maxPieces ? String(d.maxPieces) : "",
       status: d.status,
       notes: d.notes ?? "",
     })
@@ -105,8 +121,8 @@ export default function TailorDorjisScreen() {
             try {
               await deleteTailorDorji(d.id)
               await load()
-            } catch {
-              Alert.alert("Error", "Failed to delete dorji")
+            } catch (e) {
+              Alert.alert("Could not delete", tailorApiError(e, "Failed to delete dorji"))
             }
           },
         },
@@ -116,20 +132,26 @@ export default function TailorDorjisScreen() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { Alert.alert("Name is required"); return }
-    if (!form.phone.trim()) { Alert.alert("Phone is required"); return }
-    const cv = parseFloat(form.commissionValue)
+    const phone = form.phone.replace(/\D/g, "")
+    if (!phone) { Alert.alert("Phone is required"); return }
+    if (!/^[0-9]{6,15}$/.test(phone)) { Alert.alert("Enter a valid phone number (digits only)"); return }
+    const cv = form.commissionValue.trim() === "" ? 0 : parseFloat(form.commissionValue)
     if (isNaN(cv) || cv < 0) { Alert.alert("Enter a valid commission value"); return }
+    if (form.commissionType === "percentage" && cv > 100) { Alert.alert("Percentage cannot be more than 100"); return }
+    const cap = form.maxPieces.trim() === "" ? null : Number(form.maxPieces)
+    if (cap != null && (!Number.isInteger(cap) || cap < 0)) { Alert.alert("Capacity must be a whole number"); return }
 
     setSaving(true)
     try {
       const payload: Partial<TailorDorji> = {
         name: form.name.trim(),
-        phone: form.phone.trim(),
+        phone,
         address: form.address.trim() || undefined,
         commissionType: form.commissionType,
         commissionValue: cv,
         status: form.status,
         notes: form.notes.trim() || undefined,
+        maxPieces: cap,
       }
       if (editTarget) {
         await updateTailorDorji(editTarget.id, payload)
@@ -138,17 +160,17 @@ export default function TailorDorjisScreen() {
       }
       setModalVisible(false)
       await load()
-    } catch {
-      Alert.alert("Error", `Failed to ${editTarget ? "update" : "create"} dorji`)
+    } catch (e) {
+      Alert.alert("Error", tailorApiError(e, `Failed to ${editTarget ? "update" : "create"} dorji`))
     } finally {
       setSaving(false)
     }
   }
 
-  if (!canRead("TailorDorjis")) return <AccessDenied />
+  if (!canRead("TailorDorji")) return <AccessDenied />
 
   const filtered = search.trim()
-    ? dorjis.filter(d => d.name.toLowerCase().includes(search.trim().toLowerCase()))
+    ? dorjis.filter(d => d.name.toLowerCase().includes(search.trim().toLowerCase()) || (d.phone ?? "").includes(search.trim()))
     : dorjis
 
   const activeDorjis = dorjis.filter(d => d.status === "active").length
@@ -175,7 +197,7 @@ export default function TailorDorjisScreen() {
           <Text style={[s.statValue, { color: "#16a34a" }]}>{activeDorjis}</Text>
         </View>
         <View style={s.statBox}>
-          <Text style={s.statLabel}>Inactive</Text>
+          <Text style={s.statLabel}>Inactive / leave</Text>
           <Text style={[s.statValue, { color: colors.muted }]}>{dorjis.length - activeDorjis}</Text>
         </View>
       </View>
@@ -209,15 +231,15 @@ export default function TailorDorjisScreen() {
             <TouchableOpacity
               style={s.card}
               activeOpacity={0.75}
-              onPress={() => canWrite("TailorDorjis") && openEdit(d)}
-              onLongPress={() => canWrite("TailorDorjis") && handleDelete(d)}
+              onPress={() => canWrite("TailorDorji") && openEdit(d)}
+              onLongPress={() => canWrite("TailorDorji") && handleDelete(d)}
               delayLongPress={500}
             >
               <View style={s.cardHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.dorjiName}>{d.name}</Text>
                   <Text style={s.dorjiPhone}>
-                    <Ionicons name="call-outline" size={12} color={colors.muted} /> {d.phone}
+                    <Ionicons name="call-outline" size={12} color={colors.muted} /> {localPhone(d.phone) ? `+880 ${localPhone(d.phone)}` : d.phone}
                   </Text>
                   {d.address ? (
                     <Text style={s.dorjiAddress}>
@@ -227,7 +249,7 @@ export default function TailorDorjisScreen() {
                 </View>
                 <View style={[s.statusBadge, d.status === "active" ? s.statusActive : s.statusInactive]}>
                   <Text style={[s.statusText, d.status === "active" ? s.statusTextActive : s.statusTextInactive]}>
-                    {d.status === "active" ? "Active" : "Inactive"}
+                    {STATUS_LABEL[d.status] ?? d.status}
                   </Text>
                 </View>
               </View>
@@ -237,13 +259,19 @@ export default function TailorDorjisScreen() {
                   <Ionicons name="briefcase-outline" size={12} color="#7c3aed" />
                   <Text style={s.metaPillText}>{d.activeOrders ?? 0} active orders</Text>
                 </View>
+                {d.maxPieces ? (
+                  <View style={s.metaPill}>
+                    <Ionicons name="speedometer-outline" size={12} color="#7c3aed" />
+                    <Text style={s.metaPillText}>max {d.maxPieces} pcs</Text>
+                  </View>
+                ) : null}
                 <View style={s.metaPill}>
                   <Ionicons name="cash-outline" size={12} color="#7c3aed" />
                   <Text style={s.metaPillText}>
                     {d.commissionType === "percentage"
                       ? `${d.commissionValue}%`
-                      : `৳${d.commissionValue}`}{" "}
-                    {d.commissionType}
+                      : formatCurrency(Number(d.commissionValue) || 0)}{" "}
+                    {d.commissionType === "fixed" ? "/ piece" : d.commissionType}
                   </Text>
                 </View>
               </View>
@@ -253,7 +281,7 @@ export default function TailorDorjisScreen() {
       )}
 
       {/* FAB */}
-      {canWrite("TailorDorjis") && (
+      {canWrite("TailorDorji") && (
         <TouchableOpacity style={s.fab} onPress={openAdd} activeOpacity={0.85}>
           <Ionicons name="add" size={26} color="#fff" />
         </TouchableOpacity>
@@ -282,14 +310,17 @@ export default function TailorDorjisScreen() {
             />
 
             <Text style={s.inputLabel}>Phone *</Text>
-            <TextInput
-              style={s.input}
-              placeholder="+880..."
-              placeholderTextColor={colors.muted}
-              keyboardType="phone-pad"
-              value={form.phone}
-              onChangeText={v => setForm(f => ({ ...f, phone: v }))}
-            />
+            <View style={s.phoneRow}>
+              <View style={s.phonePrefix}><Text style={s.phonePrefixText}>+880</Text></View>
+              <TextInput
+                style={[s.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="17XX-XXXXXX"
+                placeholderTextColor={colors.muted}
+                keyboardType="number-pad"
+                value={form.phone}
+                onChangeText={v => setForm(f => ({ ...f, phone: localPhone(v) }))}
+              />
+            </View>
 
             <Text style={s.inputLabel}>Address</Text>
             <TextInput
@@ -310,14 +341,14 @@ export default function TailorDorjisScreen() {
                   activeOpacity={0.75}
                 >
                   <Text style={[s.chipText, form.commissionType === ct && s.chipTextActive]}>
-                    {ct === "fixed" ? "Fixed (৳)" : "Percentage (%)"}
+                    {COMMISSION_LABEL[ct]}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             <Text style={s.inputLabel}>
-              Commission Value {form.commissionType === "percentage" ? "(%)" : "(৳)"}
+              {form.commissionType === "percentage" ? "Commission (%)" : form.commissionType === "salary" ? "Monthly salary" : "Rate per piece"}
             </Text>
             <TextInput
               style={s.input}
@@ -328,6 +359,16 @@ export default function TailorDorjisScreen() {
               onChangeText={v => setForm(f => ({ ...f, commissionValue: v }))}
             />
 
+            <Text style={s.inputLabel}>Capacity (max pieces in hand)</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Optional"
+              placeholderTextColor={colors.muted}
+              keyboardType="number-pad"
+              value={form.maxPieces}
+              onChangeText={v => setForm(f => ({ ...f, maxPieces: v.replace(/[^0-9]/g, "") }))}
+            />
+
             <Text style={s.inputLabel}>Status</Text>
             <View style={s.chipRow}>
               {STATUS_OPTIONS.map(st => (
@@ -335,7 +376,7 @@ export default function TailorDorjisScreen() {
                   key={st}
                   style={[
                     s.chip,
-                    form.status === st && (st === "active" ? s.chipGreen : s.chipGray),
+                    form.status === st && (st === "active" ? s.chipGreen : st === "on_leave" ? s.chipAmber : s.chipGray),
                   ]}
                   onPress={() => setForm(f => ({ ...f, status: st }))}
                   activeOpacity={0.75}
@@ -346,7 +387,7 @@ export default function TailorDorjisScreen() {
                       form.status === st && s.chipTextActive,
                     ]}
                   >
-                    {st === "active" ? "Active" : "Inactive"}
+                    {STATUS_LABEL[st]}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -457,12 +498,19 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.text,
   },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  phoneRow: { flexDirection: "row", alignItems: "stretch", gap: 8 },
+  phonePrefix: {
+    justifyContent: "center", paddingHorizontal: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: colors.border, backgroundColor: "#f1f5f9",
+  },
+  phonePrefixText: { fontSize: 14, fontWeight: "700", color: colors.text },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background,
   },
   chipActive: { backgroundColor: "#7c3aed", borderColor: "#7c3aed" },
   chipGreen: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
+  chipAmber: { backgroundColor: "#d97706", borderColor: "#d97706" },
   chipGray: { backgroundColor: colors.muted, borderColor: colors.muted },
   chipText: { fontSize: 13, fontWeight: "600", color: colors.muted },
   chipTextActive: { color: "#fff" },

@@ -19,12 +19,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
 import { formatDateTime } from "@/lib/format";
 import {
-  cancelTransfer,
-  createTransfer,
+  cancelTransferDocument,
+  createTransferDocument,
   getProductsByLocation,
-  getTransfers,
+  getTransferDocuments,
+  TRANSFER_REASONS,
   type LocationProduct,
-  type TransferItem,
+  type TransferDocument,
 } from "@/services/inventory";
 import { getWarehouses } from "@/services/catalog";
 import type { Warehouse } from "@/types/catalog";
@@ -34,15 +35,20 @@ import { AccessDenied } from "@/components/AccessDenied";
 type Tab = "create" | "history";
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
-  Pending:   { bg: "#fef3c7", text: "#d97706" },
   Completed: { bg: "#dcfce7", text: "#16a34a" },
   Cancelled: { bg: "#fee2e2", text: "#dc2626" },
+  Reversal:  { bg: "#e0e7ff", text: "#4338ca" },
 };
+
+function transferStatusLabel(t: TransferDocument): "Completed" | "Cancelled" | "Reversal" {
+  if (t.status !== "completed") return "Cancelled";
+  return t.isReversal ? "Reversal" : "Completed";
+}
 
 export default function TransferScreen() {
   const [tab, setTab] = useState<Tab>("create");
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [transfers, setTransfers] = useState<TransferItem[]>([]);
+  const [transfers, setTransfers] = useState<TransferDocument[]>([]);
   const [transfersLoading, setTransfersLoading] = useState(false);
 
   // Form state
@@ -53,6 +59,8 @@ export default function TransferScreen() {
   const [selectedProduct, setSelectedProduct] = useState<LocationProduct | null>(null);
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState(TRANSFER_REASONS[0]);
+  const [sentWith, setSentWith] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [productSearch, setProductSearch] = useState("");
@@ -73,7 +81,8 @@ export default function TransferScreen() {
 
   const loadTransfers = useCallback(async () => {
     setTransfersLoading(true);
-    try { setTransfers(await getTransfers()); }
+    try { setTransfers((await getTransferDocuments({ perPage: 100 })).data); }
+    catch { setTransfers([]); }
     finally { setTransfersLoading(false); }
   }, []);
 
@@ -105,18 +114,22 @@ export default function TransferScreen() {
 
     setSubmitting(true);
     try {
-      await createTransfer({
-        productId: selectedProduct.productId,
-        variantId: selectedProduct.type === "variant" ? selectedProduct.id : undefined,
+      const doc = await createTransferDocument({
         fromLocationId: Number(fromWh),
         toLocationId: Number(toWh),
-        quantity: qty,
-        notes: notes.trim() || undefined,
+        reason,
+        sentWith: sentWith.trim() || undefined,
+        note: notes.trim() || undefined,
+        items: [{
+          productId: selectedProduct.productId,
+          variantId: selectedProduct.type === "variant" ? selectedProduct.id : undefined,
+          quantity: qty,
+        }],
       });
-      Alert.alert("Transfer created", "Stock transfer submitted successfully.", [
+      Alert.alert("Transfer created", `${doc.transferNo}: ${doc.itemsSummary || `${qty} units`} moved.`, [
         { text: "OK", onPress: () => {
           setFromWh(""); setToWh(""); setSelectedProduct(null);
-          setQuantity(""); setNotes("");
+          setQuantity(""); setNotes(""); setSentWith(""); setReason(TRANSFER_REASONS[0]);
           setTab("history");
         }},
       ]);
@@ -127,18 +140,27 @@ export default function TransferScreen() {
     }
   };
 
-  const handleCancel = (id: number) => {
-    Alert.alert("Cancel transfer", "Cancel this stock transfer?", [
-      { text: "No", style: "cancel" },
-      {
-        text: "Yes, cancel",
-        style: "destructive",
-        onPress: async () => {
-          await cancelTransfer(id);
-          await loadTransfers();
+  const handleCancel = (doc: TransferDocument) => {
+    Alert.alert(
+      `Cancel ${doc.transferNo}?`,
+      `The stock goes back to ${doc.from.name} and a reversal transfer is recorded.`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const updated = await cancelTransferDocument(doc.id);
+              await loadTransfers();
+              if (updated.reversedBy) Alert.alert("Transfer cancelled", `Returned via ${updated.reversedBy}.`);
+            } catch (err: any) {
+              Alert.alert("Error", err?.response?.data?.message ?? "Could not cancel the transfer.");
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const filteredProducts = locationProducts.filter((p) =>
@@ -253,12 +275,40 @@ export default function TransferScreen() {
               />
             </View>
 
+            {/* Reason */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Reason</Text>
+              <View style={styles.selectRow}>
+                {TRANSFER_REASONS.map((r) => (
+                  <Pressable
+                    key={r}
+                    style={[styles.whChip, reason === r && styles.whChipActive]}
+                    onPress={() => setReason(r)}
+                  >
+                    <Text style={[styles.whChipText, reason === r && styles.whChipTextActive]}>{r}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Sent with */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Sent with (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Driver, courier, staff name..."
+                placeholderTextColor="#94a3b8"
+                value={sentWith}
+                onChangeText={setSentWith}
+              />
+            </View>
+
             {/* Notes */}
             <View style={styles.field}>
-              <Text style={styles.label}>Notes (optional)</Text>
+              <Text style={styles.label}>Note (optional)</Text>
               <TextInput
                 style={[styles.input, styles.inputMulti]}
-                placeholder="Reason for transfer..."
+                placeholder="Anything the receiving location should know..."
                 placeholderTextColor="#94a3b8"
                 value={notes}
                 onChangeText={setNotes}
@@ -297,35 +347,43 @@ export default function TransferScreen() {
             refreshing={transfersLoading}
             onRefresh={loadTransfers}
             renderItem={({ item }) => {
-              const sc = STATUS_CONFIG[item.status] ?? { bg: "#f1f5f9", text: colors.muted };
+              const label = transferStatusLabel(item);
+              const sc = STATUS_CONFIG[label] ?? { bg: "#f1f5f9", text: colors.muted };
+              const meta = [
+                item.reason,
+                item.sentWith ? `Sent with ${item.sentWith}` : null,
+                item.reversedBy ? `Returned via ${item.reversedBy}` : null,
+                item.createdBy,
+              ].filter(Boolean).join(" · ");
               return (
                 <View style={styles.transferCard}>
                   <View style={styles.transferTop}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.transferProduct} numberOfLines={1}>
-                        {item.productName}{item.variantName ? ` — ${item.variantName}` : ""}
+                      <Text style={styles.transferProduct} numberOfLines={2}>
+                        {item.transferNo} · {item.itemsSummary || "—"}
                       </Text>
                       <Text style={styles.transferRoute}>
-                        {item.fromLocationName} → {item.toLocationName}
+                        {item.from.name} → {item.to.name}
                       </Text>
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-                      <Text style={[styles.statusText, { color: sc.text }]}>{item.status}</Text>
+                      <Text style={[styles.statusText, { color: sc.text }]}>{label}</Text>
                     </View>
                   </View>
                   <View style={styles.transferMeta}>
                     <View style={styles.qtyBadge}>
-                      <Text style={styles.qtyText}>× {item.quantity}</Text>
+                      <Text style={styles.qtyText}>{item.units} units</Text>
                     </View>
                     <Text style={styles.transferDate}>{formatDateTime(item.createdAt)}</Text>
                   </View>
-                  {item.notes ? (
-                    <Text style={styles.transferNotes}>{item.notes}</Text>
+                  {meta ? <Text style={styles.transferDate}>{meta}</Text> : null}
+                  {item.note ? (
+                    <Text style={styles.transferNotes}>{item.note}</Text>
                   ) : null}
-                  {item.status === "Pending" && (
+                  {item.canCancel && (
                     <Pressable
                       style={styles.cancelBtn}
-                      onPress={() => handleCancel(item.id)}
+                      onPress={() => handleCancel(item)}
                     >
                       <Text style={styles.cancelBtnText}>Cancel Transfer</Text>
                     </Pressable>

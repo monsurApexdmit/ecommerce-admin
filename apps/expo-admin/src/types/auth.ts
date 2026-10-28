@@ -6,6 +6,9 @@ export interface AuthSession {
   companyName: string;
   userRole: UserRole;
   userEmail: string;
+  /** Set when signed in with a staff PIN */
+  staffId?: number;
+  loginMethod?: "password" | "pin";
 }
 
 export interface Company {
@@ -36,6 +39,15 @@ export interface LoginPayload {
   password: string;
 }
 
+/** Staff PIN sign-in (POST /auth/pin-login) */
+export interface PinLoginPayload {
+  companyId: number;
+  /** Phone, email or staff ID */
+  identifier: string;
+  /** 4-digit PIN */
+  pin: string;
+}
+
 export interface ForgotPasswordPayload {
   email: string;
 }
@@ -61,6 +73,8 @@ export interface LoginResponse {
     licenseType: "trial" | "paid";
     trialDaysRemaining?: number;
     subscriptionEndDate?: string;
+    /** PIN sign-in only */
+    staffId?: number;
   };
 }
 

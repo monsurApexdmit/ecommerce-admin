@@ -3,22 +3,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { getImageUrl } from "@/lib/images";
 import { useCurrency } from "@/context/CurrencyContext";
-import type { Product } from "@/types/product";
+import type { PosProduct } from "@/types/pos";
 
 type Props = {
-  product: Product;
+  product: PosProduct;
   cartQty: number;
   onAdd: () => void;
 };
 
 export function PosProductCard({ product, cartQty, onAdd }: Props) {
   const { formatCurrency } = useCurrency();
-  const outOfStock = product.stock <= 0 && product.variants.length === 0;
+  const outOfStock = product.stock <= 0;
   const imageUrl = getImageUrl(product.image);
-  const basePrice = product.salePrice > 0 ? product.salePrice : product.price;
-  const price = product.offerPrice && product.offerPrice > 0
-    ? (product.offerType === "percentage" ? basePrice * (1 - product.offerPrice / 100) : basePrice - product.offerPrice)
-    : basePrice;
+  // server-resolved price: an expired offer is already ignored
+  const prices = product.variants.length > 0 ? product.variants.map((v) => v.price) : [product.price];
+  const price = Math.min(...prices);
+  const showStrike = product.variants.length === 0 && product.offerActive && product.regularPrice > product.price;
 
   return (
     <Pressable
@@ -49,7 +49,11 @@ export function PosProductCard({ product, cartQty, onAdd }: Props) {
       {/* Info */}
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={2}>{product.name}</Text>
-        <Text style={styles.price}>{formatCurrency(price)}</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{product.variants.length > 1 && new Set(prices).size > 1 ? "from " : ""}{formatCurrency(price)}</Text>
+          {showStrike ? <Text style={styles.strike}>{formatCurrency(product.regularPrice)}</Text> : null}
+        </View>
+        {!outOfStock && product.stock <= 5 ? <Text style={styles.lowStock}>Only {product.stock} left</Text> : null}
         {product.variants.length > 0 && (
           <Text style={styles.variants}>{product.variants.length} variants</Text>
         )}
@@ -128,10 +132,26 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 17,
   },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+    gap: 6,
+  },
   price: {
     color: colors.primaryDark,
     fontSize: 14,
     fontWeight: "800",
+  },
+  strike: {
+    color: colors.muted,
+    fontSize: 11,
+    textDecorationLine: "line-through",
+  },
+  lowStock: {
+    color: "#b45309",
+    fontSize: 11,
+    fontWeight: "600",
   },
   variants: {
     color: colors.muted,

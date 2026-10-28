@@ -53,10 +53,14 @@ type FormState = {
   profitMargin: string;
   marginType: string;
   stock: string;
+  reorderPoint: string;
   sku: string;
   barcode: string;
   receiptNumber: string;
   published: boolean;
+  availableInPos: boolean;
+  visibleOnline: boolean;
+  tag: string;
   isHotDeal: boolean;
   isBestSeller: boolean;
   isFeatured: boolean;
@@ -80,16 +84,30 @@ function getInitialForm(product?: Product | null): FormState {
       profitMargin: "",
       marginType: "percentage",
       stock: "",
+      reorderPoint: "",
       sku: generateProductSku(),
       barcode: generateBarcodeCode(),
       receiptNumber: "",
       published: true,
+      availableInPos: true,
+      visibleOnline: true,
+      tag: "",
       isHotDeal: false,
       isBestSeller: false,
       isFeatured: false,
       dealLabel: "",
     };
   }
+
+  // One selling price (price = salePrice, like the web form). Older products may have a price
+  // that cost + margin does not reproduce: express it as a flat margin so nothing changes on save.
+  const selling = product.salePrice > 0 ? product.salePrice : product.price;
+  const cost = product.costPrice ?? 0;
+  const marginValue = product.profitMargin ?? 0;
+  const marginKind = product.marginType ?? "percentage";
+  const derived = marginKind === "flat" ? cost + marginValue : cost * (1 + marginValue / 100);
+  const keepMargin = !(selling > 0 && Math.abs(derived - selling) > 0.01);
+  const flatMargin = Math.round((selling - cost) * 100) / 100;
 
   return {
     name: product.name,
@@ -98,18 +116,24 @@ function getInitialForm(product?: Product | null): FormState {
     categoryId: product.categoryId ? String(product.categoryId) : "",
     vendorId: product.vendorId ? String(product.vendorId) : "",
     locationId: product.locationId ? String(product.locationId) : "",
-    price: product.price ? String(product.price) : "",
-    salePrice: product.salePrice ? String(product.salePrice) : "",
+    price: selling ? String(selling) : "",
+    salePrice: selling ? String(selling) : "",
     offerPrice: product.offerPrice ? String(product.offerPrice) : "",
     offerType: product.offerType ?? "percentage",
     costPrice: product.costPrice ? String(product.costPrice) : "",
-    profitMargin: product.profitMargin ? String(product.profitMargin) : "",
-    marginType: product.marginType ?? "percentage",
+    profitMargin: keepMargin
+      ? (marginValue ? String(marginValue) : "")
+      : flatMargin > 0 ? String(flatMargin) : "",
+    marginType: keepMargin ? marginKind : flatMargin > 0 ? "flat" : marginKind,
     stock: String(product.stock),
+    reorderPoint: product.reorderPoint !== undefined ? String(product.reorderPoint) : "",
     sku: product.sku ?? "",
     barcode: product.barcode ?? generateBarcodeCode(),
     receiptNumber: product.receiptNumber ?? "",
     published: product.published,
+    availableInPos: product.availableInPos ?? true,
+    visibleOnline: product.visibleOnline ?? true,
+    tag: product.tag ?? "",
     isHotDeal: Boolean(product.isHotDeal),
     isBestSeller: Boolean(product.isBestSeller),
     isFeatured: Boolean(product.isFeatured),
@@ -195,17 +219,34 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
     void loadLookups();
   }, []);
 
-  useEffect(() => {
-    const cost = Number(form.costPrice);
-    const margin = Number(form.profitMargin);
-    if (!Number.isFinite(cost) || !Number.isFinite(margin) || cost < 0 || margin < 0) return;
+  // Selling price follows cost + margin (as on the web) — recalculated only when the user edits
+  // cost/margin, so opening an existing product never rewrites its saved price.
+  const updatePricing = (patch: Partial<Pick<FormState, "costPrice" | "profitMargin" | "marginType">>) => {
+    setForm((current) => {
+      const next = { ...current, ...patch };
+      const cost = Number(next.costPrice);
+      const margin = Number(next.profitMargin);
+      if (next.costPrice.trim() === "" || !Number.isFinite(cost) || !Number.isFinite(margin) || cost < 0 || margin < 0) {
+        return next;
+      }
+      const sale = next.marginType === "flat" ? cost + margin : cost + (cost * margin) / 100;
+      if (!Number.isFinite(sale) || sale <= 0) return next;
+      const fixed = (Math.round(sale * 100) / 100).toFixed(2);
+      return { ...next, salePrice: fixed, price: fixed };
+    });
+  };
 
-    const sale =
-      form.marginType === "flat" ? cost + margin : cost + (cost * margin) / 100;
-    if (Number.isFinite(sale)) {
-      setForm((current) => ({ ...current, salePrice: sale.toFixed(2) }));
-    }
-  }, [form.costPrice, form.profitMargin, form.marginType]);
+  // Editing the selling price directly keeps the margin in sync with it.
+  const updateSellingPrice = (value: string) => {
+    setForm((current) => {
+      const next = { ...current, salePrice: value, price: value };
+      const sale = Number(value);
+      const cost = Number(current.costPrice);
+      if (!value.trim() || !Number.isFinite(sale) || !Number.isFinite(cost) || cost <= 0) return next;
+      const margin = current.marginType === "flat" ? sale - cost : ((sale - cost) / cost) * 100;
+      return { ...next, profitMargin: margin >= 0 ? String(Math.round(margin * 100) / 100) : "" };
+    });
+  };
 
   useEffect(() => {
     if (variants.length === 0) return;
@@ -375,7 +416,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
   const handleGenerateVariants = () => {
     const generated = generateVariantDrafts({
       attributes: productAttributes,
-      basePrice: Number(form.price) || 0,
+      basePrice: Number(form.salePrice) || 0,
       baseSalePrice: Number(form.salePrice) || 0,
       baseOfferPrice: form.offerPrice ? Number(form.offerPrice) : undefined,
       baseOfferType: form.offerPrice ? form.offerType : undefined,
@@ -399,6 +440,8 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
                   : field === "offerPrice"
                   ? (value === "" ? undefined : Number(value))
                   : Number(value),
+              // A variant has one selling price (price = sale price, as on the web).
+              ...(field === "salePrice" ? { price: Number(value) } : {}),
             }
           : variant,
       ),
@@ -410,9 +453,55 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.categoryId || !form.locationId || !form.price || !form.salePrice) {
-      setError("Name, category, location, price, and sale price are required.");
+    const fail = (message: string) => {
+      setError(message);
       return;
+    };
+
+    const sellingPrice = Math.round((Number(form.salePrice) || 0) * 100) / 100;
+    const positiveVariantPrices = variants.map((v) => v.salePrice || v.price).filter((v) => v > 0);
+    const basePrice = sellingPrice > 0
+      ? sellingPrice
+      : positiveVariantPrices.length ? Math.min(...positiveVariantPrices) : 0;
+    const bundleOverride = isBundle && bundlePriceOverride ? Number(bundlePriceOverride) : 0;
+    const effectivePrice = bundleOverride > 0 ? bundleOverride : basePrice;
+    const costNum = form.costPrice.trim() === "" ? undefined : Number(form.costPrice);
+    const offerNum = form.offerPrice.trim() === "" ? 0 : Number(form.offerPrice);
+    const reorderNum = form.reorderPoint.trim() === "" ? undefined : Number(form.reorderPoint);
+
+    const missing: string[] = [];
+    if (!form.name.trim()) missing.push("product name");
+    if (!form.categoryId) missing.push("category");
+    if (!form.locationId) missing.push("warehouse");
+    if (missing.length) return fail(`Please fill in: ${missing.join(", ")}.`);
+    if (!(effectivePrice > 0)) return fail("Selling price must be greater than 0 (set a cost and margin, a price, or a variant price).");
+    if (costNum !== undefined && (!Number.isFinite(costNum) || costNum < 0)) return fail("Cost price cannot be negative.");
+    if (form.profitMargin.trim() !== "" && Number(form.profitMargin) < 0) return fail("Profit margin cannot be negative.");
+    if (!Number.isFinite(offerNum) || offerNum < 0) return fail("Offer cannot be negative.");
+    if (form.offerType === "percentage" && offerNum > 100) return fail("A percentage offer cannot be more than 100%.");
+    if (reorderNum !== undefined && (!Number.isInteger(reorderNum) || reorderNum < 0)) {
+      return fail("Low-stock alert must be a whole number, 0 or more (0 turns the alert off).");
+    }
+    const badVariantOffer = variants.find(
+      (v) => (v.offerType ?? "percentage") === "percentage" && (v.offerPrice ?? 0) > 100,
+    );
+    if (badVariantOffer) return fail(`Variant "${badVariantOffer.name}": a percentage offer cannot be more than 100%.`);
+    const negativeVariant = variants.find((v) => (v.salePrice || 0) < 0 || (v.stock || 0) < 0);
+    if (negativeVariant) return fail(`Variant "${negativeVariant.name}": price and stock cannot be negative.`);
+
+    // Duplicate codes inside this product (the server also checks other products and answers 422).
+    const seenSkus = new Map<string, string>();
+    const productSku = form.sku.trim().toLowerCase();
+    for (const v of variants) {
+      const key = (v.sku ?? "").trim().toLowerCase();
+      if (!key) continue;
+      if (key === productSku) return fail(`Variant SKU "${v.sku}" matches the product SKU.`);
+      if (seenSkus.has(key)) return fail(`Variant SKU "${v.sku}" is used by more than one variant.`);
+      seenSkus.set(key, v.name);
+    }
+    if (isBundle && bundleItems.length === 0) return fail("Add at least one product to the bundle.");
+    if (isBundle && product && bundleItems.some((item) => item.productId === product.id)) {
+      return fail("A bundle cannot contain itself.");
     }
 
     setSaving(true);
@@ -424,15 +513,20 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
       category: form.category,
       categoryId: Number(form.categoryId),
       locationId: Number(form.locationId),
-      price: Number(form.price),
-      salePrice: Number(form.salePrice),
-      offerPrice: form.offerPrice ? Number(form.offerPrice) : undefined,
-      offerType: form.offerPrice ? form.offerType : undefined,
-      costPrice: form.costPrice ? Number(form.costPrice) : undefined,
+      // The web form sends one selling price as both price and sale_price.
+      price: basePrice,
+      salePrice: basePrice,
+      offerPrice: offerNum > 0 ? offerNum : undefined,
+      offerType: offerNum > 0 ? form.offerType : undefined,
+      costPrice: costNum,
       profitMargin: form.profitMargin ? Number(form.profitMargin) : undefined,
-      marginType: form.marginType,
+      marginType: form.marginType || "percentage",
       stock: Number(form.stock) || 0,
+      reorderPoint: reorderNum ?? (product ? 0 : undefined),
       published: form.published,
+      availableInPos: form.availableInPos,
+      visibleOnline: form.visibleOnline,
+      tag: product ? form.tag.trim() : form.tag.trim() || undefined,
       isHotDeal: form.isHotDeal,
       isBestSeller: form.isBestSeller,
       isFeatured: form.isFeatured,
@@ -442,7 +536,10 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
       receiptNumber: form.receiptNumber.trim(),
       vendorId: form.vendorId ? Number(form.vendorId) : undefined,
       attributes: productAttributes,
-      variants,
+      variants: variants.map((variant) => {
+        const vPrice = variant.salePrice || variant.price;
+        return { ...variant, price: vPrice, salePrice: vPrice };
+      }),
       localImages,
       keepImages: existingImages.map((image) => image.path),
       deleteImages: product ? existingImages.length === 0 && localImages.length === 0 : false,
@@ -475,10 +572,9 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
   }
 
   const salePreview = Number(form.salePrice) || 0;
-  const priceNum = Number(form.price) || 0;
-  const hasDiscount = priceNum > 0 && salePreview > 0 && salePreview < priceNum;
-  const discountPct = hasDiscount ? Math.round(((priceNum - salePreview) / priceNum) * 100) : 0;
+  const costPreview = Number(form.costPrice) || 0;
   const offerNum = Number(form.offerPrice) || 0;
+  const currencySymbol = formatCurrency(0).replace(/[\d.,\s]/g, "") || currency;
   const offerFinalPrice = offerNum > 0
     ? (form.offerType === "percentage"
         ? salePreview * (1 - offerNum / 100)
@@ -608,28 +704,14 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
 
       {/* ── SECTION 3: Pricing & Stock ───────────────────────── */}
       <SectionCard step={3} icon="pricetag-outline" title="Pricing & Stock">
-        <View style={s.row2}>
-          <View style={s.rowItem}>
-            <InputField label="Selling price" icon="cash-outline" required>
-              <CurrencyInput
-                value={form.price}
-                onChangeText={(v) => setField("price", v)}
-                currency={currency}
-                placeholder="0.00"
-              />
-            </InputField>
-          </View>
-          <View style={s.rowItem}>
-            <InputField label="Cost price" icon="card-outline">
-              <CurrencyInput
-                value={form.costPrice}
-                onChangeText={(v) => setField("costPrice", v)}
-                currency={currency}
-                placeholder="0.00"
-              />
-            </InputField>
-          </View>
-        </View>
+        <InputField label="Cost price" icon="card-outline">
+          <CurrencyInput
+            value={form.costPrice}
+            onChangeText={(v) => updatePricing({ costPrice: v })}
+            currency={currency}
+            placeholder="0.00"
+          />
+        </InputField>
 
         {/* Margin row */}
         <View style={s.marginBlock}>
@@ -638,13 +720,13 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
             <View style={s.segmentPill}>
               <Pressable
                 style={[s.segPillItem, form.marginType === "percentage" && s.segPillActive]}
-                onPress={() => setField("marginType", "percentage")}
+                onPress={() => updatePricing({ marginType: "percentage" })}
               >
                 <Text style={[s.segPillText, form.marginType === "percentage" && s.segPillTextActive]}>%</Text>
               </Pressable>
               <Pressable
                 style={[s.segPillItem, form.marginType === "flat" && s.segPillActive]}
-                onPress={() => setField("marginType", "flat")}
+                onPress={() => updatePricing({ marginType: "flat" })}
               >
                 <Text style={[s.segPillText, form.marginType === "flat" && s.segPillTextActive]}>Flat</Text>
               </Pressable>
@@ -652,7 +734,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
           </View>
           <TextInput
             value={form.profitMargin}
-            onChangeText={(v) => setField("profitMargin", v)}
+            onChangeText={(v) => updatePricing({ profitMargin: v })}
             keyboardType="decimal-pad"
             placeholder={form.marginType === "percentage" ? "e.g. 20" : "e.g. 50"}
             placeholderTextColor={colors.muted}
@@ -660,10 +742,15 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
           />
         </View>
 
-        <InputField label="Sale / discounted price" icon="flash-outline" required>
+        <InputField
+          label="Selling price"
+          icon="cash-outline"
+          required={variants.length === 0}
+          hint={form.costPrice ? "Cost + margin" : variants.length > 0 ? "Or set per variant" : undefined}
+        >
           <CurrencyInput
             value={form.salePrice}
-            onChangeText={(v) => setField("salePrice", v)}
+            onChangeText={updateSellingPrice}
             currency={currency}
             placeholder="0.00"
           />
@@ -675,12 +762,12 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
             <Ionicons name="storefront-outline" size={14} color="#166534" />
             <Text style={s.priceSummaryLabel}>Selling at</Text>
             <Text style={s.priceSummaryValue}>{formatCurrency(salePreview)}</Text>
-            {hasDiscount && (
-              <View style={s.discountBadge}>
-                <Text style={s.discountBadgeText}>-{discountPct}%</Text>
-              </View>
-            )}
           </View>
+          {costPreview > 0 && salePreview > 0 && salePreview < costPreview ? (
+            <Text style={[s.stockNote, { color: colors.danger }]}>
+              Below cost — you would lose {formatCurrency(costPreview - salePreview)} per unit.
+            </Text>
+          ) : null}
         </View>
 
         {/* Offer / Discount */}
@@ -698,7 +785,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
                 style={[s.segPillItem, form.offerType === "flat" && s.segPillActive]}
                 onPress={() => setField("offerType", "flat")}
               >
-                <Text style={[s.segPillText, form.offerType === "flat" && s.segPillTextActive]}>Flat $</Text>
+                <Text style={[s.segPillText, form.offerType === "flat" && s.segPillTextActive]}>Flat {currencySymbol}</Text>
               </Pressable>
             </View>
           </View>
@@ -706,7 +793,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
             value={form.offerPrice}
             onChangeText={(v) => setField("offerPrice", v)}
             keyboardType="decimal-pad"
-            placeholder={form.offerType === "percentage" ? "e.g. 10 (10% off)" : "e.g. 10 ($10 off)"}
+            placeholder={form.offerType === "percentage" ? "e.g. 10 (10% off, max 100)" : `e.g. 10 (${currencySymbol}10 off)`}
             placeholderTextColor={colors.muted}
             style={s.input}
           />
@@ -740,19 +827,58 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
             <Text style={s.stockNote}>Stock is managed per variant below</Text>
           )}
         </InputField>
+
+        <InputField label="Low-stock alert at" icon="alert-circle-outline" hint="0 = alert off">
+          <TextInput
+            value={form.reorderPoint}
+            onChangeText={(v) => setField("reorderPoint", v.replace(/[^0-9]/g, ""))}
+            keyboardType="number-pad"
+            placeholder={product ? "0" : "Company default"}
+            placeholderTextColor={colors.muted}
+            style={s.input}
+          />
+        </InputField>
       </SectionCard>
 
       {/* ── SECTION 4: Storefront Flags ──────────────────────── */}
       <SectionCard step={4} icon="star-outline" title="Storefront">
         <ToggleCard
-          icon="globe-outline"
+          icon="checkmark-done-outline"
           label="Published"
-          description="Visible on your storefront"
+          description="Off = draft (hidden everywhere)"
           value={form.published}
           onChange={(v) => setField("published", v)}
           accentColor="#2563eb"
           accentBg="#dbeafe"
         />
+        <ToggleCard
+          icon="globe-outline"
+          label="Visible online"
+          description="Show on the online storefront"
+          value={form.visibleOnline}
+          onChange={(v) => setField("visibleOnline", v)}
+          accentColor="#0891b2"
+          accentBg="#cffafe"
+        />
+        <ToggleCard
+          icon="cart-outline"
+          label="Available in POS"
+          description="Can be sold at the point of sale"
+          value={form.availableInPos}
+          onChange={(v) => setField("availableInPos", v)}
+          accentColor={colors.primaryDark}
+          accentBg="#dcfce7"
+        />
+        <InputField label="Tag" icon="bookmark-outline" hint="e.g. New, Eid collection">
+          <TextInput
+            value={form.tag}
+            onChangeText={(v) => setField("tag", v.slice(0, 50))}
+            placeholder="Optional label"
+            placeholderTextColor={colors.muted}
+            maxLength={50}
+            style={s.input}
+          />
+        </InputField>
         <ToggleCard
           icon="flame-outline"
           label="Hot deal"
@@ -1037,16 +1163,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
                   <View style={s.rowItem}>
                     <Text style={s.fieldLabel}>Price</Text>
                     <CurrencyInput
-                      value={String(variant.price)}
-                      onChangeText={(v) => updateVariant(variant.id, "price", v)}
-                      currency={currency}
-                      placeholder="0.00"
-                    />
-                  </View>
-                  <View style={s.rowItem}>
-                    <Text style={s.fieldLabel}>Sale price</Text>
-                    <CurrencyInput
-                      value={String(variant.salePrice)}
+                      value={String(variant.salePrice || variant.price || "")}
                       onChangeText={(v) => updateVariant(variant.id, "salePrice", v)}
                       currency={currency}
                       placeholder="0.00"
@@ -1066,7 +1183,7 @@ export function ProductForm({ product, onSaved, onCancel }: ProductFormProps) {
                           style={[s.segPillItem, variant.offerType === "flat" && s.segPillActive]}
                           onPress={() => updateVariant(variant.id, "offerType", "flat")}
                         >
-                          <Text style={[s.segPillText, variant.offerType === "flat" && s.segPillTextActive]}>$</Text>
+                          <Text style={[s.segPillText, variant.offerType === "flat" && s.segPillTextActive]}>{currencySymbol}</Text>
                         </Pressable>
                       </View>
                     </View>

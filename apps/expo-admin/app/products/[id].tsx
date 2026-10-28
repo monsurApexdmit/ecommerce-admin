@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,17 +17,21 @@ import { getImageUrl } from "@/lib/images";
 import { formatDateTime } from "@/lib/format";
 import { useCurrency } from "@/context/CurrencyContext";
 import { getCategories, getVendors, getWarehouses } from "@/services/catalog";
-import { deleteProduct, getProductById, updateProductStatus } from "@/services/products";
+import {
+  deleteProduct,
+  getApiErrorMessage,
+  getDisplayPrice,
+  getProductById,
+  getRealVariants,
+  updateProductStatus,
+} from "@/services/products";
 import type { Product } from "@/types/product";
+import { getStockState, STOCK_STATE_TONE } from "@/components/products/ProductListItem";
+import { StockAdjustSheet, type StockAdjustTarget } from "@/components/products/StockAdjustSheet";
 import type { Category, Vendor, Warehouse } from "@/types/catalog";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
 
-const STATUS_ACCENT: Record<string, { bg: string; text: string; dot: string }> = {
-  Selling:      { bg: "#dcfce7", text: "#166534", dot: "#22c55e" },
-  "Out of Stock": { bg: "#fef3c7", text: "#92400e", dot: "#f59e0b" },
-  Discontinued: { bg: "#fee2e2", text: "#991b1b", dot: "#ef4444" },
-};
 
 export default function ProductDetailScreen() {
   const { formatCurrency } = useCurrency();
@@ -40,6 +44,7 @@ export default function ProductDetailScreen() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const productId = Number(params.id);
 
@@ -66,7 +71,32 @@ export default function ProductDetailScreen() {
     void load();
   }, [load, productId]);
 
-  const { canRead } = useAuth();
+  const realVariants = useMemo(() => (product ? getRealVariants(product) : []), [product]);
+
+  // Per-warehouse on-hand quantities: product.stockByLocation (all locations, 0 included),
+  // and each variant's own inventory rows.
+  const adjustTargets = useMemo<StockAdjustTarget[]>(() => {
+    if (!product) return [];
+    if (realVariants.length > 0) {
+      return realVariants.map((v) => ({
+        variantId: Number(v.id),
+        label: v.name,
+        byLocation: Object.fromEntries((v.inventory ?? []).map((row) => [row.warehouseId, row.quantity])),
+      }));
+    }
+    return [{
+      variantId: null,
+      label: product.name,
+      byLocation: Object.fromEntries((product.stockByLocation ?? []).map((row) => [row.locationId, row.quantity])),
+    }];
+  }, [product, realVariants]);
+
+  const adjustLocations = useMemo(() => {
+    if (warehouses.length > 0) return warehouses.map((w) => ({ id: w.id, name: w.name, isDefault: w.isDefault }));
+    return (product?.stockByLocation ?? []).map((row) => ({ id: row.locationId, name: row.locationName }));
+  }, [warehouses, product]);
+
+  const { canRead, canWrite } = useAuth();
   if (!canRead('Products')) return <AccessDenied />;
 
   const handleDelete = () => {
@@ -76,8 +106,12 @@ export default function ProductDetailScreen() {
       {
         text: "Delete", style: "destructive",
         onPress: async () => {
-          await deleteProduct(product.id);
-          router.replace("/(tabs)/products");
+          try {
+            await deleteProduct(product.id);
+            router.replace("/(tabs)/products");
+          } catch (error: any) {
+            Alert.alert("Delete failed", getApiErrorMessage(error, "Could not delete the product."));
+          }
         },
       },
     ]);
@@ -89,6 +123,8 @@ export default function ProductDetailScreen() {
       setPublishing(true);
       await updateProductStatus(product.id, !product.published);
       await load();
+    } catch (error: any) {
+      Alert.alert("Update failed", getApiErrorMessage(error, "Could not update the product."));
     } finally {
       setPublishing(false);
     }
@@ -111,13 +147,19 @@ export default function ProductDetailScreen() {
     );
   }
 
-  const statusAccent = STATUS_ACCENT[product.status] ?? { bg: "#f1f5f9", text: "#475569", dot: "#94a3b8" };
-  const basePrice = product.salePrice > 0 ? product.salePrice : product.price;
-  const displayPrice = product.offerPrice && product.offerPrice > 0 && product.offerPrice < basePrice
-    ? product.offerPrice
-    : basePrice;
-  const hasDiscount = displayPrice < basePrice;
-  const hasOffer = Boolean(product.offerPrice && product.offerPrice > 0 && product.offerPrice < basePrice);
+  const stockTone = STOCK_STATE_TONE[getStockState(product)];
+  const statusAccent = { bg: stockTone.bg, text: stockTone.color, dot: stockTone.accent };
+  // Offer only while the server reports it active (currentPrice already applies it).
+  const { price: displayPrice, basePrice, hasOffer } = getDisplayPrice(product);
+  const hasDiscount = hasOffer;
+  const offerLabel = product.offerPrice
+    ? product.offerType === "percentage"
+      ? `${product.offerPrice}% off`
+      : `${formatCurrency(product.offerPrice)} off`
+    : null;
+  const stockRows = product.stockByLocation && product.stockByLocation.length > 0
+    ? product.stockByLocation
+    : warehouses.map((w) => ({ locationId: w.id, locationName: w.name, quantity: w.id === product.locationId ? product.stock : 0 }));
   const allImages = product.images.length > 0
     ? product.images.map((img) => img.path)
     : product.image ? [product.image] : [];
@@ -161,12 +203,14 @@ export default function ProductDetailScreen() {
           <View style={s.heroBadges}>
             <View style={[s.heroBadge, { backgroundColor: statusAccent.bg }]}>
               <View style={[s.heroBadgeDot, { backgroundColor: statusAccent.dot }]} />
-              <Text style={[s.heroBadgeText, { color: statusAccent.text }]}>{product.status}</Text>
+              <Text style={[s.heroBadgeText, { color: statusAccent.text }]}>{stockTone.label}</Text>
             </View>
             {product.published ? (
               <View style={[s.heroBadge, { backgroundColor: "#dbeafe" }]}>
                 <Ionicons name="checkmark-circle" size={11} color="#1d4ed8" />
-                <Text style={[s.heroBadgeText, { color: "#1d4ed8" }]}>Published</Text>
+                <Text style={[s.heroBadgeText, { color: "#1d4ed8" }]}>
+                  {product.visibleOnline === false ? "Hidden online" : "Published"}
+                </Text>
               </View>
             ) : (
               <View style={[s.heroBadge, { backgroundColor: "#f1f5f9" }]}>
@@ -210,7 +254,22 @@ export default function ProductDetailScreen() {
             ) : null}
           </View>
 
-          {/* ── Special flags ── */}
+          {/* ── Channels + flags ── */}
+          <View style={s.flagsRow}>
+            <FlagChip
+              icon="cart-outline"
+              label={product.availableInPos === false ? "Not in POS" : "Available in POS"}
+              color={product.availableInPos === false ? "#64748b" : "#047857"}
+              bg={product.availableInPos === false ? "#f1f5f9" : "#ecfdf5"}
+            />
+            <FlagChip
+              icon="globe-outline"
+              label={product.published && product.visibleOnline !== false ? "Visible online" : "Hidden online"}
+              color={product.published && product.visibleOnline !== false ? "#0e7490" : "#64748b"}
+              bg={product.published && product.visibleOnline !== false ? "#ecfeff" : "#f1f5f9"}
+            />
+            {product.tag ? <FlagChip icon="bookmark-outline" label={product.tag} color="#6d28d9" bg="#f5f3ff" /> : null}
+          </View>
           {(product.isFeatured || product.isBestSeller || product.isHotDeal) ? (
             <View style={s.flagsRow}>
               {product.isFeatured && <FlagChip icon="star-outline" label="Featured" color="#7c3aed" bg="#f5f3ff" />}
@@ -224,6 +283,36 @@ export default function ProductDetailScreen() {
             <ActionBtn icon="create-outline" label="Edit" onPress={() => router.push(`/products/${product.id}/edit`)} />
             <ActionBtn icon="chatbubble-ellipses-outline" label="Reviews" onPress={() => router.push(`/products/${product.id}/reviews`)} />
             <ActionBtn icon="barcode-outline" label="Barcode" onPress={() => router.push(`/products/${product.id}/barcode`)} />
+            {!product.isBundle && canWrite("Inventory") ? (
+              <ActionBtn icon="swap-vertical-outline" label="Adjust stock" onPress={() => setAdjustOpen(true)} />
+            ) : null}
+          </View>
+
+          {/* ── Stock by warehouse ── */}
+          <View style={s.card}>
+            <View style={s.cardTitleRow}>
+              <Text style={s.cardTitle}>Stock by warehouse</Text>
+              <View style={[s.stockPill, { backgroundColor: stockTone.bg }]}>
+                <Text style={[s.stockPillText, { color: stockTone.color }]}>{stockTone.label} · {product.stock}</Text>
+              </View>
+            </View>
+            {stockRows.length === 0 ? (
+              <Text style={s.mutedText}>No warehouses yet.</Text>
+            ) : (
+              stockRows.map((row) => (
+                <View key={row.locationId} style={s.locRow}>
+                  <Ionicons name="location-outline" size={14} color={colors.muted} />
+                  <Text style={s.locName} numberOfLines={1}>{row.locationName || `Location #${row.locationId}`}</Text>
+                  <Text style={[s.locQty, row.quantity <= 0 && { color: colors.danger }]}>{row.quantity}</Text>
+                </View>
+              ))
+            )}
+            <Text style={s.mutedText}>
+              {(product.reorderPoint ?? 0) > 0
+                ? `Low-stock alert at ${product.reorderPoint} units`
+                : "Low-stock alert off (reorder point 0)"}
+              {product.isBundle ? " · Bundle stock = complete kits from its components" : ""}
+            </Text>
           </View>
 
           {/* ── Info card ── */}
@@ -233,16 +322,23 @@ export default function ProductDetailScreen() {
             <InfoRow icon="storefront-outline" label="Vendor"    value={vendorName} />
             <InfoRow icon="location-outline"   label="Location"  value={locationName} />
             <View style={s.divider} />
-            <InfoRow icon="layers-outline"     label="Stock"     value={String(product.stock)} accent={product.stock < 5 ? "#ef4444" : undefined} />
+            <InfoRow icon="layers-outline"     label="Stock"     value={String(product.stock)} accent={stockTone.label !== "In stock" ? stockTone.color : undefined} />
             <InfoRow icon="pricetag-outline"   label="SKU"       value={product.sku || "—"} mono />
             <InfoRow icon="barcode-outline"    label="Barcode"   value={product.barcode || "—"} mono />
             <InfoRow icon="receipt-outline"    label="Receipt #" value={product.receiptNumber || "—"} mono />
             <View style={s.divider} />
-            <InfoRow icon="cash-outline"       label="List price" value={formatCurrency(product.price)} />
-            <InfoRow icon="cart-outline"       label="Sale price" value={formatCurrency(product.salePrice || product.price)} accent={product.salePrice < product.price ? colors.primaryDark : undefined} />
-            {hasOffer && (
-              <InfoRow icon="flash-outline" label="Offer price" value={formatCurrency(product.offerPrice!)} accent="#c2410c" />
-            )}
+            <InfoRow icon="cart-outline"       label="Selling price" value={formatCurrency(basePrice)} />
+            {product.costPrice !== undefined ? (
+              <InfoRow icon="card-outline" label="Cost price" value={formatCurrency(product.costPrice)} />
+            ) : null}
+            {offerLabel ? (
+              <InfoRow
+                icon="flash-outline"
+                label={hasOffer ? "Offer (active)" : "Offer (not active)"}
+                value={hasOffer ? `${offerLabel} · ${formatCurrency(displayPrice)}` : offerLabel}
+                accent={hasOffer ? "#c2410c" : colors.muted}
+              />
+            ) : null}
             <View style={s.divider} />
             <InfoRow icon="calendar-outline"   label="Created"   value={createdLabel} />
             <InfoRow icon="time-outline"       label="Updated"   value={updatedLabel} />
@@ -285,9 +381,7 @@ export default function ProductDetailScreen() {
                     </View>
                   </View>
                   {(() => {
-                    const vBase = v.salePrice || v.price;
-                    const vDisplay = v.offerPrice && v.offerPrice > 0 && v.offerPrice < vBase ? v.offerPrice : vBase;
-                    const vHasOffer = vDisplay < vBase;
+                    const { price: vDisplay, basePrice: vBase, hasOffer: vHasOffer } = getDisplayPrice(v);
                     return (
                       <View style={{ alignItems: "flex-end" }}>
                         <Text style={[s.variantPrice, vHasOffer && { color: "#c2410c" }]}>{formatCurrency(vDisplay)}</Text>
@@ -299,6 +393,23 @@ export default function ProductDetailScreen() {
               ))}
             </View>
           ) : null}
+
+          <StockAdjustSheet
+            visible={adjustOpen}
+            productId={product.id}
+            productName={product.name}
+            targets={adjustTargets}
+            locations={adjustLocations}
+            onClose={() => setAdjustOpen(false)}
+            onDone={(result) => {
+              setAdjustOpen(false);
+              Alert.alert(
+                "Stock adjusted",
+                `${result.number ? `${result.number} · ` : ""}${result.variantName ? `${result.variantName}: ` : ""}${result.before} → ${result.after}`,
+              );
+              void load();
+            }}
+          />
 
           {/* ── Bottom actions ── */}
           <View style={s.bottomActions}>
@@ -439,6 +550,16 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10,
   },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginBottom: 2 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  stockPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  stockPillText: { fontSize: 12, fontWeight: "800" },
+  mutedText: { color: colors.muted, fontSize: 12 },
+  locRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: colors.background, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+  },
+  locName: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "600" },
+  locQty: { color: colors.text, fontSize: 14, fontWeight: "800" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
 
   // Info rows

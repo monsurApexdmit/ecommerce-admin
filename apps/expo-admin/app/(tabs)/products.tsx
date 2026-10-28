@@ -23,12 +23,14 @@ import { resolveNotificationRoute } from "@/lib/notification-routing";
 import { getAttributes, getCategories, getVendors, getWarehouses } from "@/services/catalog";
 import {
   deleteProduct,
+  getApiErrorMessage,
+  getDisplayPrice,
   getProducts,
   getProductStats,
   updateProductStatus,
 } from "@/services/products";
 import type { Attribute, Category, Vendor, Warehouse } from "@/types/catalog";
-import type { Product, ProductStats } from "@/types/product";
+import type { Product, ProductListParams, ProductListTab, ProductStats, ProductTabCounts } from "@/types/product";
 import { ProductListItem } from "@/components/products/ProductListItem";
 import { ProductStatusPill } from "@/components/products/ProductStatusPill";
 import { useAuth } from "@/context/AuthContext";
@@ -38,10 +40,32 @@ type SortValue =
   | "default"
   | "price-asc"
   | "price-desc"
+  | "stock-asc"
+  | "stock-desc"
+  | "name"
   | "published"
   | "unpublished"
   | "date-added"
   | "date-updated";
+
+/** Sorts the API can apply across all pages (others are applied to the loaded rows). */
+const SERVER_SORTS: Partial<Record<SortValue, NonNullable<ProductListParams["sort"]>>> = {
+  "price-asc": "price-asc",
+  "price-desc": "price-desc",
+  "stock-asc": "stock-asc",
+  "stock-desc": "stock-desc",
+  name: "name",
+  "date-added": "recent",
+};
+
+const STOCK_TABS: Array<{ key: ProductListTab; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "ok", label: "In stock" },
+  { key: "low", label: "Low" },
+  { key: "out", label: "Out" },
+  { key: "hidden", label: "Hidden" },
+  { key: "draft", label: "Draft" },
+];
 
 export default function ProductsTab() {
   const router = useRouter();
@@ -68,6 +92,8 @@ export default function ProductsTab() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
   const [selectedPublished, setSelectedPublished] = useState<string>("");
   const [sortValue, setSortValue] = useState<SortValue>("default");
+  const [stockTab, setStockTab] = useState<ProductListTab>("all");
+  const [tabCounts, setTabCounts] = useState<ProductTabCounts | null>(null);
   const [notificationVisible, setNotificationVisible] = useState(false);
   const searchActive = search.trim().length > 0;
   const notificationPreview = useMemo(() => notifications.slice(0, 5), [notifications]);
@@ -102,21 +128,20 @@ export default function ProductsTab() {
         search: debouncedSearch || undefined,
         categoryId: selectedCategoryId ? Number(selectedCategoryId) : undefined,
         vendorId: selectedVendorId ? Number(selectedVendorId) : undefined,
-        locationId: selectedWarehouseId ? Number(selectedWarehouseId) : undefined,
+        // Stock, stock state and tabs are evaluated for the chosen warehouse.
+        stockLocationId: selectedWarehouseId ? Number(selectedWarehouseId) : undefined,
+        published: selectedPublished ? selectedPublished === "published" : undefined,
+        tab: stockTab,
+        sort: SERVER_SORTS[sortValue],
       });
 
-      let items = result.data;
-      if (selectedPublished) {
-        items = items.filter((item) =>
-          selectedPublished === "published" ? item.published : !item.published,
-        );
-      }
-
+      const items = result.data;
       setProducts((current) => (mode === "append" ? [...current, ...items] : items));
+      if (result.tabCounts) setTabCounts(result.tabCounts);
       setPage(result.pagination.page);
       setHasNext(result.pagination.hasNext);
     },
-    [debouncedSearch, selectedCategoryId, selectedVendorId, selectedWarehouseId, selectedPublished],
+    [debouncedSearch, selectedCategoryId, selectedVendorId, selectedWarehouseId, selectedPublished, stockTab, sortValue],
   );
 
   const loadInitial = useCallback(async () => {
@@ -158,29 +183,17 @@ export default function ProductsTab() {
     }
   }, [hasNext, loadingMore, loading, loadPage, page]);
 
-  const getEffectivePrice = (p: typeof products[0]) => {
-    const base = p.salePrice > 0 ? p.salePrice : p.price;
-    if (!p.offerPrice || p.offerPrice <= 0) return base;
-    const final = p.offerType === "percentage" ? base * (1 - p.offerPrice / 100) : base - p.offerPrice;
-    return final > 0 && final < base ? final : base;
-  };
-
   const sortedProducts = useMemo(() => {
     const next = [...products];
     switch (sortValue) {
       case "price-asc":
-        return next.sort((a, b) => getEffectivePrice(a) - getEffectivePrice(b));
+        return next.sort((a, b) => getDisplayPrice(a).price - getDisplayPrice(b).price);
       case "price-desc":
-        return next.sort((a, b) => getEffectivePrice(b) - getEffectivePrice(a));
+        return next.sort((a, b) => getDisplayPrice(b).price - getDisplayPrice(a).price);
       case "published":
         return next.sort((a, b) => Number(b.published) - Number(a.published));
       case "unpublished":
         return next.sort((a, b) => Number(a.published) - Number(b.published));
-      case "date-added":
-        return next.sort(
-          (a, b) =>
-            new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
-        );
       case "date-updated":
         return next.sort(
           (a, b) =>
@@ -222,7 +235,7 @@ export default function ProductsTab() {
       clearSelection();
       await loadPage(1, "reset");
     } catch (error: any) {
-      Alert.alert("Update failed", error?.message ?? "Could not update selected products.");
+      Alert.alert("Update failed", getApiErrorMessage(error, "Could not update selected products."));
     }
   };
 
@@ -238,7 +251,7 @@ export default function ProductsTab() {
             clearSelection();
             await loadPage(1, "reset");
           } catch (error: any) {
-            Alert.alert("Delete failed", error?.message ?? "Could not delete selected products.");
+            Alert.alert("Delete failed", getApiErrorMessage(error, "Could not delete selected products."));
           }
         },
       },
@@ -265,17 +278,33 @@ export default function ProductsTab() {
       {
         text: product.published ? "Unpublish" : "Publish",
         onPress: async () => {
-          await updateProductStatus(product.id, !product.published);
-          await loadPage(1, "reset");
+          try {
+            await updateProductStatus(product.id, !product.published);
+            await loadPage(1, "reset");
+          } catch (error: any) {
+            Alert.alert("Update failed", getApiErrorMessage(error, "Could not update the product."));
+          }
         },
       },
       {
         text: "Delete",
         style: "destructive",
-        onPress: async () => {
-          await deleteProduct(product.id);
-          await loadPage(1, "reset");
-        },
+        onPress: () =>
+          Alert.alert("Delete product", `Delete "${product.name}"? This cannot be undone.`, [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await deleteProduct(product.id);
+                  await loadPage(1, "reset");
+                } catch (error: any) {
+                  Alert.alert("Delete failed", getApiErrorMessage(error, "Could not delete the product."));
+                }
+              },
+            },
+          ]),
       },
     ]);
   };
@@ -348,12 +377,28 @@ export default function ProductsTab() {
         </Pressable>
       </View>
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={styles.chipsScroll} alwaysBounceHorizontal={false}>
+        {STOCK_TABS.map((tab) => {
+          const active = stockTab === tab.key;
+          const count = tabCounts?.[tab.key];
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => setStockTab(tab.key)}
+              style={[styles.filterChip, active ? styles.filterChipActive : null]}
+            >
+              <Text style={[styles.filterChipText, active ? styles.filterChipTextActive : null]}>
+                {tab.label}{count !== undefined ? ` ${count}` : ""}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       {!searchActive && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={styles.chipsScroll} alwaysBounceHorizontal={false}>
           <ProductStatusPill label={`${sortedProducts.length} loaded`} tone="neutral" />
           {stats ? <ProductStatusPill label={`Total ${stats.total}`} tone="info" /> : null}
-          {stats ? <ProductStatusPill label={`Published ${stats.published}`} tone="success" /> : null}
-          {stats ? <ProductStatusPill label={`Draft ${stats.unpublished}`} tone="warning" /> : null}
           {selectedCategoryId ? (
             <ProductStatusPill
               label={categories.find((item) => String(item.id) === selectedCategoryId)?.categoryName ?? "Category"}
@@ -488,7 +533,7 @@ export default function ProductsTab() {
               onChange={setSelectedVendorId}
             />
             <FilterBlock
-              title="Location"
+              title="Stock at warehouse"
               options={[{ label: "All", value: "" }, ...warehouses.map((item) => ({
                 label: item.name,
                 value: String(item.id),
@@ -522,8 +567,11 @@ export default function ProductsTab() {
               title="Sort by"
               options={[
                 { label: "Default", value: "default" },
+                { label: "Name A–Z", value: "name" },
                 { label: "Price low to high", value: "price-asc" },
                 { label: "Price high to low", value: "price-desc" },
+                { label: "Stock low to high", value: "stock-asc" },
+                { label: "Stock high to low", value: "stock-desc" },
                 { label: "Published first", value: "published" },
                 { label: "Draft first", value: "unpublished" },
                 { label: "Newest added", value: "date-added" },

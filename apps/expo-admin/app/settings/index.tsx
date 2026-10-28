@@ -20,19 +20,20 @@ import { AccessDenied } from "@/components/AccessDenied";
 import {
   changePassword,
   getAllSettings,
+  getDeliveryOptions,
+  getEnabledPaymentMethods,
   updateGeneralSettings,
   updateNotificationSettings,
-  updatePaymentSettings,
   updateRegionalSettings,
-  updateShippingSettings,
   updateTaxSettings,
+  type DeliveryOption,
   type GeneralSettings,
   type NotificationSettings,
-  type PaymentSettings,
+  type PaymentMethodsSummary,
   type RegionalSettings,
-  type ShippingSettings,
   type TaxSettings,
 } from "@/services/settings";
+import { useCurrency } from "@/context/CurrencyContext";
 
 type Section = "store" | "regional" | "tax" | "payment" | "shipping" | "notifications" | "security";
 
@@ -41,7 +42,7 @@ const SECTIONS: { key: Section; label: string; icon: string }[] = [
   { key: "regional", label: "Regional", icon: "globe-outline" },
   { key: "tax", label: "Tax", icon: "receipt-outline" },
   { key: "payment", label: "Payment", icon: "card-outline" },
-  { key: "shipping", label: "Shipping", icon: "cube-outline" },
+  { key: "shipping", label: "Delivery", icon: "cube-outline" },
   { key: "notifications", label: "Notifications", icon: "notifications-outline" },
   { key: "security", label: "Security", icon: "lock-closed-outline" },
 ];
@@ -61,29 +62,33 @@ export default function SettingsScreen() {
     defaultTaxRate: 0, taxInclusivePrice: false,
     enableGSTTracking: false, enableTaxExemption: false, defaultShippingTax: 0,
   });
-  const [payment, setPayment] = useState<PaymentSettings>({
-    enableCash: true, enableCard: true, enableOnline: false, cardProcessingFee: 0,
-  });
+  // Payment methods and delivery options are configured on the web admin — read-only here.
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodsSummary | null>(null);
+  const [deliveryOptions, setDeliveryOptions] = useState<DeliveryOption[] | null>(null);
   const [regional, setRegional] = useState<RegionalSettings>({
     language: "en", currency: "USD", timezone: "UTC",
   });
   const [notifications, setNotifications] = useState<NotificationSettings>({
     emailNotifications: true, orderNotifications: true, marketingEmails: false,
   });
-  const [shipping, setShipping] = useState<ShippingSettings>({
-    enableShipping: false, defaultShippingCost: 0,
-  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const all = await getAllSettings();
-      if (all.general && Object.keys(all.general).length) setGeneral(all.general);
-      if (all.tax && Object.keys(all.tax).length) setTax(all.tax);
-      if (all.payment && Object.keys(all.payment).length) setPayment(all.payment);
-      if (all.regional && Object.keys(all.regional).length) setRegional(all.regional);
-      if (all.notifications && Object.keys(all.notifications).length) setNotifications(all.notifications);
-      if (all.shipping && Object.keys(all.shipping).length) setShipping(all.shipping);
+      const [allResult, payResult, deliveryResult] = await Promise.allSettled([
+        getAllSettings(),
+        getEnabledPaymentMethods(),
+        getDeliveryOptions(),
+      ]);
+      if (payResult.status === "fulfilled") setPaymentMethods(payResult.value);
+      if (deliveryResult.status === "fulfilled") setDeliveryOptions(deliveryResult.value);
+      if (allResult.status !== "fulfilled") return;
+      const all = allResult.value;
+      const filled = (v: unknown) => Boolean(v) && typeof v === "object" && !Array.isArray(v) && Object.keys(v as object).length > 0;
+      if (filled(all.general)) setGeneral(all.general);
+      if (filled(all.tax)) setTax(all.tax);
+      if (filled(all.regional)) setRegional((cur) => ({ ...cur, ...all.regional }));
+      if (filled(all.notifications)) setNotifications(all.notifications);
     } catch {
       // sections may 404 individually — silently ignore
     } finally { setLoading(false); }
@@ -99,10 +104,8 @@ export default function SettingsScreen() {
       switch (activeSection) {
         case "store": await updateGeneralSettings(general); break;
         case "tax": await updateTaxSettings(tax); break;
-        case "payment": await updatePaymentSettings(payment); break;
         case "regional": await updateRegionalSettings(regional); break;
         case "notifications": await updateNotificationSettings(notifications); break;
-        case "shipping": await updateShippingSettings(shipping); break;
       }
       Alert.alert("Saved", "Settings updated successfully.");
     } catch (err: any) {
@@ -110,7 +113,7 @@ export default function SettingsScreen() {
     } finally { setSaving(false); }
   };
 
-  const hasSaveBtn = activeSection !== "security";
+  const hasSaveBtn = activeSection !== "security" && activeSection !== "payment" && activeSection !== "shipping";
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -177,10 +180,10 @@ export default function SettingsScreen() {
             <TaxSection tax={tax} onChange={setTax} />
           )}
           {activeSection === "payment" && (
-            <PaymentSection payment={payment} onChange={setPayment} />
+            <PaymentSection summary={paymentMethods} />
           )}
           {activeSection === "shipping" && (
-            <ShippingSection shipping={shipping} onChange={setShipping} />
+            <DeliverySection options={deliveryOptions} />
           )}
           {activeSection === "notifications" && (
             <NotificationsSection notifications={notifications} onChange={setNotifications} />
@@ -284,48 +287,78 @@ function TaxSection({ tax, onChange }: {
 
 // ─── Section: Payment ─────────────────────────────────────────────────────────
 
-function PaymentSection({ payment, onChange }: {
-  payment: PaymentSettings; onChange: (v: PaymentSettings) => void;
-}) {
-  const setBool = (k: keyof PaymentSettings) => (v: boolean) => onChange({ ...payment, [k]: v });
-  const setStr = (k: keyof PaymentSettings) => (v: string) => onChange({ ...payment, [k]: v });
-  const setNum = (k: keyof PaymentSettings) => (v: string) => onChange({ ...payment, [k]: Number(v) || 0 });
+const CHANNEL_LABELS: Record<string, string> = { pos: "POS", online: "Online store" };
+
+function PaymentSection({ summary }: { summary: PaymentMethodsSummary | null }) {
+  const nameOf = (slug: string | null) =>
+    slug ? summary?.methods.find((m) => m.slug === slug)?.name ?? slug : "—";
   return (
     <View style={sStyles.section}>
       <SectionHeader icon="card-outline" title="Payment Methods" />
-      <ToggleRow label="Cash Payments" value={payment.enableCash} onChange={setBool("enableCash")} desc="Accept cash at POS" />
-      <ToggleRow label="Card Payments" value={payment.enableCard} onChange={setBool("enableCard")} desc="Accept credit/debit cards" />
-      <ToggleRow label="Online Payments" value={payment.enableOnline} onChange={setBool("enableOnline")} desc="Accept online gateway payments" />
-      <Field label="Card Processing Fee (%)" value={String(payment.cardProcessingFee)} onChange={setNum("cardProcessingFee")} keyboardType="decimal-pad" />
-      {payment.enableOnline && (
-        <Field label="Stripe Publishable Key" value={payment.stripeKey ?? ""} onChange={setStr("stripeKey")} placeholder="pk_live_..." />
+      <Text style={sStyles.readOnlyNote}>Enabled methods — change them in the web admin (Settings → Payments).</Text>
+      {!summary ? (
+        <Text style={sStyles.emptyText}>Could not load payment methods.</Text>
+      ) : summary.methods.length === 0 ? (
+        <Text style={sStyles.emptyText}>
+          No payment methods configured yet — POS uses the standard list (Cash, Card, Online, COD, bKash, Nagad, Bank).
+        </Text>
+      ) : (
+        <>
+          {summary.methods.map((m) => (
+            <View key={m.slug} style={sStyles.listRow}>
+              <View style={sStyles.listIcon}>
+                <Ionicons name={m.slug === "cash" || m.slug === "cod" ? "cash-outline" : "card-outline"} size={16} color={colors.primaryDark} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={sStyles.listTitle}>{m.name}</Text>
+                <Text style={sStyles.listMeta}>{m.channels.map((c) => CHANNEL_LABELS[c] ?? c).join(" · ")}</Text>
+              </View>
+              {summary.default === m.slug ? (
+                <View style={sStyles.defaultPill}><Text style={sStyles.defaultPillText}>Default</Text></View>
+              ) : null}
+            </View>
+          ))}
+          <View style={sStyles.summaryBox}>
+            <Text style={sStyles.listMeta}>Default: <Text style={sStyles.listTitle}>{nameOf(summary.default)}</Text></Text>
+            <Text style={sStyles.listMeta}>POS default: <Text style={sStyles.listTitle}>{nameOf(summary.posDefault)}</Text></Text>
+          </View>
+        </>
       )}
     </View>
   );
 }
 
-// ─── Section: Shipping ────────────────────────────────────────────────────────
+// ─── Section: Delivery options ────────────────────────────────────────────────
 
-function ShippingSection({ shipping, onChange }: {
-  shipping: ShippingSettings; onChange: (v: ShippingSettings) => void;
-}) {
-  const setBool = (k: keyof ShippingSettings) => (v: boolean) => onChange({ ...shipping, [k]: v });
-  const setNum = (k: keyof ShippingSettings) => (v: string) => onChange({ ...shipping, [k]: Number(v) || 0 });
+function DeliverySection({ options }: { options: DeliveryOption[] | null }) {
+  const { formatCurrency } = useCurrency();
+  const active = (options ?? []).filter((o) => o.isActive);
+  const inactive = (options ?? []).filter((o) => !o.isActive);
   return (
     <View style={sStyles.section}>
-      <SectionHeader icon="cube-outline" title="Shipping Settings" />
-      <ToggleRow label="Enable Shipping" value={shipping.enableShipping} onChange={setBool("enableShipping")} desc="Offer shipping for orders" />
-      {shipping.enableShipping && (
-        <>
-          <Field label="Default Shipping Cost" value={String(shipping.defaultShippingCost)} onChange={setNum("defaultShippingCost")} keyboardType="decimal-pad" />
-          <Field
-            label="Free Shipping Threshold"
-            value={String(shipping.freeShippingThreshold ?? "")}
-            onChange={setNum("freeShippingThreshold")}
-            keyboardType="decimal-pad"
-            placeholder="e.g. 100 (leave empty to disable)"
-          />
-        </>
+      <SectionHeader icon="cube-outline" title="Delivery Options" />
+      <Text style={sStyles.readOnlyNote}>Fixed-price delivery charges — manage them in the web admin (Settings → Shipping).</Text>
+      {!options ? (
+        <Text style={sStyles.emptyText}>Could not load delivery options.</Text>
+      ) : options.length === 0 ? (
+        <Text style={sStyles.emptyText}>No delivery options set up yet.</Text>
+      ) : (
+        [...active, ...inactive].map((o) => (
+          <View key={o.id} style={[sStyles.listRow, !o.isActive && { opacity: 0.55 }]}>
+            <View style={sStyles.listIcon}>
+              <Ionicons name="bicycle-outline" size={16} color={colors.primaryDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={sStyles.listTitle}>{o.name}{o.isActive ? "" : " (off)"}</Text>
+              <Text style={sStyles.listMeta}>
+                {[o.estimatedDays ? `${o.estimatedDays}${/day/i.test(o.estimatedDays) ? "" : " days"}` : null,
+                  o.expressRate > 0 ? `Express ${formatCurrency(o.expressRate)}` : null,
+                  o.areasCovered || o.description].filter(Boolean).join(" · ") || "—"}
+              </Text>
+            </View>
+            <Text style={sStyles.listPrice}>{o.price > 0 ? formatCurrency(o.price) : "Free"}</Text>
+          </View>
+        ))
       )}
     </View>
   );
@@ -550,6 +583,23 @@ function MenuRow({ icon, label, desc, onPress, chevron, danger }: {
 
 const sStyles = StyleSheet.create({
   section: { gap: 4 },
+  readOnlyNote: { color: colors.muted, fontSize: 12, marginBottom: 8 },
+  emptyText: { color: colors.muted, fontSize: 13, paddingVertical: 12 },
+  listRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
+  },
+  listIcon: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: "#ecfdf5",
+    alignItems: "center", justifyContent: "center",
+  },
+  listTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  listMeta: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  listPrice: { color: colors.primaryDark, fontSize: 14, fontWeight: "800" },
+  defaultPill: { borderRadius: 999, backgroundColor: "#dcfce7", paddingHorizontal: 8, paddingVertical: 3 },
+  defaultPillText: { color: "#166534", fontSize: 11, fontWeight: "800" },
+  summaryBox: { gap: 4, paddingVertical: 6 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, marginTop: 4 },
   sectionTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },

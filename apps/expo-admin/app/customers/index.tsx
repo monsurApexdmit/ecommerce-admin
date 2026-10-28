@@ -26,11 +26,29 @@ import {
   deleteCustomer,
   getCustomers,
   getCustomerStats,
+  validateCustomer,
   type Customer,
+  type CustomerGroup,
+  type CustomerKind,
   type CustomerStats,
 } from "@/services/customers";
+import { apiErrorMessage, apiFieldErrors } from "@/lib/format";
+import {
+  CustomerFormFields,
+  emptyCustomerForm,
+  formToInput,
+  type CustomerFormValues,
+} from "@/components/customers/CustomerForm";
 
 type StatusFilter = "" | "active" | "inactive";
+type GroupFilter = "" | CustomerGroup;
+type TypeFilter = "" | CustomerKind;
+
+const GROUP_STYLE: Record<CustomerGroup, { bg: string; text: string; label: string }> = {
+  retail: { bg: "#eff6ff", text: "#1d4ed8", label: "Retail" },
+  wholesale: { bg: "#fef3c7", text: "#d97706", label: "Wholesale" },
+  vip: { bg: "#fae8ff", text: "#a21caf", label: "VIP" },
+};
 
 function avatarInitials(name: string) {
   return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -52,6 +70,8 @@ export default function CustomersScreen() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [filterVisible, setFilterVisible] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
 
@@ -65,16 +85,19 @@ export default function CustomersScreen() {
       page: nextPage, limit: 20,
       search: debouncedSearch || undefined,
       status: statusFilter || undefined,
+      group: groupFilter || undefined,
+      type: typeFilter || undefined,
     });
     setCustomers((prev) => mode === "append" ? [...prev, ...result.data] : result.data);
     setPage(result.page);
     setTotal(result.total);
     setHasNext(result.page * result.limit < result.total);
-  }, [debouncedSearch, statusFilter]);
+  }, [debouncedSearch, statusFilter, groupFilter, typeFilter]);
 
   const bootstrap = useCallback(async () => {
     setLoading(true);
     try { await Promise.all([loadCustomers(1, "reset"), getCustomerStats().then(setStats)]); }
+    catch (err) { Alert.alert("Could not load customers", apiErrorMessage(err)); }
     finally { setLoading(false); }
   }, [loadCustomers]);
 
@@ -82,29 +105,37 @@ export default function CustomersScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadCustomers(1, "reset"), getCustomerStats().then(setStats)]);
-    setRefreshing(false);
+    try { await Promise.all([loadCustomers(1, "reset"), getCustomerStats().then(setStats)]); }
+    catch (err) { Alert.alert("Could not load customers", apiErrorMessage(err)); }
+    finally { setRefreshing(false); }
   };
 
   const onEndReached = async () => {
     if (!hasNext || loadingMore || loading) return;
     setLoadingMore(true);
-    await loadCustomers(page + 1, "append");
-    setLoadingMore(false);
+    try { await loadCustomers(page + 1, "append"); }
+    catch { /* pull to refresh retries */ }
+    finally { setLoadingMore(false); }
   };
 
   const handleDelete = (c: Customer) => {
     Alert.alert("Delete customer", `Delete ${c.name}?`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
-        await deleteCustomer(c.id);
-        await loadCustomers(1, "reset");
-        getCustomerStats().then(setStats);
+        try {
+          await deleteCustomer(c.id);
+          await loadCustomers(1, "reset");
+          getCustomerStats().then(setStats).catch(() => undefined);
+        } catch (err) {
+          // blocked when the customer has sales or returns
+          Alert.alert("Could not delete", apiErrorMessage(err));
+        }
       }},
     ]);
   };
 
-  const filtersApplied = Boolean(statusFilter);
+  const filtersApplied = Boolean(statusFilter || groupFilter || typeFilter);
+  const clearFilters = () => { setStatusFilter(""); setGroupFilter(""); setTypeFilter(""); };
 
   const { canRead } = useAuth();
   if (!canRead('Customers')) return <AccessDenied />;
@@ -137,7 +168,7 @@ export default function CustomersScreen() {
           <Ionicons name="search" size={16} color={colors.muted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by name or email..."
+            placeholder="Name, phone, email or business"
             placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}
@@ -160,7 +191,7 @@ export default function CustomersScreen() {
       <View style={styles.countRow}>
         <Text style={styles.countText}>{total} customer{total !== 1 ? "s" : ""}</Text>
         {filtersApplied && (
-          <Pressable onPress={() => setStatusFilter("")}>
+          <Pressable onPress={clearFilters}>
             <Text style={styles.clearText}>Clear filters</Text>
           </Pressable>
         )}
@@ -225,6 +256,34 @@ export default function CustomersScreen() {
               </Pressable>
             ))}
           </View>
+          <Text style={styles.filterLabel}>Group</Text>
+          <View style={styles.filterOptions}>
+            {(["", "retail", "wholesale", "vip"] as GroupFilter[]).map((g) => (
+              <Pressable
+                key={g || "all"}
+                style={[styles.filterChip, groupFilter === g && styles.filterChipActive]}
+                onPress={() => setGroupFilter(g)}
+              >
+                <Text style={[styles.filterChipText, groupFilter === g && styles.filterChipTextActive]}>
+                  {g ? GROUP_STYLE[g].label : "All"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.filterLabel}>Type</Text>
+          <View style={styles.filterOptions}>
+            {(["", "individual", "business"] as TypeFilter[]).map((t) => (
+              <Pressable
+                key={t || "all"}
+                style={[styles.filterChip, typeFilter === t && styles.filterChipActive]}
+                onPress={() => setTypeFilter(t)}
+              >
+                <Text style={[styles.filterChipText, typeFilter === t && styles.filterChipTextActive]}>
+                  {t || "All"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <Pressable style={styles.applyBtn} onPress={() => setFilterVisible(false)}>
             <Text style={styles.applyBtnText}>Apply</Text>
           </Pressable>
@@ -262,14 +321,20 @@ function CustomerCard({ customer, onPress, onDelete }: {
           <Text style={cardStyles.name} numberOfLines={1}>{customer.name}</Text>
           <View style={[cardStyles.statusDot, { backgroundColor: customer.status === "active" ? "#16a34a" : "#94a3b8" }]} />
         </View>
-        <Text style={cardStyles.email} numberOfLines={1}>{customer.email}</Text>
+        {customer.type === "business" && customer.businessName ? (
+          <Text style={cardStyles.business} numberOfLines={1}>{customer.businessName}</Text>
+        ) : null}
         {customer.phone ? <Text style={cardStyles.meta}>{customer.phone}</Text> : null}
+        {customer.email ? <Text style={cardStyles.email} numberOfLines={1}>{customer.email}</Text> : null}
         <View style={cardStyles.bottomRow}>
-          <View style={[cardStyles.typeBadge, customer.customerType === "wholesale" ? cardStyles.typeBadgeWholesale : null]}>
-            <Text style={[cardStyles.typeText, customer.customerType === "wholesale" ? cardStyles.typeTextWholesale : null]}>
-              {customer.customerType}
+          <View style={[cardStyles.typeBadge, { backgroundColor: GROUP_STYLE[customer.customerGroup]?.bg ?? "#eff6ff" }]}>
+            <Text style={[cardStyles.typeText, { color: GROUP_STYLE[customer.customerGroup]?.text ?? "#1d4ed8" }]}>
+              {GROUP_STYLE[customer.customerGroup]?.label ?? customer.customerGroup}
             </Text>
           </View>
+          {Number(customer.dueAmount ?? 0) > 0 ? (
+            <Text style={cardStyles.due}>Due {formatCurrency(Number(customer.dueAmount))}</Text>
+          ) : null}
           {customer.totalOrders != null && (
             <Text style={cardStyles.meta}>{customer.totalOrders} orders</Text>
           )}
@@ -296,26 +361,34 @@ function CustomerCard({ customer, onPress, onDelete }: {
 function AddCustomerModal({ visible, onClose, onCreated }: {
   visible: boolean; onClose: () => void; onCreated: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
-  const [type, setType] = useState<"retail" | "wholesale">("retail");
+  const [values, setValues] = useState<CustomerFormValues>(emptyCustomerForm);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const reset = () => { setName(""); setEmail(""); setPhone(""); setAddress(""); setCity(""); setCountry(""); setType("retail"); };
+  const reset = () => { setValues(emptyCustomerForm); setErrors({}); };
+  const onChange = (patch: Partial<CustomerFormValues>) => {
+    setValues((v) => ({ ...v, ...patch }));
+    setErrors((e) => {
+      const next = { ...e };
+      Object.keys(patch).forEach((k) => delete next[k]);
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
-    if (!name.trim() || !email.trim()) { Alert.alert("Required", "Name and email are required."); return; }
+    const input = formToInput(values, "create");
+    const local = validateCustomer(input, "create");
+    setErrors(local);
+    if (Object.keys(local).length) return;
     setSubmitting(true);
     try {
-      await createCustomer({ name: name.trim(), email: email.trim(), phone: phone || undefined, address: address || undefined, city: city || undefined, country: country || undefined, customerType: type });
+      await createCustomer(input);
       reset();
       onCreated();
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message ?? "Failed to create customer.");
+      const fields = apiFieldErrors(err);
+      if (Object.keys(fields).length) setErrors(fields);
+      Alert.alert("Could not create customer", apiErrorMessage(err, "Failed to create customer."));
     } finally { setSubmitting(false); }
   };
 
@@ -342,26 +415,7 @@ function AddCustomerModal({ visible, onClose, onCreated }: {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.addForm}
           >
-            <Field label="Name *" value={name} onChange={setName} placeholder="Full name" />
-            <Field label="Email *" value={email} onChange={setEmail} placeholder="email@example.com" keyboardType="email-address" />
-            <Field label="Phone" value={phone} onChange={setPhone} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
-            <Field label="Address" value={address} onChange={setAddress} placeholder="Street address" />
-            <Field label="City" value={city} onChange={setCity} placeholder="City" />
-            <Field label="Country" value={country} onChange={setCountry} placeholder="Country" />
-            <View style={styles.fieldWrap}>
-              <Text style={styles.fieldLabel}>Customer Type</Text>
-              <View style={styles.typeRow}>
-                {(["retail", "wholesale"] as const).map((t) => (
-                  <Pressable
-                    key={t}
-                    style={[styles.typeChip, type === t && styles.typeChipActive]}
-                    onPress={() => setType(t)}
-                  >
-                    <Text style={[styles.typeChipText, type === t && styles.typeChipTextActive]}>{t}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+            <CustomerFormFields values={values} onChange={onChange} errors={errors} mode="create" />
             <Pressable style={[styles.submitBtn, submitting && { opacity: 0.55 }]} onPress={handleSubmit} disabled={submitting}>
               {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Create Customer</Text>}
             </Pressable>
@@ -370,26 +424,6 @@ function AddCustomerModal({ visible, onClose, onCreated }: {
         </View>
       </KeyboardAvoidingView>
     </Modal>
-  );
-}
-
-function Field({ label, value, onChange, placeholder, keyboardType }: {
-  label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; keyboardType?: any;
-}) {
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={styles.fieldInput}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor="#94a3b8"
-        keyboardType={keyboardType}
-        autoCapitalize="none"
-      />
-    </View>
   );
 }
 
@@ -434,6 +468,8 @@ const cardStyles = StyleSheet.create({
   typeText: { color: "#1d4ed8", fontSize: 11, fontWeight: "700" },
   typeTextWholesale: { color: "#d97706" },
   spent: { color: colors.primaryDark, fontSize: 12, fontWeight: "700", marginLeft: "auto" },
+  business: { color: colors.text, fontSize: 12, fontWeight: "600" },
+  due: { color: colors.danger, fontSize: 12, fontWeight: "700" },
   menuBtn: { padding: 4 },
 });
 

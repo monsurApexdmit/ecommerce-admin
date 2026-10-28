@@ -1,7 +1,12 @@
 import { api } from "@/lib/api";
 import type {
   CreateShipmentDraft,
+  FollowUpOutcome,
+  LogFollowUpData,
   Order,
+  OrderFollowUp,
+  OrderKpis,
+  OrderTabCounts,
   OrderItem,
   OrderListParams,
   OrderListResult,
@@ -142,7 +147,24 @@ type SellResponse = {
   shipped_at?: string;
   notes?: string;
   items?: SellItemResponse[];
-  shipments?: SellShipmentResponse[];
+  shipments?: SellShipmentResponse[] | null;
+  source?: Order["source"];
+  paidAmount?: number;
+  dueAmount?: number;
+  shippingMethodName?: string;
+  transactionId?: string | null;
+  paymentTransactionId?: string | null;
+  courier?: string | null;
+  zoneName?: string | null;
+  deliveryNote?: string | null;
+  taxRate?: number | null;
+  taxAmount?: number | null;
+  locationId?: number | null;
+  locationName?: string | null;
+  followUpCount?: number;
+  lastFollowUpAt?: string | null;
+  lastFollowUpOutcome?: FollowUpOutcome | null;
+  nextFollowUpAt?: string | null;
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;
@@ -155,6 +177,11 @@ type ShipmentSellResponse = {
   invoice_no?: string;
   customerName?: string;
   customer_name?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  area?: string;
+  paymentStatus?: string;
+  dueAmount?: number;
   method: string;
   amount: number;
   status: string;
@@ -197,6 +224,16 @@ type ShipmentResponse = {
   shipped_at?: string;
   deliveredAt?: string;
   delivered_at?: string;
+  rider?: string | null;
+  package?: string | null;
+  codAmount?: number | string | null;
+  codCollected?: boolean | number | null;
+  codCollectedAmount?: number | string | null;
+  codCollectedAt?: string | null;
+  codState?: Shipment["codState"];
+  deliveryPayer?: string | null;
+  deliverySpeed?: string | null;
+  pickupDate?: string | null;
   trackingHistory?: TrackingEventResponse[];
   tracking_history?: TrackingEventResponse[];
   createdAt?: string;
@@ -300,6 +337,22 @@ function normalizeOrder(order: SellResponse): Order {
     notes: order.notes,
     items: Array.isArray(order.items) ? order.items.map(normalizeOrderItem) : [],
     shipments: Array.isArray(order.shipments) ? order.shipments.map(normalizeSellShipment) : [],
+    source: order.source ?? null,
+    paidAmount: order.paidAmount != null ? Number(order.paidAmount) : undefined,
+    dueAmount: order.dueAmount != null ? Number(order.dueAmount) : undefined,
+    shippingMethodName: order.shippingMethodName,
+    transactionId: order.transactionId ?? order.paymentTransactionId ?? null,
+    courier: order.courier ?? null,
+    zoneName: order.zoneName ?? null,
+    deliveryNote: order.deliveryNote ?? null,
+    taxRate: order.taxRate != null ? Number(order.taxRate) : null,
+    taxAmount: order.taxAmount != null ? Number(order.taxAmount) : null,
+    locationId: order.locationId ?? null,
+    locationName: order.locationName ?? null,
+    followUpCount: Number(order.followUpCount ?? 0),
+    lastFollowUpAt: order.lastFollowUpAt ?? null,
+    lastFollowUpOutcome: order.lastFollowUpOutcome ?? null,
+    nextFollowUpAt: order.nextFollowUpAt ?? null,
     createdAt: order.createdAt ?? order.created_at,
     updatedAt: order.updatedAt ?? order.updated_at,
   };
@@ -326,6 +379,11 @@ function normalizeShipment(item: ShipmentResponse): Shipment {
           id: item.sell.id,
           invoiceNo: item.sell.invoiceNo ?? item.sell.invoice_no ?? String(item.sell.id),
           customerName: item.sell.customerName ?? item.sell.customer_name ?? "Customer",
+          customerPhone: item.sell.customerPhone,
+          customerAddress: item.sell.customerAddress,
+          area: item.sell.area,
+          paymentStatus: item.sell.paymentStatus,
+          dueAmount: item.sell.dueAmount != null ? Number(item.sell.dueAmount) : undefined,
           method: item.sell.method,
           amount: Number(item.sell.amount ?? 0),
           status: item.sell.status,
@@ -343,35 +401,75 @@ function normalizeShipment(item: ShipmentResponse): Shipment {
     notes: item.notes,
     shippedAt: item.shippedAt ?? item.shipped_at,
     deliveredAt: item.deliveredAt ?? item.delivered_at,
+    rider: item.rider ?? null,
+    package: item.package ?? null,
+    codAmount: Number(item.codAmount ?? 0) || 0,
+    codCollected: item.codCollected === true || item.codCollected === 1,
+    codCollectedAmount: item.codCollectedAmount != null ? Number(item.codCollectedAmount) : null,
+    codCollectedAt: item.codCollectedAt ?? null,
+    codState: item.codState ?? null,
+    deliveryPayer: item.deliveryPayer ?? null,
+    deliverySpeed: item.deliverySpeed ?? null,
+    pickupDate: item.pickupDate ?? null,
     trackingHistory: (item.trackingHistory ?? item.tracking_history ?? []).map(normalizeTrackingEvent),
     createdAt: item.createdAt ?? item.created_at ?? "",
     updatedAt: item.updatedAt ?? item.updated_at ?? "",
   };
 }
 
+const num = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export async function getOrders(params?: OrderListParams): Promise<OrderListResult> {
+  // `per_page` pages the list; `limit` would return a capped, unpaginated list without meta.
+  const perPage = params?.perPage ?? (params?.limit && params?.page ? params.limit : undefined);
   const response = await api.get("/sells", {
     params: {
       page: params?.page,
-      limit: params?.limit,
+      per_page: perPage,
+      limit: perPage ? undefined : params?.limit,
       search: params?.search,
-      status: params?.status,
+      status: params?.status && params.status !== "all" ? params.status : undefined,
       method: params?.method,
+      payment: params?.payment,
+      source: params?.source,
+      followUp: params?.followUp,
       start_date: params?.startDate,
       end_date: params?.endDate,
     },
   });
 
   const rawData = response.data?.data || [];
+  const meta = response.data?.meta ?? {};
   const isArray = Array.isArray(rawData);
   const items = isArray ? rawData : rawData.data || [];
-  const pagination = isArray ? {} : rawData;
+  const pagination = meta.pagination ?? (isArray ? {} : {
+    page: rawData.current_page, per_page: rawData.per_page, total: rawData.total, last_page: rawData.last_page,
+  });
+
+  const tc = meta.tabCounts;
+  const k = meta.kpis;
+  const tabCounts: OrderTabCounts | undefined = tc
+    ? Object.fromEntries(Object.entries(tc).map(([key, v]) => [key, num(v)]))
+    : undefined;
+  const kpis: OrderKpis | undefined = k
+    ? {
+        totalOrders: num(k.totalOrders), last30Days: num(k.last30Days), pending: num(k.pending),
+        confirmedOrPacked: num(k.confirmedOrPacked), shipped: num(k.shipped), delivered: num(k.delivered),
+        revenue: num(k.revenue), dueToCollect: num(k.dueToCollect), unpaidCount: num(k.unpaidCount),
+      }
+    : undefined;
 
   return {
     data: items.map(normalizeOrder),
-    total: pagination.total || items.length || 0,
-    page: pagination.current_page || params?.page || 1,
-    limit: pagination.per_page || params?.limit || 10,
+    total: num(pagination.total) || items.length || 0,
+    page: num(pagination.page) || params?.page || 1,
+    limit: num(pagination.per_page) || perPage || params?.limit || 10,
+    lastPage: pagination.last_page != null ? num(pagination.last_page) : undefined,
+    tabCounts,
+    kpis,
   };
 }
 
@@ -384,6 +482,11 @@ export async function getOrderStats(): Promise<OrderStats> {
     pendingOrders: Number(data.pendingOrders ?? 0),
     processingOrders: Number(data.processingOrders ?? 0),
     deliveredOrders: Number(data.deliveredOrders ?? 0),
+    packedOrders: data.packedOrders != null ? Number(data.packedOrders) : undefined,
+    shippedOrders: data.shippedOrders != null ? Number(data.shippedOrders) : undefined,
+    cancelledOrders: data.cancelledOrders != null ? Number(data.cancelledOrders) : undefined,
+    totalDue: data.totalDue != null ? Number(data.totalDue) : undefined,
+    unpaidCount: data.unpaidCount != null ? Number(data.unpaidCount) : undefined,
   };
 }
 
@@ -398,9 +501,43 @@ export async function getOrderByInvoice(invoiceNo: string): Promise<Order> {
   return normalizeOrder(response.data?.data ?? response.data);
 }
 
-export async function updateOrderStatus(id: number, status: Order["status"]) {
-  const response = await api.patch(`/sells/${id}/status`, { status });
+export async function updateOrderStatus(id: number, status: Order["status"], reason?: string) {
+  const response = await api.patch(`/sells/${id}/status`, reason ? { status, reason } : { status });
   return normalizeOrder(response.data?.data ?? response.data);
+}
+
+/** Mark an open order packed or shipped (shipped links/creates a shipment), or put it back to unfulfilled. */
+export async function updateOrderFulfillment(id: number, fulfillment: "packed" | "shipped" | "unfulfilled") {
+  const response = await api.patch(`/sells/${id}/fulfillment`, { fulfillment });
+  return normalizeOrder(response.data?.data ?? response.data);
+}
+
+function normalizeFollowUp(f: any): OrderFollowUp {
+  return {
+    id: Number(f.id),
+    sellId: Number(f.sellId ?? f.sell_id ?? 0),
+    userId: f.userId ?? f.user_id ?? null,
+    staffName: f.staffName ?? f.staff_name ?? null,
+    outcome: f.outcome,
+    channel: f.channel ?? "call",
+    note: f.note ?? null,
+    nextFollowUpAt: f.nextFollowUpAt ?? f.next_follow_up_at ?? null,
+    createdAt: f.createdAt ?? f.created_at ?? "",
+  };
+}
+
+/** Follow-up (confirmation call) history of an order, newest first. */
+export async function getOrderFollowUps(id: number): Promise<OrderFollowUp[]> {
+  const response = await api.get(`/sells/${id}/follow-ups`);
+  const raw = response.data?.data;
+  return Array.isArray(raw) ? raw.map(normalizeFollowUp) : [];
+}
+
+/** Log a follow-up; confirmed moves Pending to Processing, customer_cancelled cancels the order. */
+export async function logOrderFollowUp(id: number, data: LogFollowUpData): Promise<{ followUp: OrderFollowUp; order: Order }> {
+  const response = await api.post(`/sells/${id}/follow-ups`, data);
+  const d = response.data?.data ?? {};
+  return { followUp: normalizeFollowUp(d.followUp ?? {}), order: normalizeOrder(d.order) };
 }
 
 export async function updateOrder(id: number, updates: { notes?: string }) {
@@ -416,7 +553,8 @@ export async function getShipments(params?: ShipmentListParams): Promise<Shipmen
   const response = await api.get("/shipments", {
     params: {
       page: params?.page,
-      limit: params?.limit,
+      per_page: params?.perPage ?? params?.limit,
+      cod: params?.cod ? 1 : undefined,
       search: params?.search,
       status: params?.status,
       carrier: params?.carrier,
@@ -435,13 +573,15 @@ export async function getShipmentStats(): Promise<ShipmentStats> {
   const response = await api.get("/shipments/stats");
   const data = response.data?.data ?? {};
   return {
+    readyToShip: Number(data.readyToShip ?? 0),
+    codWithCouriers: Number(data.codWithCouriers ?? 0),
     total: Number(data.total ?? 0),
     pending: Number(data.pending ?? 0),
     inTransit: Number(data.inTransit ?? data.in_transit ?? 0),
     delivered: Number(data.delivered ?? 0),
     failed: Number(data.failed ?? 0),
-    pickedUp: Number(data.picked_up ?? 0),
-    outForDelivery: Number(data.out_for_delivery ?? 0),
+    pickedUp: Number(data.pickedUp ?? data.picked_up ?? 0),
+    outForDelivery: Number(data.outForDelivery ?? data.out_for_delivery ?? 0),
     returned: Number(data.returned ?? 0),
   };
 }
@@ -458,8 +598,32 @@ export async function createShipment(draft: CreateShipmentDraft): Promise<Shipme
 
 export async function updateShipmentStatus(
   id: number,
-  data: { status: ShipmentStatus; location?: string; description?: string },
+  data: { status: ShipmentStatus; location?: string; description?: string; rider?: string },
 ): Promise<Shipment> {
-  const response = await api.patch(`/shipments/${id}/status`, data);
+  const response = await api.patch(`/shipments/${id}/status`, {
+    status: data.status,
+    location: data.location?.trim() || undefined,
+    description: data.description?.trim() || undefined,
+    rider: data.rider?.trim() || undefined,
+  });
   return normalizeShipment(response.data?.data ?? response.data);
+}
+
+/** Record the cash a courier collected for a delivered COD shipment (codState delivered_record_payment). */
+export async function recordShipmentCodPayment(id: number, data?: { paymentMethod?: string; notes?: string }): Promise<Shipment> {
+  const response = await api.post(`/shipments/${id}/cod-payment`, data ?? {});
+  return normalizeShipment(response.data?.data ?? response.data);
+}
+
+/**
+ * Next statuses the server accepts: forward-only along the delivery flow, `failed` only once the courier has it
+ * (picked up / in transit / out for delivery), and from `failed` only `returned`. Delivered/returned are final.
+ */
+export function nextShipmentStatuses(current: ShipmentStatus): ShipmentStatus[] {
+  const flow: ShipmentStatus[] = ["pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
+  if (current === "failed") return ["returned"];
+  if (current === "delivered" || current === "returned") return [];
+  const i = flow.indexOf(current);
+  const ahead = flow.slice(Math.max(0, i + 1));
+  return current === "pending" ? ahead : [...ahead, "failed"];
 }

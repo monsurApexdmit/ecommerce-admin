@@ -3,7 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { useCurrency } from "@/context/CurrencyContext";
 import { getImageUrl } from "@/lib/images";
-import type { Product } from "@/types/product";
+import { getDisplayPrice } from "@/services/products";
+import type { Product, ProductStockState } from "@/types/product";
 
 type ProductListItemProps = {
   product: Product;
@@ -14,11 +15,18 @@ type ProductListItemProps = {
   onMenuPress?: () => void;
 };
 
-const STATUS_ACCENT: Record<string, string> = {
-  Selling: "#10b981",
-  "Out of Stock": "#f59e0b",
-  Discontinued: "#ef4444",
+export const STOCK_STATE_TONE: Record<ProductStockState, { label: string; bg: string; color: string; accent: string }> = {
+  ok: { label: "In stock", bg: "#dcfce7", color: "#166534", accent: "#10b981" },
+  low: { label: "Low stock", bg: "#fef3c7", color: "#92400e", accent: "#f59e0b" },
+  out: { label: "Out of stock", bg: "#fee2e2", color: "#991b1b", accent: "#ef4444" },
 };
+
+export function getStockState(product: Pick<Product, "stockState" | "stock" | "reorderPoint">): ProductStockState {
+  if (product.stockState) return product.stockState;
+  if (product.stock <= 0) return "out";
+  if ((product.reorderPoint ?? 0) > 0 && product.stock <= (product.reorderPoint ?? 0)) return "low";
+  return "ok";
+}
 
 export function ProductListItem({
   product,
@@ -30,15 +38,11 @@ export function ProductListItem({
 }: ProductListItemProps) {
   const { formatCurrency } = useCurrency();
   const imageUrl = getImageUrl(product.image);
-  const basePrice = product.salePrice > 0 ? product.salePrice : product.price;
-  const offerFinal = product.offerPrice && product.offerPrice > 0
-    ? (product.offerType === "percentage"
-        ? basePrice * (1 - product.offerPrice / 100)
-        : basePrice - product.offerPrice)
-    : null;
-  const price = offerFinal !== null && offerFinal > 0 && offerFinal < basePrice ? offerFinal : basePrice;
-  const hasOffer = price < basePrice;
-  const accent = STATUS_ACCENT[product.status] ?? colors.border;
+  // Offer shown only while the server says it is active (currentPrice already applies it).
+  const { price, basePrice, hasOffer } = getDisplayPrice(product);
+  const stockState = getStockState(product);
+  const stockTone = STOCK_STATE_TONE[stockState];
+  const accent = stockTone.accent;
 
   return (
     <Pressable
@@ -98,24 +102,19 @@ export function ProductListItem({
 
           {/* Status pills */}
           <View style={styles.pillRow}>
-            <StatusDot
-              label={product.published ? "Published" : "Draft"}
-              bg={product.published ? "#dbeafe" : "#f1f5f9"}
-              color={product.published ? "#1d4ed8" : "#64748b"}
-            />
-            <StatusDot
-              label={product.status}
-              bg={
-                product.status === "Selling" ? "#dcfce7"
-                  : product.status === "Out of Stock" ? "#fef3c7"
-                  : "#fee2e2"
-              }
-              color={
-                product.status === "Selling" ? "#166534"
-                  : product.status === "Out of Stock" ? "#92400e"
-                  : "#991b1b"
-              }
-            />
+            <StatusDot label={stockTone.label} bg={stockTone.bg} color={stockTone.color} />
+            {!product.published ? (
+              <StatusDot label="Draft" bg="#f1f5f9" color="#64748b" />
+            ) : product.visibleOnline === false ? (
+              <StatusDot label="Hidden online" bg="#f1f5f9" color="#64748b" />
+            ) : (
+              <StatusDot label="Online" bg="#dbeafe" color="#1d4ed8" />
+            )}
+            {product.availableInPos === false ? (
+              <StatusDot label="Not in POS" bg="#f1f5f9" color="#64748b" />
+            ) : null}
+            {hasOffer ? <StatusDot label="Offer" bg="#ffedd5" color="#c2410c" /> : null}
+            {product.tag ? <StatusDot label={product.tag} bg="#ede9fe" color="#6d28d9" /> : null}
           </View>
         </View>
       </View>

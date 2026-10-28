@@ -20,7 +20,9 @@ import { useCurrency } from "@/context/CurrencyContext";
 import {
   createSalaryPayment,
   deleteSalaryPayment,
+  formatSalaryMonth,
   getStaff,
+  toSalaryMonthKey,
   getSalaryPayments,
   updateSalaryPayment,
   type SalaryPayment,
@@ -33,11 +35,13 @@ const AVATAR_COLORS = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#
 function avatarColor(id: number) { return AVATAR_COLORS[id % AVATAR_COLORS.length]; }
 function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
 
+/** Month keys in the API format "YYYY-MM" (shown as "Oct 2026"). */
 function buildMonthOptions(): string[] {
   return Array.from({ length: 12 }, (_, i) => {
     const d = new Date();
+    d.setDate(1);
     d.setMonth(d.getMonth() - i);
-    return d.toLocaleString("en-US", { month: "short" }) + " " + d.getFullYear();
+    return toSalaryMonthKey(d);
   });
 }
 
@@ -136,7 +140,12 @@ export default function SalaryScreen() {
         text: "Delete Payment", style: "destructive", onPress: () =>
           Alert.alert("Delete payment?", undefined, [
             { text: "Cancel", style: "cancel" },
-            { text: "Delete", style: "destructive", onPress: async () => { await deleteSalaryPayment(payment.id); load(); } },
+            {
+              text: "Delete", style: "destructive", onPress: async () => {
+                try { await deleteSalaryPayment(payment.id); load(); }
+                catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Could not delete the payment."); }
+              },
+            },
           ])
       });
     }
@@ -158,7 +167,7 @@ export default function SalaryScreen() {
       {/* Month selector */}
       <Pressable style={styles.monthSelector} onPress={() => setMonthPickerOpen(true)}>
         <Ionicons name="calendar-outline" size={16} color={colors.primaryDark} />
-        <Text style={styles.monthText}>{selectedMonth}</Text>
+        <Text style={styles.monthText}>{formatSalaryMonth(selectedMonth)}</Text>
         <Ionicons name="chevron-down" size={16} color={colors.muted} />
       </Pressable>
 
@@ -260,7 +269,7 @@ export default function SalaryScreen() {
                 style={[mStyles.pickerItem, m === selectedMonth && mStyles.pickerItemActive]}
                 onPress={() => { setSelectedMonth(m); setMonthPickerOpen(false); }}
               >
-                <Text style={[mStyles.pickerItemText, m === selectedMonth && mStyles.pickerItemTextActive]}>{m}</Text>
+                <Text style={[mStyles.pickerItemText, m === selectedMonth && mStyles.pickerItemTextActive]}>{formatSalaryMonth(m)}</Text>
                 {m === selectedMonth && <Ionicons name="checkmark" size={16} color={colors.primaryDark} />}
               </Pressable>
             ))}
@@ -311,6 +320,10 @@ function CustomPayModal({ staff: s, month, existing, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    const amountNum = Number(amount);
+    const paidNum = Number(paidAmount);
+    if (!Number.isFinite(amountNum) || amountNum < 0) { Alert.alert("Error", "Amount cannot be negative."); return; }
+    if (!Number.isFinite(paidNum) || paidNum < 0) { Alert.alert("Error", "Paid amount cannot be negative."); return; }
     setSaving(true);
     try {
       const paymentDate = new Date().toISOString().split("T")[0];
@@ -343,7 +356,7 @@ function CustomPayModal({ staff: s, month, existing, onClose, onSaved }: {
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={mStyles.fields} keyboardShouldPersistTaps="handled">
-          <Text style={mStyles.staffName}>{s.name} · {month}</Text>
+          <Text style={mStyles.staffName}>{s.name} · {formatSalaryMonth(month)}</Text>
 
           <View style={{ gap: 4 }}>
             <Text style={mStyles.fieldLabel}>Salary Amount</Text>

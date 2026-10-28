@@ -1,15 +1,35 @@
 import { ProductStatusPill } from "@/components/products/ProductStatusPill";
-import type { OrderStatus, ShipmentStatus } from "@/types/order";
+import type { Order, OrderStatus, ShipmentStatus } from "@/types/order";
+import { orderStage, type OrderStage } from "./order-utils";
 
-export function OrderStatusPill({ status }: { status: OrderStatus }) {
+export function OrderStatusPill({ status }: { status: OrderStatus | string }) {
   const tone =
     status === "Delivered"
       ? "success"
-      : status === "Processing"
-        ? "warning"
-        : "warning";
+      : status === "Cancelled"
+        ? "danger"
+        : status === "Processing"
+          ? "info"
+          : "warning";
 
-  return <ProductStatusPill label={status} tone={tone} />;
+  // "Processing" is shown as "Confirmed" everywhere in the admin
+  return <ProductStatusPill label={status === "Processing" ? "Confirmed" : status} tone={tone} />;
+}
+
+const STAGE_TONE: Record<OrderStage, "neutral" | "success" | "warning" | "danger" | "info"> = {
+  Pending: "warning",
+  Confirmed: "info",
+  Packed: "info",
+  Shipped: "info",
+  Delivered: "success",
+  Completed: "success",
+  Cancelled: "danger",
+};
+
+/** Derived stage (Pending / Confirmed / Packed / Shipped / Delivered / Completed / Cancelled). */
+export function OrderStagePill({ order }: { order: Pick<Order, "status" | "fulfillmentStatus" | "paymentStatus" | "shippedAt"> }) {
+  const stage = orderStage(order);
+  return <ProductStatusPill label={stage} tone={STAGE_TONE[stage]} />;
 }
 
 export function ShipmentStatusPill({ status }: { status: ShipmentStatus }) {

@@ -36,6 +36,9 @@ export interface SupportTicket {
   customerEmail: string | null;
   resolvedAt: string | null;
   createdAt: string;
+  updatedAt?: string;
+  /** A customer wrote since staff last opened the ticket (cleared by GET /support/tickets/{id}) */
+  adminUnread?: boolean;
   messages: SupportMessage[];
 }
 
@@ -45,6 +48,8 @@ export interface TicketStats {
   resolved: number;
   closed: number;
   total: number;
+  /** Tickets with a customer message staff have not opened yet */
+  unread?: number;
 }
 
 export interface TicketListResult {
@@ -71,10 +76,14 @@ export async function getTickets(params?: {
   search?: string;
   page?: number;
   per_page?: number;
+  /** Only tickets with unread customer messages */
+  unread?: boolean;
 }): Promise<TicketListResult> {
-  const cleaned = Object.fromEntries(
-    Object.entries(params ?? {}).filter(([, v]) => v && v !== "all")
+  const { unread, ...rest } = params ?? {};
+  const cleaned: Record<string, unknown> = Object.fromEntries(
+    Object.entries(rest).filter(([, v]) => v && v !== "all")
   );
+  if (unread) cleaned.unread = 1;
   const res = await api.get("/support/tickets", { params: cleaned });
   const d = res.data;
   return {
@@ -87,7 +96,15 @@ export async function getTickets(params?: {
 
 export async function getTicketStats(): Promise<TicketStats> {
   const res = await api.get("/support/tickets/stats");
-  return res.data.data;
+  const d = res.data?.data ?? {};
+  return {
+    open: Number(d.open ?? 0),
+    in_progress: Number(d.in_progress ?? 0),
+    resolved: Number(d.resolved ?? 0),
+    closed: Number(d.closed ?? 0),
+    total: Number(d.total ?? 0),
+    unread: d.unread != null ? Number(d.unread) : undefined,
+  };
 }
 
 export async function getTicket(id: number): Promise<SupportTicket> {

@@ -14,9 +14,17 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/constants/theme";
-import { getProducts } from "@/services/products";
-import { getCategories, getWarehouses } from "@/services/catalog";
-import { createSell } from "@/services/pos";
+import { getCategories } from "@/services/catalog";
+import {
+  couponDiscountFor,
+  createSell,
+  DEFAULT_POS_METHODS,
+  getPosLocations,
+  getPosPaymentOptions,
+  getPosProducts,
+  type PosLocation,
+} from "@/services/pos";
+import { apiErrorMessage } from "@/lib/format";
 import { getTaxSettings } from "@/services/settings";
 import { getCustomers } from "@/services/customers";
 import type { Customer } from "@/services/customers";
@@ -28,9 +36,8 @@ import { CouponModal } from "@/components/pos/CouponModal";
 import { CheckoutModal } from "@/components/pos/CheckoutModal";
 import { SuccessModal } from "@/components/pos/SuccessModal";
 import { BarcodeScannerModal } from "@/components/pos/BarcodeScannerModal";
-import type { Product, ProductVariant } from "@/types/product";
-import type { Category, Warehouse } from "@/types/catalog";
-import type { CartItem, Coupon, CompletedSale, PaymentMethod } from "@/types/pos";
+import type { Category } from "@/types/catalog";
+import type { CartItem, Coupon, CompletedSale, PaymentMethod, PosPaymentOptions, PosProduct, PosVariant } from "@/types/pos";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
 
@@ -42,10 +49,12 @@ function cartKey(productId: number, variantId?: number) {
 export default function PosTab() {
   const { formatCurrency } = useCurrency();
   // ── Data ──
-  const [products, setProducts]       = useState<Product[]>([]);
+  const [products, setProducts]       = useState<PosProduct[]>([]);
   const [categories, setCategories]   = useState<Category[]>([]);
-  const [warehouses, setWarehouses]   = useState<Warehouse[]>([]);
+  const [warehouses, setWarehouses]   = useState<PosLocation[]>([]);
+  const [locationsReady, setLocationsReady] = useState(false);
   const [loadingProds, setLoadingProds] = useState(false);
+  const [payOptions, setPayOptions]   = useState<PosPaymentOptions>({ methods: DEFAULT_POS_METHODS, defaultMethod: "Cash" });
 
   // ── Tax ──
   const [taxRate, setTaxRate] = useState(0);
@@ -66,11 +75,10 @@ export default function PosTab() {
   const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [discount, setDiscount]       = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-  const [couponDiscount, setCouponDiscount] = useState(0);
   const [cartOpen, setCartOpen]       = useState(false);
 
   // ── Modals ──
-  const [variantProduct, setVariantProduct]   = useState<Product | null>(null);
+  const [variantProduct, setVariantProduct]   = useState<PosProduct | null>(null);
   const [discountOpen, setDiscountOpen]       = useState(false);
   const [couponOpen, setCouponOpen]           = useState(false);
   const [checkoutOpen, setCheckoutOpen]       = useState(false);
@@ -85,57 +93,76 @@ export default function PosTab() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // ── Load catalogs + tax ──
+  // ── Load catalogs, locations, tax, payment methods ──
   useEffect(() => {
-    Promise.all([getCategories(), getWarehouses(), getTaxSettings()]).then(([cats, whs, tax]) => {
-      setCategories(cats);
-      setWarehouses(whs);
-      const def = whs.find((w) => w.isDefault);
-      if (def) setSelectedWh(String(def.id));
-      setTaxRate((tax.defaultTaxRate ?? 0) / 100);
-    });
+    getCategories().then(setCategories).catch(() => undefined);
+    getTaxSettings().then((tax) => setTaxRate((tax.defaultTaxRate ?? 0) / 100)).catch(() => undefined);
+    getPosPaymentOptions().then(setPayOptions).catch(() => undefined);
+    getPosLocations()
+      .then((whs) => {
+        setWarehouses(whs);
+        const def = whs.find((w) => w.isDefault) ?? whs[0];
+        if (def) setSelectedWh(String(def.id));
+      })
+      .catch(() => undefined)
+      .finally(() => setLocationsReady(true));
   }, []);
 
-  // ── Load products ──
+  // ── Load products (POS products only, priced and stocked at the selected location) ──
   const loadProducts = useCallback(async () => {
+    if (!locationsReady) return;
     setLoadingProds(true);
     try {
-      const result = await getProducts({
-        page: 1,
-        limit: 60,
+      const result = await getPosProducts({
         search: debouncedSearch || undefined,
         categoryId: selectedCat !== "all" ? Number(selectedCat) : undefined,
         locationId: selectedWh ? Number(selectedWh) : undefined,
       });
-      setProducts(result.data.filter((p) => p.published));
+      setProducts(result.filter((p) => p.published));
+    } catch (err) {
+      Alert.alert("Could not load products", apiErrorMessage(err));
     } finally {
       setLoadingProds(false);
     }
-  }, [debouncedSearch, selectedCat, selectedWh]);
+  }, [debouncedSearch, selectedCat, selectedWh, locationsReady]);
 
   useEffect(() => { void loadProducts(); }, [loadProducts]);
 
   // ── Totals ──
+  const round2 = (v: number) => Math.round(v * 100) / 100;
   const subtotal = useMemo(
-    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    () => round2(cart.reduce((sum, item) => sum + item.price * item.quantity, 0)),
     [cart],
   );
-  const totalDiscount = discount + couponDiscount;
-  const tax           = (subtotal - totalDiscount) * taxRate;
-  const total         = subtotal - totalDiscount + tax;
+  const manualDiscount = Math.min(Math.max(discount, 0), subtotal);
+  // the coupon follows the cart, so it stays right as items change
+  const couponCalc = appliedCoupon
+    ? couponDiscountFor(
+        appliedCoupon,
+        cart.map((i) => ({ productId: i.productId, categoryId: i.categoryId, subtotal: i.price * i.quantity })),
+        subtotal,
+        manualDiscount,
+      )
+    : { amount: 0, problem: "" };
+  const couponDiscount = couponCalc.amount;
+  const couponProblem = !appliedCoupon || !couponCalc.problem
+    ? ""
+    : couponCalc.problem === "min"
+      ? `Minimum order ${formatCurrency(appliedCoupon.minOrderAmount)} required for ${appliedCoupon.code}.`
+      : couponCalc.problem;
+  const totalDiscount = round2(manualDiscount + couponDiscount);
+  const tax           = round2(Math.max(0, subtotal - totalDiscount) * taxRate);
+  const total         = round2(Math.max(0, subtotal - totalDiscount) + tax);
 
   // ── Cart helpers ──
-  const calcDisplayPrice = (base: number, offerPrice?: number, offerType?: string) => {
-    if (!offerPrice || offerPrice <= 0) return base;
-    return offerType === "percentage" ? base * (1 - offerPrice / 100) : base - offerPrice;
-  };
-
-  const addToCart = useCallback((product: Product, variant?: ProductVariant) => {
-    const key = cartKey(product.id, variant ? Number(variant.id) : undefined);
-    const price = variant
-      ? calcDisplayPrice(variant.salePrice > 0 ? variant.salePrice : variant.price, variant.offerPrice, variant.offerType)
-      : calcDisplayPrice(product.salePrice > 0 ? product.salePrice : product.price, product.offerPrice, product.offerType);
+  const addToCart = useCallback((product: PosProduct, variant?: PosVariant) => {
+    const key = cartKey(product.id, variant ? variant.id : undefined);
+    const price = variant ? variant.price : product.price;
     const stock = variant ? variant.stock : product.stock;
+    if (stock <= 0) {
+      Alert.alert("Out of stock", `${product.name}${variant ? ` (${variant.name})` : ""} has no stock at this location.`);
+      return;
+    }
 
     setCart((prev) => {
       const existing = prev.find((i) => i.key === key);
@@ -148,10 +175,16 @@ export default function PosTab() {
         {
           key,
           productId: product.id,
-          variantId: variant ? Number(variant.id) : undefined,
+          variantId: variant ? variant.id : undefined,
+          inventoryId: variant?.inventoryId,
+          categoryId: product.categoryId,
           name: product.name,
           variantName: variant?.name,
           price,
+          regularPrice: variant ? variant.regularPrice : product.regularPrice,
+          // a variant without its own wholesale tier uses the product's (same rule as the server)
+          wholesalePrice: variant?.wholesalePrice || product.wholesalePrice,
+          minWholesaleQty: variant?.wholesalePrice ? (variant.minWholesaleQty || product.minWholesaleQty) : product.minWholesaleQty,
           image: product.image,
           quantity: 1,
           stock,
@@ -161,7 +194,7 @@ export default function PosTab() {
     setCartOpen(true);
   }, []);
 
-  const handleProductPress = (product: Product) => {
+  const handleProductPress = (product: PosProduct) => {
     if (product.variants.length > 0) {
       setVariantProduct(product);
     } else {
@@ -185,7 +218,6 @@ export default function PosTab() {
     setCart([]);
     setDiscount(0);
     setAppliedCoupon(null);
-    setCouponDiscount(0);
     setCustomerName("Walk-in Customer");
     setSelectedCustomer(null);
     setCustomerSuggestions([]);
@@ -195,6 +227,7 @@ export default function PosTab() {
 
   const handleCustomerSearch = (text: string) => {
     setCustomerName(text);
+    setSelectedCustomer(null); // typing a name is a walk-in until a saved customer is picked
     if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
     if (!text || text === "Walk-in Customer") {
       setCustomerSuggestions([]);
@@ -235,30 +268,59 @@ export default function PosTab() {
     const matchedVariant = match.variants.find(
       (v) => v.barcode === barcode || v.sku === barcode,
     );
+    if (!matchedVariant && match.variants.length > 0) {
+      setVariantProduct(match);
+      return;
+    }
     addToCart(match, matchedVariant);
   }, [products, addToCart]);
 
   // ── Checkout ──
-  const handleConfirm = async (method: PaymentMethod, tendered: number, change: number) => {
+  const canCheckout = (method: PaymentMethod): string | null => {
+    if (cart.length === 0) return "Add at least one item.";
+    if (method === "COD" && !selectedCustomer) return "Cash on delivery needs a customer. Pick a saved customer first.";
+    if (appliedCoupon?.perCustomer && !selectedCustomer) return "Select a customer to use this coupon";
+    if (appliedCoupon && couponProblem) return couponProblem;
+    return null;
+  };
+
+  const handleConfirm = async (method: PaymentMethod, tendered: number, change: number, transactionId?: string) => {
+    const problem = canCheckout(method);
+    if (problem) {
+      Alert.alert("Cannot complete the sale", problem);
+      return;
+    }
     setSubmitting(true);
     try {
+      const isCod = method === "COD";
+      const location = warehouses.find((w) => String(w.id) === selectedWh);
       const result = await createSell({
-        customerName,
+        customerId: selectedCustomer?.id,
+        customerName: selectedCustomer?.name || customerName.trim() || "Walk-in Customer",
+        customerPhone: selectedCustomer?.phone || undefined,
+        customerEmail: selectedCustomer?.email || undefined,
         shippingFullName: selectedCustomer?.name,
         shippingPhone: selectedCustomer?.phone,
-        shippingEmail: selectedCustomer?.email,
+        shippingEmail: selectedCustomer?.email || undefined,
         shippingAddressLine1: selectedCustomer?.address,
         shippingCity: selectedCustomer?.city,
         shippingState: selectedCustomer?.state,
         shippingPostalCode: selectedCustomer?.zipCode,
         shippingCountry: selectedCustomer?.country,
         method,
+        source: "pos",
+        locationId: location ? location.id : undefined,
         amount: total,
         discount: totalDiscount,
-        couponId: appliedCoupon?.id,
-        couponCode: appliedCoupon?.code,
+        manualDiscount,
+        ...(appliedCoupon && couponDiscount > 0 ? { couponId: appliedCoupon.id, couponCode: appliedCoupon.code } : {}),
+        taxRate: tax > 0 ? round2(taxRate * 100) : undefined,
+        taxAmount: tax > 0 ? tax : undefined,
+        // paid at the counter; cash on delivery is collected later
+        paidAmount: isCod ? 0 : total,
+        transactionId: transactionId?.trim() || undefined,
         shippingCost: 0,
-        status: "Pending",
+        status: isCod ? "Pending" : "Delivered",
         items: cart.map((item) => ({
           productId: item.productId,
           variantId: item.variantId,
@@ -269,27 +331,31 @@ export default function PosTab() {
         })),
       });
 
+      // the server may re-price (wholesale) or re-settle the coupon: show its totals
+      const serverDiscount = result.discount;
       setCompletedSale({
         invoiceNo: result.invoiceNo,
-        customerName,
+        customerName: selectedCustomer?.name || customerName,
         method,
         subtotal,
-        discount,
-        couponDiscount,
+        discount: appliedCoupon ? manualDiscount : serverDiscount,
+        couponDiscount: appliedCoupon ? Math.max(0, round2(serverDiscount - manualDiscount)) : 0,
         tax,
-        total,
+        total: result.amount,
         itemCount: cart.reduce((s, i) => s + i.quantity, 0),
         tendered: method === "Cash" ? tendered : undefined,
-        change: method === "Cash" ? change : undefined,
+        change: method === "Cash" ? Math.max(0, round2(tendered - result.amount)) || change : undefined,
+        transactionId: transactionId?.trim() || undefined,
       });
 
       setCheckoutOpen(false);
       setSuccessOpen(true);
+      void loadProducts(); // stock changed
     } catch (err: any) {
-      const data = err?.response?.data;
-      const msg = data?.message ?? data?.error ?? "Could not complete the sale.";
-      const errors = data?.errors ? "\n" + Object.values(data.errors).flat().join("\n") : "";
-      Alert.alert("Checkout failed", msg + errors);
+      // server rules (out-of-date price, stock at this location, coupon) come back as a 422 message
+      const msg = apiErrorMessage(err, "Could not complete the sale.");
+      Alert.alert("Sale not completed", msg);
+      if (/price is out of date/i.test(msg)) void loadProducts();
     } finally {
       setSubmitting(false);
     }
@@ -478,8 +544,12 @@ export default function PosTab() {
               <View style={styles.totals}>
                 <TotalRow label="Subtotal" value={formatCurrency(subtotal)} />
                 {discount > 0 && <TotalRow label="Discount" value={`− ${formatCurrency(discount)}`} valueColor="#dc2626" />}
-                {couponDiscount > 0 && <TotalRow label="Coupon" value={`− ${formatCurrency(couponDiscount)}`} valueColor="#dc2626" />}
-                <TotalRow label={`Tax (${Math.round(taxRate * 100)}%)`} value={formatCurrency(tax)} />
+                {couponDiscount > 0 && <TotalRow label={`Coupon (${appliedCoupon?.code})`} value={`− ${formatCurrency(couponDiscount)}`} valueColor="#dc2626" />}
+                {couponProblem ? <Text style={styles.couponProblem}>{couponProblem}</Text> : null}
+                {appliedCoupon?.perCustomer && !selectedCustomer ? (
+                  <Text style={styles.couponProblem}>Select a customer to use this coupon</Text>
+                ) : null}
+                {taxRate > 0 ? <TotalRow label={`Tax (${round2(taxRate * 100)}%)`} value={formatCurrency(tax)} /> : null}
                 <View style={styles.totalDivider} />
                 <TotalRow label="Total" value={formatCurrency(total)} bold />
               </View>
@@ -539,7 +609,7 @@ export default function PosTab() {
           <Text style={styles.variantTitle}>{variantProduct?.name}</Text>
           <Text style={styles.variantSubtitle}>Select a variant</Text>
           {variantProduct?.variants.map((v) => {
-            const price = calcDisplayPrice(v.salePrice > 0 ? v.salePrice : v.price, v.offerPrice, v.offerType);
+            const price = v.price;
             return (
               <Pressable
                 key={v.id}
@@ -556,6 +626,9 @@ export default function PosTab() {
                   {v.stock <= 0 && <Text style={styles.variantOos}>Out of stock</Text>}
                 </View>
                 <View style={styles.variantRight}>
+                  {v.offerActive && v.regularPrice > price ? (
+                    <Text style={styles.variantStrike}>{formatCurrency(v.regularPrice)}</Text>
+                  ) : null}
                   <Text style={styles.variantPrice}>{formatCurrency(price)}</Text>
                   {v.stock > 0 && (
                     <Text style={styles.variantStock}>Stock: {v.stock}</Text>
@@ -579,20 +652,27 @@ export default function PosTab() {
       <CouponModal
         visible={couponOpen}
         subtotal={subtotal}
+        lines={cart.map((i) => ({ productId: i.productId, categoryId: i.categoryId, subtotal: i.price * i.quantity }))}
+        manualDiscount={manualDiscount}
+        hasCustomer={!!selectedCustomer}
         appliedCoupon={appliedCoupon}
-        onApply={(coupon, amount) => { setAppliedCoupon(coupon); setCouponDiscount(amount); }}
-        onRemove={() => { setAppliedCoupon(null); setCouponDiscount(0); }}
+        onApply={(coupon) => setAppliedCoupon(coupon)}
+        onRemove={() => setAppliedCoupon(null)}
         onClose={() => setCouponOpen(false)}
       />
 
       <CheckoutModal
         visible={checkoutOpen}
         total={total}
+        validate={canCheckout}
         subtotal={subtotal}
-        discount={discount}
+        discount={manualDiscount}
         couponDiscount={couponDiscount}
         tax={tax}
-        customerName={customerName}
+        customerName={selectedCustomer?.name || customerName}
+        hasCustomer={!!selectedCustomer}
+        methods={payOptions.methods}
+        defaultMethod={payOptions.defaultMethod}
         itemCount={cartCount}
         submitting={submitting}
         onConfirm={handleConfirm}
@@ -1010,6 +1090,17 @@ const styles = StyleSheet.create({
   variantRight: {
     alignItems: "flex-end",
     gap: 2,
+  },
+  variantStrike: {
+    color: colors.muted,
+    fontSize: 12,
+    textDecorationLine: "line-through",
+  },
+  couponProblem: {
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: "600",
+    paddingVertical: 2,
   },
   variantPrice: {
     color: colors.primaryDark,

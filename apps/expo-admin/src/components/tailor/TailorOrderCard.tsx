@@ -2,66 +2,74 @@ import React from "react"
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { colors } from "@/constants/theme"
-import type { TailorOrder } from "@/types/tailor"
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, PAYMENT_STATUS_COLORS } from "@/types/tailor"
+import type { TailorBoardRow } from "@/types/tailor"
+import { PAYMENT_STATUS_COLORS, TAILOR_STAGE_COLORS, TAILOR_STAGE_LABEL } from "@/types/tailor"
+import { whenText } from "@/components/tailor/tailorHelpers"
 
-interface Props { order: TailorOrder; onPress: () => void; formatCurrency: (n: any) => string }
-
-const STATUS_BG: Record<string, string> = {
-  pending: "#fef3c7", measurement_taken: "#dbeafe", assigned: "#ede9fe",
-  cutting: "#e0f2fe", stitching: "#f3e8ff", ready: "#dcfce7",
-  delivered: "#d1fae5", cancelled: "#fee2e2",
-}
+interface Props { order: TailorBoardRow; onPress: () => void; formatCurrency: (n: number) => string }
 
 export function TailorOrderCard({ order, onPress, formatCurrency }: Props) {
-  const isOverdue =
-    order.deliveryDate &&
-    order.orderStatus !== "delivered" &&
-    order.orderStatus !== "cancelled" &&
-    new Date(order.deliveryDate) < new Date()
-
-  const statusColor = ORDER_STATUS_COLORS[order.orderStatus] ?? "#94a3b8"
-  const statusBg = STATUS_BG[order.orderStatus] ?? "#f1f5f9"
+  const open = order.stage !== "delivered" && order.stage !== "cancelled"
+  const when = whenText(order.daysLeft, order.stage)
+  const statusColor = TAILOR_STAGE_COLORS[order.stage] ?? "#94a3b8"
   const payColor = PAYMENT_STATUS_COLORS[order.paymentStatus] ?? "#94a3b8"
   const initials = (order.customer?.name ?? "?").trim().split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
 
   return (
     <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.72}>
+      {/* Left accent bar */}
       <View style={[s.accent, { backgroundColor: statusColor }]} />
 
       <View style={s.body}>
+        {/* Top row */}
         <View style={s.row}>
           <View style={s.avatar}>
             <Text style={s.avatarText}>{initials}</Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.customerName} numberOfLines={1}>
-              {order.customer?.name ?? `Customer #${order.customerId}`}
+              {order.customer?.name ?? "—"}
             </Text>
-            <Text style={s.orderNum}>{order.orderNumber}</Text>
+            <Text style={s.orderNum}>{order.orderNumber}{order.isUrgent ? "  · URGENT" : ""}</Text>
           </View>
-          <View style={[s.statusPill, { backgroundColor: statusBg }]}>
+          <View style={[s.statusPill, { backgroundColor: statusColor + "22" }]}>
             <Text style={[s.statusText, { color: statusColor }]}>
-              {ORDER_STATUS_LABELS[order.orderStatus]}
+              {TAILOR_STAGE_LABEL[order.stage]}
             </Text>
           </View>
         </View>
 
+        {order.itemsSummary ? (
+          <Text style={s.summary} numberOfLines={1}>
+            {order.itemsSummary}{order.dorjiNames.length ? ` · ${order.dorjiNames.join(", ")}` : ""}
+          </Text>
+        ) : null}
+
+        {/* Stage bar */}
+        <View style={s.stageBar}>
+          {[0, 1, 2, 3, 4, 5].map((j) => (
+            <View
+              key={j}
+              style={[s.stageSeg, {
+                backgroundColor: order.stage === "cancelled" ? "#fecaca" : j <= order.stageIndex ? statusColor : colors.border,
+              }]}
+            />
+          ))}
+        </View>
+
+        {/* Divider */}
         <View style={s.divider} />
 
+        {/* Bottom row */}
         <View style={s.row}>
           <View style={s.metaItem}>
             <Ionicons name="calendar-outline" size={12} color={colors.muted} />
-            <Text style={[s.metaText, isOverdue && s.overdueText]}>
+            <Text style={[s.metaText, open && { color: when.color }]}>
               {order.deliveryDate
-                ? new Date(order.deliveryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+                ? new Date(order.deliveryDate + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
                 : "No date"}
+              {open && order.daysLeft != null ? ` · ${when.text}` : ""}
             </Text>
-            {isOverdue && <Ionicons name="warning-outline" size={11} color="#ef4444" />}
-          </View>
-          <View style={s.metaItem}>
-            <Ionicons name="shirt-outline" size={12} color={colors.muted} />
-            <Text style={s.metaText}>{order.items?.length ?? 0} item{(order.items?.length ?? 0) !== 1 ? "s" : ""}</Text>
           </View>
           <View style={{ flex: 1 }} />
           <View style={[s.payPill, { backgroundColor: payColor + "22" }]}>
@@ -71,6 +79,9 @@ export function TailorOrderCard({ order, onPress, formatCurrency }: Props) {
           </View>
           <Text style={s.amount}>{formatCurrency(order.totalAmount)}</Text>
         </View>
+        {open && order.dueAmount > 0 ? (
+          <Text style={s.dueText}>Due {formatCurrency(order.dueAmount)}</Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   )
@@ -101,13 +112,21 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 13, fontWeight: "900", color: "#7c3aed" },
   customerName: { fontSize: 14, fontWeight: "800", color: colors.text },
   orderNum: { fontSize: 11, color: "#7c3aed", fontWeight: "600", marginTop: 1 },
-  statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusPill: {
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
   statusText: { fontSize: 11, fontWeight: "700" },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 10 },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaText: { fontSize: 12, color: colors.muted, fontWeight: "500" },
   overdueText: { color: "#ef4444", fontWeight: "700" },
-  payPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  payPill: {
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
+  },
   payText: { fontSize: 11, fontWeight: "700" },
+  summary: { fontSize: 12, color: colors.muted, marginTop: 8 },
+  stageBar: { flexDirection: "row", gap: 3, marginTop: 8 },
+  stageSeg: { flex: 1, height: 4, borderRadius: 2 },
+  dueText: { fontSize: 11, color: "#d97706", fontWeight: "700", textAlign: "right", marginTop: 4 },
   amount: { fontSize: 14, fontWeight: "900", color: "#7c3aed" },
 })

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,8 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
 import { useAuth } from "@/context/AuthContext"
 import { useCurrency } from "@/context/CurrencyContext"
-import { getTailorOrder, updateTailorOrder } from "@/services/tailor"
-import type { TailorOrder } from "@/types/tailor"
+import { getTailorOrderDetail, tailorApiError, updateTailorOrder } from "@/services/tailor"
+import type { TailorOrderDetail } from "@/types/tailor"
 import { AccessDenied } from "@/components/AccessDenied"
 import { colors } from "@/constants/theme"
 
@@ -25,7 +27,7 @@ export default function EditTailorOrderScreen() {
   const { formatCurrency } = useCurrency()
 
   const [loading, setLoading] = useState(true)
-  const [order, setOrder] = useState<TailorOrder | null>(null)
+  const [order, setOrder] = useState<TailorOrderDetail | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [itemsExpanded, setItemsExpanded] = useState(false)
 
@@ -39,32 +41,40 @@ export default function EditTailorOrderScreen() {
   useEffect(() => {
     if (!id) return
     setLoading(true)
-    getTailorOrder(+id)
+    getTailorOrderDetail(+id)
       .then((o) => {
         setOrder(o)
         setDeliveryDate(o.deliveryDate ? o.deliveryDate.slice(0, 10) : "")
-        setStitchingCharge(String(o.stitchingCharge))
-        setExtraCharge(String(o.extraCharge))
-        setDiscount(String(o.discount))
+        setStitchingCharge(String(o.charges.stitching || o.charges.stitchingOrderLevel))
+        setExtraCharge(String(o.charges.extra))
+        setDiscount(String(o.charges.discount))
         setNotes(o.notes ?? "")
       })
       .catch((err: any) => {
-        Alert.alert("Error", err?.message ?? "Failed to load order")
+        Alert.alert("Error", tailorApiError(err, "Failed to load order"))
       })
       .finally(() => setLoading(false))
   }, [id])
 
   if (!canWrite("TailorOrders")) return <AccessDenied />
 
-  const fabricTotal =
-    order?.items?.reduce((sum, item) => sum + item.fabricQuantity * item.fabricUnitPrice, 0) ?? 0
+  const fabricTotal = order?.charges.fabric ?? 0
+  const urgentFee = order?.charges.urgent ?? 0
   const stitching = parseFloat(stitchingCharge) || 0
   const extra = parseFloat(extraCharge) || 0
   const disc = parseFloat(discount) || 0
-  const liveTotal = Math.max(0, fabricTotal + stitching + extra - disc)
+  const liveTotal = Math.max(0, fabricTotal + urgentFee + stitching + extra - disc)
 
   const handleSubmit = async () => {
-    if (!id) return
+    if (!id || !order) return
+    if ([stitchingCharge, extraCharge, discount].some((v) => v.trim() !== "" && (isNaN(Number(v)) || Number(v) < 0))) {
+      Alert.alert("Validation", "Charges must be 0 or more"); return
+    }
+    if (deliveryDate && !/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) { Alert.alert("Validation", "Enter the delivery date as YYYY-MM-DD"); return }
+    if (order.orderDate && deliveryDate && deliveryDate < order.orderDate.slice(0, 10)) {
+      Alert.alert("Validation", "Delivery date cannot be before the order date."); return
+    }
+    if (disc > stitching + fabricTotal + urgentFee + extra) { Alert.alert("Validation", "Discount cannot be more than the order subtotal."); return }
     setSubmitting(true)
     try {
       await updateTailorOrder(+id, {
@@ -76,13 +86,14 @@ export default function EditTailorOrderScreen() {
       })
       router.back()
     } catch (err: any) {
-      Alert.alert("Error", err?.message ?? "Failed to update order")
+      Alert.alert("Error", tailorApiError(err, "Failed to update order"))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <SafeAreaView style={s.safe} edges={["top", "bottom"]}>
       {/* Top bar */}
       <View style={s.topBar}>
@@ -153,17 +164,18 @@ export default function EditTailorOrderScreen() {
 
               {itemsExpanded &&
                 order.items.map((item, idx) => {
-                  const subtotal = item.fabricQuantity * item.fabricUnitPrice
                   return (
                     <View key={item.id ?? idx} style={s.itemRow}>
                       <View style={s.itemRowLeft}>
-                        <Text style={s.itemType}>{item.productType}</Text>
-                        {item.fabric ? (
-                          <Text style={s.itemFabric}>{item.fabric.name}</Text>
-                        ) : null}
-                        <Text style={s.itemQty}>Qty: {item.fabricQuantity}</Text>
+                        <Text style={s.itemType}>{item.productType} ×{item.quantity}</Text>
+                        <Text style={s.itemFabric}>
+                          {item.fabricSource === "shop" && item.fabric
+                            ? `${item.fabric.name} · ${item.fabricQuantity} ${item.fabric.unit}`
+                            : `Customer fabric${item.ownFabricNote ? `: ${item.ownFabricNote}` : ""}`}
+                        </Text>
+                        <Text style={s.itemQty}>Stitching {formatCurrency(item.stitchingPrice)} each</Text>
                       </View>
-                      <Text style={s.itemSubtotal}>{formatCurrency(subtotal)}</Text>
+                      <Text style={s.itemSubtotal}>{formatCurrency(item.lineTotal)}</Text>
                     </View>
                   )
                 })}
@@ -215,6 +227,9 @@ export default function EditTailorOrderScreen() {
               placeholderTextColor={colors.muted}
             />
 
+            <Text style={s.itemQty}>
+              Includes fabric {formatCurrency(fabricTotal)}{urgentFee > 0 ? ` and urgent charge ${formatCurrency(urgentFee)}` : ""}. Garments and fabric are locked once the order is placed.
+            </Text>
             <View style={s.totalBox}>
               <Text style={s.totalLabel}>Estimated Total</Text>
               <Text style={s.totalValue}>{formatCurrency(liveTotal)}</Text>
@@ -256,6 +271,7 @@ export default function EditTailorOrderScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+    </KeyboardAvoidingView>
   )
 }
 

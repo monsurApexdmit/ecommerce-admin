@@ -13,6 +13,9 @@ import type {
   ProductReviewListResult,
   ProductReviewReply,
   ProductStats,
+  ProductStockByLocation,
+  ProductStockState,
+  ProductTabCounts,
   ProductVariant,
 } from "@/types/product";
 
@@ -68,18 +71,28 @@ type ProductVariantResponse = {
   profitMargin?: number | string | null;
   margin_type?: string | null;
   marginType?: string | null;
+  offer_price?: number | string | null;
+  offerPrice?: number | string | null;
+  offer_type?: string | null;
+  offerType?: string | null;
+  offerActive?: boolean | null;
+  currentPrice?: number | string | null;
   stock?: number | string | null;
   attributes?: Record<string, string> | string | null;
   inventory?: Array<{
+    id?: number;
     inventory_id?: number;
     warehouse_id?: number;
+    locationId?: number | null;
+    location_id?: number | null;
     quantity?: number | string | null;
   }>;
 };
 
 type ProductInventoryResponse = {
   inventory_id?: number;
-  warehouse_id?: number;
+  warehouse_id?: number | null;
+  warehouseId?: number | null;
   quantity?: number | string | null;
 };
 
@@ -101,6 +114,9 @@ type ProductResponse = {
   offerPrice?: number | string | null;
   offer_type?: string | null;
   offerType?: string | null;
+  offerEndsAt?: string | null;
+  offerActive?: boolean | null;
+  currentPrice?: number | string | null;
   cost_price?: number | string | null;
   costPrice?: number | string | null;
   profit_margin?: number | string | null;
@@ -108,6 +124,16 @@ type ProductResponse = {
   margin_type?: string | null;
   marginType?: string | null;
   stock?: number | string | null;
+  stockState?: string | null;
+  reorderPoint?: number | string | null;
+  reorder_point?: number | string | null;
+  stockByLocation?: Array<{ locationId?: number; locationName?: string | null; quantity?: number | string | null }> | null;
+  availableInPos?: boolean | null;
+  available_in_pos?: boolean | null;
+  visibleOnline?: boolean | null;
+  visible_online?: boolean | null;
+  tag?: string | null;
+  locationName?: string | null;
   status?: string | null;
   published?: boolean | null;
   image?: string | null;
@@ -237,10 +263,26 @@ function normalizeInventory(items?: ProductInventoryResponse[] | null): ProductI
   return Array.isArray(items)
     ? items.map((item) => ({
         inventoryId: item.inventory_id,
-        warehouseId: Number(item.warehouse_id ?? 0),
+        warehouseId: Number(item.warehouseId ?? item.warehouse_id ?? 0),
         quantity: toNumber(item.quantity),
       }))
     : [];
+}
+
+function normalizeStockByLocation(items?: ProductResponse["stockByLocation"]): ProductStockByLocation[] | undefined {
+  if (!Array.isArray(items)) return undefined;
+  return items.map((item) => ({
+    locationId: Number(item.locationId ?? 0),
+    locationName: item.locationName ?? "",
+    quantity: toNumber(item.quantity),
+  }));
+}
+
+function normalizeStockState(value: string | null | undefined, stock: number, reorderPoint: number): ProductStockState {
+  if (value === "ok" || value === "low" || value === "out") return value;
+  if (stock <= 0) return "out";
+  if (reorderPoint > 0 && stock <= reorderPoint) return "low";
+  return "ok";
 }
 
 function normalizeAttributes(items?: ProductAttributeResponse[] | null): ProductAttributeSelection[] {
@@ -291,13 +333,16 @@ function normalizeVariants(items?: ProductVariantResponse[] | null): ProductVari
         marginType: variant.marginType ?? variant.margin_type ?? undefined,
         offerPrice: variant.offerPrice ?? variant.offer_price ? toNumber(variant.offerPrice ?? variant.offer_price) || undefined : undefined,
         offerType: variant.offerType ?? variant.offer_type ?? undefined,
+        offerActive: variant.offerActive ?? undefined,
+        currentPrice:
+          variant.currentPrice !== undefined && variant.currentPrice !== null ? toNumber(variant.currentPrice) : undefined,
         stock: toNumber(variant.stock),
         sku: variant.sku ?? "",
         barcode: variant.barcode ?? undefined,
         inventory: Array.isArray(variant.inventory)
           ? variant.inventory.map((item) => ({
-              inventoryId: item.inventory_id,
-              warehouseId: Number(item.warehouse_id ?? 0),
+              inventoryId: item.inventory_id ?? item.id,
+              warehouseId: Number(item.locationId ?? item.location_id ?? item.warehouse_id ?? 0),
               quantity: toNumber(item.quantity),
             }))
           : [],
@@ -369,6 +414,8 @@ function normalizeProduct(product: ProductResponse): Product {
   const stock = toNumber(product.stock);
   const salePrice = toNumber(product.salePrice ?? product.sale_price);
   const price = toNumber(product.price);
+  const reorderPoint = toNumber(product.reorderPoint ?? product.reorder_point);
+  const published = Boolean(product.published ?? true);
 
   return {
     id: product.id,
@@ -382,6 +429,10 @@ function normalizeProduct(product: ProductResponse): Product {
       ? toNumber(product.offerPrice ?? product.offer_price) || undefined
       : undefined,
     offerType: product.offerType ?? product.offer_type ?? undefined,
+    offerEndsAt: product.offerEndsAt ?? undefined,
+    offerActive: product.offerActive ?? undefined,
+    currentPrice:
+      product.currentPrice !== undefined && product.currentPrice !== null ? toNumber(product.currentPrice) : undefined,
     costPrice:
       product.costPrice ?? product.cost_price ? toNumber(product.costPrice ?? product.cost_price) : undefined,
     profitMargin:
@@ -390,9 +441,15 @@ function normalizeProduct(product: ProductResponse): Product {
         : undefined,
     marginType: product.marginType ?? product.margin_type ?? undefined,
     stock,
+    stockState: normalizeStockState(product.stockState, stock, reorderPoint),
+    reorderPoint,
+    stockByLocation: normalizeStockByLocation(product.stockByLocation),
+    availableInPos: product.availableInPos ?? product.available_in_pos ?? true,
+    visibleOnline: product.visibleOnline ?? product.visible_online ?? true,
+    tag: product.tag ?? undefined,
     status:
       (product.status as Product["status"]) ?? (stock > 0 ? "Selling" : "Out of Stock"),
-    published: Boolean(product.published ?? true),
+    published,
     isHotDeal: Boolean(product.isHotDeal ?? product.is_hot_deal),
     isBestSeller: Boolean(product.isBestSeller ?? product.is_best_seller),
     isFeatured: Boolean(product.isFeatured ?? product.is_featured),
@@ -405,7 +462,7 @@ function normalizeProduct(product: ProductResponse): Product {
     vendorId: product.vendorId ?? product.vendor_id ?? undefined,
     vendorName: product.vendor?.name ?? product.vendorName ?? product.vendor_name ?? undefined,
     locationId,
-    locationName: product.location?.name ?? undefined,
+    locationName: product.location?.name ?? product.locationName ?? undefined,
     attributes: normalizeAttributes(product.attributes),
     variants: normalizeVariants(product.variants),
     inventory: normalizeInventory(product.inventory),
@@ -437,6 +494,11 @@ function buildFormData(draft: ProductDraft) {
     formData.append("offer_price", "");
     formData.append("offer_type", "");
   }
+
+  if (draft.reorderPoint !== undefined) formData.append("reorderPoint", String(draft.reorderPoint));
+  if (draft.availableInPos !== undefined) formData.append("availableInPos", draft.availableInPos ? "1" : "0");
+  if (draft.visibleOnline !== undefined) formData.append("visibleOnline", draft.visibleOnline ? "1" : "0");
+  if (draft.tag !== undefined) formData.append("tag", draft.tag);
 
   if (draft.costPrice !== undefined) formData.append("cost_price", String(draft.costPrice));
   if (draft.profitMargin !== undefined) formData.append("profit_margin", String(draft.profitMargin));
@@ -519,13 +581,24 @@ async function sendMultipart<T>(method: "POST" | "PUT", path: string, draft: Pro
 
   const response = await fetch(url, {
     method,
-    headers: session?.token ? { Authorization: `Bearer ${session.token}` } : undefined,
+    headers: {
+      Accept: "application/json",
+      ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+    },
     body: formData,
   });
 
-  const payload = (await response.json()) as T & { message?: string };
-  if (!response.ok) {
-    throw new Error((payload as { message?: string }).message ?? "Request failed");
+  let payload: (T & { message?: string; errors?: Record<string, string[]> }) | null = null;
+  try {
+    payload = (await response.json()) as T & { message?: string; errors?: Record<string, string[]> };
+  } catch {
+    payload = null;
+  }
+  if (!response.ok || !payload) {
+    // 422 business rules carry a readable `message` (duplicate SKU/barcode, price rules…);
+    // FormRequest errors also list field errors — show the first one.
+    const firstFieldError = payload?.errors ? Object.values(payload.errors).flat()[0] : undefined;
+    throw new Error(firstFieldError ?? payload?.message ?? `Request failed (${response.status})`);
   }
 
   return payload;
@@ -540,7 +613,12 @@ export async function getProducts(params?: ProductListParams): Promise<ProductLi
       status: params?.status,
       category_id: params?.categoryId,
       location_id: params?.locationId,
+      locationId: params?.stockLocationId,
       vendor_id: params?.vendorId,
+      tab: params?.tab && params.tab !== "all" ? params.tab : undefined,
+      sort: params?.sort,
+      published: params?.published === undefined ? undefined : params.published ? 1 : 0,
+      pos: params?.pos ? 1 : undefined,
     },
   });
 
@@ -551,7 +629,20 @@ export async function getProducts(params?: ProductListParams): Promise<ProductLi
   const limit = laravelData.per_page ?? params?.limit ?? items.length ?? 20;
   const totalPages = laravelData.last_page ?? Math.max(1, Math.ceil(total / Math.max(1, limit)));
 
+  const rawCounts = laravelData.tabCounts as Partial<ProductTabCounts> | undefined;
+  const tabCounts: ProductTabCounts | undefined = rawCounts
+    ? {
+        all: Number(rawCounts.all ?? 0),
+        ok: Number(rawCounts.ok ?? 0),
+        low: Number(rawCounts.low ?? 0),
+        out: Number(rawCounts.out ?? 0),
+        hidden: Number(rawCounts.hidden ?? 0),
+        draft: Number(rawCounts.draft ?? 0),
+      }
+    : undefined;
+
   return {
+    tabCounts,
     data: items.map(normalizeProduct),
     pagination: {
       page,
@@ -583,33 +674,102 @@ export async function deleteProduct(id: number) {
   await api.delete(`/products/${id}`);
 }
 
-export async function updateProductStatus(id: number, published: boolean) {
-  const product = await getProductById(id);
-  return updateProduct(id, {
-    name: product.name,
-    description: product.description,
-    category: product.category,
-    categoryId: product.categoryId ?? 0,
-    locationId: product.locationId ?? product.inventory[0]?.warehouseId ?? 0,
-    price: product.price,
-    salePrice: product.salePrice,
-    costPrice: product.costPrice,
-    profitMargin: product.profitMargin,
-    marginType: product.marginType,
-    stock: product.stock,
-    published,
-    isHotDeal: product.isHotDeal,
-    isBestSeller: product.isBestSeller,
-    isFeatured: product.isFeatured,
-    dealLabel: product.dealLabel,
-    sku: product.sku,
-    barcode: product.barcode,
-    receiptNumber: product.receiptNumber,
-    vendorId: product.vendorId,
-    attributes: product.attributes,
-    variants: product.variants,
-    keepImages: product.images.map((image) => image.path),
+export async function updateProductStatus(id: number, published: boolean): Promise<Product> {
+  // Dedicated endpoint: only flips `published`, leaving prices/offers/variants untouched.
+  const response = await api.patch<{ data: ProductResponse }>(`/products/${id}/status`, { published });
+  return normalizeProduct(response.data.data);
+}
+
+export type StockAdjustmentType = "increase" | "decrease" | "set";
+
+export interface StockAdjustmentResult {
+  id: number;
+  number: string;
+  productId: number;
+  productName: string;
+  variantId: number | null;
+  variantName: string | null;
+  locationId: number;
+  type: StockAdjustmentType;
+  quantity: number;
+  delta: number;
+  before: number;
+  after: number;
+  reason: string;
+  flagged?: boolean;
+}
+
+/** Reasons offered by the web adjustment screen, per adjustment type. */
+export const STOCK_ADJUST_REASONS: Record<StockAdjustmentType, string[]> = {
+  increase: ["Recount", "Received without PO", "Customer return", "Found", "Other"],
+  decrease: ["Recount", "Damaged", "Expired", "Theft / loss", "Gift / sample", "Own use", "Other"],
+  set: ["Recount", "Opening stock", "Other"],
+};
+
+/**
+ * Manual stock adjustment (POST /adjustments) — recorded in the movement log with an ADJ number.
+ * Products with real variants must pass the variantId (their stock is the sum of the variants).
+ */
+export async function adjustProductStock(data: {
+  productId: number;
+  variantId?: number | null;
+  locationId: number;
+  type: StockAdjustmentType;
+  quantity: number;
+  reason: string;
+  note?: string;
+}): Promise<StockAdjustmentResult> {
+  const response = await api.post("/adjustments", {
+    product_id: data.productId,
+    variant_id: data.variantId ?? null,
+    location_id: data.locationId,
+    type: data.type,
+    quantity: data.quantity,
+    reason: data.reason,
+    note: data.note || undefined,
   });
+  const d = response.data?.data ?? {};
+  return {
+    id: Number(d.id ?? 0),
+    number: d.number ?? (d.id ? `ADJ-${String(d.id).padStart(5, "0")}` : ""),
+    productId: Number(d.productId ?? data.productId),
+    productName: d.productName ?? "",
+    variantId: d.variantId ?? null,
+    variantName: d.variantName ?? null,
+    locationId: Number(d.locationId ?? data.locationId),
+    type: d.type ?? data.type,
+    quantity: Number(d.quantity ?? data.quantity),
+    delta: Number(d.delta ?? 0),
+    before: Number(d.before ?? 0),
+    after: Number(d.after ?? 0),
+    reason: d.reason ?? data.reason,
+    flagged: Boolean(d.flagged),
+  };
+}
+
+/** Real (non-"Default") variants — products that have them track stock per variant. */
+export function getRealVariants(product: Pick<Product, "variants">): ProductVariant[] {
+  return product.variants.filter((variant) => variant.name !== "Default");
+}
+
+/** Selling price shown to customers: server `currentPrice` (offer only while active). */
+export function getDisplayPrice(item: {
+  price: number;
+  salePrice: number;
+  currentPrice?: number;
+  offerActive?: boolean;
+}): { price: number; basePrice: number; hasOffer: boolean } {
+  const basePrice = item.salePrice > 0 ? item.salePrice : item.price;
+  const current = item.currentPrice !== undefined && item.currentPrice > 0 ? item.currentPrice : basePrice;
+  const hasOffer = Boolean(item.offerActive) && current < basePrice;
+  return { price: hasOffer ? current : basePrice, basePrice, hasOffer };
+}
+
+/** Readable message from an axios / fetch error (422 business rules carry `message`). */
+export function getApiErrorMessage(error: any, fallback: string): string {
+  const data = error?.response?.data;
+  const fieldError = data?.errors ? (Object.values(data.errors).flat()[0] as string | undefined) : undefined;
+  return fieldError ?? data?.message ?? error?.message ?? fallback;
 }
 
 export async function getProductStats(): Promise<ProductStats> {

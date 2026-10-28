@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -15,7 +16,7 @@ import { useNavigation } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
-import { formatDateTime } from "@/lib/format";
+import { apiErrorMessage, formatDateTime } from "@/lib/format";
 import { useCurrency } from "@/context/CurrencyContext";
 import {
   createShipment,
@@ -23,6 +24,8 @@ import {
   getShipmentById,
   getShipmentStats,
   getShipments,
+  nextShipmentStatuses,
+  recordShipmentCodPayment,
   updateShipmentStatus,
 } from "@/services/order-service";
 import type { CreateShipmentDraft, Order, Shipment, ShipmentStatus } from "@/types/order";
@@ -54,10 +57,37 @@ function statusDot(status: string) {
   return STATUS_COLOR[status]?.dot ?? colors.muted;
 }
 
-function allowedNextStatuses(current: ShipmentStatus) {
-  const index = shipmentFlow.indexOf(current);
-  return shipmentFlow.slice(Math.max(0, index));
+type CodKind = "none" | "prepaid" | "to_collect" | "collected" | "delivered_unpaid" | "returning";
+
+/** COD state from the server's `codState`, with a fallback for older rows. */
+function codView(s: Shipment): { amount: number; kind: CodKind; label: string; color: string } {
+  const amount = Number(s.codAmount) || 0;
+  let kind: CodKind;
+  switch (s.codState) {
+    case "prepaid": kind = "prepaid"; break;
+    case "to_collect": kind = "to_collect"; break;
+    case "collected": kind = "collected"; break;
+    case "delivered_record_payment": kind = "delivered_unpaid"; break;
+    case "returning": kind = "returning"; break;
+    default:
+      if (amount <= 0) kind = "none";
+      else if (s.codCollected) kind = "collected";
+      else if (s.status === "failed" || s.status === "returned") kind = "returning";
+      else if (s.status === "delivered") kind = "delivered_unpaid";
+      else kind = "to_collect";
+  }
+  const map: Record<CodKind, [string, string]> = {
+    none: ["No COD", colors.muted],
+    prepaid: ["Prepaid", colors.muted],
+    to_collect: ["COD to collect", "#b45309"],
+    collected: ["COD collected", "#15803d"],
+    delivered_unpaid: ["Delivered · record payment", "#b45309"],
+    returning: ["Returning", "#b91c1c"],
+  };
+  return { amount: kind === "prepaid" || kind === "none" ? 0 : amount, kind, label: map[kind][0], color: map[kind][1] };
 }
+
+const humanize = (v?: string | null) => (v ? v.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "");
 
 const emptyDraft: CreateShipmentDraft = {
   sellId: 0,
@@ -99,7 +129,7 @@ export default function ShipmentsScreen() {
 
   const load = useCallback(async (nextPage: number, mode: "reset" | "append") => {
     const [listRes, statsRes] = await Promise.all([
-      getShipments({ page: nextPage, limit: 20, search: searchQuery || undefined, status: statusFilter || undefined }),
+      getShipments({ page: nextPage, perPage: 20, search: searchQuery || undefined, status: statusFilter || undefined }),
       getShipmentStats(),
     ]);
     setShipments((current) => mode === "append" ? [...current, ...listRes.data] : listRes.data);
@@ -109,12 +139,18 @@ export default function ShipmentsScreen() {
   }, [searchQuery, statusFilter]);
 
   useEffect(() => {
-    const bootstrap = async () => { try { setLoading(true); await load(1, "reset"); } finally { setLoading(false); } };
+    const bootstrap = async () => {
+      try { setLoading(true); await load(1, "reset"); }
+      catch (err) { Alert.alert("Could not load shipments", apiErrorMessage(err)); }
+      finally { setLoading(false); }
+    };
     void bootstrap();
   }, [load]);
 
   const onRefresh = useCallback(async () => {
-    try { setRefreshing(true); await load(1, "reset"); } finally { setRefreshing(false); }
+    try { setRefreshing(true); await load(1, "reset"); }
+    catch (err) { Alert.alert("Could not load shipments", apiErrorMessage(err)); }
+    finally { setRefreshing(false); }
   }, [load]);
 
   const onEndReached = useCallback(async () => {
@@ -127,19 +163,115 @@ export default function ShipmentsScreen() {
   const openView = async (shipment: Shipment) => {
     setSelectedShipment(shipment);
     setViewVisible(true);
-    const full = await getShipmentById(shipment.id);
-    setSelectedShipment(full);
+    try {
+      const full = await getShipmentById(shipment.id);
+      setSelectedShipment(full);
+    } catch {
+      // keep the list row
+    }
   };
 
   const openStatusUpdate = (shipment: Shipment) => {
+    const options = nextShipmentStatuses(shipment.status);
+    if (options.length === 0) {
+      Alert.alert("Shipment closed", `A ${shipment.status.replace(/_/g, " ")} shipment cannot change status.`);
+      return;
+    }
     setSelectedShipment(shipment);
-    setStatusDraft({ status: shipment.status, location: "", description: "" });
+    setStatusDraft({ status: options[0], location: "", description: "" });
     setStatusVisible(true);
+  };
+
+  const submitStatus = async () => {
+    if (!selectedShipment) return;
+    if (statusDraft.status === "failed" && !statusDraft.description.trim()) {
+      Alert.alert("Note required", "Add a note explaining why the delivery failed.");
+      return;
+    }
+    const run = async () => {
+      try {
+        setSaving(true);
+        await updateShipmentStatus(selectedShipment.id, statusDraft);
+        setStatusVisible(false);
+        await load(1, "reset");
+      } catch (err) {
+        Alert.alert("Could not update", apiErrorMessage(err));
+      } finally {
+        setSaving(false);
+      }
+    };
+    if (statusDraft.status === "failed" || statusDraft.status === "returned" || statusDraft.status === "delivered") {
+      Alert.alert(
+        `Mark as ${humanize(statusDraft.status).toLowerCase()}?`,
+        statusDraft.status === "delivered"
+          ? "The order is marked delivered and any COD payment is recorded. This cannot be undone."
+          : statusDraft.status === "failed"
+            ? "After a failed delivery the shipment can only be marked returned."
+            : "Returned is final.",
+        [{ text: "Back", style: "cancel" }, { text: "Confirm", style: statusDraft.status === "delivered" ? "default" : "destructive", onPress: () => void run() }],
+      );
+      return;
+    }
+    await run();
+  };
+
+  const recordCod = (shipment: Shipment) => {
+    const cod = codView(shipment);
+    Alert.alert("Record COD payment", `Record ${formatCurrency(cod.amount)} collected by the courier for #${shipment.sell?.invoiceNo ?? shipment.sellId}?`, [
+      { text: "Back", style: "cancel" },
+      {
+        text: "Record",
+        onPress: async () => {
+          try {
+            setSaving(true);
+            const updated = await recordShipmentCodPayment(shipment.id);
+            if (selectedShipment?.id === updated.id) setSelectedShipment({ ...selectedShipment, ...updated });
+            await load(1, "reset");
+          } catch (err) {
+            Alert.alert("Could not record payment", apiErrorMessage(err));
+          } finally {
+            setSaving(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const submitCreate = async () => {
+    if (!draft.sellId) { Alert.alert("Order required", "Load the order by its invoice number first."); return; }
+    if (!draft.carrier?.trim()) { Alert.alert("Carrier required", "Enter the courier / carrier name."); return; }
+    try {
+      setSaving(true);
+      await createShipment({
+        ...draft,
+        trackingNumber: draft.trackingNumber?.trim() || undefined,
+        estimatedDelivery: draft.estimatedDelivery || undefined,
+      });
+      setCreateVisible(false);
+      await load(1, "reset");
+    } catch (err) {
+      Alert.alert("Could not create shipment", apiErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const lookupOrder = async () => {
+    if (!invoiceLookup.trim()) return;
+    try {
+      const found = await getOrderByInvoice(invoiceLookup.trim());
+      setLinkedOrder(found);
+      setDraft((d) => ({ ...d, sellId: found.id }));
+    } catch (err) {
+      setLinkedOrder(null);
+      setDraft((d) => ({ ...d, sellId: 0 }));
+      Alert.alert("Order not found", apiErrorMessage(err, "Check the invoice number."));
+    }
   };
 
   const searchActive = searchQuery.trim().length > 0;
   const compactHeader = searchActive || statusFilter !== "";
-  const statusOptions = useMemo(() => allowedNextStatuses(selectedShipment?.status ?? "pending"), [selectedShipment?.status]);
+  const statusOptions = useMemo(() => nextShipmentStatuses(selectedShipment?.status ?? "pending"), [selectedShipment?.status]);
   const visibleShipments = useMemo(
     () => (statusFilter ? shipments.filter((item) => item.status === statusFilter) : shipments),
     [shipments, statusFilter],
@@ -147,6 +279,8 @@ export default function ShipmentsScreen() {
 
   const { canRead } = useAuth();
   if (!canRead('Shipments')) return <AccessDenied />;
+
+  const selCod = selectedShipment ? codView(selectedShipment) : null;
 
   const statCards = [
     { label: "Total",      value: stats.total,      bg: "#f1f5f9", text: colors.text },
@@ -220,6 +354,8 @@ export default function ShipmentsScreen() {
           ListHeaderComponent={listHeader}
           renderItem={({ item }) => {
             const dot = statusDot(item.status);
+            const cod = codView(item);
+            const canMove = nextShipmentStatuses(item.status).length > 0;
             return (
               <Pressable style={[s.card, { borderLeftColor: dot }]} onPress={() => void openView(item)}>
                 {/* Row 1: tracking + status */}
@@ -237,10 +373,20 @@ export default function ShipmentsScreen() {
                 </View>
 
                 {/* Row 2: carrier + method */}
-                {(item.carrier || item.shippingMethod) ? (
+                {(item.carrier || item.shippingMethod || item.rider) ? (
                   <View style={s.cardMid}>
                     <Ionicons name="car-outline" size={13} color={colors.muted} />
-                    <Text style={s.cardMeta}>{[item.carrier, item.shippingMethod].filter(Boolean).join(" · ")}</Text>
+                    <Text style={s.cardMeta}>{[item.carrier, item.shippingMethod, item.rider].filter(Boolean).join(" · ")}</Text>
+                  </View>
+                ) : null}
+
+                {/* COD state */}
+                {cod.kind !== "none" ? (
+                  <View style={s.cardMid}>
+                    <Ionicons name="cash-outline" size={13} color={cod.color} />
+                    <Text style={[s.cardMeta, { color: cod.color, fontWeight: "700" }]}>
+                      {cod.amount > 0 ? `${formatCurrency(cod.amount)} · ` : ""}{cod.label}
+                    </Text>
                   </View>
                 ) : null}
 
@@ -250,10 +396,17 @@ export default function ShipmentsScreen() {
                     <Ionicons name="time-outline" size={13} color={colors.muted} />
                     <Text style={s.cardMeta}>{formatDateTime(item.shippedAt || item.createdAt)}</Text>
                   </View>
-                  <Pressable style={s.updateBtn} onPress={() => openStatusUpdate(item)}>
-                    <Ionicons name="refresh-outline" size={13} color={colors.primaryDark} />
-                    <Text style={s.updateBtnText}>Update</Text>
-                  </Pressable>
+                  {cod.kind === "delivered_unpaid" ? (
+                    <Pressable style={s.updateBtn} onPress={() => recordCod(item)} disabled={saving}>
+                      <Ionicons name="cash-outline" size={13} color={colors.primaryDark} />
+                      <Text style={s.updateBtnText}>Record COD</Text>
+                    </Pressable>
+                  ) : canMove ? (
+                    <Pressable style={s.updateBtn} onPress={() => openStatusUpdate(item)}>
+                      <Ionicons name="refresh-outline" size={13} color={colors.primaryDark} />
+                      <Text style={s.updateBtnText}>Update</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </Pressable>
             );
@@ -282,11 +435,7 @@ export default function ShipmentsScreen() {
             <Text style={s.sheetTitle}>Create Shipment</Text>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: Math.max(insets.bottom, 12) }}>
               <LabeledInput label="Invoice number" value={invoiceLookup} onChangeText={setInvoiceLookup} placeholder="#INV-1001" />
-              <Pressable style={s.lookupBtn} onPress={async () => {
-                const found = await getOrderByInvoice(invoiceLookup);
-                setLinkedOrder(found);
-                setDraft((d) => ({ ...d, sellId: found.id }));
-              }}>
+              <Pressable style={s.lookupBtn} onPress={() => void lookupOrder()}>
                 <Ionicons name="search-outline" size={15} color="#fff" />
                 <Text style={s.lookupBtnText}>Load Order</Text>
               </Pressable>
@@ -299,8 +448,10 @@ export default function ShipmentsScreen() {
                   </View>
                 </View>
               ) : null}
-              <LabeledInput label="Tracking number" value={draft.trackingNumber ?? ""} onChangeText={(v) => setDraft((d) => ({ ...d, trackingNumber: v }))} placeholder="DHL-BD-123456789" />
-              <LabeledInput label="Carrier" value={draft.carrier ?? ""} onChangeText={(v) => setDraft((d) => ({ ...d, carrier: v }))} placeholder="DHL Express" />
+              <LabeledInput label="Carrier *" value={draft.carrier ?? ""} onChangeText={(v) => setDraft((d) => ({ ...d, carrier: v }))} placeholder="Pathao, Steadfast, RedX…" />
+              <LabeledInput label="Tracking number (blank = auto)" value={draft.trackingNumber ?? ""} onChangeText={(v) => setDraft((d) => ({ ...d, trackingNumber: v }))} placeholder="Leave blank to generate one" />
+              <LabeledInput label="Rider" value={draft.rider ?? ""} onChangeText={(v) => setDraft((d) => ({ ...d, rider: v }))} placeholder="Rider name / phone" />
+              <LabeledInput label="COD amount" value={draft.codAmount ? String(draft.codAmount) : ""} onChangeText={(v) => setDraft((d) => ({ ...d, codAmount: Number(v) || 0 }))} placeholder="0 for prepaid" />
               <LabeledInput label="Shipping method" value={draft.shippingMethod ?? ""} onChangeText={(v) => setDraft((d) => ({ ...d, shippingMethod: v }))} placeholder="Express Delivery" />
               <DateField
                 label="Estimated delivery"
@@ -315,9 +466,7 @@ export default function ShipmentsScreen() {
                 <Pressable style={s.cancelBtn} onPress={() => setCreateVisible(false)}>
                   <Text style={s.cancelBtnText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[s.confirmBtn, (!draft.sellId || saving) && s.confirmBtnDisabled]} onPress={async () => {
-                  try { setSaving(true); await createShipment(draft); setCreateVisible(false); await load(1, "reset"); } finally { setSaving(false); }
-                }} disabled={!draft.sellId || saving}>
+                <Pressable style={[s.confirmBtn, (!draft.sellId || saving) && s.confirmBtnDisabled]} onPress={() => void submitCreate()} disabled={!draft.sellId || saving}>
                   <Text style={s.confirmBtnText}>{saving ? "Creating…" : "Create Shipment"}</Text>
                 </Pressable>
               </View>
@@ -353,6 +502,21 @@ export default function ShipmentsScreen() {
                     <Text style={s.infoCardTitle}>Order Info</Text>
                     <InfoRow icon="receipt-outline" label="Order" value={`#${selectedShipment.sell?.invoiceNo ?? selectedShipment.sellId}`} />
                     <InfoRow icon="person-outline" label="Customer" value={selectedShipment.sell?.customerName ?? "—"} />
+                    {selectedShipment.sell?.customerPhone ? <InfoRow icon="call-outline" label="Phone" value={selectedShipment.sell.customerPhone} /> : null}
+                    {selectedShipment.sell?.customerAddress ? <InfoRow icon="location-outline" label="Address" value={[selectedShipment.sell.customerAddress, selectedShipment.sell.area].filter(Boolean).join(", ")} /> : null}
+                  </View>
+
+                  <View style={s.infoCard}>
+                    <Text style={s.infoCardTitle}>Cash on delivery</Text>
+                    <InfoRow icon="cash-outline" label="COD" value={selCod && selCod.amount > 0 ? formatCurrency(selCod.amount) : "—"} />
+                    <InfoRow icon="information-circle-outline" label="State" value={selCod?.label ?? "—"} />
+                    {selectedShipment.codCollectedAt ? <InfoRow icon="checkmark-done-outline" label="Collected" value={formatDateTime(selectedShipment.codCollectedAt)} /> : null}
+                    {selCod?.kind === "delivered_unpaid" ? (
+                      <Pressable style={[s.codBtn, saving && s.confirmBtnDisabled]} disabled={saving} onPress={() => recordCod(selectedShipment)}>
+                        <Ionicons name="cash-outline" size={15} color="#fff" />
+                        <Text style={s.codBtnText}>Record COD payment</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
 
                   <View style={s.infoCard}>
@@ -360,11 +524,15 @@ export default function ShipmentsScreen() {
                     <InfoRow icon="barcode-outline" label="Tracking" value={selectedShipment.trackingNumber || "—"} />
                     <InfoRow icon="car-outline" label="Carrier" value={selectedShipment.carrier || "—"} />
                     <InfoRow icon="navigate-outline" label="Method" value={selectedShipment.shippingMethod || "—"} />
-                    <InfoRow icon="cash-outline" label="Cost" value={formatCurrency(Number(selectedShipment.shippingCost ?? 0))} />
+                    {selectedShipment.rider ? <InfoRow icon="bicycle-outline" label="Rider" value={selectedShipment.rider} /> : null}
+                    {selectedShipment.package ? <InfoRow icon="cube-outline" label="Package" value={humanize(selectedShipment.package)} /> : null}
+                    <InfoRow icon="cash-outline" label="Cost" value={`${formatCurrency(Number(selectedShipment.shippingCost ?? 0))}${selectedShipment.deliveryPayer ? ` · paid by ${selectedShipment.deliveryPayer === "us" ? "us" : "customer"}` : ""}`} />
+                    {selectedShipment.deliverySpeed ? <InfoRow icon="speedometer-outline" label="Speed" value={humanize(selectedShipment.deliverySpeed)} /> : null}
                   </View>
 
                   <View style={s.infoCard}>
                     <Text style={s.infoCardTitle}>Timeline</Text>
+                    {selectedShipment.pickupDate ? <InfoRow icon="archive-outline" label="Pickup" value={formatDateTime(selectedShipment.pickupDate)} /> : null}
                     <InfoRow icon="send-outline" label="Shipped" value={formatDateTime(selectedShipment.shippedAt || selectedShipment.createdAt)} />
                     <InfoRow icon="calendar-outline" label="Estimated" value={formatDateTime(selectedShipment.estimatedDelivery)} />
                     <InfoRow icon="checkmark-circle-outline" label="Delivered" value={formatDateTime(selectedShipment.deliveredAt)} />
@@ -405,12 +573,14 @@ export default function ShipmentsScreen() {
                   ) : null}
                 </ScrollView>
 
-                <View style={[s.detailActionBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-                  <Pressable style={s.updateStatusBtn} onPress={() => { setViewVisible(false); if (selectedShipment) openStatusUpdate(selectedShipment); }}>
-                    <Ionicons name="refresh-outline" size={16} color="#fff" />
-                    <Text style={s.updateStatusBtnText}>Update Status</Text>
-                  </Pressable>
-                </View>
+                {nextShipmentStatuses(selectedShipment.status).length > 0 ? (
+                  <View style={[s.detailActionBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                    <Pressable style={s.updateStatusBtn} onPress={() => { setViewVisible(false); openStatusUpdate(selectedShipment); }}>
+                      <Ionicons name="refresh-outline" size={16} color="#fff" />
+                      <Text style={s.updateStatusBtnText}>Update Status</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             ) : (
               <View style={s.center}><ActivityIndicator color={colors.primaryDark} /></View>
@@ -444,16 +614,28 @@ export default function ShipmentsScreen() {
                   );
                 })}
               </ScrollView>
+              <Text style={s.statusHint}>
+                {selectedShipment?.status === "failed"
+                  ? "A failed delivery can only be marked returned."
+                  : "Status only moves forward. Failed needs a note."}
+              </Text>
               <LabeledInput label="Location" value={statusDraft.location} onChangeText={(v) => setStatusDraft((d) => ({ ...d, location: v }))} placeholder="Dhaka Distribution Center" />
-              <LabeledInput label="Description" value={statusDraft.description} onChangeText={(v) => setStatusDraft((d) => ({ ...d, description: v }))} placeholder="Package in transit…" multiline />
+              <LabeledInput
+                label={statusDraft.status === "failed" ? "Note * (why it failed)" : "Note"}
+                value={statusDraft.description}
+                onChangeText={(v) => setStatusDraft((d) => ({ ...d, description: v }))}
+                placeholder={statusDraft.status === "failed" ? "Customer unreachable, refused, wrong address…" : "Package in transit…"}
+                multiline
+              />
               <View style={s.sheetActions}>
                 <Pressable style={s.cancelBtn} onPress={() => setStatusVisible(false)}>
                   <Text style={s.cancelBtnText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[s.confirmBtn, saving && s.confirmBtnDisabled]} onPress={async () => {
-                  if (!selectedShipment) return;
-                  try { setSaving(true); await updateShipmentStatus(selectedShipment.id, statusDraft); setStatusVisible(false); await load(1, "reset"); } finally { setSaving(false); }
-                }}>
+                <Pressable
+                  style={[s.confirmBtn, (saving || (statusDraft.status === "failed" && !statusDraft.description.trim())) && s.confirmBtnDisabled]}
+                  disabled={saving}
+                  onPress={() => void submitStatus()}
+                >
                   <Text style={s.confirmBtnText}>{saving ? "Updating…" : "Confirm Update"}</Text>
                 </Pressable>
               </View>
@@ -705,6 +887,9 @@ const s = StyleSheet.create({
   // Update status button in detail
   updateStatusBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 16, backgroundColor: colors.primaryDark, paddingVertical: 14, marginTop: 4 },
   updateStatusBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
+  statusHint: { color: colors.muted, fontSize: 12 },
+  codBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, backgroundColor: colors.primaryDark, paddingVertical: 11, marginTop: 2 },
+  codBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
   // Date field
   dateTrigger: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: 14 },

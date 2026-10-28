@@ -32,6 +32,12 @@ import {
   getVendorReturnStats,
   rejectCustomerReturn,
   updateVendorReturnStatus,
+  CUSTOMER_REFUND_METHODS,
+  refundMethodLabel,
+  VENDOR_CREDIT_TYPES,
+  VENDOR_RETURN_FLOW,
+  VENDOR_RETURN_STATUS_LABELS,
+  vendorCreditTypeLabel,
   type CustomerReturn,
   type CustomerReturnStats,
   type VendorReturn,
@@ -56,16 +62,21 @@ const CUSTOMER_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 const VENDOR_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "#fef3c7", text: "#d97706" },
   shipped: { bg: "#dbeafe", text: "#1d4ed8" },
-  received_by_vendor: { bg: "#ede9fe", text: "#7c3aed" },
-  completed: { bg: "#dcfce7", text: "#16a34a" },
+  received: { bg: "#ede9fe", text: "#7c3aed" },
+  credited: { bg: "#dcfce7", text: "#16a34a" },
 };
+
+const REJECT_REASONS = ["Outside return window", "Item used or damaged by customer", "Missing items or packaging", "Not bought here"];
 
 function StatusPill({ status, type }: { status: string; type: "customer" | "vendor" }) {
   const map = type === "customer" ? CUSTOMER_STATUS_COLORS : VENDOR_STATUS_COLORS;
   const tone = map[status] ?? { bg: "#f1f5f9", text: "#64748b" };
+  const label = type === "vendor"
+    ? VENDOR_RETURN_STATUS_LABELS[status as keyof typeof VENDOR_RETURN_STATUS_LABELS] ?? status
+    : status.replace(/_/g, " ");
   return (
     <View style={[pillStyles.pill, { backgroundColor: tone.bg }]}>
-      <Text style={[pillStyles.text, { color: tone.text }]}>{status.replace(/_/g, " ")}</Text>
+      <Text style={[pillStyles.text, { color: tone.text }]}>{label}</Text>
     </View>
   );
 }
@@ -170,23 +181,19 @@ function CustomerReturnsTab() {
   const openMenu = (r: CustomerReturn) => {
     const opts: any[] = [{ text: "View Details", onPress: () => setDetailReturn(r) }];
     if (r.status === "pending") {
-      opts.push(
-        { text: "Approve", onPress: async () => { await approveCustomerReturn(r.id); load(); } },
-        { text: "Reject", style: "destructive", onPress: () =>
-          Alert.prompt?.("Reject Return", "Reason for rejection:", async (reason) => {
-            if (reason) { await rejectCustomerReturn(r.id, reason); load(); }
-          }) ?? Alert.alert("Reject", "Enter rejection reason", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Reject", style: "destructive", onPress: async () => { await rejectCustomerReturn(r.id, "Rejected by admin"); load(); } },
-          ])
-        }
-      );
+      // Approve / reject (with a required reason) from the detail sheet.
+      opts.push({ text: "Approve or reject…", onPress: () => setDetailReturn(r) });
     }
     opts.push(
       { text: "Delete", style: "destructive", onPress: () =>
         Alert.alert("Delete", "Delete this return?", [
           { text: "Cancel", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: async () => { await deleteCustomerReturn(r.id); load(); } },
+          {
+            text: "Delete", style: "destructive", onPress: async () => {
+              try { await deleteCustomerReturn(r.id); load(); }
+              catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Could not delete the return."); }
+            },
+          },
         ])
       },
       { text: "Cancel", style: "cancel" }
@@ -194,7 +201,7 @@ function CustomerReturnsTab() {
     Alert.alert(`Return #${r.returnNumber ?? r.id}`, r.status, opts);
   };
 
-  const CUSTOMER_STATUS_FILTERS = [undefined, "pending", "approved", "rejected", "completed"];
+  const CUSTOMER_STATUS_FILTERS = [undefined, "pending", "completed", "rejected"];
 
   return (
     <View style={{ flex: 1 }}>
@@ -202,13 +209,13 @@ function CustomerReturnsTab() {
       <View style={styles.statsRow}>
         <SmallStat label="Total" value={stats.total} bg="#eff6ff" text="#1d4ed8" />
         <SmallStat label="Pending" value={stats.pending} bg="#fef3c7" text="#d97706" />
-        <SmallStat label="Approved" value={stats.approved} bg="#dcfce7" text="#16a34a" />
-        <SmallStat label="Refunded" value={stats.completed} bg="#f3e8ff" text="#7c3aed" />
+        <SmallStat label="Completed" value={stats.completed} bg="#dcfce7" text="#16a34a" />
+        <SmallStat label="Rejected" value={stats.rejected} bg="#fee2e2" text="#dc2626" />
       </View>
 
       {/* Total refund amount */}
       <View style={styles.amountBanner}>
-        <Text style={styles.amountBannerLabel}>Total Refund Amount</Text>
+        <Text style={styles.amountBannerLabel}>Refunded</Text>
         <Text style={styles.amountBannerValue}>{formatCurrency(stats.totalRefundAmount)}</Text>
       </View>
 
@@ -269,7 +276,7 @@ function CustomerReturnsTab() {
                 <Text style={styles.cardDate}>{formatDateTime(item.createdAt)}</Text>
                 {item.refundMethod && (
                   <View style={styles.methodPill}>
-                    <Text style={styles.methodText}>{item.refundMethod}</Text>
+                    <Text style={styles.methodText}>{refundMethodLabel(item.refundMethod)}</Text>
                   </View>
                 )}
               </View>
@@ -353,31 +360,34 @@ function VendorReturnsTab() {
     setRefreshing(false);
   };
 
-  const VENDOR_STATUS_FLOW = ["pending", "shipped", "received_by_vendor", "completed"] as const;
-
   const openMenu = (r: VendorReturn) => {
     const opts: any[] = [{ text: "View Details", onPress: () => setDetailReturn(r) }];
-    const currentIdx = VENDOR_STATUS_FLOW.indexOf(r.status as any);
-    if (currentIdx < VENDOR_STATUS_FLOW.length - 1) {
-      const next = VENDOR_STATUS_FLOW[currentIdx + 1];
-      opts.push({ text: `Mark as ${next.replace(/_/g, " ")}`, onPress: async () => {
-        await updateVendorReturnStatus(r.id, next);
-        load();
+    const currentIdx = VENDOR_RETURN_FLOW.indexOf(r.status);
+    if (currentIdx >= 0 && currentIdx < VENDOR_RETURN_FLOW.length - 1) {
+      const next = VENDOR_RETURN_FLOW[currentIdx + 1];
+      opts.push({ text: `Mark as ${VENDOR_RETURN_STATUS_LABELS[next].toLowerCase()}`, onPress: async () => {
+        try { await updateVendorReturnStatus(r.id, next); load(); }
+        catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Could not update the status."); }
       }});
     }
     opts.push(
       { text: "Delete", style: "destructive", onPress: () =>
         Alert.alert("Delete", "Delete this return?", [
           { text: "Cancel", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: async () => { await deleteVendorReturn(r.id); load(); } },
+          {
+            text: "Delete", style: "destructive", onPress: async () => {
+              try { await deleteVendorReturn(r.id); load(); }
+              catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Could not delete the return."); }
+            },
+          },
         ])
       },
       { text: "Cancel", style: "cancel" }
     );
-    Alert.alert(`Return #${r.returnNumber ?? r.id}`, r.status.replace(/_/g, " "), opts);
+    Alert.alert(`Return #${r.returnNumber ?? r.id}`, VENDOR_RETURN_STATUS_LABELS[r.status] ?? r.status, opts);
   };
 
-  const VENDOR_STATUS_FILTERS = [undefined, "pending", "shipped", "received_by_vendor", "completed"];
+  const VENDOR_STATUS_FILTERS = [undefined, ...VENDOR_RETURN_FLOW];
 
   return (
     <View style={{ flex: 1 }}>
@@ -386,11 +396,11 @@ function VendorReturnsTab() {
         <SmallStat label="Total" value={stats.total} bg="#eff6ff" text="#1d4ed8" />
         <SmallStat label="Pending" value={stats.pending} bg="#fef3c7" text="#d97706" />
         <SmallStat label="Shipped" value={stats.shipped} bg="#dbeafe" text="#2563eb" />
-        <SmallStat label="Done" value={stats.completed} bg="#dcfce7" text="#16a34a" />
+        <SmallStat label="Credited" value={stats.completed} bg="#dcfce7" text="#16a34a" />
       </View>
 
       <View style={styles.amountBanner}>
-        <Text style={styles.amountBannerLabel}>Total Credit Amount</Text>
+        <Text style={styles.amountBannerLabel}>Supplier credit (received + due)</Text>
         <Text style={styles.amountBannerValue}>{formatCurrency(stats.totalCreditAmount)}</Text>
       </View>
 
@@ -403,7 +413,7 @@ function VendorReturnsTab() {
               onPress={() => setStatusFilter(s)}
             >
               <Text style={[styles.chipText, statusFilter === s && styles.chipTextActive]}>
-                {s ? s.replace(/_/g, " ") : "All"}
+                {s ? VENDOR_RETURN_STATUS_LABELS[s] : "All"}
               </Text>
             </Pressable>
           ))}
@@ -436,7 +446,7 @@ function VendorReturnsTab() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>#{item.returnNumber ?? item.id}</Text>
                   <Text style={styles.cardSub}>{item.vendorName ?? `Vendor #${item.vendorId}`}</Text>
-                  {item.creditType && <Text style={styles.cardSub}>Credit: {item.creditType.replace(/_/g, " ")}</Text>}
+                  {item.creditType && <Text style={styles.cardSub}>Credit: {vendorCreditTypeLabel(item.creditType)}</Text>}
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 4 }}>
                   {item.totalAmount !== undefined && (
@@ -544,6 +554,12 @@ function AddCustomerReturnModal({ visible, onClose, onCreated }: {
   const handleCreate = async () => {
     if (!selectedCustomer) { Alert.alert("Error", "Select a customer."); return; }
     if (items.length === 0) { Alert.alert("Error", "Add at least one item."); return; }
+    if (!refundMethod) { Alert.alert("Error", "Choose a refund method."); return; }
+    const badItem = items.find((i) => !i.reason.trim() || !(i.quantity >= 1) || i.price < 0);
+    if (badItem) {
+      Alert.alert("Error", `${badItem.productName}: quantity must be at least 1, price 0 or more, and a reason is required.`);
+      return;
+    }
     setSaving(true);
     try {
       await createCustomerReturn({
@@ -620,16 +636,16 @@ function AddCustomerReturnModal({ visible, onClose, onCreated }: {
 
             {/* Refund method */}
             <View>
-              <Text style={mStyles.fieldLabel}>Refund Method</Text>
+              <Text style={mStyles.fieldLabel}>Refund Method *</Text>
               <View style={mStyles.methodRow}>
-                {["cash", "card", "store_credit"].map((m) => (
+                {CUSTOMER_REFUND_METHODS.map((m) => (
                   <Pressable
-                    key={m}
-                    style={[mStyles.methodChip, refundMethod === m && mStyles.methodChipActive]}
-                    onPress={() => setRefundMethod(m)}
+                    key={m.value}
+                    style={[mStyles.methodChip, refundMethod === m.value && mStyles.methodChipActive]}
+                    onPress={() => setRefundMethod(m.value)}
                   >
-                    <Text style={[mStyles.methodChipText, refundMethod === m && mStyles.methodChipTextActive]}>
-                      {m.replace("_", " ")}
+                    <Text style={[mStyles.methodChipText, refundMethod === m.value && mStyles.methodChipTextActive]}>
+                      {m.label}
                     </Text>
                   </Pressable>
                 ))}
@@ -746,7 +762,7 @@ function AddVendorReturnModal({ visible, onClose, onCreated }: {
   const [vendorsList, setVendorsList] = useState<{ id: number; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedVendor, setSelectedVendor] = useState<{ id: number; name: string } | null>(null);
-  const [creditType, setCreditType] = useState("credit_note");
+  const [creditType, setCreditType] = useState("note");
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<{ productId: number; productName: string; quantity: number; unitPrice: number; reason: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -790,13 +806,18 @@ function AddVendorReturnModal({ visible, onClose, onCreated }: {
   const totalAmount = items.reduce((sum, i) => sum + (i.unitPrice * i.quantity), 0);
 
   const reset = () => {
-    setSelectedVendor(null); setCreditType("credit_note"); setNotes(""); setItems([]);
+    setSelectedVendor(null); setCreditType("note"); setNotes(""); setItems([]);
     setVendorSearch(""); setProductSearch("");
   };
 
   const handleCreate = async () => {
     if (!selectedVendor) { Alert.alert("Error", "Select a vendor."); return; }
     if (items.length === 0) { Alert.alert("Error", "Add at least one item."); return; }
+    const badItem = items.find((i) => !i.reason.trim() || !(i.quantity >= 1) || !(i.unitPrice >= 0));
+    if (badItem) {
+      Alert.alert("Error", `${badItem.productName}: quantity must be at least 1, unit cost 0 or more, and a reason is required.`);
+      return;
+    }
     setSaving(true);
     try {
       await createVendorReturn({
@@ -864,16 +885,16 @@ function AddVendorReturnModal({ visible, onClose, onCreated }: {
 
             {/* Credit type */}
             <View>
-              <Text style={mStyles.fieldLabel}>Credit Type</Text>
+              <Text style={mStyles.fieldLabel}>Credit Type *</Text>
               <View style={mStyles.methodRow}>
-                {["credit_note", "refund", "replacement"].map((t) => (
+                {VENDOR_CREDIT_TYPES.map((t) => (
                   <Pressable
-                    key={t}
-                    style={[mStyles.methodChip, creditType === t && mStyles.methodChipActive]}
-                    onPress={() => setCreditType(t)}
+                    key={t.value}
+                    style={[mStyles.methodChip, creditType === t.value && mStyles.methodChipActive]}
+                    onPress={() => setCreditType(t.value)}
                   >
-                    <Text style={[mStyles.methodChipText, creditType === t && mStyles.methodChipTextActive]}>
-                      {t.replace("_", " ")}
+                    <Text style={[mStyles.methodChipText, creditType === t.value && mStyles.methodChipTextActive]}>
+                      {t.label}
                     </Text>
                   </Pressable>
                 ))}
@@ -989,23 +1010,34 @@ function CustomerReturnDetailModal({ returnData, onClose, onAction }: {
   const { formatCurrency } = useCurrency();
   const [processing, setProcessing] = useState(false);
 
-  const handleApprove = async () => {
-    setProcessing(true);
-    try { await approveCustomerReturn(returnData.id); onAction(); }
-    catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Action failed."); }
-    finally { setProcessing(false); }
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const handleApprove = () => {
+    const method = refundMethodLabel(returnData.refundMethod);
+    Alert.alert(
+      "Approve return",
+      `Items go back to stock and the customer is refunded via ${method.toLowerCase()}.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve", onPress: async () => {
+            setProcessing(true);
+            try { await approveCustomerReturn(returnData.id); onAction(); }
+            catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Action failed."); }
+            finally { setProcessing(false); }
+          },
+        },
+      ],
+    );
   };
 
-  const handleReject = () => {
-    Alert.alert("Reject Return", "This will reject the return.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Reject", style: "destructive", onPress: async () => {
-        setProcessing(true);
-        try { await rejectCustomerReturn(returnData.id, "Rejected by admin"); onAction(); }
-        catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Action failed."); }
-        finally { setProcessing(false); }
-      }},
-    ]);
+  const handleReject = async () => {
+    if (!rejectReason.trim()) { Alert.alert("Reason required", "Enter why this return is rejected."); return; }
+    setProcessing(true);
+    try { await rejectCustomerReturn(returnData.id, rejectReason.trim()); onAction(); }
+    catch (err: any) { Alert.alert("Error", err?.response?.data?.message ?? "Action failed."); }
+    finally { setProcessing(false); }
   };
 
   return (
@@ -1037,7 +1069,7 @@ function CustomerReturnDetailModal({ returnData, onClose, onAction }: {
             {returnData.refundMethod && (
               <View style={detailStyles.row}>
                 <Text style={detailStyles.label}>Refund Method</Text>
-                <Text style={detailStyles.value}>{returnData.refundMethod}</Text>
+                <Text style={detailStyles.value}>{refundMethodLabel(returnData.refundMethod)}</Text>
               </View>
             )}
             {returnData.totalAmount !== undefined && (
@@ -1084,12 +1116,43 @@ function CustomerReturnDetailModal({ returnData, onClose, onAction }: {
               </View>
             )}
 
-            {returnData.status === "pending" && (
+            {returnData.status === "pending" && rejecting && (
+              <View style={{ gap: 8, marginTop: 6 }}>
+                <Text style={mStyles.fieldLabel}>Reason for rejection *</Text>
+                <View style={mStyles.methodRow}>
+                  {REJECT_REASONS.map((r) => (
+                    <Pressable
+                      key={r}
+                      style={[mStyles.methodChip, rejectReason === r && mStyles.methodChipActive]}
+                      onPress={() => setRejectReason(r)}
+                    >
+                      <Text style={[mStyles.methodChipText, rejectReason === r && mStyles.methodChipTextActive]}>{r}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  style={mStyles.input}
+                  value={rejectReason}
+                  onChangeText={setRejectReason}
+                  placeholder="Or type a reason…"
+                  placeholderTextColor="#94a3b8"
+                />
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <Pressable style={[mStyles.saveBtn, { flex: 1, backgroundColor: "#64748b" }]} onPress={() => setRejecting(false)} disabled={processing}>
+                    <Text style={mStyles.saveBtnText}>Back</Text>
+                  </Pressable>
+                  <Pressable style={[mStyles.saveBtn, { flex: 1, backgroundColor: "#dc2626" }, processing && { opacity: 0.55 }]} onPress={() => void handleReject()} disabled={processing}>
+                    {processing ? <ActivityIndicator color="#fff" /> : <Text style={mStyles.saveBtnText}>Reject return</Text>}
+                  </Pressable>
+                </View>
+              </View>
+            )}
+            {returnData.status === "pending" && !rejecting && (
               <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
                 <Pressable style={[mStyles.saveBtn, { flex: 1, backgroundColor: "#16a34a" }, processing && { opacity: 0.55 }]} onPress={handleApprove} disabled={processing}>
                   {processing ? <ActivityIndicator color="#fff" /> : <Text style={mStyles.saveBtnText}>Approve</Text>}
                 </Pressable>
-                <Pressable style={[mStyles.saveBtn, { flex: 1, backgroundColor: "#dc2626" }, processing && { opacity: 0.55 }]} onPress={handleReject} disabled={processing}>
+                <Pressable style={[mStyles.saveBtn, { flex: 1, backgroundColor: "#dc2626" }, processing && { opacity: 0.55 }]} onPress={() => setRejecting(true)} disabled={processing}>
                   <Text style={mStyles.saveBtnText}>Reject</Text>
                 </Pressable>
               </View>
@@ -1107,9 +1170,9 @@ function VendorReturnDetailModal({ returnData, onClose, onAction }: {
   const { formatCurrency } = useCurrency();
   const [processing, setProcessing] = useState(false);
 
-  const FLOW = ["pending", "shipped", "received_by_vendor", "completed"] as const;
-  const currentIdx = FLOW.indexOf(returnData.status as any);
-  const nextStatus = currentIdx < FLOW.length - 1 ? FLOW[currentIdx + 1] : null;
+  const FLOW = VENDOR_RETURN_FLOW;
+  const currentIdx = FLOW.indexOf(returnData.status);
+  const nextStatus = currentIdx >= 0 && currentIdx < FLOW.length - 1 ? FLOW[currentIdx + 1] : null;
 
   const handleAdvance = async () => {
     if (!nextStatus) return;
@@ -1145,7 +1208,7 @@ function VendorReturnDetailModal({ returnData, onClose, onAction }: {
             {returnData.creditType && (
               <View style={detailStyles.row}>
                 <Text style={detailStyles.label}>Credit Type</Text>
-                <Text style={detailStyles.value}>{returnData.creditType.replace(/_/g, " ")}</Text>
+                <Text style={detailStyles.value}>{vendorCreditTypeLabel(returnData.creditType)}</Text>
               </View>
             )}
             {returnData.totalAmount !== undefined && (
@@ -1191,7 +1254,7 @@ function VendorReturnDetailModal({ returnData, onClose, onAction }: {
                 return (
                   <View key={s} style={detailStyles.flowStep}>
                     <View style={[detailStyles.flowDot, done && detailStyles.flowDotDone]} />
-                    <Text style={[detailStyles.flowLabel, done && detailStyles.flowLabelDone]}>{s.replace(/_/g, " ")}</Text>
+                    <Text style={[detailStyles.flowLabel, done && detailStyles.flowLabelDone]}>{VENDOR_RETURN_STATUS_LABELS[s]}</Text>
                     {i < FLOW.length - 1 && <View style={[detailStyles.flowLine, done && i < currentIdx && detailStyles.flowLineDone]} />}
                   </View>
                 );
@@ -1202,7 +1265,7 @@ function VendorReturnDetailModal({ returnData, onClose, onAction }: {
               <Pressable style={[mStyles.saveBtn, processing && { opacity: 0.55 }]} onPress={handleAdvance} disabled={processing}>
                 {processing
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={mStyles.saveBtnText}>Mark as {nextStatus.replace(/_/g, " ")}</Text>
+                  : <Text style={mStyles.saveBtnText}>Mark as {VENDOR_RETURN_STATUS_LABELS[nextStatus].toLowerCase()}</Text>
                 }
               </Pressable>
             )}

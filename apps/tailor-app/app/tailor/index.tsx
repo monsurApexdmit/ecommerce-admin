@@ -15,20 +15,22 @@ import { SafeAreaView } from "react-native-safe-area-context"
 import { Ionicons } from "@expo/vector-icons"
 import { useAuth } from "@/context/AuthContext"
 import { useCurrency } from "@/context/CurrencyContext"
-import { getTailorOrders } from "@/services/tailor"
-import type { TailorOrder, TailorOrderStatus } from "@/types/tailor"
+import { getTailorBoard } from "@/services/tailor"
+import type { TailorBoardRow, TailorStage } from "@/types/tailor"
 import { TailorOrderCard } from "@/components/tailor/TailorOrderCard"
 import { AccessDenied } from "@/components/AccessDenied"
 import { colors } from "@/constants/theme"
 
-const STATUS_FILTERS: { label: string; value: string }[] = [
-  { label: "All", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "Assigned", value: "assigned" },
+const STATUS_FILTERS: { label: string; value: "open" | "all" | TailorStage }[] = [
+  { label: "Open", value: "open" },
+  { label: "Received", value: "new" },
+  { label: "Cutting", value: "cutting" },
   { label: "Stitching", value: "stitching" },
+  { label: "Trial", value: "trial" },
   { label: "Ready", value: "ready" },
   { label: "Delivered", value: "delivered" },
   { label: "Cancelled", value: "cancelled" },
+  { label: "All", value: "all" },
 ]
 
 function SkeletonList() {
@@ -45,91 +47,50 @@ export default function TailorOrdersScreen() {
   const { canRead } = useAuth()
   const { formatCurrency } = useCurrency()
 
-  const [orders, setOrders] = useState<TailorOrder[]>([])
+  const [orders, setOrders] = useState<TailorBoardRow[]>([])
   const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState<Partial<Record<string, number>>>({})
+  const [balance, setBalance] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState("all")
+  const [filter, setFilter] = useState<"open" | "all" | TailorStage>("open")
   const [page, setPage] = useState(1)
   const [lastPage, setLastPage] = useState(1)
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reqId = useRef(0)
 
-  const load = useCallback(
-    async (opts: { reset?: boolean; silent?: boolean } = {}) => {
-      if (!opts.silent) opts.reset ? setLoading(true) : null
-      try {
-        const p = opts.reset ? 1 : page
-        const result = await getTailorOrders({
-          search: search || undefined,
-          order_status: filter !== "all" ? (filter as TailorOrderStatus) : undefined,
-          limit: 20,
-          page: p,
-        })
-        setOrders((prev) => (opts.reset || p === 1 ? result.data : [...prev, ...result.data]))
-        setTotal(result.total)
-        setPage(result.page)
-        setLastPage(result.lastPage)
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    },
-    [search, filter, page],
-  )
+  const fetchPage = useCallback(async (p: number) => {
+    const id = ++reqId.current
+    const r = await getTailorBoard({ status: filter, search: search.trim() || undefined, limit: 20, page: p })
+    if (id !== reqId.current) return
+    setOrders((prev) => (p === 1 ? r.orders : [...prev, ...r.orders]))
+    setTotal(r.pagination.total)
+    setPage(r.pagination.page)
+    setLastPage(r.pagination.lastPage)
+    setCounts(r.statusCounts)
+    setBalance(r.stats.balanceToCollect)
+  }, [filter, search])
 
   useEffect(() => {
-    setPage(1)
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     searchTimeout.current = setTimeout(() => {
       setLoading(true)
-      getTailorOrders({
-        search: search || undefined,
-        order_status: filter !== "all" ? (filter as TailorOrderStatus) : undefined,
-        limit: 20,
-        page: 1,
-      }).then((result) => {
-        setOrders(result.data)
-        setTotal(result.total)
-        setPage(result.page)
-        setLastPage(result.lastPage)
-        setLoading(false)
-      })
-    }, 400)
+      fetchPage(1).catch(() => {}).finally(() => setLoading(false))
+    }, 350)
     return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current) }
-  }, [search, filter])
+  }, [fetchPage])
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
-    setPage(1)
-    getTailorOrders({
-      search: search || undefined,
-      order_status: filter !== "all" ? (filter as TailorOrderStatus) : undefined,
-      limit: 20,
-      page: 1,
-    }).then((result) => {
-      setOrders(result.data)
-      setTotal(result.total)
-      setPage(result.page)
-      setLastPage(result.lastPage)
-      setRefreshing(false)
-    })
-  }, [search, filter])
+    fetchPage(1).catch(() => {}).finally(() => setRefreshing(false))
+  }, [fetchPage])
 
   const loadMore = () => {
-    if (page < lastPage && !loading) {
-      const nextPage = page + 1
-      setPage(nextPage)
-      getTailorOrders({
-        search: search || undefined,
-        order_status: filter !== "all" ? (filter as TailorOrderStatus) : undefined,
-        limit: 20,
-        page: nextPage,
-      }).then((result) => {
-        setOrders((prev) => [...prev, ...result.data])
-        setPage(result.page)
-        setLastPage(result.lastPage)
-      })
+    if (page < lastPage && !loading && !loadingMore) {
+      setLoadingMore(true)
+      fetchPage(page + 1).catch(() => {}).finally(() => setLoadingMore(false))
     }
   }
 
@@ -142,7 +103,7 @@ export default function TailorOrdersScreen() {
         <View style={s.heroTop}>
           <View>
             <Text style={s.heroTitle}>Orders</Text>
-            <Text style={s.heroSub}>{total} total orders</Text>
+            <Text style={s.heroSub}>{total} order{total === 1 ? "" : "s"}{balance > 0 ? ` · ${formatCurrency(balance)} to collect` : ""}</Text>
           </View>
           <TouchableOpacity style={s.newBtn} onPress={() => router.push("/tailor/new")} activeOpacity={0.85}>
             <Ionicons name="add" size={18} color="#fff" />
@@ -194,7 +155,9 @@ export default function TailorOrdersScreen() {
             onPress={() => setFilter(f.value)}
             activeOpacity={0.75}
           >
-            <Text style={[s.filterChipText, filter === f.value && s.filterChipTextActive]}>{f.label}</Text>
+            <Text style={[s.filterChipText, filter === f.value && s.filterChipTextActive]}>
+              {f.label}{f.value !== "all" && counts[f.value] != null ? ` ${counts[f.value]}` : ""}
+            </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -211,7 +174,7 @@ export default function TailorOrdersScreen() {
             <TailorOrderCard
               order={item}
               onPress={() => router.push(`/tailor/${item.id}`)}
-              formatCurrency={formatCurrency}
+              formatCurrency={(n) => formatCurrency(n)}
             />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}

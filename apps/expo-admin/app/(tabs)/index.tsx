@@ -16,12 +16,12 @@ import { colors } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
 import { useNotifications } from "@/context/NotificationContext";
-import { OrderStatusPill } from "@/components/orders/OrderStatusPill";
-import { getDashboardStats, getRecentOrders } from "@/services/dashboard";
+import { OrderStagePill } from "@/components/orders/OrderStatusPill";
+import { getDashboardStats, getRecentOrdersWithCounts } from "@/services/dashboard";
 import { formatCompactDate } from "@/lib/format";
 import { useCurrency } from "@/context/CurrencyContext";
 import type { DashboardStats } from "@/types/dashboard";
-import type { Order } from "@/types/order";
+import type { Order, OrderTabCounts } from "@/types/order";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -62,16 +62,20 @@ export default function DashboardTab() {
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+  const [tabCounts, setTabCounts] = useState<OrderTabCounts | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadAll = useCallback(async () => {
     const [nextStats, nextOrders] = await Promise.allSettled([
       getDashboardStats(),
-      getRecentOrders(5),
+      getRecentOrdersWithCounts(5),
     ]);
     if (nextStats.status === "fulfilled") setStats(nextStats.value);
-    if (nextOrders.status === "fulfilled") setRecentOrders(nextOrders.value);
+    if (nextOrders.status === "fulfilled") {
+      setRecentOrders(nextOrders.value.orders);
+      setTabCounts(nextOrders.value.tabCounts ?? null);
+    }
   }, []);
 
   useEffect(() => {
@@ -195,17 +199,45 @@ export default function DashboardTab() {
               />
             </View>
 
+            {/* ── Follow-ups due ── */}
+            {tabCounts?.followUpDue ? (
+              <Pressable
+                style={[styles.alertBanner, { backgroundColor: "#fef2f2", borderColor: "#fecaca" }]}
+                onPress={() => router.push({ pathname: "/(tabs)/orders", params: { followUp: "due" } } as any)}
+              >
+                <View style={[styles.alertIconWrap, { backgroundColor: "#fee2e2" }]}>
+                  <Ionicons name="call-outline" size={16} color="#dc2626" />
+                </View>
+                <Text style={[styles.alertText, { color: "#991b1b" }]}>
+                  {tabCounts.followUpDue} order{tabCounts.followUpDue > 1 ? "s" : ""} need a confirmation call
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#991b1b" />
+              </Pressable>
+            ) : null}
+
+            {/* ── Due to collect ── */}
+            {stats?.totalDue ? (
+              <View style={[styles.alertBanner, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]}>
+                <View style={[styles.alertIconWrap, { backgroundColor: "#dbeafe" }]}>
+                  <Ionicons name="wallet-outline" size={16} color="#1d4ed8" />
+                </View>
+                <Text style={[styles.alertText, { color: "#1e3a8a" }]}>
+                  {formatCurrency(stats.totalDue)} due to collect{stats.unpaidCount ? ` · ${stats.unpaidCount} unpaid order${stats.unpaidCount > 1 ? "s" : ""}` : ""}
+                </Text>
+              </View>
+            ) : null}
+
             {/* ── Processing alert ── */}
             {stats && stats.processingCount > 0 ? (
               <Pressable
                 style={styles.alertBanner}
-                onPress={() => router.push("/(tabs)/orders")}
+                onPress={() => router.push({ pathname: "/(tabs)/orders", params: { status: "confirmed" } } as any)}
               >
                 <View style={styles.alertIconWrap}>
                   <Ionicons name="flash-outline" size={16} color="#d97706" />
                 </View>
                 <Text style={styles.alertText}>
-                  {stats.processingCount} order{stats.processingCount > 1 ? "s" : ""} currently processing
+                  {stats.processingCount} confirmed order{stats.processingCount > 1 ? "s" : ""} to pack and ship
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color="#92400e" />
               </Pressable>
@@ -282,7 +314,7 @@ export default function DashboardTab() {
                       {/* Amount + status */}
                       <View style={styles.orderRight}>
                         <Text style={styles.orderAmount}>{formatCurrency(order.amount)}</Text>
-                        <OrderStatusPill status={order.status} />
+                        <OrderStagePill order={order} />
                       </View>
                     </Pressable>
                   ))}

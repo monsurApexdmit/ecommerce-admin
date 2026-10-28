@@ -12,6 +12,11 @@ const TYPE_META: Record<NotificationType, { icon: keyof typeof Ionicons.glyphMap
   system: { icon: "settings-outline", bg: "#f1f5f9", color: "#64748b" },
   support: { icon: "chatbubble-outline", bg: "#ede9fe", color: "#7c3aed" },
   review: { icon: "star-outline", bg: "#fce7f3", color: "#db2777" },
+  payment_received: { icon: "cash-outline", bg: "#dcfce7", color: "#16a34a" },
+  po_received: { icon: "archive-outline", bg: "#e0f2fe", color: "#0369a1" },
+  tailor_ready: { icon: "cut-outline", bg: "#fae8ff", color: "#a21caf" },
+  daily_summary: { icon: "stats-chart-outline", bg: "#ecfeff", color: "#0e7490" },
+  stock_adjustment: { icon: "swap-vertical-outline", bg: "#fef3c7", color: "#d97706" },
 };
 
 export function NotificationPreviewSheet({

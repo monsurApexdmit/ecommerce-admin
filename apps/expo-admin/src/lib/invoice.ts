@@ -1,8 +1,11 @@
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Share } from "react-native";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency as formatUsd } from "@/lib/format";
 import type { Order } from "@/types/order";
+
+/** Money formatter; pass the CurrencyContext one so invoices use the company currency (e.g. ৳). */
+export type MoneyFormatter = (value: number) => string;
 
 function itemPrice(item: Order["items"][number]) {
   return Number(item.unitPrice ?? item.price ?? 0);
@@ -12,7 +15,14 @@ function itemTotal(item: Order["items"][number]) {
   return Number(item.totalPrice ?? itemPrice(item) * item.quantity);
 }
 
-export function buildInvoiceHtml(order: Order) {
+export function buildInvoiceHtml(order: Order, formatMoney?: MoneyFormatter) {
+  const formatCurrency: MoneyFormatter = formatMoney ?? ((v) => formatUsd(v));
+  const taxAmount = Number(order.taxAmount ?? 0);
+  const extraRows = [
+    order.transactionId ? `<p style="font-size:13px;color:#6b7280;">Transaction ID: ${order.transactionId}</p>` : "",
+    order.courier ? `<p style="font-size:13px;color:#6b7280;">Courier: ${order.courier}${order.zoneName ? ` · ${order.zoneName}` : ""}</p>` : "",
+    order.deliveryNote ? `<p style="font-size:13px;color:#6b7280;">Note: ${order.deliveryNote}</p>` : "",
+  ].join("");
   const shipTo = order.shippingFullName
     ? `
       <p style="font-weight:600;">${order.shippingFullName}</p>
@@ -68,7 +78,7 @@ export function buildInvoiceHtml(order: Order) {
           table { width:100%; border-collapse: collapse; margin: 32px 0; }
           th { text-align:left; background:#f8fafc; color:#334155; font-size:12px; text-transform:uppercase; padding:12px; border-bottom:2px solid #e5e7eb; }
           td { padding:14px 12px; border-bottom:1px solid #f1f5f9; font-size:14px; }
-          .summary { background:#f8fafc; border-radius:16px; padding:24px; display:grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+          .summary { background:#f8fafc; border-radius:16px; padding:24px; display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; }
           .summary h3 { font-size:12px; text-transform:uppercase; color:#6b7280; margin-bottom:6px; }
           .summary p { font-size:16px; font-weight:600; margin:0; }
           .total { color:#dc2626; font-size:24px !important; }
@@ -123,15 +133,20 @@ export function buildInvoiceHtml(order: Order) {
             <div>
               <h3>Payment Method</h3>
               <p>${order.method}</p>
+              ${extraRows}
             </div>
             <div>
               <h3>Shipping Cost</h3>
               <p>${formatCurrency(Number(order.shippingCost ?? 0))}</p>
             </div>
             <div>
-              <h3>Discount</h3>
+              <h3>Discount${order.couponCode ? ` (${order.couponCode})` : ""}</h3>
               <p>${formatCurrency(Number(order.discount ?? 0))}</p>
             </div>
+            ${taxAmount > 0 ? `<div>
+              <h3>Tax${order.taxRate ? ` (${order.taxRate}%)` : ""}</h3>
+              <p>${formatCurrency(taxAmount)}</p>
+            </div>` : ""}
             <div>
               <h3>Total Amount</h3>
               <p class="total">${formatCurrency(Number(order.amount ?? 0))}</p>
@@ -143,12 +158,12 @@ export function buildInvoiceHtml(order: Order) {
   `;
 }
 
-export async function printInvoice(order: Order) {
-  await Print.printAsync({ html: buildInvoiceHtml(order) });
+export async function printInvoice(order: Order, formatMoney?: MoneyFormatter) {
+  await Print.printAsync({ html: buildInvoiceHtml(order, formatMoney) });
 }
 
-export async function shareInvoicePdf(order: Order) {
-  const result = await Print.printToFileAsync({ html: buildInvoiceHtml(order) });
+export async function shareInvoicePdf(order: Order, formatMoney?: MoneyFormatter) {
+  const result = await Print.printToFileAsync({ html: buildInvoiceHtml(order, formatMoney) });
   const canShare = await Sharing.isAvailableAsync();
 
   if (canShare) {

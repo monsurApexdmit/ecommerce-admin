@@ -21,8 +21,9 @@ import {
   getVendorById,
   updateVendor,
   type Vendor,
+  type VendorStatus,
 } from "@/services/vendors";
-import { getVendorReturns, type VendorReturn } from "@/services/returns";
+import { getVendorReturns, VENDOR_RETURN_STATUS_LABELS, type VendorReturn } from "@/services/returns";
 import { getProducts } from "@/services/products";
 import type { Product } from "@/types/product";
 import { useAuth } from "@/context/AuthContext";
@@ -35,8 +36,8 @@ function initials(name: string) { return name.split(" ").map((w) => w[0]).slice(
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "#fef3c7", text: "#d97706" },
   shipped: { bg: "#dbeafe", text: "#1d4ed8" },
-  received_by_vendor: { bg: "#ede9fe", text: "#7c3aed" },
-  completed: { bg: "#dcfce7", text: "#16a34a" },
+  received: { bg: "#ede9fe", text: "#7c3aed" },
+  credited: { bg: "#dcfce7", text: "#16a34a" },
 };
 
 export default function VendorDetailScreen() {
@@ -54,7 +55,12 @@ export default function VendorDetailScreen() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState<"active" | "inactive">("active");
+  const [status, setStatus] = useState<VendorStatus>("active");
+  const [contactPerson, setContactPerson] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("");
+  const [leadTimeDays, setLeadTimeDays] = useState("");
+  const [safetyDays, setSafetyDays] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +76,10 @@ export default function VendorDetailScreen() {
         setName(ven.name); setEmail(ven.email ?? "");
         setPhone(ven.phone ?? ""); setAddress(ven.address ?? "");
         setDescription(ven.description ?? ""); setStatus(ven.status);
+        setContactPerson(ven.contactPerson ?? ""); setPaymentTerms(ven.paymentTerms ?? "");
+        setOpeningBalance(ven.openingBalance ? String(ven.openingBalance) : "");
+        setLeadTimeDays(ven.leadTimeDays !== null && ven.leadTimeDays !== undefined ? String(ven.leadTimeDays) : "");
+        setSafetyDays(ven.safetyDays !== null && ven.safetyDays !== undefined ? String(ven.safetyDays) : "");
       }
       if (r.status === "fulfilled") setReturns(r.value.data.slice(0, 5));
       if (p.status === "fulfilled") setProducts(p.value.data);
@@ -77,7 +87,7 @@ export default function VendorDetailScreen() {
   }, [id]);
 
   const inventoryValue = useMemo(
-    () => products.reduce((sum, p) => sum + p.price * (p.stock ?? 0), 0),
+    () => products.reduce((sum, p) => sum + (p.costPrice ?? p.price) * (p.stock ?? 0), 0),
     [products]
   );
 
@@ -88,9 +98,24 @@ export default function VendorDetailScreen() {
 
   const handleSave = async () => {
     if (!vendor) return;
+    if (!name.trim()) { Alert.alert("Error", "Vendor name is required."); return; }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert("Error", "Enter a valid email address."); return;
+    }
+    const opening = openingBalance.trim() === "" ? 0 : Number(openingBalance);
+    if (!Number.isFinite(opening) || opening < 0) { Alert.alert("Error", "Opening balance cannot be negative."); return; }
+    const lead = leadTimeDays.trim() === "" ? null : Number(leadTimeDays);
+    const safety = safetyDays.trim() === "" ? null : Number(safetyDays);
+    if ((lead !== null && (!Number.isInteger(lead) || lead < 0)) || (safety !== null && (!Number.isInteger(safety) || safety < 0))) {
+      Alert.alert("Error", "Lead time and safety days must be whole numbers, 0 or more."); return;
+    }
     setSaving(true);
     try {
-      const updated = await updateVendor(vendor.id, { name, email, phone, address, description, status });
+      const updated = await updateVendor(vendor.id, {
+        name: name.trim(), email: email.trim(), phone: phone.trim(), address, description, status,
+        contactPerson: contactPerson.trim(), paymentTerms: paymentTerms.trim(),
+        openingBalance: opening, leadTimeDays: lead, safetyDays: safety,
+      });
       setVendor(updated);
       setEditing(false);
     } catch (err: any) {
@@ -103,8 +128,12 @@ export default function VendorDetailScreen() {
     Alert.alert("Delete vendor", `Delete ${vendor.name}? This cannot be undone.`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
-        await deleteVendor(vendor.id);
-        router.replace("/vendors");
+        try {
+          await deleteVendor(vendor.id);
+          router.replace("/vendors");
+        } catch (err: any) {
+          Alert.alert("Error", err?.response?.data?.message ?? "Could not delete this vendor.");
+        }
       }},
     ]);
   };
@@ -210,7 +239,7 @@ export default function VendorDetailScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Status</Text>
             <View style={styles.statusRow}>
-              {(["active", "inactive"] as const).map((s) => (
+              {(["active", "inactive", "blocked"] as const).map((s) => (
                 <Pressable
                   key={s}
                   style={[styles.statusChip, status === s && styles.statusChipActive]}
@@ -222,6 +251,30 @@ export default function VendorDetailScreen() {
             </View>
           </View>
         )}
+
+        {/* Supplier terms */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Supplier terms</Text>
+          {editing ? (
+            <View style={{ gap: 10 }}>
+              <EditField value={contactPerson} onChange={setContactPerson} placeholder="Contact person" />
+              <EditField value={paymentTerms} onChange={setPaymentTerms} placeholder="Payment terms (e.g. Net 30)" />
+              <EditField value={openingBalance} onChange={setOpeningBalance} placeholder="Opening balance (0 or more)" keyboardType="decimal-pad" />
+              <EditField value={leadTimeDays} onChange={(v) => setLeadTimeDays(v.replace(/[^0-9]/g, ""))} placeholder="Lead time (days)" keyboardType="number-pad" />
+              <EditField value={safetyDays} onChange={(v) => setSafetyDays(v.replace(/[^0-9]/g, ""))} placeholder="Safety stock (days)" keyboardType="number-pad" />
+            </View>
+          ) : (
+            <View style={{ gap: 4 }}>
+              <Text style={styles.bodyText}>Contact: {vendor.contactPerson || "—"}</Text>
+              <Text style={styles.bodyText}>Payment terms: {vendor.paymentTerms || "—"}</Text>
+              <Text style={styles.bodyText}>Opening balance: {formatCurrency(vendor.openingBalance ?? 0)}</Text>
+              <Text style={styles.bodyText}>
+                Lead time: {vendor.leadTimeDays !== null && vendor.leadTimeDays !== undefined ? `${vendor.leadTimeDays} days` : "—"}
+                {vendor.safetyDays ? ` · safety ${vendor.safetyDays} days` : ""}
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* Description */}
         <View style={styles.card}>
@@ -298,7 +351,7 @@ export default function VendorDetailScreen() {
                       <Text style={styles.returnAmount}>{formatCurrency(r.totalAmount)}</Text>
                     )}
                     <View style={[styles.statusPill, { backgroundColor: tone.bg }]}>
-                      <Text style={[styles.statusPillText, { color: tone.text }]}>{r.status.replace(/_/g, " ")}</Text>
+                      <Text style={[styles.statusPillText, { color: tone.text }]}>{VENDOR_RETURN_STATUS_LABELS[r.status] ?? r.status}</Text>
                     </View>
                   </View>
                 </View>

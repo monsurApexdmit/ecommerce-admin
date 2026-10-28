@@ -13,7 +13,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/constants/theme";
 import { useCurrency } from "@/context/CurrencyContext";
-import type { CompletedSale, PaymentMethod } from "@/types/pos";
+import { DEFAULT_POS_METHODS, NEEDS_TXN } from "@/services/pos";
+import type { PaymentMethod } from "@/types/pos";
 
 type Props = {
   visible: boolean;
@@ -23,38 +24,57 @@ type Props = {
   couponDiscount: number;
   tax: number;
   customerName: string;
+  /** A saved customer is selected (needed for cash on delivery) */
+  hasCustomer?: boolean;
+  /** Methods enabled for the POS in payment settings */
+  methods?: PaymentMethod[];
+  defaultMethod?: PaymentMethod;
+  /** Returns a reason the sale cannot go through with this method, or null */
+  validate?: (method: PaymentMethod) => string | null;
   itemCount: number;
-  onConfirm: (method: PaymentMethod, tendered: number, change: number) => void;
+  onConfirm: (method: PaymentMethod, tendered: number, change: number, transactionId?: string) => void;
   onClose: () => void;
   submitting: boolean;
 };
 
-const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: string }[] = [
-  { id: "Cash",  label: "Cash",  icon: "cash-outline" },
-  { id: "Card",  label: "Card",  icon: "card-outline" },
-  { id: "Online", label: "Online", icon: "globe-outline" },
-];
+const METHOD_META: Record<PaymentMethod, { label: string; icon: string }> = {
+  Cash: { label: "Cash", icon: "cash-outline" },
+  Card: { label: "Card", icon: "card-outline" },
+  Online: { label: "Online", icon: "globe-outline" },
+  bKash: { label: "bKash", icon: "phone-portrait-outline" },
+  Nagad: { label: "Nagad", icon: "phone-portrait-outline" },
+  Bank: { label: "Bank", icon: "business-outline" },
+  COD: { label: "Cash on delivery", icon: "bicycle-outline" },
+};
 
 export function CheckoutModal({
   visible, total, subtotal, discount, couponDiscount, tax,
-  customerName, itemCount, onConfirm, onClose, submitting,
+  customerName, hasCustomer = false, methods = DEFAULT_POS_METHODS, defaultMethod,
+  validate, itemCount, onConfirm, onClose, submitting,
 }: Props) {
   const { formatCurrency } = useCurrency();
-  const [method, setMethod] = useState<PaymentMethod>("Cash");
+  const currencySymbol = formatCurrency(0).replace(/[\d.,\s]/g, "") || "";
+  const initialMethod = defaultMethod && methods.includes(defaultMethod) ? defaultMethod : methods[0] ?? "Cash";
+  const [method, setMethod] = useState<PaymentMethod>(initialMethod);
   const [tendered, setTendered] = useState("");
+  const [txnId, setTxnId] = useState("");
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (visible) {
-      setMethod("Cash");
+      setMethod(initialMethod);
       setTendered("");
-      setTimeout(() => inputRef.current?.focus(), 300);
+      setTxnId("");
+      if (initialMethod === "Cash") setTimeout(() => inputRef.current?.focus(), 300);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const tenderedNum = parseFloat(tendered) || 0;
+  const tenderedNum = parseFloat(tendered.replace(/,/g, "")) || 0;
   const change = method === "Cash" && tenderedNum >= total ? tenderedNum - total : 0;
-  const canConfirm = method !== "Cash" || tenderedNum >= total;
+  const blocker = validate ? validate(method) : null;
+  const codNeedsCustomer = method === "COD" && !hasCustomer;
+  const canConfirm = !blocker && !codNeedsCustomer && (method !== "Cash" || tenderedNum >= total);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -87,36 +107,63 @@ export function CheckoutModal({
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>Payment Method</Text>
               <View style={styles.methodRow}>
-                {PAYMENT_METHODS.map((m) => (
-                  <Pressable
-                    key={m.id}
-                    style={[styles.methodBtn, method === m.id && styles.methodBtnActive]}
-                    onPress={() => setMethod(m.id)}
-                  >
-                    <Ionicons
-                      name={m.icon as any}
-                      size={22}
-                      color={method === m.id ? colors.primaryDark : colors.muted}
-                    />
-                    <Text style={[styles.methodLabel, method === m.id && styles.methodLabelActive]}>
-                      {m.label}
-                    </Text>
-                  </Pressable>
-                ))}
+                {methods.map((id) => {
+                  const m = METHOD_META[id] ?? { label: id, icon: "wallet-outline" };
+                  return (
+                    <Pressable
+                      key={id}
+                      style={[styles.methodBtn, method === id && styles.methodBtnActive]}
+                      onPress={() => setMethod(id)}
+                    >
+                      <Ionicons
+                        name={m.icon as any}
+                        size={22}
+                        color={method === id ? colors.primaryDark : colors.muted}
+                      />
+                      <Text style={[styles.methodLabel, method === id && styles.methodLabelActive]} numberOfLines={1}>
+                        {m.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
+              {codNeedsCustomer ? (
+                <Text style={styles.warnText}>Cash on delivery needs a customer. Pick a saved customer in the cart.</Text>
+              ) : method === "COD" ? (
+                <Text style={styles.hintText}>Nothing is collected now; the order waits for delivery.</Text>
+              ) : null}
+              {blocker && !codNeedsCustomer ? <Text style={styles.warnText}>{blocker}</Text> : null}
             </View>
+
+            {/* Payment reference for mobile banking / bank */}
+            {NEEDS_TXN.includes(method) && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Transaction ID (optional)</Text>
+                <View style={styles.inputWrap}>
+                  <TextInput
+                    style={[styles.input, { fontSize: 16, fontWeight: "600" }]}
+                    placeholder={`${method} transaction ID`}
+                    placeholderTextColor="#94a3b8"
+                    value={txnId}
+                    onChangeText={setTxnId}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+            )}
 
             {/* Cash tendered */}
             {method === "Cash" && (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>Amount Tendered</Text>
                 <View style={styles.inputWrap}>
-                  <Text style={styles.inputPrefix}>$</Text>
+                  <Text style={styles.inputPrefix}>{currencySymbol}</Text>
                   <TextInput
                     ref={inputRef}
                     style={styles.input}
                     keyboardType="decimal-pad"
-                    placeholder={formatCurrency(total).replace("$", "")}
+                    placeholder={formatCurrency(total).replace(currencySymbol, "")}
                     placeholderTextColor="#94a3b8"
                     value={tendered}
                     onChangeText={setTendered}
@@ -152,7 +199,7 @@ export function CheckoutModal({
           {/* Confirm button */}
           <Pressable
             style={[styles.confirmBtn, (!canConfirm || submitting) && styles.confirmBtnDisabled]}
-            onPress={() => canConfirm && !submitting && onConfirm(method, tenderedNum, change)}
+            onPress={() => canConfirm && !submitting && onConfirm(method, tenderedNum, change, NEEDS_TXN.includes(method) ? txnId : undefined)}
             disabled={!canConfirm || submitting}
           >
             {submitting ? (
@@ -160,7 +207,7 @@ export function CheckoutModal({
             ) : (
               <>
                 <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-                <Text style={styles.confirmText}>Confirm Payment</Text>
+                <Text style={styles.confirmText}>{method === "COD" ? "Place COD Order" : "Confirm Payment"}</Text>
               </>
             )}
           </Pressable>
@@ -269,10 +316,23 @@ const styles = StyleSheet.create({
   },
   methodRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
+  warnText: {
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 8,
+  },
+  hintText: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 8,
+  },
   methodBtn: {
-    flex: 1,
+    flexBasis: "30%",
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 6,

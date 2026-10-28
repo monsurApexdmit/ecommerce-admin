@@ -17,11 +17,16 @@ import { formatDateTime } from "@/lib/format";
 import { useCurrency } from "@/context/CurrencyContext";
 import {
   deleteStaff,
+  formatSalaryMonth,
   getStaffById,
+  getStaffOverviewFlags,
   getSalaryPayments,
+  STAFF_PHONE_PATTERN,
+  STAFF_STATUSES,
   updateStaff,
   type SalaryPayment,
   type StaffMember,
+  type StaffStatus,
 } from "@/services/staff";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
@@ -52,17 +57,25 @@ export default function StaffDetailScreen() {
   const [salary, setSalary] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [bankAccount, setBankAccount] = useState("");
-  const [status, setStatus] = useState<"Active" | "Inactive">("Active");
+  const [status, setStatus] = useState<StaffStatus>("Active");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [m, p] = await Promise.allSettled([
+      const [m, p, fl] = await Promise.allSettled([
         getStaffById(Number(id)),
         getSalaryPayments({ staffId: Number(id), limit: 6 }),
+        getStaffOverviewFlags(),
       ]);
       if (m.status === "fulfilled") {
-        const s = m.value;
+        const flag = fl.status === "fulfilled" ? fl.value[Number(id)] : undefined;
+        const s: StaffMember = {
+          ...m.value,
+          isOwner: flag?.isOwner ?? m.value.isOwner,
+          isOnlyOwner: flag?.isOnlyOwner ?? m.value.isOnlyOwner,
+          loginMethod: m.value.loginMethod ?? flag?.loginMethod,
+          hasPin: m.value.hasPin ?? flag?.hasPin,
+        };
         setMember(s);
         setName(s.name); setEmail(s.email ?? "");
         setContact(s.contact ?? ""); setRole(s.role ?? "");
@@ -80,16 +93,34 @@ export default function StaffDetailScreen() {
 
   const handleSave = async () => {
     if (!member) return;
+    if (!name.trim()) { Alert.alert("Error", "Name is required."); return; }
+    if (!contact.trim()) { Alert.alert("Error", "Phone is required."); return; }
+    if (!STAFF_PHONE_PATTERN.test(contact.trim())) {
+      Alert.alert("Error", "Enter a valid phone number (digits, optional +, 6-20 characters).");
+      return;
+    }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert("Error", "Enter a valid email address.");
+      return;
+    }
+    if (!Number.isFinite(Number(salary)) || Number(salary) < 0) {
+      Alert.alert("Error", "Salary cannot be negative.");
+      return;
+    }
     setSaving(true);
     try {
       const updated = await updateStaff(member.id, {
-        name, email, contact, role,
-        salary: Number(salary), paymentMethod, bankAccount, status,
+        name: name.trim(), email: email.trim(), contact: contact.trim(), role,
+        salary: Number(salary), paymentMethod, bankAccount,
+        // Invited members keep their status until they accept the invite.
+        ...(status !== member.status ? { status } : {}),
       });
-      setMember(updated);
+      setMember({ ...updated, isOwner: member.isOwner, isOnlyOwner: member.isOnlyOwner });
       setEditing(false);
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message ?? "Update failed.");
+      const fieldErrors = err?.response?.data?.errors;
+      const first = fieldErrors ? (Object.values(fieldErrors).flat()[0] as string | undefined) : undefined;
+      Alert.alert("Error", first ?? err?.response?.data?.message ?? "Update failed.");
     } finally { setSaving(false); }
   };
 
@@ -98,8 +129,12 @@ export default function StaffDetailScreen() {
     Alert.alert("Delete staff", `Delete ${member.name}? This cannot be undone.`, [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
-        await deleteStaff(member.id);
-        router.replace("/staff");
+        try {
+          await deleteStaff(member.id);
+          router.replace("/staff");
+        } catch (err: any) {
+          Alert.alert("Error", err?.response?.data?.message ?? "Could not delete this team member.");
+        }
       }},
     ]);
   };
@@ -154,10 +189,17 @@ export default function StaffDetailScreen() {
               {member.role ? <Text style={styles.profileRole}>{member.role}</Text> : null}
               {member.email ? <Text style={styles.profileMeta}>{member.email}</Text> : null}
               {member.contact ? <Text style={styles.profileMeta}>{member.contact}</Text> : null}
-              <View style={[styles.badge, member.status === "Active" ? styles.badgeActive : styles.badgeInactive]}>
-                <Text style={[styles.badgeText, member.status === "Active" ? styles.badgeTextActive : styles.badgeTextInactive]}>
-                  {member.status}
-                </Text>
+              <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+                <View style={[styles.badge, member.status === "Active" ? styles.badgeActive : styles.badgeInactive]}>
+                  <Text style={[styles.badgeText, member.status === "Active" ? styles.badgeTextActive : styles.badgeTextInactive]}>
+                    {member.status}
+                  </Text>
+                </View>
+                {member.isOwner ? (
+                  <View style={[styles.badge, { backgroundColor: "#fef3c7" }]}>
+                    <Text style={[styles.badgeText, { color: "#b45309" }]}>{member.isOnlyOwner ? "Only Owner" : "Owner"}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           )}
@@ -215,6 +257,16 @@ export default function StaffDetailScreen() {
             <InfoRow label="Role" value={member.role || "—"} />
             <InfoRow label="Joining Date" value={member.joiningDate ? new Date(member.joiningDate).toLocaleDateString() : "—"} />
             <InfoRow label="Bank Account" value={member.bankAccount || "—"} />
+            <InfoRow
+              label="Login method"
+              value={member.loginMethod === "pin" ? "POS PIN (4 digits)" : "Email + password"}
+            />
+            {member.loginMethod === "pin" ? (
+              <InfoRow label="POS PIN" value={member.hasPin ? "Set" : "Not set yet"} />
+            ) : null}
+            {member.lastActiveAt ? (
+              <InfoRow label="Last active" value={formatDateTime(member.lastActiveAt)} />
+            ) : null}
           </View>
         )}
 
@@ -222,8 +274,11 @@ export default function StaffDetailScreen() {
         {editing && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Status</Text>
-            <View style={styles.statusRow}>
-              {(["Active", "Inactive"] as const).map((s) => (
+            {member.isOnlyOwner ? (
+              <Text style={styles.bodyText}>The only Owner cannot be deactivated. Make someone else an Owner first.</Text>
+            ) : null}
+            <View style={[styles.statusRow, { flexWrap: "wrap" }]}>
+              {(member.isOnlyOwner ? (["Active"] as StaffStatus[]) : STAFF_STATUSES).map((s) => (
                 <Pressable
                   key={s}
                   style={[styles.statusChip, status === s && styles.statusChipActive]}
@@ -252,7 +307,7 @@ export default function StaffDetailScreen() {
               return (
                 <View key={p.id ?? i} style={styles.paymentRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.paymentMonth}>{p.month}</Text>
+                    <Text style={styles.paymentMonth}>{formatSalaryMonth(p.month)}</Text>
                     {p.paymentDate && <Text style={styles.paymentDate}>{new Date(p.paymentDate).toLocaleDateString()}</Text>}
                   </View>
                   <View style={{ alignItems: "flex-end", gap: 4 }}>
@@ -268,7 +323,12 @@ export default function StaffDetailScreen() {
         </View>
 
         {/* Delete / Save actions */}
-        {!editing && (
+        {!editing && member.isOnlyOwner ? (
+          <Text style={[styles.bodyText, { textAlign: "center" }]}>
+            The only Owner cannot be removed. Make someone else an Owner first.
+          </Text>
+        ) : null}
+        {!editing && !member.isOnlyOwner && (
           <Pressable style={styles.deleteBtn} onPress={handleDelete}>
             <Ionicons name="trash-outline" size={17} color="#dc2626" />
             <Text style={styles.deleteBtnText}>Delete Staff Member</Text>

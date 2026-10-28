@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,9 +20,42 @@ import { resolveNotificationRoute } from "@/lib/notification-routing";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
 import {
+  dismissLiveAlert,
+  getLiveAlerts,
+  restoreLiveAlerts,
+  type LiveAlert,
   type Notification,
   type NotificationType,
 } from "@/services/notifications";
+
+// ─── Live alerts ──────────────────────────────────────────────────────────────
+
+const ALERT_META: Record<string, { icon: string; color: string; bg: string }> = {
+  out_of_stock:     { icon: "alert-circle-outline", color: "#dc2626", bg: "#fee2e2" },
+  low_stock:        { icon: "warning-outline",      color: "#d97706", bg: "#fef3c7" },
+  pending_order:    { icon: "time-outline",         color: "#1d4ed8", bg: "#dbeafe" },
+  customer_overdue: { icon: "cash-outline",         color: "#b91c1c", bg: "#fee2e2" },
+  po_overdue:       { icon: "archive-outline",      color: "#7c3aed", bg: "#ede9fe" },
+};
+
+const APP_SECTIONS = new Set(["orders", "products", "inventory", "customers", "vendors", "returns", "staff", "salary", "support", "tailor", "settings", "pos", "notifications"]);
+
+/** Maps a web admin link (e.g. /dashboard/dues/customers) onto a screen this app has, or null. */
+function alertRoute(actionUrl?: string | null): string | null {
+  const resolved = resolveNotificationRoute(actionUrl);
+  if (!resolved) return null;
+  const parts = resolved.split("?")[0].split("/").filter(Boolean);
+  if (parts[0] === "dues" && parts[1] && APP_SECTIONS.has(parts[1])) return `/${parts[1]}`;
+  if (parts[0] && APP_SECTIONS.has(parts[0])) return `/${parts[0]}`;
+  return null;
+}
+
+/** Filter chip -> notification types it covers (new types fold into the closest chip). */
+const FILTER_TYPES: Partial<Record<NotificationType, NotificationType[]>> = {
+  payment: ["payment", "payment_received"],
+  stock_alert: ["stock_alert", "stock_adjustment", "po_received"],
+  system: ["system", "daily_summary", "tailor_ready"],
+};
 
 // ─── Type metadata ────────────────────────────────────────────────────────────
 
@@ -33,6 +66,11 @@ const TYPE_META: Record<NotificationType, { icon: string; bg: string; color: str
   system:      { icon: "settings-outline",    bg: "#f1f5f9", color: "#64748b", label: "System" },
   support:     { icon: "chatbubble-outline",  bg: "#ede9fe", color: "#7c3aed", label: "Support" },
   review:      { icon: "star-outline",        bg: "#fce7f3", color: "#db2777", label: "Review" },
+  payment_received: { icon: "cash-outline",     bg: "#dcfce7", color: "#16a34a", label: "Payment" },
+  po_received: { icon: "archive-outline",     bg: "#e0f2fe", color: "#0369a1", label: "Purchase" },
+  tailor_ready: { icon: "cut-outline",        bg: "#fae8ff", color: "#a21caf", label: "Tailor" },
+  daily_summary: { icon: "stats-chart-outline", bg: "#ecfeff", color: "#0e7490", label: "Summary" },
+  stock_adjustment: { icon: "swap-vertical-outline", bg: "#fef3c7", color: "#d97706", label: "Stock" },
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -71,13 +109,47 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [alerts, setAlerts] = useState<LiveAlert[]>([]);
+  const [dismissedCount, setDismissedCount] = useState(0);
+  const [alertsOpen, setAlertsOpen] = useState(true);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      const res = await getLiveAlerts();
+      setAlerts(res.alerts);
+      setDismissedCount(res.dismissedCount);
+    } catch {
+      // alerts are optional (older servers / no permission)
+    }
+  }, []);
+
+  useEffect(() => { void loadAlerts(); }, [loadAlerts]);
+
+  const dismissAlert = async (alert: LiveAlert) => {
+    setAlerts((prev) => prev.filter((a) => a.key !== alert.key));
+    setDismissedCount((n) => n + 1);
+    try {
+      await dismissLiveAlert(alert.key);
+    } catch {
+      void loadAlerts();
+    }
+  };
+
+  const restoreAlerts = async () => {
+    try {
+      await restoreLiveAlerts();
+    } finally {
+      void loadAlerts();
+    }
+  };
 
   const filteredNotifications = useMemo(() => {
     let list = [...notifications];
     if (filter === "unread") {
       list = list.filter((item) => !item.readAt);
     } else if (filter !== "all") {
-      list = list.filter((item) => item.type === filter);
+      const types = FILTER_TYPES[filter] ?? [filter];
+      list = list.filter((item) => types.includes(item.type));
     }
 
     return list.sort(
@@ -90,7 +162,7 @@ export default function NotificationsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchNotifications();
+    await Promise.all([fetchNotifications(), loadAlerts()]);
     setRefreshing(false);
   };
 
@@ -213,6 +285,58 @@ export default function NotificationsScreen() {
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primaryDark} />}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+          ListHeaderComponent={
+            !selectMode && (alerts.length > 0 || dismissedCount > 0) ? (
+              <View style={alertStyles.section}>
+                <Pressable style={alertStyles.sectionHeader} onPress={() => setAlertsOpen((v) => !v)}>
+                  <Ionicons name="flash-outline" size={15} color="#b45309" />
+                  <Text style={alertStyles.sectionTitle}>Needs attention</Text>
+                  {alerts.length > 0 ? (
+                    <View style={alertStyles.countPill}><Text style={alertStyles.countText}>{alerts.length}</Text></View>
+                  ) : null}
+                  <View style={{ flex: 1 }} />
+                  <Ionicons name={alertsOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.muted} />
+                </Pressable>
+                {alertsOpen ? (
+                  <>
+                    {alerts.map((a) => {
+                      const meta = ALERT_META[a.kind] ?? { icon: "notifications-outline", color: colors.muted, bg: "#f1f5f9" };
+                      const route = alertRoute(a.actionUrl);
+                      return (
+                        <View key={a.key} style={[alertStyles.card, { borderLeftColor: PRIORITY_COLORS[a.priority] ?? meta.color }]}>
+                          <View style={[alertStyles.icon, { backgroundColor: meta.bg }]}>
+                            <Ionicons name={meta.icon as any} size={16} color={meta.color} />
+                          </View>
+                          <View style={{ flex: 1, gap: 3 }}>
+                            <Text style={alertStyles.title} numberOfLines={1}>{a.title}</Text>
+                            <Text style={alertStyles.message} numberOfLines={3}>{a.message}</Text>
+                            <View style={alertStyles.footer}>
+                              {a.since ? <Text style={alertStyles.since}>Since {formatDateTime(a.since)}</Text> : <View />}
+                              {route && a.ctaLabel ? (
+                                <Pressable onPress={() => router.push(route as any)} hitSlop={6}>
+                                  <Text style={alertStyles.cta}>{a.ctaLabel} →</Text>
+                                </Pressable>
+                              ) : null}
+                            </View>
+                          </View>
+                          <Pressable onPress={() => void dismissAlert(a)} hitSlop={10} style={alertStyles.dismiss}>
+                            <Ionicons name="close" size={16} color={colors.muted} />
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                    {alerts.length === 0 ? <Text style={alertStyles.empty}>All clear. Nothing needs attention.</Text> : null}
+                    {dismissedCount > 0 ? (
+                      <Pressable onPress={() => void restoreAlerts()} hitSlop={6}>
+                        <Text style={alertStyles.restore}>Show {dismissedCount} dismissed alert{dismissedCount === 1 ? "" : "s"}</Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                ) : null}
+                <Text style={alertStyles.listTitle}>Notifications</Text>
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <NotificationCard
               notification={item}
@@ -295,6 +419,29 @@ function NotificationCard({ notification: n, selected, selectMode, onPress, onLo
     </Pressable>
   );
 }
+
+const alertStyles = StyleSheet.create({
+  section: { gap: 8, marginBottom: 8 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2 },
+  sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  countPill: { backgroundColor: "#fef3c7", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 1 },
+  countText: { color: "#b45309", fontSize: 11, fontWeight: "800" },
+  card: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderLeftWidth: 4,
+    borderColor: colors.border, padding: 12,
+  },
+  icon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  title: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  message: { color: colors.muted, fontSize: 12, lineHeight: 17 },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  since: { color: colors.muted, fontSize: 11 },
+  cta: { color: colors.primaryDark, fontSize: 12, fontWeight: "800" },
+  dismiss: { padding: 2 },
+  empty: { color: colors.muted, fontSize: 12, paddingVertical: 4 },
+  restore: { color: colors.primaryDark, fontSize: 12, fontWeight: "700" },
+  listTitle: { color: colors.text, fontSize: 14, fontWeight: "800", marginTop: 8 },
+});
 
 const cardStyles = StyleSheet.create({
   card: {

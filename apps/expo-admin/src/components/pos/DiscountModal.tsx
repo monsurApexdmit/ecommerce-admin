@@ -25,6 +25,7 @@ type Props = {
 
 export function DiscountModal({ visible, subtotal, currentDiscount, onApply, onClose }: Props) {
   const { formatCurrency } = useCurrency();
+  const currencySymbol = formatCurrency(0).replace(/[\d.,\s]/g, "") || "";
   const [type, setType] = useState<DiscountType>("percentage");
   const [value, setValue] = useState("");
   const inputRef = useRef<TextInput>(null);
@@ -91,7 +92,7 @@ export function DiscountModal({ visible, subtotal, currentDiscount, onApply, onC
 
           {/* Input */}
           <View style={styles.inputWrap}>
-            <Text style={styles.inputPrefix}>{type === "percentage" ? "%" : "$"}</Text>
+            <Text style={styles.inputPrefix}>{type === "percentage" ? "%" : currencySymbol}</Text>
             <TextInput
               ref={inputRef}
               style={styles.input}

@@ -44,6 +44,25 @@ export interface ProductAttributeSelection {
   value: string | string[];
 }
 
+export type ProductStockState = "ok" | "low" | "out";
+
+export interface ProductStockByLocation {
+  locationId: number;
+  locationName: string;
+  quantity: number;
+}
+
+export interface ProductTabCounts {
+  all: number;
+  ok: number;
+  low: number;
+  out: number;
+  hidden: number;
+  draft: number;
+}
+
+export type ProductListTab = keyof ProductTabCounts;
+
 export interface ProductVariant {
   id: string;
   name: string;
@@ -52,6 +71,10 @@ export interface ProductVariant {
   salePrice: number;
   offerPrice?: number;
   offerType?: string;
+  /** Server-computed: true only while the offer is running. */
+  offerActive?: boolean;
+  /** Server-computed selling price (offer applied when active). */
+  currentPrice?: number;
   costPrice?: number;
   profitMargin?: number;
   marginType?: string;
@@ -113,10 +136,22 @@ export interface Product {
   salePrice: number;
   offerPrice?: number;
   offerType?: string;
+  offerEndsAt?: string;
+  /** Server-computed: true only while the offer is running. */
+  offerActive?: boolean;
+  /** Server-computed selling price (offer applied when active). */
+  currentPrice?: number;
   costPrice?: number;
   profitMargin?: number;
   marginType?: string;
   stock: number;
+  /** ok | low | out — reorderPoint 0 means the low-stock alert is off. */
+  stockState?: ProductStockState;
+  reorderPoint?: number;
+  stockByLocation?: ProductStockByLocation[];
+  availableInPos?: boolean;
+  visibleOnline?: boolean;
+  tag?: string;
   status: ProductStatus;
   published: boolean;
   isHotDeal?: boolean;
@@ -148,11 +183,20 @@ export interface ProductListParams {
   search?: string;
   status?: string;
   categoryId?: number;
+  /** Legacy: products whose home location is X. */
   locationId?: number;
+  /** Warehouse for stock evaluation (stock, stockState, tab, sort). */
+  stockLocationId?: number;
   vendorId?: number;
+  tab?: ProductListTab;
+  sort?: "recent" | "name" | "price-asc" | "price-desc" | "stock-asc" | "stock-desc";
+  published?: boolean;
+  /** Only products available in POS. */
+  pos?: boolean;
 }
 
 export interface ProductListResult {
+  tabCounts?: ProductTabCounts;
   data: Product[];
   pagination: {
     page: number;
@@ -198,7 +242,11 @@ export interface ProductDraft {
   profitMargin?: number;
   marginType?: string;
   stock: number;
+  reorderPoint?: number;
   published?: boolean;
+  availableInPos?: boolean;
+  visibleOnline?: boolean;
+  tag?: string;
   isHotDeal?: boolean;
   isBestSeller?: boolean;
   isFeatured?: boolean;

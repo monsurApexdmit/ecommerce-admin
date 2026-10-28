@@ -22,23 +22,27 @@ import {
   createTailorFabric,
   updateTailorFabric,
   deleteTailorFabric,
+  tailorApiError,
 } from "@/services/tailor"
 import type { TailorFabric } from "@/types/tailor"
 import { AccessDenied } from "@/components/AccessDenied"
 import { colors } from "@/constants/theme"
 
 const LOW_STOCK_THRESHOLD = 5
-const UNITS: Array<"goj" | "gaj"> = ["goj", "gaj"]
+/** Low when at/below the fabric's reorder level, else below the default threshold. */
+const isLow = (f: TailorFabric) => (f.reorderLevel != null && f.reorderLevel > 0 ? f.stockQuantity <= f.reorderLevel : f.stockQuantity < LOW_STOCK_THRESHOLD)
+const UNITS: Array<"m" | "goj" | "gaj"> = ["m", "goj", "gaj"]
 const STATUSES: Array<"active" | "inactive"> = ["active", "inactive"]
 
 interface FormState {
   name: string
   fabricType: string
   color: string
-  unit: "goj" | "gaj"
+  unit: "m" | "goj" | "gaj"
   purchasePrice: string
   sellingPrice: string
   stockQuantity: string
+  reorderLevel: string
   status: "active" | "inactive"
 }
 
@@ -46,10 +50,11 @@ const BLANK_FORM: FormState = {
   name: "",
   fabricType: "",
   color: "",
-  unit: "goj",
+  unit: "m",
   purchasePrice: "",
   sellingPrice: "",
   stockQuantity: "",
+  reorderLevel: "",
   status: "active",
 }
 
@@ -58,10 +63,11 @@ function fabricToForm(f: TailorFabric): FormState {
     name: f.name,
     fabricType: f.fabricType ?? "",
     color: f.color ?? "",
-    unit: f.unit,
+    unit: f.unit || "m",
     purchasePrice: f.purchasePrice ? String(f.purchasePrice) : "",
     sellingPrice: f.sellingPrice ? String(f.sellingPrice) : "",
     stockQuantity: f.stockQuantity ? String(f.stockQuantity) : "",
+    reorderLevel: f.reorderLevel != null ? String(f.reorderLevel) : "",
     status: f.status,
   }
 }
@@ -124,8 +130,9 @@ export default function TailorFabricsScreen() {
             try {
               await deleteTailorFabric(fabric.id)
               await load()
-            } catch {
-              Alert.alert("Error", "Failed to delete fabric")
+            } catch (e) {
+              // 422 when the fabric is used on orders ("… Deactivate it instead.")
+              Alert.alert("Could not delete", tailorApiError(e, "Failed to delete fabric"))
             }
           },
         },
@@ -138,6 +145,18 @@ export default function TailorFabricsScreen() {
       Alert.alert("Validation", "Name is required")
       return
     }
+    const nums = [form.purchasePrice, form.sellingPrice, form.stockQuantity, form.reorderLevel]
+    if (nums.some((v) => v.trim() !== "" && (isNaN(Number(v)) || Number(v) < 0))) {
+      Alert.alert("Validation", "Prices and quantities must be 0 or more")
+      return
+    }
+    // Same name + colour may exist only once (server enforces it too).
+    const key = (n: string, c?: string) => `${n.trim().toLowerCase()}|${(c ?? "").trim().toLowerCase()}`
+    const dup = fabrics.find((f) => f.id !== editingFabric?.id && key(f.name, f.color) === key(form.name, form.color))
+    if (dup) {
+      Alert.alert("Duplicate fabric", `A fabric named "${form.name.trim()}"${form.color.trim() ? ` in ${form.color.trim()}` : ""} already exists.`)
+      return
+    }
     setSaving(true)
     try {
       const payload: Partial<TailorFabric> = {
@@ -147,7 +166,8 @@ export default function TailorFabricsScreen() {
         unit: form.unit,
         purchasePrice: form.purchasePrice ? parseFloat(form.purchasePrice) : 0,
         sellingPrice: form.sellingPrice ? parseFloat(form.sellingPrice) : 0,
-        stockQuantity: form.stockQuantity ? parseInt(form.stockQuantity, 10) : 0,
+        stockQuantity: form.stockQuantity ? parseFloat(form.stockQuantity) : 0,
+        reorderLevel: form.reorderLevel.trim() !== "" ? parseFloat(form.reorderLevel) : undefined,
         status: form.status,
       }
       if (editingFabric) {
@@ -157,8 +177,9 @@ export default function TailorFabricsScreen() {
       }
       setModalVisible(false)
       await load()
-    } catch {
-      Alert.alert("Error", "Failed to save fabric")
+    } catch (e) {
+      // e.g. 422 'A fabric named "Cotton" in White already exists.'
+      Alert.alert("Error", tailorApiError(e, "Failed to save fabric"))
     } finally {
       setSaving(false)
     }
@@ -238,15 +259,15 @@ export default function TailorFabricsScreen() {
                   <Ionicons name="resize-outline" size={12} color={colors.muted} />
                   <Text style={s.metaChipText}>{f.unit}</Text>
                 </View>
-                <View style={[s.metaChip, f.stockQuantity < LOW_STOCK_THRESHOLD && s.metaChipWarn]}>
+                <View style={[s.metaChip, isLow(f) && s.metaChipWarn]}>
                   <Ionicons
-                    name={f.stockQuantity < LOW_STOCK_THRESHOLD ? "warning-outline" : "cube-outline"}
+                    name={isLow(f) ? "warning-outline" : "cube-outline"}
                     size={12}
-                    color={f.stockQuantity < LOW_STOCK_THRESHOLD ? colors.warning : colors.muted}
+                    color={isLow(f) ? colors.warning : colors.muted}
                   />
-                  <Text style={[s.metaChipText, f.stockQuantity < LOW_STOCK_THRESHOLD && s.metaChipTextWarn]}>
-                    {f.stockQuantity} in stock
-                    {f.stockQuantity < LOW_STOCK_THRESHOLD ? " · Low" : ""}
+                  <Text style={[s.metaChipText, isLow(f) && s.metaChipTextWarn]}>
+                    {f.stockQuantity} {f.unit} in stock
+                    {isLow(f) ? " · Low" : ""}
                   </Text>
                 </View>
               </View>
@@ -357,9 +378,20 @@ export default function TailorFabricsScreen() {
               style={s.input}
               placeholder="0"
               placeholderTextColor={colors.muted}
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               value={form.stockQuantity}
               onChangeText={v => setForm(p => ({ ...p, stockQuantity: v }))}
+            />
+
+            {/* Reorder level */}
+            <Text style={s.inputLabel}>Reorder level ({form.unit})</Text>
+            <TextInput
+              style={s.input}
+              placeholder="Optional — warn when stock falls to this"
+              placeholderTextColor={colors.muted}
+              keyboardType="decimal-pad"
+              value={form.reorderLevel}
+              onChangeText={v => setForm(p => ({ ...p, reorderLevel: v }))}
             />
 
             {/* Status */}
