@@ -149,7 +149,7 @@ export default function OrdersPage() {
   const latestFetch = useRef(0)
   const blocked = useModuleGuard("Orders")
 
-  // Deep links: ?status= (all 7), ?customer= / ?q= / ?search=, ?source=, ?pay=
+  // Deep links: ?status= (all 7), ?customer= / ?q= / ?search=, ?source=, ?pay=, ?method=
   useEffect(() => {
     const st = searchParams.get("status")?.toLowerCase()
     if (st) {
@@ -165,6 +165,11 @@ export default function OrdersPage() {
     }
     const pay = searchParams.get("pay")?.toLowerCase()
     if (pay && ["paid", "partial", "unpaid"].includes(pay)) { setPayFilter(pay as Pay); setPage(1) }
+    const method = searchParams.get("method")
+    if (method) {
+      const m = ["Cash", "Card", "Online", "COD", "bKash", "Nagad", "Bank"].find((x) => x.toLowerCase() === method.toLowerCase())
+      if (m) { setMethodFilter(m); setPage(1) }
+    }
     if (searchParams.get("followUp")?.toLowerCase() === "due") { setDueOnly(true); setPage(1) }
   }, [searchParams])
 

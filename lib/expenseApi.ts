@@ -79,6 +79,15 @@ export interface ExpenseResponse {
   source?: 'manual' | 'salary' | 'recurring' | string;
   locked?: boolean;
   categoryColor?: string | null;
+  /** v2 (EXP-1): voided rows stay listed, struck through with the reason. */
+  voided?: boolean;
+  voidedAt?: string | null;
+  voidReason?: string | null;
+  voidedByName?: string | null;
+  /** The expense date is in a closed month (edits/deletes are refused by the server). */
+  periodClosed?: boolean;
+  /** Not voided, not generated, month open. */
+  editable?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { isFinanceHref, useFinanceQuery, withFinanceQuery } from "@/components/finance/finance-filters"
 import {
     LayoutDashboard,
     ShoppingCart,
@@ -23,8 +24,8 @@ import {
     Headphones,
     Scissors,
     Receipt,
-    Wallet,
     BarChart3,
+    Landmark,
 } from "lucide-react"
 
 import {
@@ -62,6 +63,8 @@ const SECTIONS = ["Overview", "Sell", "Catalog", "Operations", "Finance", "Works
 
 const NAV_CONFIG = [
     { section: "Overview", name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "Dashboard" },
+    // Sales / purchases / stock reports. Finance → Reports holds the money reports (P&L, cash flow, tax, aging).
+    { section: "Overview", name: "Analytics", href: "/dashboard/reports", icon: BarChart3, module: "Reports" },
 
     { section: "Sell", name: "POS",       href: "/dashboard/pos",       icon: CreditCard, module: "POS" },
     { section: "Sell", name: "Sales",     href: "/dashboard/sales",     icon: Receipt,    module: "Orders" },
@@ -83,6 +86,7 @@ const NAV_CONFIG = [
         items: [
             { name: "Products",      href: "/dashboard/products",               module: "Products" },
             { name: "Categories",    href: "/dashboard/categories",             module: "Categories" },
+            { name: "Collections",   href: "/dashboard/collections",            module: "Collections" },
             { name: "Units",         href: "/dashboard/units",                  module: "Units" },
             { name: "Brands",        href: "/dashboard/brands",                 module: "Brands" },
             { name: "Attributes",    href: "/dashboard/attributes",             module: "Attributes" },
@@ -138,16 +142,19 @@ const NAV_CONFIG = [
 
     {
         section: "Finance",
-        name: "Expenses",
-        icon: Wallet,
+        name: "Finance",
+        icon: Landmark,
         items: [
-            { name: "All expenses",   href: "/dashboard/expenses",            module: "Expenses" },
-            { name: "Categories",     href: "/dashboard/expenses/categories", module: "Expenses" },
-            { name: "Customer dues",  href: "/dashboard/dues/customers",      module: "Dues" },
-            { name: "Vendor dues",    href: "/dashboard/dues/vendors",        module: "Dues" },
+            { name: "Overview",              href: "/dashboard/finance",              module: "Finance" },
+            { name: "Inventory and ledger",  href: "/dashboard/finance/inventory",    module: "Finance" },
+            { name: "Expenses",              href: "/dashboard/expenses",             module: "Expenses" },
+            { name: "Payouts",               href: "/dashboard/finance/payouts",      module: "Finance" },
+            { name: "Receivables",           href: "/dashboard/finance/receivables",  module: "Finance" },
+            { name: "Payments",              href: "/dashboard/finance/payments",     module: "Finance" },
+            { name: "Transactions",          href: "/dashboard/finance/transactions", module: "Finance" },
+            { name: "Reports",               href: "/dashboard/finance/reports",      module: "Finance" },
         ],
     },
-    { section: "Finance", name: "Reports", href: "/dashboard/reports", icon: BarChart3, module: "Reports" },
 
     {
         section: "Workspace",
@@ -287,6 +294,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const { canRead, isPlanModule, user, company } = useSaasAuth()
     const { setOpen: setSidebarOpen } = useSidebar()
     const businessName = company?.name?.trim() || "Your business"
+    // FND-2: finance links carry the Period / Channel last picked on a finance page (kept in sessionStorage)
+    const financeQuery = useFinanceQuery()
+    const linkHref = (href: string) => (isFinanceHref(href) ? withFinanceQuery(href, financeQuery) : href)
 
     // Collapsed state is remembered per user (no per-user settings store exists, so localStorage).
     const prefKey = user?.id ? `sidebar-collapsed:${user.id}` : null
@@ -367,7 +377,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <li key={item.name}>
                 <WithTooltip content={collapsed ? item.name : undefined} side="right">
                     <Link
-                        href={item.href}
+                        href={linkHref(item.href)}
                         aria-label={item.name}
                         data-active={active}
                         className={cn("nav-btn", collapsed && "justify-center px-0")}
@@ -414,7 +424,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             return (
                                 <Link
                                     key={kid.name}
-                                    href={kid.href}
+                                    href={linkHref(kid.href)}
+                                    prefetch={isFinanceHref(kid.href) ? false : undefined}
                                     role="menuitem"
                                     className={cn(
                                         "flex min-h-10 w-full items-center justify-between rounded-lg px-2.5 text-sm outline-none hover:bg-accent focus-visible:bg-accent",
@@ -456,7 +467,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             const count = kidCount(group.name, kid.name)
                             return (
                                 <li key={kid.name}>
-                                    <Link href={kid.href} data-active={kid.href === activeKid} className="nav-sub">
+                                    <Link href={linkHref(kid.href)} prefetch={isFinanceHref(kid.href) ? false : undefined} data-active={kid.href === activeKid} className="nav-sub">
                                         <span>{kid.name}</span>
                                         {count && <span className="nav-count">{count}</span>}
                                     </Link>

@@ -28,6 +28,7 @@ import { Toaster as SonnerToaster } from "sonner"
 import { CustomerSupportMessenger } from "@/components/customer-support-messenger"
 import { CompanySettingsProvider } from "@/contexts/company-settings-context"
 import { AppHeader } from "@/components/shell/app-header"
+import { PointerEventsGuard } from "@/components/shell/pointer-events-guard"
 import { DashboardProvider } from "@/components/dashboard/dashboard-context"
 import { displayFont, bodyFont } from "@/components/dashboard/fonts"
 
@@ -74,6 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       </SidebarProvider>
                         </Suspense>
                         <Toaster />
+                        <PointerEventsGuard />
                         <SonnerToaster position="top-right" richColors />
                         <CustomerSupportMessenger />
                               </OrderProvider>

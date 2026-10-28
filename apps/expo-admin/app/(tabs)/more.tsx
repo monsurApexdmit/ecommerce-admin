@@ -44,6 +44,7 @@ export default function MoreTab() {
       title: "Store",
       items: [
         { icon: "cube-outline",             label: "Products",  route: "/(tabs)/products", iconBg: "#ecfdf5", module: "Products" },
+        { icon: "albums-outline",           label: "Collections", route: "/collections",    iconBg: "#f0fdfa", module: "Collections" },
         { icon: "receipt-outline",          label: "Orders",    route: "/(tabs)/orders",   iconBg: "#eff6ff", module: "Orders" },
         { icon: "cart-outline",             label: "POS",       route: "/(tabs)/pos",      iconBg: "#ecfeff", module: "POS" },
         { icon: "cut-outline",              label: "Tailor Shop", route: "/(tabs)/tailor", iconBg: "#ede9fe", module: "TailorDashboard" },
@@ -52,6 +53,12 @@ export default function MoreTab() {
         { icon: "people-outline",           label: "Customers", route: "/customers",        iconBg: "#f5f3ff", module: "Customers" },
         { icon: "storefront-outline",       label: "Vendors",   route: "/vendors",          iconBg: "#fef3c7", module: "Vendors" },
         { icon: "return-down-back-outline", label: "Returns",   route: "/returns",          iconBg: "#fce7f3", module: "Customer Returns" },
+      ],
+    },
+    {
+      title: "Finance",
+      items: [
+        { icon: "wallet-outline", label: "Finance", route: "/finance", iconBg: "#ecfdf5", module: "Finance" },
       ],
     },
     {

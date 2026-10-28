@@ -6,10 +6,16 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
+/**
+ * Non-modal by default (G-4). A modal menu locks `pointer-events` on <body>; when an item opens a Dialog /
+ * AlertDialog, Radix 1.1.x can leave that lock behind after the dialog closes, so the next click on the page is
+ * ignored. Menus here don't need a focus trap; pass `modal` explicitly for one that does.
+ */
 function DropdownMenu({
+  modal = false,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" modal={modal} {...props} />
 }
 
 function DropdownMenuPortal({

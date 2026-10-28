@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { Attribute, Category, Vendor, Warehouse } from "@/types/catalog";
+import type { Attribute, Brand, Category, Vendor, Warehouse } from "@/types/catalog";
 
 type CategoryResponse = {
   id: number;
@@ -134,4 +134,17 @@ export async function getAttributes() {
   const payload = response.data?.data;
   const items = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
   return items.map(normalizeAttribute);
+}
+
+/** Active brands (id + name) for pickers. */
+export async function getBrands(): Promise<Brand[]> {
+  const response = await api.get("/brands/simple");
+  const payload = response.data?.data;
+  const items: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+  return items.map((b) => ({
+    id: Number(b.id),
+    brandName: b.brandName ?? b.brand_name ?? "",
+    logo: b.logo ?? null,
+    status: b.status !== false,
+  }));
 }

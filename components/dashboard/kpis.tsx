@@ -57,7 +57,7 @@ export function Kpis() {
   if (error && !data) return <SectionError message={error} onRetry={retry} />
   if (loading && !data) {
     return (
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 min-[1400px]:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => <Bar key={i} className="h-[170px] rounded-xl" />)}
       </div>
     )
@@ -130,16 +130,16 @@ export function Kpis() {
   ]
 
   return (
-    <section aria-label="Key metrics" className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+    <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 min-[1400px]:grid-cols-6">
       {cards.map((c) => (
         <Card key={c.label} className="min-w-0 gap-2.5 p-[18px]">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-muted-foreground">{c.label}</span>
-            <Badge variant={TONE[c.tone]}>{c.chip}</Badge>
+            <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">{c.label}</span>
+            <Badge variant={TONE[c.tone]} className="shrink-0">{c.chip}</Badge>
           </div>
-          <span className="text-2xl font-semibold tracking-tight tabular-nums">{c.value}</span>
+          <span className="truncate text-2xl font-semibold tracking-tight tabular-nums">{c.value}</span>
           <Sparkline values={c.series} color={c.color} />
-          <span className="text-xs text-muted-foreground">{c.sub}</span>
+          <span className="truncate text-xs text-muted-foreground" title={typeof c.sub === "string" ? c.sub : undefined}>{c.sub}</span>
         </Card>
       ))}
     </section>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Banknote, CalendarClock, Download, Pencil, Plus, Repeat, Search, TrendingUp, Trash2, Wallet } from "lucide-react"
+import { Ban, Banknote, CalendarClock, Download, History, Pencil, Plus, Repeat, Search, TrendingUp, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatsCards } from "@/components/ui/stats-card"
@@ -32,20 +32,26 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { FinanceFilters, useFinanceFilters } from "@/components/finance/finance-filters"
+import { formatDate, todayIn } from "@/lib/finance-format"
+import { ExpenseVoidDialog } from "@/components/finance/expense-void-dialog"
+import { ExpenseActivitySheet } from "@/components/finance/expense-activity-sheet"
+
+const CLOSED_MSG = "This month is closed. Void this expense and add a new one in an open month instead."
+/** Generated from Salary / Tailor payments: read-only here. */
+const isGenerated = (e: ExpenseResponse) => !!e.locked || e.source === "salary" || e.source === "dorji_payout"
 
 type Tab = "all" | "rec" | "salary" | "manual"
-type Period = "month" | "last" | "d30" | "year" | "all" | "custom"
 
 const METHODS = ["Cash", "bKash", "Bank", "Card", "Other"]
 const EVERY = ["Week", "Month", "Quarter", "Year"]
-const PERIODS: [Period, string][] = [["month", "This month"], ["last", "Last month"], ["d30", "Last 30 days"], ["year", "This year"], ["all", "All time"], ["custom", "Custom range"]]
 const PALETTE = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
 
 const NONE = "__none"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-const fmtD = (d?: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+const fmtD = (d?: string | null) => (d ? formatDate(d.slice(0, 10)) : "—")
 
 const REC_LABEL: Record<string, string> = { Week: "Weekly", Month: "Monthly", Quarter: "Quarterly", Year: "Yearly" }
 const normEvery = (f?: string | null) => {
@@ -64,22 +70,13 @@ function addPeriod(iso: string, every: string): string {
 }
 const csvEsc = (v: unknown) => { const t = String(v ?? ""); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
 
-function windowFor(p: Period, from: string, to: string): { from?: string; to?: string; label: string } {
-  const now = new Date()
-  if (p === "month") return { from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)), to: ymd(now), label: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }) }
-  if (p === "last") { const s = new Date(now.getFullYear(), now.getMonth() - 1, 1); return { from: ymd(s), to: ymd(new Date(now.getFullYear(), now.getMonth(), 0)), label: s.toLocaleDateString("en-US", { month: "long", year: "numeric" }) } }
-  if (p === "d30") return { from: ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)), to: ymd(now), label: "last 30 days" }
-  if (p === "year") return { from: `${now.getFullYear()}-01-01`, to: ymd(now), label: String(now.getFullYear()) }
-  if (p === "custom") return { from: from || undefined, to: to || undefined, label: "custom range" }
-  return { label: "all time" }
-}
 
 interface FormState {
   amount: string; title: string; categoryId: string; method: string; date: string; paidTo: string
   vendorId: string; locationId: string; ref: string; note: string; recurring: boolean; every: string; nextDue: string; recEnd: string
 }
 const blankForm = (): FormState => ({
-  amount: "", title: "", categoryId: "", method: "Cash", date: ymd(new Date()), paidTo: "", vendorId: "", locationId: "", ref: "", note: "",
+  amount: "", title: "", categoryId: "", method: "Cash", date: todayIn(), paidTo: "", vendorId: "", locationId: "", ref: "", note: "",
   recurring: false, every: "Month", nextDue: "", recEnd: "",
 })
 
@@ -109,9 +106,8 @@ export default function ExpensesPage() {
   const [fMethod, setFMethod] = useState("all")
   const [fLoc, setFLoc] = useState("all")
   const [fVendor, setFVendor] = useState("all")
-  const [period, setPeriod] = useState<Period>("month")
-  const [cFrom, setCFrom] = useState("")
-  const [cTo, setCTo] = useState("")
+  // FND-2: the shared finance Period filter (URL + remembered across finance pages), worked out in the company time zone
+  const filters = useFinanceFilters()
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
 
@@ -119,10 +115,13 @@ export default function ExpensesPage() {
   const [editing, setEditing] = useState<ExpenseResponse | null>(null)
   const [err, setErr] = useState("")
   const [saving, setSaving] = useState(false)
+  const [voiding, setVoiding] = useState<ExpenseResponse | null>(null)
+  const [activity, setActivity] = useState<ExpenseResponse | null>(null)
 
   useEffect(() => { const t = setTimeout(() => setQD(q.trim()), 250); return () => clearTimeout(t) }, [q])
 
-  const win = windowFor(period, cFrom, cTo)
+  const win = { from: filters.from || undefined, to: filters.to || undefined, label: filters.label.toLowerCase() === "all time" ? "all time" : filters.label }
+  useEffect(() => { setPage(1) }, [filters.key])
 
   const loadCommon = useCallback(() => {
     expenseCategoryApi.getOverview({ include_inactive: true }).then((r) => { setAllCats(r.data); setCats(r.data.filter((c) => c.status !== false)) }).catch(() => {})
@@ -132,6 +131,7 @@ export default function ExpensesPage() {
   useEffect(() => { loadCommon() }, [loadCommon])
 
   const load = useCallback(async () => {
+    if (!filters.ready) return
     setLoading(true)
     try {
       const params: Record<string, any> = { page, per_page: perPage, tab }
@@ -150,12 +150,16 @@ export default function ExpensesPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, perPage, tab, qD, fCat, fMethod, fLoc, fVendor, win.from, win.to]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, perPage, tab, qD, fCat, fMethod, fLoc, fVendor, win.from, win.to, filters.ready]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [load])
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }))
 
   const startEdit = (e: ExpenseResponse | null) => {
+    if (e && (e.voided || e.periodClosed || e.editable === false)) {
+      toast.error(e.voided ? "A voided expense cannot be edited." : CLOSED_MSG)
+      return
+    }
     setEditing(e)
     setErr("")
     setForm(e ? {
@@ -171,7 +175,7 @@ export default function ExpensesPage() {
     setEditing(null)
     setForm({ ...blankForm(), title: t.title, categoryId: String(t.categoryId), amount: String(t.amount), method: t.paymentMethod || "Cash",
       paidTo: t.paidTo ?? "", vendorId: t.vendorId ? String(t.vendorId) : "", locationId: t.locationId ? String(t.locationId) : "",
-      recurring: !!t.isRecurring, every: normEvery(t.recurringFrequency), nextDue: t.isRecurring ? addPeriod(ymd(new Date()), normEvery(t.recurringFrequency)) : "",
+      recurring: !!t.isRecurring, every: normEvery(t.recurringFrequency), nextDue: t.isRecurring ? addPeriod(todayIn(), normEvery(t.recurringFrequency)) : "",
       recEnd: t.isRecurring ? (t.recurringEndDate ?? "").slice(0, 10) : "" })
   }
 
@@ -248,20 +252,13 @@ export default function ExpensesPage() {
     }
   }
 
-  const remove = async (e: ExpenseResponse) => {
-    if (!window.confirm(`Delete "${e.title}"?`)) return
-    try {
-      await expenseApi.delete(e.id)
-      toast.success("Expense deleted")
-      if (editing?.id === e.id) startEdit(null)
-      load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Could not delete")
-    }
+  const afterVoid = () => {
+    if (editing && voiding && editing.id === voiding.id) startEdit(null)
+    load()
   }
 
   const trendMax = Math.max(1, ...trend.map((t) => t.amount))
-  const rowSum = rows.reduce((a, r) => a + r.amount, 0)
+  const rowSum = rows.reduce((a, r) => a + (r.voided ? 0 : r.amount), 0)
   const hasFilter = !!(qD || fCat !== "all" || fMethod !== "all" || fLoc !== "all" || fVendor !== "all" || tab !== "all")
   const amtVal = Number(form.amount) || 0
   const catColor = useMemo(() => Object.fromEntries(cats.map((c, i) => [c.id, c.color || PALETTE[i % PALETTE.length]])), [cats])
@@ -289,7 +286,7 @@ export default function ExpensesPage() {
           { label: "Recurring / month", value: formatCurrency(stats.recurringMonthly), icon: <Repeat className="size-4" />, color: "purple",
             hint: stats.recurringCount ? `${stats.recurringCount} repeating bill${stats.recurringCount === 1 ? "" : "s"}` : "No recurring bills" },
           { label: "Bills due this week", value: stats.billsDueThisWeek.length, icon: <CalendarClock className="size-4" />, color: stats.billsDueThisWeek.length ? "red" : "green",
-            hint: stats.billsDueThisWeek.length ? stats.billsDueThisWeek.slice(0, 2).map((b) => `${b.title} ${fmtD(b.nextDueDate).replace(/, \d{4}$/, "")}`).join(" · ") : "Nothing due" },
+            hint: stats.billsDueThisWeek.length ? stats.billsDueThisWeek.slice(0, 2).map((b) => `${b.title} ${formatDate(b.nextDueDate?.slice(0, 10), undefined, "day")}`).join(" · ") : "Nothing due" },
           { label: "Profit after expenses", value: `${stats.profitAfterExpenses < 0 ? "−" : ""}${formatCurrency(Math.abs(stats.profitAfterExpenses))}`, icon: <TrendingUp className="size-4" />, color: stats.profitAfterExpenses < 0 ? "red" : "green",
             hint: `Revenue ${formatCurrency(stats.monthRevenue)} this month` },
         ]} />
@@ -353,16 +350,7 @@ export default function ExpensesPage() {
                 <SelectTrigger aria-label="Supplier"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="all">Supplier: All</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
               </Select>
-              <Select value={period} onValueChange={(v) => { setPeriod(v as Period); setPage(1) }}>
-                <SelectTrigger aria-label="Period"><SelectValue /></SelectTrigger>
-                <SelectContent>{PERIODS.map(([id, l]) => <SelectItem key={id} value={id}>{l}</SelectItem>)}</SelectContent>
-              </Select>
-              {period === "custom" && (
-                <>
-                  <Input type="date" aria-label="From" className="w-auto" value={cFrom} onChange={(e) => { setCFrom(e.target.value); setPage(1) }} />
-                  <Input type="date" aria-label="To" className="w-auto" value={cTo} onChange={(e) => { setCTo(e.target.value); setPage(1) }} />
-                </>
-              )}
+              <FinanceFilters filters={filters} channel={false} idPrefix="expenses" />
             </div>
 
             <div className="overflow-x-auto">
@@ -380,11 +368,20 @@ export default function ExpensesPage() {
                         <EmptyState icon={Wallet} title="No expenses found" description={hasFilter ? "Try clearing the filters." : "Record the first expense with the form."} className="p-4 md:p-6" />
                       </TableCell></TableRow>
                     ) : rows.map((r) => (
-                      <TableRow key={r.id} data-state={editing?.id === r.id ? "selected" : undefined}>
+                      <TableRow key={r.id} data-state={editing?.id === r.id ? "selected" : undefined} className={cn(r.voided && "text-muted-foreground")}>
                         <TableCell className="pl-4">
-                          <div className="font-medium">{r.title}{r.isRecurring && <Badge variant="secondary" className="ml-2">↻ {String(r.recurringFrequency ?? "")}{r.recurringEndDate ? ` until ${fmtD(r.recurringEndDate)}` : ""}</Badge>}</div>
+                          <div className={cn("font-medium", r.voided && "line-through decoration-muted-foreground/70")}>{r.title}{r.isRecurring && <Badge variant="secondary" className="ml-2">↻ {String(r.recurringFrequency ?? "")}{r.recurringEndDate ? ` until ${fmtD(r.recurringEndDate)}` : ""}</Badge>}</div>
                           <div className="text-xs text-muted-foreground">{[r.vendorName ?? r.paidTo, r.referenceNo && `#${r.referenceNo}`].filter(Boolean).join(" · ") || "—"}</div>
                           {r.notes && <div className="max-w-[260px] truncate text-xs text-muted-foreground">{r.notes}</div>}
+                          {r.voided && (
+                            <div className="mt-1 flex max-w-[320px] flex-wrap items-center gap-1.5 text-xs">
+                              <Badge variant="destructive">Voided</Badge>
+                              <span className="text-muted-foreground">
+                                {[r.voidedAt && fmtD(r.voidedAt), r.voidedByName && `by ${r.voidedByName}`].filter(Boolean).join(" ")}{r.voidReason ? ` · ${r.voidReason}` : ""}
+                              </span>
+                            </div>
+                          )}
+                          {!r.voided && r.periodClosed && <Badge variant="outline" className="mt-1">Closed month</Badge>}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">
@@ -393,15 +390,24 @@ export default function ExpensesPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">{fmtD(r.expenseDate)}</TableCell>
                         <TableCell>{r.paymentMethod || "—"}</TableCell>
-                        <TableCell className="text-right font-bold tabular-nums">{formatCurrency(r.amount)}</TableCell>
+                        <TableCell className={cn("text-right font-bold tabular-nums", r.voided && "font-normal line-through")}>{formatCurrency(r.amount)}</TableCell>
                         <TableCell className="pr-4">
-                          <div className="flex justify-end gap-1">
-                            {r.locked || r.source === "salary" ? <span className="text-xs text-muted-foreground">Paid via Salary</span> : (
+                          <div className="flex items-center justify-end gap-1">
+                            {isGenerated(r) ? (
+                              <span className="text-xs text-muted-foreground">{r.source === "dorji_payout" ? "Paid via Tailor payments" : "Paid via Salary"}</span>
+                            ) : !r.voided && (
                               <>
-                                <WithTooltip content={`Edit ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
-                                <WithTooltip content={`Delete ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.title}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>
+                                {r.periodClosed || r.editable === false ? (
+                                  <WithTooltip content={CLOSED_MSG}>
+                                    <span tabIndex={0} className="inline-flex"><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title} (month closed)`} disabled><Pencil className="size-4" /></Button></span>
+                                  </WithTooltip>
+                                ) : (
+                                  <WithTooltip content={`Edit ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
+                                )}
+                                <WithTooltip content={`Void ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Void ${r.title}`} onClick={() => setVoiding(r)}><Ban className="size-4" /></Button></WithTooltip>
                               </>
                             )}
+                            <WithTooltip content="Activity"><Button type="button" variant="ghost" size="icon" aria-label={`Activity of ${r.title}`} onClick={() => setActivity(r)}><History className="size-4" /></Button></WithTooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -495,6 +501,8 @@ export default function ExpensesPage() {
          </SectionCard>
         </aside>
       </div>
+      <ExpenseVoidDialog expense={voiding} onClose={() => setVoiding(null)} onDone={afterVoid} />
+      <ExpenseActivitySheet expense={activity} onClose={() => setActivity(null)} />
     </div>
   )
 }

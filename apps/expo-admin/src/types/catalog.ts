@@ -34,3 +34,10 @@ export interface Attribute {
   values: string[];
   status: boolean;
 }
+
+export interface Brand {
+  id: number;
+  brandName: string;
+  logo?: string | null;
+  status: boolean;
+}

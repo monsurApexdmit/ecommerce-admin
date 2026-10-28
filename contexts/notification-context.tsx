@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { notificationApi, type NotificationResponse } from "@/lib/notificationApi"
-import { subscribeToNotifications } from "@/lib/reverb"
+import { getSupportEcho, subscribeToNotifications } from "@/lib/reverb"
 import { getCompanyId } from "@/lib/utils/apiInterceptor"
 
 interface NotificationContextValue {
@@ -140,6 +140,58 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       unsubscribe()
     }
   }, [fetchNotifications, prependOrReplace])
+
+  // G-1: polling fallback for the unread badge. Realtime (Reverb) pushes changes when it is on, so we only check
+  // rarely then; without it we poll. Exponential backoff on errors (30s → 60s → … → 5 min), paused while the tab
+  // is hidden (checked once when it becomes visible again), errors are quiet (the badge keeps its last value).
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const realtime = !!getSupportEcho() && !!getCompanyId()
+    const BASE = realtime ? 120_000 : 30_000
+    const MAX = 300_000
+    let delay = BASE
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let inFlight = false
+    let stopped = false
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer)
+      if (stopped || document.hidden) return
+      timer = setTimeout(tick, delay)
+    }
+    const tick = async () => {
+      if (stopped || document.hidden || inFlight) return
+      inFlight = true
+      try {
+        const res = await notificationApi.getUnreadCount()
+        const count = Number(res?.data?.count ?? 0)
+        delay = BASE
+        if (count !== lastCountRef.current) {
+          lastCountRef.current = count
+          setUnreadCount(count)
+          // New notifications arrived: refresh the list quietly (errors keep the current list)
+          notificationApi.getAll({ limit: 50 }).then((r) => setNotifications(r.data ?? [])).catch(() => {})
+        }
+      } catch {
+        delay = Math.min(delay * 2, MAX)
+      } finally {
+        inFlight = false
+        schedule()
+      }
+    }
+    const onVisibility = () => {
+      if (document.hidden) { if (timer) clearTimeout(timer); timer = null }
+      else tick()
+    }
+
+    schedule()
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      stopped = true
+      if (timer) clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [])
 
   return (
     <NotificationContext.Provider value={{
