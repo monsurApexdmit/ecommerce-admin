@@ -13,7 +13,8 @@ import { Switch as UISwitch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StatsCards } from "@/components/ui/stats-card"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
-import { settingsApi, resolveStorageUrl, type AuraShopHeroSlide } from "@/lib/settingsApi"
+import { settingsApi, resolveStorageUrl, type AuraShopHeroSlide, type HomepageSections } from "@/lib/settingsApi"
+import { HomepageSectionsEditor, sectionsFromSettings, sectionsToSettings, validateSections, type LinkGroup, type SectionsForm } from "@/components/storefront-homepage-sections"
 import wishlistApi, { type WishlistAnalytics } from "@/lib/wishlistApi"
 import { productApi, type ProductResponse } from "@/lib/productApi"
 import { categoryApi, type CategoryResponse } from "@/lib/categoryApi"
@@ -52,6 +53,7 @@ interface Form {
   youtube: string
   secs: string
   slides: Slide[]
+  sections: SectionsForm
 }
 
 const THEMES: [string, string][] = [["#2449E8", "Blue"], ["#0F766E", "Teal"], ["#6D28D9", "Violet"], ["#0E1525", "Ink"]]
@@ -117,6 +119,7 @@ const normalize = (business: any): Form => {
     youtube: S(so.youtube),
     secs: String(ms >= 2000 ? Math.round(ms / 1000) : 6),
     slides,
+    sections: sectionsFromSettings(business?.homepageSections),
   }
 }
 
@@ -215,6 +218,12 @@ export default function OnlineStorePage() {
     return { cats, prods }
   }, [categories, products])
   const knownLinks = useMemo(() => new Set([...PAGES.map(([v]) => v), ...linkOptions.cats.map((o) => o.v), ...linkOptions.prods.map((o) => o.v)]), [linkOptions])
+  const linkGroups = useMemo<LinkGroup[]>(() => [
+    { label: "Pages", options: PAGES.map(([v, l]) => ({ value: v, label: `${l} (${v})` })) },
+    { label: "Category", options: linkOptions.cats.map((o) => ({ value: o.v, label: o.l })) },
+    { label: "Product", options: linkOptions.prods.map((o) => ({ value: o.v, label: o.l })) },
+  ], [linkOptions])
+  const categoryChoices = useMemo(() => categories.filter((c) => c.status !== false).map((c) => ({ id: c.id, name: c.categoryName })), [categories])
 
   if (blocked) return blocked
 
@@ -222,7 +231,7 @@ export default function OnlineStorePage() {
   const header = (
     <PageHeader
       title="Online store"
-      description="Your online storefront: locations, wishlist analytics, details, policies and homepage slider, with a live preview."
+      description="Your online storefront: locations, wishlist analytics, details, policies, homepage slider and homepage sections, with a live preview."
     />
   )
 
@@ -270,6 +279,22 @@ export default function OnlineStorePage() {
     }
   }
 
+  const uploadImage = async (file: File): Promise<string | null> => {
+    if (!/^image\//.test(file.type)) { toast.error("Please choose an image file (PNG, JPG, WEBP)."); return null }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Image must be 10MB or smaller."); return null }
+    try {
+      setUploading(true)
+      const res = await settingsApi.uploadStorefrontImage(file)
+      toast.success("Image uploaded")
+      return res.data.imagePath
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to upload storefront image")
+      return null
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const save = async () => {
     const name = d.name.trim(), slug = d.slug.trim()
     if (!name) return fail("Store name is required.")
@@ -287,6 +312,8 @@ export default function OnlineStorePage() {
     for (let i = 0; i < d.slides.length; i++) {
       if (!d.slides[i].title.trim()) return fail(`Slide ${i + 1} needs a headline.`, i)
     }
+    const sectionsError = validateSections(d.sections)
+    if (sectionsError) return fail(sectionsError)
     try {
       setSaving(true)
       await settingsApi.updateBusiness({
@@ -299,6 +326,7 @@ export default function OnlineStorePage() {
           autoplayMs: Math.round(secs * 1000),
           slides: d.slides.map((x, i) => ({ ...x, id: x.id || `aura-slide-${i + 1}`, tag: x.tag.trim(), title: x.title.trim(), subtitle: x.subtitle.trim(), cta: x.cta.trim(), link: x.link.trim() || "/shop", gradient: x.gradient.trim() })),
         },
+        homepageSections: sectionsToSettings(d.sections) as HomepageSections,
       })
       toast.success("Online store saved")
       await load()
@@ -311,7 +339,7 @@ export default function OnlineStorePage() {
     }
   }
 
-  const text = (lbl: string, key: keyof Omit<Form, "slides" | "published">, placeholder = "", transform?: (v: string) => string) => (
+  const text = (lbl: string, key: keyof Omit<Form, "slides" | "published" | "sections">, placeholder = "", transform?: (v: string) => string) => (
     <FormField label={lbl} htmlFor={`store-${key}`} className="min-w-0">
       <Input id={`store-${key}`} type="text" className="w-full" value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: transform ? transform(e.target.value) : e.target.value })} />
     </FormField>
@@ -533,6 +561,15 @@ export default function OnlineStorePage() {
         </SectionCard>
         </aside>
       </div>
+
+      <HomepageSectionsEditor
+        value={d.sections}
+        onChange={(sections) => patch({ sections })}
+        linkGroups={linkGroups}
+        categories={categoryChoices}
+        uploading={uploading}
+        uploadImage={uploadImage}
+      />
 
       {(
         <SectionCard

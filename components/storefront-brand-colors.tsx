@@ -8,7 +8,7 @@ import { FormField } from "@/components/common/FormField"
 import { settingsApi } from "@/lib/settingsApi"
 import { useToast } from "@/hooks/use-toast"
 
-const DEFAULTS = { primaryColor: "#6B1A2A", accentColor: "#B8963E", backgroundColor: "#F0EBE3" }
+const DEFAULTS = { primaryColor: "#1C1917", accentColor: "#94234A", backgroundColor: "#FFFFFF" }
 
 /**
  * Storefront brand colours (primary / accent / background). Applied to the
