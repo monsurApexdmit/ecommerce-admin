@@ -28,9 +28,19 @@ const colorClasses = {
   purple: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
 }
 
+/** Desktop columns follow the card count so a row never ends with one stray card (e.g. 6 → one line, not 5 + 1). */
+const GRID_COLS: Record<number, string> = {
+  1: "sm:grid-cols-1",
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-3",
+  4: "sm:grid-cols-2 lg:grid-cols-4",
+  5: "sm:grid-cols-2 lg:grid-cols-5",
+  6: "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6",
+}
+
 export function StatsCards({ stats }: StatsCardsProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className={cn("grid grid-cols-1 gap-4", GRID_COLS[stats.length] ?? "sm:grid-cols-2 lg:grid-cols-4")}>
       {stats.map((stat, idx) => {
         const clickable = !!stat.onClick
         return (

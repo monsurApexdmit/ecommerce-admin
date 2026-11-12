@@ -6,14 +6,20 @@
  * backend list (StorefrontController::THEME_PRESETS). Here only what the gallery preview needs.
  */
 
+import type { ParseKeys } from "i18next"
+
 export type StoreThemeId = "editorial" | "market" | "luxe" | "single" | "fresh"
+
+/** Translation key in the "store" namespace (lib/i18n/locales/en/store.ts), translated where rendered. */
+export type StoreThemeKey = ParseKeys<["store"]>
 
 export interface StoreThemePreview {
   id: StoreThemeId
-  name: string
-  description: string
+  /** Keys, translated where rendered: t(theme.nameKey) */
+  nameKey: StoreThemeKey
+  descriptionKey: StoreThemeKey
   /** Who it suits */
-  bestFor: string
+  bestForKey: StoreThemeKey
   fonts: string
   /** CSS font-family stacks */
   display: string
@@ -40,9 +46,9 @@ export const DEFAULT_STORE_THEME: StoreThemeId = "editorial"
 export const STORE_THEMES: StoreThemePreview[] = [
   {
     id: "editorial",
-    name: "Editorial",
-    description: "Magazine-style home with tilted photo cards, pastel tiles and a floating phone tab bar.",
-    bestFor: "Fashion and lifestyle brands",
+    nameKey: "store:template.themes.editorial.name",
+    descriptionKey: "store:template.themes.editorial.description",
+    bestForKey: "store:template.themes.editorial.bestFor",
     fonts: "Fraunces · DM Sans",
     display: "Fraunces, Georgia, serif",
     body: '"DM Sans", system-ui, sans-serif',
@@ -55,63 +61,63 @@ export const STORE_THEMES: StoreThemePreview[] = [
   },
   {
     id: "market",
-    name: "Mega Market",
-    description: "Marketplace layout: category sidebar, banner slider, flash sale with countdown, dense product grid.",
-    bestFor: "Stores with many products and categories",
-    fonts: "Sora · Inter",
-    display: 'Sora, "Segoe UI", system-ui, sans-serif',
-    body: 'Inter, "Segoe UI", system-ui, sans-serif',
-    bg: "220 20% 95%", card: "0 0% 100%", fg: "222 30% 12%", muted: "220 9% 42%",
-    primary: "222 47% 16%", primaryFg: "0 0% 100%",
-    highlight: "350 80% 47%", highlightFg: "0 0% 100%",
-    ink: "222 47% 13%", inkFg: "0 0% 100%", border: "220 14% 88%",
-    tiles: ["220 20% 94%", "210 40% 94%", "30 60% 94%", "150 30% 93%"],
-    radius: "0.5rem", pill: "0.375rem",
+    nameKey: "store:template.themes.market.name",
+    descriptionKey: "store:template.themes.market.description",
+    bestForKey: "store:template.themes.market.bestFor",
+    fonts: "Plus Jakarta Sans · Inter",
+    display: '"Plus Jakarta Sans", Inter, system-ui, sans-serif',
+    body: 'Inter, "Hind Siliguri", system-ui, sans-serif',
+    bg: "220 33% 97%", card: "0 0% 100%", fg: "222 47% 11%", muted: "220 9% 44%",
+    primary: "221 83% 53%", primaryFg: "0 0% 100%",
+    highlight: "217 91% 55%", highlightFg: "0 0% 100%",
+    ink: "222 47% 11%", inkFg: "0 0% 100%", border: "220 20% 90%",
+    tiles: ["221 85% 95%", "199 85% 94%", "250 75% 96%", "165 55% 93%"],
+    radius: "0.625rem", pill: "0.5rem",
   },
   {
     id: "luxe",
-    name: "Luxe Lookbook",
-    description: "Full-screen photo hero, centred logo, big images that swap on hover, lots of white space.",
-    bestFor: "Fashion, jewellery and premium brands",
-    fonts: "Bodoni Moda · Jost",
-    display: '"Bodoni Moda", Didot, "Times New Roman", serif',
-    body: 'Jost, Futura, system-ui, sans-serif',
-    bg: "0 0% 100%", card: "0 0% 100%", fg: "0 0% 7%", muted: "0 0% 40%",
-    primary: "0 0% 7%", primaryFg: "0 0% 100%",
-    highlight: "12 40% 40%", highlightFg: "0 0% 100%",
-    ink: "0 0% 7%", inkFg: "0 0% 100%", border: "0 0% 88%",
-    tiles: ["30 10% 86%", "20 8% 80%", "40 12% 88%", "0 0% 84%"],
-    radius: "0rem", pill: "0rem",
+    nameKey: "store:template.themes.luxe.name",
+    descriptionKey: "store:template.themes.luxe.description",
+    bestForKey: "store:template.themes.luxe.bestFor",
+    fonts: "Playfair Display · Inter",
+    display: '"Playfair Display", Georgia, serif',
+    body: 'Inter, system-ui, sans-serif',
+    bg: "216 25% 97%", card: "0 0% 100%", fg: "217 47% 12%", muted: "215 16% 42%",
+    primary: "175 76% 26%", primaryFg: "0 0% 100%",
+    highlight: "40 70% 52%", highlightFg: "217 47% 12%",
+    ink: "218 52% 11%", inkFg: "210 33% 96%", border: "215 22% 89%",
+    tiles: ["213 27% 91%", "176 26% 89%", "40 45% 90%", "220 18% 90%"],
+    radius: "0.75rem", pill: "0.5rem",
   },
   {
     id: "single",
-    name: "Single Product",
-    description: "One long landing page for your hero product with reviews, FAQ and the order form on the page.",
-    bestFor: "1–5 products sold through Facebook or TikTok ads",
-    fonts: "Unbounded · Hind Siliguri",
-    display: 'Unbounded, "Arial Black", system-ui, sans-serif',
-    body: '"Hind Siliguri", system-ui, sans-serif',
-    bg: "40 40% 98%", card: "0 0% 100%", fg: "250 30% 12%", muted: "250 8% 40%",
-    primary: "250 30% 12%", primaryFg: "0 0% 100%",
-    highlight: "152 76% 32%", highlightFg: "0 0% 100%",
-    ink: "250 30% 12%", inkFg: "40 40% 98%", border: "40 15% 87%",
-    tiles: ["40 100% 92%", "152 50% 90%", "260 60% 94%", "200 70% 92%"],
-    radius: "1.25rem", pill: "9999px",
+    nameKey: "store:template.themes.single.name",
+    descriptionKey: "store:template.themes.single.description",
+    bestForKey: "store:template.themes.single.bestFor",
+    fonts: "Fredoka · Nunito",
+    display: 'Fredoka, "Hind Siliguri", system-ui, sans-serif',
+    body: 'Nunito, "Hind Siliguri", system-ui, sans-serif',
+    bg: "40 60% 98%", card: "0 0% 100%", fg: "248 38% 18%", muted: "248 12% 42%",
+    primary: "252 58% 60%", primaryFg: "0 0% 100%",
+    highlight: "346 70% 52%", highlightFg: "0 0% 100%",
+    ink: "252 42% 24%", inkFg: "40 60% 98%", border: "250 30% 91%",
+    tiles: ["252 85% 94%", "42 95% 90%", "158 52% 89%", "345 85% 93%"],
+    radius: "1rem", pill: "9999px",
   },
   {
     id: "fresh",
-    name: "Daily Fresh",
-    description: "Quick-buy layout: category circles, product rails, + buttons on every card and a cart total bar.",
-    bestFor: "Grocery, pharmacy and daily needs",
-    fonts: "Baloo Da 2 · Nunito",
-    display: '"Baloo Da 2", "Trebuchet MS", system-ui, sans-serif',
-    body: "Nunito, system-ui, sans-serif",
-    bg: "100 30% 97%", card: "0 0% 100%", fg: "150 30% 12%", muted: "150 8% 38%",
-    primary: "150 62% 27%", primaryFg: "0 0% 100%",
-    highlight: "40 96% 52%", highlightFg: "150 30% 10%",
-    ink: "150 50% 17%", inkFg: "100 30% 97%", border: "100 15% 86%",
-    tiles: ["95 45% 90%", "48 90% 88%", "16 85% 90%", "180 35% 88%"],
-    radius: "1rem", pill: "9999px",
+    nameKey: "store:template.themes.fresh.name",
+    descriptionKey: "store:template.themes.fresh.description",
+    bestForKey: "store:template.themes.fresh.bestFor",
+    fonts: "Outfit · Plus Jakarta Sans",
+    display: 'Outfit, system-ui, sans-serif',
+    body: '"Plus Jakarta Sans", system-ui, sans-serif',
+    bg: "0 0% 100%", card: "0 0% 100%", fg: "160 22% 10%", muted: "150 6% 40%",
+    primary: "142 70% 30%", primaryFg: "0 0% 100%",
+    highlight: "21 90% 41%", highlightFg: "0 0% 100%",
+    ink: "152 45% 13%", inkFg: "140 20% 96%", border: "140 12% 90%",
+    tiles: ["28 100% 93%", "140 48% 91%", "212 75% 93%", "350 85% 94%"],
+    radius: "0.75rem", pill: "0.5rem",
   },
 ]
 
@@ -123,13 +129,33 @@ export const STORE_THEME_FONTS_HREF =
   [
     "Fraunces:ital,opsz,wght@0,9..144,800;1,9..144,800",
     "DM+Sans:wght@400;600",
-    "Sora:wght@700;800",
-    "Inter:wght@400;600",
-    "Bodoni+Moda:ital,opsz,wght@0,6..96,500;1,6..96,500",
-    "Jost:wght@400;500",
-    "Unbounded:wght@700;800",
+    "Inter:wght@400;600;700",
+    "Plus+Jakarta+Sans:wght@400;600;700;800",
+    "Playfair+Display:wght@600;700",
+    "Fredoka:wght@600;700",
+    "Nunito:wght@400;700",
     "Hind+Siliguri:wght@500;600",
-    "Baloo+Da+2:wght@700;800",
-    "Nunito:wght@600;800",
+    "Outfit:wght@600;700",
   ].map((f) => `family=${f}`).join("&") +
   "&display=swap"
+
+/** Template content blocks (Online store > Template content). Mirrors aura-shop src/templates/shared/useTemplateContent.ts. */
+export type TemplateBlock = "announcement" | "headerNote" | "promoTiles" | "stats" | "testimonials" | "newsletter" | "cta"
+
+/** Blocks each template has a place for, and how many promo tiles it shows. Editorial uses none. */
+export const TEMPLATE_BLOCKS: Record<StoreThemeId, { blocks: TemplateBlock[]; promoTiles?: { max: number; hintKey: StoreThemeKey } }> = {
+  editorial: { blocks: [] },
+  market: { blocks: ["announcement", "promoTiles", "stats", "testimonials", "newsletter"], promoTiles: { max: 3, hintKey: "store:template.promoHints.market" } },
+  single: { blocks: ["announcement", "promoTiles", "testimonials", "newsletter"], promoTiles: { max: 4, hintKey: "store:template.promoHints.single" } },
+  fresh: { blocks: ["announcement", "headerNote", "promoTiles", "newsletter"], promoTiles: { max: 5, hintKey: "store:template.promoHints.fresh" } },
+  luxe: { blocks: ["stats", "cta"] },
+}
+
+/** Homepage section tabs a template has no place for. */
+export const TEMPLATE_HIDDEN_SECTIONS: Record<StoreThemeId, ("lookbook" | "perks")[]> = {
+  editorial: [],
+  market: ["lookbook"],
+  single: ["lookbook"],
+  fresh: ["lookbook"],
+  luxe: ["lookbook"],
+}

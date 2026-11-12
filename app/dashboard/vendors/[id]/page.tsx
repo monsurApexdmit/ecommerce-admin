@@ -1,6 +1,8 @@
 "use client"
 
 import { useParams, useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
 import { useVendor } from "@/contexts/vendor-context"
 import { useProduct } from "@/contexts/product-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
@@ -24,7 +26,15 @@ import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 
+const STATUS_KEY = {
+  Active: "common:status.active",
+  Inactive: "common:status.inactive",
+  Blocked: "inventory:suppliers.status.blocked",
+} as const
+
 export default function VendorDetailsPage() {
+  const { t, i18n } = useTranslation(["inventory", "common"])
+  const statusLabel = (v: string) => (v in STATUS_KEY ? t(STATUS_KEY[v as keyof typeof STATUS_KEY]) : v)
   const { canRead } = useSaasAuth()
   const params = useParams()
   const router = useRouter()
@@ -57,8 +67,8 @@ export default function VendorDetailsPage() {
     return (
       <EmptyState
         className="min-h-[400px]"
-        title="Supplier Not Found"
-        action={<Button onClick={() => router.push("/dashboard/vendors")}>Back to Suppliers</Button>}
+        title={t("inventory:suppliers.detail.notFound")}
+        action={<Button onClick={() => router.push("/dashboard/vendors")}>{t("inventory:suppliers.detail.backToList")}</Button>}
       />
     )
   }
@@ -99,15 +109,15 @@ export default function VendorDetailsPage() {
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
-        title="Supplier Details"
+        title={t("inventory:suppliers.detail.title")}
         actions={<>
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard/vendors")}>
             <ArrowLeft className="w-4 h-4" />
-            Back
+            {t("common:actions.back")}
           </Button>
           <Button size="sm" onClick={openEditDialog}>
             <Edit2 className="w-4 h-4" />
-            Edit Supplier
+            {t("inventory:suppliers.panel.edit")}
           </Button>
         </>}
       />
@@ -119,14 +129,14 @@ export default function VendorDetailsPage() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-semibold">{vendor.name}</h2>
-              <StatusBadge status={vendor.status} />
+              <StatusBadge status={vendor.status} label={statusLabel(vendor.status)} />
             </div>
             <InfoList className="grid-cols-1 gap-1 sm:grid-cols-2">
-              <InfoRow layout="stacked" label="Email" value={vendor.email} />
-              <InfoRow layout="stacked" label="Phone" value={vendor.phone} />
-              {vendor.address && <InfoRow layout="stacked" label="Address" value={vendor.address} className="sm:col-span-2" />}
-              {vendor.description && <InfoRow layout="stacked" label="Description" value={vendor.description} className="sm:col-span-2" />}
-              <InfoRow layout="stacked" label="Member since" value={new Date(vendor.created_at).toLocaleDateString()} />
+              <InfoRow layout="stacked" label={t("common:fields.email")} value={vendor.email} />
+              <InfoRow layout="stacked" label={t("common:fields.phone")} value={vendor.phone} />
+              {vendor.address && <InfoRow layout="stacked" label={t("common:fields.address")} value={vendor.address} className="sm:col-span-2" />}
+              {vendor.description && <InfoRow layout="stacked" label={t("common:fields.description")} value={vendor.description} className="sm:col-span-2" />}
+              <InfoRow layout="stacked" label={t("inventory:suppliers.detail.memberSince")} value={new Date(vendor.created_at).toLocaleDateString(localeTag(i18n.language))} />
             </InfoList>
           </div>
         </div>
@@ -134,32 +144,32 @@ export default function VendorDetailsPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatTile label="Total Products" value={totalProducts} icon={<Package />} />
-        <StatTile label="Inventory Value" value={formatCurrency(inventoryValue)} icon={<DollarSign />} />
-        <StatTile label="Total Paid" value={formatCurrency(vendor.totalPaid)} icon={<CreditCard />} />
-        <StatTile label="Amount Payable" value={<span className={payableTone}>{formatCurrency(vendor.amountPayable)}</span>} icon={<Wallet className={payableTone} />} />
-        <StatTile label="Purchase Order Due" value={<span className={poDueTone}>{formatCurrency(vendor.poDueAmount ?? 0)}</span>} icon={<Receipt className={poDueTone} />} />
+        <StatTile label={t("inventory:suppliers.detail.totalProducts")} value={totalProducts} icon={<Package />} />
+        <StatTile label={t("inventory:suppliers.detail.inventoryValue")} value={formatCurrency(inventoryValue)} icon={<DollarSign />} />
+        <StatTile label={t("inventory:suppliers.profile.totalPaid")} value={formatCurrency(vendor.totalPaid)} icon={<CreditCard />} />
+        <StatTile label={t("inventory:suppliers.detail.amountPayable")} value={<span className={payableTone}>{formatCurrency(vendor.amountPayable)}</span>} icon={<Wallet className={payableTone} />} />
+        <StatTile label={t("inventory:suppliers.detail.poDue")} value={<span className={poDueTone}>{formatCurrency(vendor.poDueAmount ?? 0)}</span>} icon={<Receipt className={poDueTone} />} />
       </div>
 
       {/* Products table */}
-      <SectionCard title={`Products (${totalProducts})`}>
+      <SectionCard title={t("inventory:suppliers.detail.productsCount", { count: totalProducts })}>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Value</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t("common:fields.product")}</TableHead>
+                <TableHead>{t("common:fields.category")}</TableHead>
+                <TableHead>{t("common:money.price")}</TableHead>
+                <TableHead>{t("common:fields.stock")}</TableHead>
+                <TableHead>{t("inventory:suppliers.detail.value")}</TableHead>
+                <TableHead>{t("common:fields.status")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {vendorProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6}>
-                    <EmptyState icon={Package} title="No products found for this supplier" className="p-4 md:p-6" />
+                    <EmptyState icon={Package} title={t("inventory:suppliers.detail.noProducts")} className="p-4 md:p-6" />
                   </TableCell>
                 </TableRow>
               ) : vendorProducts.map((product) => (
@@ -174,14 +184,14 @@ export default function VendorDetailsPage() {
                   <TableCell>{formatCurrency(product.salePrice)}</TableCell>
                   <TableCell>
                     {product.stock < 5 ? (
-                      <span className="text-destructive font-semibold">{product.stock} <span className="text-xs">(Low)</span></span>
+                      <span className="text-destructive font-semibold">{product.stock} <span className="text-xs">{t("inventory:suppliers.detail.low")}</span></span>
                     ) : product.stock}
                   </TableCell>
                   <TableCell>
                     {formatCurrency(product.salePrice * product.stock)}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={product.status} />
+                    <StatusBadge status={product.status} label={statusLabel(product.status)} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -194,25 +204,25 @@ export default function VendorDetailsPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Supplier</DialogTitle>
+            <DialogTitle>{t("inventory:suppliers.panel.edit")}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
-            <FormField label="Supplier Name" htmlFor="vd-name" className="col-span-2">
+            <FormField label={t("inventory:suppliers.detail.name")} htmlFor="vd-name" className="col-span-2">
               <Input id="vd-name" value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
             </FormField>
-            <FormField label="Email" htmlFor="vd-email">
+            <FormField label={t("common:fields.email")} htmlFor="vd-email">
               <Input id="vd-email" type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} />
             </FormField>
-            <FormField label="Phone" htmlFor="vd-phone">
+            <FormField label={t("common:fields.phone")} htmlFor="vd-phone">
               <Input id="vd-phone" value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} />
             </FormField>
-            <FormField label="Address" htmlFor="vd-address" className="col-span-2">
+            <FormField label={t("common:fields.address")} htmlFor="vd-address" className="col-span-2">
               <Input id="vd-address" value={formData.address} onChange={e => setFormData(p => ({ ...p, address: e.target.value }))} />
             </FormField>
-            <FormField label="Description" htmlFor="vd-desc" className="col-span-2">
+            <FormField label={t("common:fields.description")} htmlFor="vd-desc" className="col-span-2">
               <Input id="vd-desc" value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} />
             </FormField>
-            <FormField label="Total Paid ($)" htmlFor="vd-paid">
+            <FormField label={t("inventory:suppliers.detail.totalPaidField")} htmlFor="vd-paid">
               <Input
                 id="vd-paid"
                 type="number" min={0} step="0.01"
@@ -220,7 +230,7 @@ export default function VendorDetailsPage() {
                 onChange={e => setFormData(p => ({ ...p, totalPaid: parseFloat(e.target.value) || 0 }))}
               />
             </FormField>
-            <FormField label="Amount Payable ($)" htmlFor="vd-payable">
+            <FormField label={t("inventory:suppliers.detail.payableField")} htmlFor="vd-payable">
               <Input
                 id="vd-payable"
                 type="number" min={0} step="0.01"
@@ -230,9 +240,9 @@ export default function VendorDetailsPage() {
             </FormField>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Changes"}
+              {isSaving ? t("common:actions.saving") : t("common:actions.saveChanges")}
             </Button>
           </DialogFooter>
         </DialogContent>

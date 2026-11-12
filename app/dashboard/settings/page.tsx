@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Copy, Check, Upload } from "lucide-react"
 import { toast } from "sonner"
+import { Trans, useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -31,11 +34,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 /* Static definitions (UI options, gateway field maps)                 */
 /* ------------------------------------------------------------------ */
 
+type Key = ParseKeys<["store", "common"]>
+
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const
 type Day = (typeof DAYS)[number]
-const DAY_LABEL: Record<Day, string> = {
-  monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday", thursday: "Thursday",
-  friday: "Friday", saturday: "Saturday", sunday: "Sunday",
+const DAY_LABEL: Record<Day, Key> = {
+  monday: "store:settings.general.days.monday", tuesday: "store:settings.general.days.tuesday",
+  wednesday: "store:settings.general.days.wednesday", thursday: "store:settings.general.days.thursday",
+  friday: "store:settings.general.days.friday", saturday: "store:settings.general.days.saturday",
+  sunday: "store:settings.general.days.sunday",
 }
 const DEFAULT_HOURS: Record<Day, DayHours> = {
   monday: { open: true, from: "09:00", to: "17:00" },
@@ -47,16 +54,21 @@ const DEFAULT_HOURS: Record<Day, DayHours> = {
   sunday: { open: false, from: "09:00", to: "17:00" },
 }
 
-const BIZ_TYPES = ["Retail", "Wholesale", "Restaurant", "Services", "Manufacturing", "Other"]
-const CURRENCIES: [string, string][] = [
-  ["BDT", "৳ Bangladeshi Taka (BDT)"],
-  ["USD", "$ US Dollar (USD)"],
-  ["INR", "₹ Indian Rupee (INR)"],
+// Saved as these English values; labels translated at render
+const BIZ_TYPES = ["Retail", "Wholesale", "Restaurant", "Services", "Manufacturing", "Other"] as const
+const BIZ_LABEL: Record<string, Key> = {
+  Retail: "store:shared.bizTypes.Retail", Wholesale: "store:shared.bizTypes.Wholesale", Restaurant: "store:shared.bizTypes.Restaurant",
+  Services: "store:shared.bizTypes.Services", Manufacturing: "store:shared.bizTypes.Manufacturing", Other: "store:shared.bizTypes.Other",
+}
+const CURRENCIES: [string, Key][] = [
+  ["BDT", "store:settings.general.currencies.BDT"],
+  ["USD", "store:settings.general.currencies.USD"],
+  ["INR", "store:settings.general.currencies.INR"],
 ]
 const CURRENCY_SYMBOL: Record<string, string> = {
   BDT: "৳", USD: "$", INR: "₹", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$", JPY: "¥",
 }
-const LANGUAGES: [string, string][] = [["en", "English"], ["bn", "বাংলা (Bangla)"]]
+const LANGUAGES: [string, Key][] = [["en", "common:language.en"], ["bn", "common:language.bn"]]
 
 type DateStyle = "dmy" | "mdy" | "long"
 const DATE_FORMAT_OF: Record<DateStyle, "DD/MM/YYYY" | "MM/DD/YYYY" | "D MMM YYYY"> = {
@@ -65,46 +77,50 @@ const DATE_FORMAT_OF: Record<DateStyle, "DD/MM/YYYY" | "MM/DD/YYYY" | "D MMM YYY
 const styleOfDateFormat = (f?: string): DateStyle =>
   f === "MM/DD/YYYY" ? "mdy" : f === "D MMM YYYY" ? "long" : "dmy"
 
-const PAPERS: [Paper, string][] = [["58", "58 mm"], ["80", "80 mm"], ["a4", "A4 invoice"]]
+const PAPERS: [Paper, Key][] = [["58", "store:settings.general.papers.p58"], ["80", "store:settings.general.papers.p80"], ["a4", "store:settings.general.papers.a4"]]
 const PAPER_WIDTH: Record<Paper, number> = { "58": 200, "80": 260, a4: 320 }
 
 type GwId = "sslcommerz" | "portwallet" | "stripe" | "paypal" | "bkash" | "nagad"
 interface GwDef {
   id: GwId
+  /** Brand name, not translated */
   name: string
-  sub: string
+  sub: Key
   sandbox: boolean
-  fields: [string, string, "text" | "password", string][]
+  /** [field, label key, input type, placeholder (example value, or a key when it is words)] */
+  fields: [string, Key, "text" | "password", string | { key: Key }][]
   need: string[]
-  note: [string, string]
+  note: [Key, Key]
   noteIf?: (f: Record<string, string>) => boolean
 }
+const F = "store:settings.general.gateways.fields."
+const N = "store:settings.general.gateways.notes."
 const GATEWAYS: GwDef[] = [
-  { id: "sslcommerz", name: "SSLCommerz", sub: "Covers bKash, Nagad, Rocket, Cards, Net Banking", sandbox: true,
-    fields: [["store_id", "Store ID", "text", "your_store_id"], ["store_passwd", "Store password", "password", "••••••••"]],
+  { id: "sslcommerz", name: "SSLCommerz", sub: "store:settings.general.gateways.subs.sslcommerz", sandbox: true,
+    fields: [["store_id", `${F}storeId`, "text", "your_store_id"], ["store_passwd", `${F}storePassword`, "password", "••••••••"]],
     need: ["store_id", "store_passwd"],
-    note: ["SSLCommerz sandbox.", "Register at developer.sslcommerz.com for a free sandbox Store ID and password. Callback URLs must be publicly accessible."] },
-  { id: "portwallet", name: "PortWallet", sub: "Cards and mobile banking", sandbox: true,
-    fields: [["app_key", "App key", "text", "your_app_key"], ["app_secret", "App secret", "password", "••••••••"]],
+    note: [`${N}sslcommerz`, `${N}sslcommerzBody`] },
+  { id: "portwallet", name: "PortWallet", sub: "store:settings.general.gateways.subs.portwallet", sandbox: true,
+    fields: [["app_key", `${F}appKey`, "text", "your_app_key"], ["app_secret", `${F}appSecret`, "password", "••••••••"]],
     need: ["app_key", "app_secret"],
-    note: ["PortWallet sandbox.", "Register at portwallet.com for sandbox keys. The callback URL must be publicly accessible."] },
-  { id: "stripe", name: "Stripe", sub: "Credit / debit card payments globally", sandbox: false,
-    fields: [["publishable_key", "Publishable key", "text", "pk_test_..."], ["secret_key", "Secret key", "password", "sk_test_..."], ["webhook_secret", "Webhook secret", "password", "whsec_..."]],
+    note: [`${N}portwallet`, `${N}portwalletBody`] },
+  { id: "stripe", name: "Stripe", sub: "store:settings.general.gateways.subs.stripe", sandbox: false,
+    fields: [["publishable_key", `${F}publishableKey`, "text", "pk_test_..."], ["secret_key", `${F}secretKey`, "password", "sk_test_..."], ["webhook_secret", `${F}webhookSecret`, "password", "whsec_..."]],
     need: ["publishable_key", "secret_key"],
-    note: ["Stripe test mode.", "Use pk_test_ and sk_test_ keys from the Stripe dashboard. Test card: 4242 4242 4242 4242, any future date, any CVC. Decline card: 4000 0000 0000 0002."],
+    note: [`${N}stripe`, `${N}stripeBody`],
     noteIf: (f) => (f.secret_key ?? "") === "" || f.secret_key.startsWith("sk_test_") },
-  { id: "paypal", name: "PayPal", sub: "PayPal account and card payments", sandbox: true,
-    fields: [["client_id", "Client ID", "text", "AY..."], ["client_secret", "Client secret", "password", "••••••••"]],
+  { id: "paypal", name: "PayPal", sub: "store:settings.general.gateways.subs.paypal", sandbox: true,
+    fields: [["client_id", `${F}clientId`, "text", "AY..."], ["client_secret", `${F}clientSecret`, "password", "••••••••"]],
     need: ["client_id", "client_secret"],
-    note: ["PayPal sandbox.", "Get sandbox Client ID and Secret from developer.paypal.com under My Apps and Credentials. Return and cancel URLs must be publicly accessible."] },
-  { id: "bkash", name: "bKash", sub: "Direct bKash merchant payments, no SSLCommerz needed", sandbox: true,
-    fields: [["app_key", "App key", "text", "bkash_app_key"], ["app_secret", "App secret", "password", "••••••••"], ["username", "Username", "text", "merchant username"], ["password", "Password", "password", "••••••••"]],
+    note: [`${N}paypal`, `${N}paypalBody`] },
+  { id: "bkash", name: "bKash", sub: "store:settings.general.gateways.subs.bkash", sandbox: true,
+    fields: [["app_key", `${F}appKey`, "text", "bkash_app_key"], ["app_secret", `${F}appSecret`, "password", "••••••••"], ["username", `${F}username`, "text", { key: `${F}merchantUsernamePh` }], ["password", `${F}password`, "password", "••••••••"]],
     need: ["app_key", "app_secret", "username", "password"],
-    note: ["bKash sandbox.", "Use the sandbox credentials from the bKash developer portal. The callback URL must be publicly accessible."] },
-  { id: "nagad", name: "Nagad", sub: "Direct Nagad merchant payments, no SSLCommerz needed", sandbox: true,
-    fields: [["merchant_id", "Merchant ID", "text", "686969"], ["nagad_public_key", "Nagad public key (blank for sandbox default)", "text", "Nagad-provided RSA public key"], ["private_key", "Your RSA private key (base64, no headers)", "password", "MIIEpAIBAAKCAQEA..."]],
+    note: [`${N}bkash`, `${N}bkashBody`] },
+  { id: "nagad", name: "Nagad", sub: "store:settings.general.gateways.subs.nagad", sandbox: true,
+    fields: [["merchant_id", `${F}merchantId`, "text", "686969"], ["nagad_public_key", `${F}nagadPublicKey`, "text", { key: `${F}nagadPublicKeyPh` }], ["private_key", `${F}privateKey`, "password", "MIIEpAIBAAKCAQEA..."]],
     need: ["merchant_id", "private_key"],
-    note: ["Nagad sandbox.", "A real sandbox account needs merchant registration with Nagad. The callback URL must be publicly accessible."] },
+    note: [`${N}nagad`, `${N}nagadBody`] },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -189,6 +205,7 @@ function SwitchRow({ title, sub, on, onClick }: { title: string; sub: string; on
 /* ------------------------------------------------------------------ */
 
 export default function GeneralSettingsPage() {
+  const { t, i18n } = useTranslation(["store", "common"])
   const blocked = useModuleGuard("Settings")
   const { company, canWrite } = useSaasAuth()
   const { refreshSettings } = useCompanySettings()
@@ -293,7 +310,7 @@ export default function GeneralSettingsPage() {
       setBanner({ ...EMPTY_IMG, url: b.bannerUrl || "" })
       setErr("")
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to load settings")
+      toast.error(e?.response?.data?.message || t("store:settings.general.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -317,11 +334,11 @@ export default function GeneralSettingsPage() {
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
-    if (!file.type.startsWith("image/")) { toast.error("Choose an image file (PNG or JPG)"); return }
-    if (file.size > maxMb * 1024 * 1024) { toast.error(`Image is over ${maxMb} MB. Pick a smaller file.`); return }
+    if (!file.type.startsWith("image/")) { toast.error(t("store:settings.general.image.notImage")); return }
+    if (file.size > maxMb * 1024 * 1024) { toast.error(t("store:settings.general.image.tooBig", { mb: maxMb })); return }
     const next: ImageState = { url: "", file, preview: URL.createObjectURL(file), removed: false }
     if (kind === "logo") setLogo((p) => ({ ...next, url: p.url })); else setBanner((p) => ({ ...next, url: p.url }))
-    toast.success(kind === "logo" ? "Logo ready, save to apply" : "Banner ready, save to apply")
+    toast.success(kind === "logo" ? t("store:settings.general.image.logoReady") : t("store:settings.general.image.bannerReady"))
   }
   const clearImage = (kind: "logo" | "banner") => {
     const upd = (p: ImageState): ImageState => ({ url: p.url, file: null, preview: "", removed: !!p.url })
@@ -336,12 +353,12 @@ export default function GeneralSettingsPage() {
     if (!v) return
     const m = v.hours.monday
     set("hours", { ...v.hours, tuesday: { ...m }, wednesday: { ...m }, thursday: { ...m }, friday: { ...m } })
-    toast.success("Monday hours copied to weekdays")
+    toast.success(t("store:settings.general.hours.mondayCopied"))
   }
   const addHoliday = () => {
     if (!v) return
-    if (!holDraft) { setErr("Pick a date for the holiday closure."); return }
-    if (v.holidays.includes(holDraft)) { toast.error("That date is already listed"); return }
+    if (!holDraft) { setErr(t("store:settings.general.hours.pickDate")); return }
+    if (v.holidays.includes(holDraft)) { toast.error(t("store:settings.general.hours.dateListed")); return }
     set("holidays", [...v.holidays, holDraft])
     setHolDraft("")
   }
@@ -356,7 +373,7 @@ export default function GeneralSettingsPage() {
     const dd = String(d.getDate()).padStart(2, "0"), mm = String(d.getMonth() + 1).padStart(2, "0")
     if (style === "dmy") return `${dd}/${mm}/${d.getFullYear()}`
     if (style === "mdy") return `${mm}/${dd}/${d.getFullYear()}`
-    return `${d.getDate()} ${d.toLocaleString("en-US", { month: "short" })} ${d.getFullYear()}`
+    return `${d.getDate()} ${d.toLocaleString(localeTag(i18n.language), { month: "short" })} ${d.getFullYear()}`
   }
   const fmtHoliday = (iso: string) => fmtDate(new Date(iso + "T00:00:00"), v?.df ?? "dmy")
   const today = new Date()
@@ -365,30 +382,31 @@ export default function GeneralSettingsPage() {
   const validate = (f: Form): string => {
     const email = f.email.trim()
     const tax = Number(f.taxRate), low = Number(f.lowStock), nxt = Number(f.nextNo)
-    if (!f.storeName.trim()) return "Store name is required."
-    if (!f.phone.trim()) return "Phone is required."
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Enter a valid email address."
-    if (!f.prefix.trim()) return "Invoice prefix is required."
-    if (!f.poPrefix.trim()) return "PO prefix is required."
-    if (f.taxRate === "" || !isFinite(tax) || tax < 0 || tax > 100) return "Tax rate must be between 0 and 100."
-    if (f.lowStock === "" || !Number.isInteger(low) || low < 0) return "Low-stock default must be a whole number, 0 or more."
-    if (f.nextNo === "" || !Number.isInteger(nxt) || nxt < 1) return "Next invoice number must be a whole number, 1 or more."
+    const E = "store:settings.general.errors."
+    if (!f.storeName.trim()) return t(`${E}storeName`)
+    if (!f.phone.trim()) return t(`${E}phone`)
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return t(`${E}email`)
+    if (!f.prefix.trim()) return t(`${E}prefix`)
+    if (!f.poPrefix.trim()) return t(`${E}poPrefix`)
+    if (f.taxRate === "" || !isFinite(tax) || tax < 0 || tax > 100) return t(`${E}taxRate`)
+    if (f.lowStock === "" || !Number.isInteger(low) || low < 0) return t(`${E}lowStock`)
+    if (f.nextNo === "" || !Number.isInteger(nxt) || nxt < 1) return t(`${E}nextNo`)
     const bad = DAYS.find((d) => f.hours[d].open && (!f.hours[d].from || !f.hours[d].to || f.hours[d].from >= f.hours[d].to))
-    if (bad) return `${DAY_LABEL[bad]}: opening time must be before closing time.`
+    if (bad) return t(`${E}hours`, { day: t(DAY_LABEL[bad]) })
     const URLRE = /^https?:\/\/[^\s/$.?#][^\s]*$/i
-    for (const [k, label] of [["website", "Website"], ["facebook", "Facebook"], ["instagram", "Instagram"], ["twitter", "Twitter"]] as const) {
+    for (const [k, label] of [["website", t("store:shared.website")], ["facebook", "Facebook"], ["instagram", "Instagram"], ["twitter", "Twitter"]] as const) {
       const u = f[k].trim()
-      if (u && !URLRE.test(u)) return `${label} must be a full URL starting with http:// or https://`
+      if (u && !URLRE.test(u)) return t(`${E}url`, { name: label })
     }
-    if (f.promo.on && !f.promo.title.trim()) return "Promo banner needs a title while it is turned on."
-    if (f.promo.on && f.promo.link.trim() && !/^(\/|https?:\/\/)/.test(f.promo.link.trim())) return "Promo banner link must start with / or http(s)://"
+    if (f.promo.on && !f.promo.title.trim()) return t(`${E}promoTitle`)
+    if (f.promo.on && f.promo.link.trim() && !/^(\/|https?:\/\/)/.test(f.promo.link.trim())) return t(`${E}promoLink`)
     const incomplete = GATEWAYS.find((g) => f.gw[g.id].enabled && g.need.some((k) => !(f.gw[g.id].fields[k] || "").trim()))
-    if (incomplete) return `${incomplete.name} is turned on but its credentials are incomplete.`
+    if (incomplete) return t(`${E}gatewayIncomplete`, { name: incomplete.name })
     if (f.cod.on) {
       const cg = GATEWAYS.find((x) => x.id === f.cod.gateway)
       const amt = Number(f.cod.amount)
-      if (f.cod.amount === "" || !isFinite(amt) || amt < 0) return "COD deposit amount must be 0 or more."
-      if (!cg || !f.gw[cg.id].enabled) return `Turn on ${cg ? cg.name : "the chosen gateway"} before using it for the COD deposit.`
+      if (f.cod.amount === "" || !isFinite(amt) || amt < 0) return t(`${E}codAmount`)
+      if (!cg || !f.gw[cg.id].enabled) return t(`${E}codGateway`, { name: cg ? cg.name : t(`${E}chosenGateway`) })
     }
     return ""
   }
@@ -406,7 +424,7 @@ export default function GeneralSettingsPage() {
     const run = (name: string, keys: FormKey[], p: Promise<unknown>) => { jobs.push(p); tags.push({ name, keys }) }
     try {
       if (any("storeName", "legalName", "phone", "email", "address", "bin", "licence", "prefix", "nextNo", "poPrefix", "lowStock", "paper", "footer", "holidays")) {
-        run("General", ["storeName", "legalName", "phone", "email", "address", "bin", "licence", "prefix", "nextNo", "poPrefix", "lowStock", "paper", "footer", "holidays"], settingsApi.updateGeneral({
+        run(t("store:settings.general.sectionNames.general"), ["storeName", "legalName", "phone", "email", "address", "bin", "licence", "prefix", "nextNo", "poPrefix", "lowStock", "paper", "footer", "holidays"], settingsApi.updateGeneral({
           storeName: v.storeName.trim(), legalName: v.legalName.trim(), storePhone: v.phone.trim(),
           storeEmail: v.email.trim(), storeAddress: v.address.trim(), bin: v.bin.trim(), licence: v.licence.trim(),
           invoicePrefix: v.prefix.trim(), nextInvoiceNumber: Number(v.nextNo), poPrefix: v.poPrefix.trim(),
@@ -414,7 +432,7 @@ export default function GeneralSettingsPage() {
         } as any))
       }
       if (any("storeName", "bizType", "registration", "website", "facebook", "instagram", "twitter", "promo")) {
-        run("Business", ["storeName", "bizType", "registration", "website", "facebook", "instagram", "twitter", "promo"], settingsApi.updateBusiness({
+        run(t("store:settings.general.sectionNames.business"), ["storeName", "bizType", "registration", "website", "facebook", "instagram", "twitter", "promo"], settingsApi.updateBusiness({
           businessName: v.storeName.trim(),
           businessType: v.bizType,
           registrationNumber: v.registration.trim(),
@@ -428,16 +446,16 @@ export default function GeneralSettingsPage() {
           currency: v.currency, timezone: v.timezone, language: v.language,
           taxRate: Number(v.taxRate), numberFormat: v.nf, dateFormat: DATE_FORMAT_OF[v.df],
         }
-        run("Region", ["currency", "timezone", "language", "nf", "df", "taxRate"], saasCompanyApi.updateSettings(payload))
+        run(t("store:settings.general.sectionNames.region"), ["currency", "timezone", "language", "nf", "df", "taxRate"], saasCompanyApi.updateSettings(payload))
       }
-      if (any("taxRate")) run("Tax", ["taxRate"], settingsApi.updateTax({ defaultTaxRate: Number(v.taxRate) }))
+      if (any("taxRate")) run(t("store:settings.general.sectionNames.tax"), ["taxRate"], settingsApi.updateTax({ defaultTaxRate: Number(v.taxRate) }))
       if (any("hours")) {
         const out: StoreHours = {}
         DAYS.forEach((d) => { out[d] = { isOpen: v.hours[d].open, open: v.hours[d].open ? v.hours[d].from : "", close: v.hours[d].open ? v.hours[d].to : "" } })
-        run("Opening hours", ["hours"], settingsApi.updateStoreHours(out))
+        run(t("store:settings.general.sectionNames.hours"), ["hours"], settingsApi.updateStoreHours(out))
       }
       if (any("notif")) {
-        run("Notifications", ["notif"], settingsApi.updateNotifications({
+        run(t("store:settings.general.sectionNames.notifications"), ["notif"], settingsApi.updateNotifications({
           emailNotifications: v.notif.email, orderNotifications: v.notif.order, marketingEmails: v.notif.marketing,
         }))
       }
@@ -445,18 +463,18 @@ export default function GeneralSettingsPage() {
         const payment: Record<string, unknown> = {}
         GATEWAYS.forEach((g) => { payment[g.id] = { enabled: v.gw[g.id].enabled, ...v.gw[g.id].fields, ...(g.sandbox ? { sandbox: v.gw[g.id].sandbox } : {}) } })
         payment.cod_shipping_deposit = { enabled: v.cod.on, gateway: v.cod.gateway, custom_amount: Number(v.cod.amount) || 0 }
-        run("Payment gateways", ["gw", "cod"], settingsApi.updatePayment(payment as any))
+        run(t("store:settings.general.sectionNames.gateways"), ["gw", "cod"], settingsApi.updatePayment(payment as any))
       }
-      if (logo.file) run("Logo", [], settingsApi.uploadLogo(logo.file))
-      else if (logo.removed) run("Logo", [], settingsApi.removeLogo())
-      if (banner.file) run("Banner", [], settingsApi.uploadBanner(banner.file))
-      else if (banner.removed) run("Banner", [], settingsApi.removeBanner())
+      if (logo.file) run(t("store:settings.general.sectionNames.logo"), [], settingsApi.uploadLogo(logo.file))
+      else if (logo.removed) run(t("store:settings.general.sectionNames.logo"), [], settingsApi.removeLogo())
+      if (banner.file) run(t("store:settings.general.sectionNames.banner"), [], settingsApi.uploadBanner(banner.file))
+      else if (banner.removed) run(t("store:settings.general.sectionNames.banner"), [], settingsApi.removeBanner())
 
       const results = await Promise.allSettled(jobs)
       const bad = results.map((r, i) => ({ r, t: tags[i] })).filter((x) => x.r.status === "rejected") as { r: PromiseRejectedResult; t: { name: string; keys: FormKey[] } }[]
       if (bad.length) {
         const names = Array.from(new Set(bad.map((x) => x.t.name)))
-        const m = `Could not save: ${names.join(", ")}.${names.length < tags.length ? " Other sections were saved." : ""} ${(bad[0].r.reason as any)?.response?.data?.message ?? ""}`.trim()
+        const m = [t("store:shared.couldNotSave", { names: names.join(", ") }), names.length < tags.length ? t("store:shared.otherSectionsSaved") : "", (bad[0].r.reason as any)?.response?.data?.message ?? ""].filter(Boolean).join(" ")
         setErr(m); toast.error(m)
         const keep = new Set(bad.flatMap((x) => x.t.keys))
         const mine = v
@@ -465,7 +483,7 @@ export default function GeneralSettingsPage() {
         setV((p) => (p ? ({ ...p, ...Object.fromEntries([...keep].map((k) => [k, mine[k]])) } as Form) : p))
         setErr(m)
       } else {
-        toast.success("Settings saved")
+        toast.success(t("store:settings.general.saved"))
         await load()
       }
       refreshSettings()
@@ -477,7 +495,7 @@ export default function GeneralSettingsPage() {
   const discard = () => {
     setV(base); setLogo((p) => ({ ...EMPTY_IMG, url: p.url })); setBanner((p) => ({ ...EMPTY_IMG, url: p.url }))
     setErr(""); setHolDraft("")
-    if (dirty) toast.success("Changes discarded")
+    if (dirty) toast.success(t("store:shared.changesDiscarded"))
   }
 
   /* ---------- data: export / import ---------- */
@@ -513,9 +531,9 @@ export default function GeneralSettingsPage() {
       a.download = `settings-backup-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-      toast.success("Settings exported")
+      toast.success(t("store:settings.general.data.exported"))
     } catch {
-      toast.error("Export failed")
+      toast.error(t("store:settings.general.data.exportFailed"))
     }
   }
 
@@ -526,9 +544,9 @@ export default function GeneralSettingsPage() {
     const rd = new FileReader()
     rd.onload = async () => {
       let p: any
-      try { p = JSON.parse(String(rd.result)) } catch { toast.error("That file is not valid JSON"); return }
-      if (!p || typeof p !== "object" || Array.isArray(p) || p.kind !== "company-settings") { toast.error("Not a settings backup file"); return }
-      if (!window.confirm("Import this backup? It replaces the matching current settings.")) return
+      try { p = JSON.parse(String(rd.result)) } catch { toast.error(t("store:settings.general.data.invalidJson")); return }
+      if (!p || typeof p !== "object" || Array.isArray(p) || p.kind !== "company-settings") { toast.error(t("store:settings.general.data.notBackup")); return }
+      if (!window.confirm(t("store:settings.general.data.confirmImport"))) return
       const jobs: Promise<unknown>[] = []
       if (p.general && typeof p.general === "object") jobs.push(settingsApi.updateGeneral(p.general))
       if (p.business && typeof p.business === "object") {
@@ -558,8 +576,8 @@ export default function GeneralSettingsPage() {
       }
       const res = await Promise.allSettled(jobs)
       const bad = res.filter((r) => r.status === "rejected").length
-      if (bad) toast.error(`${bad} of ${res.length} sections could not be imported`)
-      else toast.success("Settings imported")
+      if (bad) toast.error(t("store:settings.general.data.importPartial", { bad, total: res.length }))
+      else toast.success(t("store:settings.general.data.imported"))
       await load()
       refreshSettings()
     }
@@ -573,8 +591,8 @@ export default function GeneralSettingsPage() {
     try {
       await navigator.clipboard.writeText(envText)
       setCopied(true); setTimeout(() => setCopied(false), 2000)
-      toast.success(".env copied")
-    } catch { toast.error("Could not copy to the clipboard") }
+      toast.success(t("store:shared.envCopied"))
+    } catch { toast.error(t("store:shared.copyFailed")) }
   }
 
   /* ---------- render ---------- */
@@ -583,7 +601,7 @@ export default function GeneralSettingsPage() {
   const wrapper = "flex flex-col gap-5"
 
   const heading = (
-    <PageHeader title="General settings" description="Business details, logo and banner, region, receipts, opening hours, notifications and payment gateway credentials." />
+    <PageHeader title={t("store:settings.general.title")} description={t("store:settings.general.description")} />
   )
 
   if (loading || !v || !base) {
@@ -612,35 +630,36 @@ export default function GeneralSettingsPage() {
 
   const imageBox = (kind: "logo" | "banner", s: ImageState, label: string, maxMb: number) => {
     const shown = shownImg(s)
+    const changeLabel = kind === "logo" ? t("store:settings.general.image.changeLogo") : t("store:settings.general.image.changeBanner")
     return (
       <FormField label={label} htmlFor={`gs-${kind}-file`} className="min-w-0">
         {shown && (
           <span className="flex h-[130px] items-center justify-center overflow-hidden rounded-md border bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shown} alt={`${label} preview`} className="max-h-full max-w-full object-contain" />
+            <img src={shown} alt={t("store:settings.general.image.previewAlt", { label })} className="max-h-full max-w-full object-contain" />
           </span>
         )}
         <EmptyState
           bordered
           icon={shown ? undefined : Upload}
-          title={shown ? `Change ${kind}` : "Click to upload"}
-          description={`PNG or JPG · up to ${maxMb} MB`}
+          title={shown ? changeLabel : t("store:settings.general.image.clickUpload")}
+          description={t("store:settings.general.image.spec", { mb: maxMb })}
           action={
             <Button asChild variant="outline" size="sm">
-              <Label htmlFor={`gs-${kind}-file`} className="cursor-pointer">{shown ? `Change ${kind}` : "Choose file"}</Label>
+              <Label htmlFor={`gs-${kind}-file`} className="cursor-pointer">{shown ? changeLabel : t("store:settings.general.image.chooseFile")}</Label>
             </Button>
           }
           className={shown ? "gap-2 p-3 md:p-3" : "gap-3 p-4 md:p-4"}
         />
-        <Input id={`gs-${kind}-file`} type="file" accept="image/*" aria-label={`${label} file`} onChange={pickImage(kind, maxMb)} className="sr-only" />
+        <Input id={`gs-${kind}-file`} type="file" accept="image/*" aria-label={t("store:settings.general.image.fileLabel", { label })} onChange={pickImage(kind, maxMb)} className="sr-only" />
         {shown && (
-          <Button type="button" variant="link" size="sm" onClick={() => clearImage(kind)} className="self-start">Remove {kind}</Button>
+          <Button type="button" variant="link" size="sm" onClick={() => clearImage(kind)} className="self-start">{kind === "logo" ? t("store:settings.general.image.removeLogo") : t("store:settings.general.image.removeBanner")}</Button>
         )}
       </FormField>
     )
   }
 
-  const barText = err ? err : dirty ? `${dirtyCount} unsaved change${dirtyCount === 1 ? "" : "s"}` : "Changes apply to new receipts and orders."
+  const barText = err ? err : dirty ? t("store:shared.unsavedCount", { count: dirtyCount }) : t("store:settings.general.barIdle")
 
   return (
     <div className={wrapper}>
@@ -649,46 +668,46 @@ export default function GeneralSettingsPage() {
       <div className="flex flex-wrap items-start gap-4">
         {/* ---------------- left column ---------------- */}
         <div className="flex min-w-0 flex-[999_1_600px] flex-col gap-4">
-          <Section title="Business profile" sub="Shown on receipts, invoices and your online store.">
+          <Section title={t("store:settings.general.profile.title")} sub={t("store:settings.general.profile.sub")}>
             <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))]">
-              {imageBox("logo", logo, "Logo", 5)}
-              {imageBox("banner", banner, "Banner", 10)}
+              {imageBox("logo", logo, t("store:settings.general.profile.logo"), 5)}
+              {imageBox("banner", banner, t("store:settings.general.profile.banner"), 10)}
             </div>
             <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))]">
-              {fld("Store name *", "storeName")}
-              {fld("Legal / company name", "legalName", { ph: "e.g. SAAS Trading Ltd." })}
-              {fld("Phone *", "phone", { type: "tel" })}
-              {fld("Email", "email", { type: "email" })}
-              {fld("Address", "address", { ph: "House, road, area" })}
-              {fld("BIN / VAT reg. no.", "bin", { ph: "Optional" })}
-              {fld("Trade licence no.", "licence", { ph: "Optional" })}
-              <FormField label="Business type" htmlFor="gs-bizType" className="min-w-0">
+              {fld(t("store:settings.general.profile.storeName"), "storeName")}
+              {fld(t("store:settings.general.profile.legalName"), "legalName", { ph: t("store:settings.general.profile.legalNamePh") })}
+              {fld(t("store:settings.general.profile.phone"), "phone", { type: "tel" })}
+              {fld(t("common:fields.email"), "email", { type: "email" })}
+              {fld(t("store:settings.general.profile.address"), "address", { ph: t("store:settings.general.profile.addressPh") })}
+              {fld(t("store:settings.general.profile.bin"), "bin", { ph: t("common:status.optional") })}
+              {fld(t("store:settings.general.profile.licence"), "licence", { ph: t("common:status.optional") })}
+              <FormField label={t("store:shared.businessType")} htmlFor="gs-bizType" className="min-w-0">
                 <Select value={String(v.bizType)} onValueChange={(val) => set("bizType", val as never)}>
                   <SelectTrigger id="gs-bizType" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {withCurrent(BIZ_TYPES.map((t) => [t, t] as [string, string]), v.bizType).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                    {withCurrent(BIZ_TYPES.map((b) => [b, BIZ_LABEL[b] ? t(BIZ_LABEL[b]) : b] as [string, string]), v.bizType).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
-              {fld("Registration number", "registration", { ph: "e.g. REG-2026-001" })}
-              {fld("Website", "website", { ph: "https://" })}
+              {fld(t("store:shared.registration"), "registration", { ph: t("store:settings.general.profile.registrationPh") })}
+              {fld(t("store:shared.website"), "website", { ph: "https://" })}
               {fld("Facebook", "facebook", { ph: "https://facebook.com/…" })}
               {fld("Instagram", "instagram", { ph: "https://instagram.com/…" })}
-              {fld("Twitter / X", "twitter", { ph: "https://twitter.com/…" })}
+              {fld(t("store:settings.general.profile.twitter"), "twitter", { ph: "https://twitter.com/…" })}
             </div>
           </Section>
 
-          <Section title="Region & format" sub="Your current pages show “$” in some places — this fixes it everywhere.">
+          <Section title={t("store:settings.general.region.title")} sub={t("store:settings.general.region.sub")}>
             <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))]">
-              <FormField label="Currency" htmlFor="gs-currency" className="min-w-0">
+              <FormField label={t("store:settings.general.region.currency")} htmlFor="gs-currency" className="min-w-0">
                 <Select value={String(v.currency)} onValueChange={(val) => set("currency", val as never)}>
                   <SelectTrigger id="gs-currency" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {withCurrent(CURRENCIES, v.currency).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                    {withCurrent(CURRENCIES.map(([a, k]) => [a, t(k)] as [string, string]), v.currency).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Time zone" htmlFor="gs-timezone" className="min-w-0">
+              <FormField label={t("store:settings.general.region.timezone")} htmlFor="gs-timezone" className="min-w-0">
                 <Select value={String(v.timezone)} onValueChange={(val) => set("timezone", val as never)}>
                   <SelectTrigger id="gs-timezone" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -696,27 +715,27 @@ export default function GeneralSettingsPage() {
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Language" htmlFor="gs-language" className="min-w-0">
+              <FormField label={t("common:language.label")} htmlFor="gs-language" className="min-w-0">
                 <Select value={String(v.language)} onValueChange={(val) => set("language", val as never)}>
                   <SelectTrigger id="gs-language" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {withCurrent(LANGUAGES, v.language).map(([a, b]) => <SelectItem key={a} value={String(a)}>{b}</SelectItem>)}
+                    {withCurrent(LANGUAGES.map(([a, k]) => [a, t(k)] as [string, string]), v.language).map(([a, b]) => <SelectItem key={a} value={String(a)} lang={a}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
             </div>
-            <FormField label="Number format">
-              <Chips label="Number format" value={v.nf} onPick={(x) => set("nf", x)}
-                options={[["lakh", "1,00,000.00 (lakh)"], ["intl", "100,000.00"]]} />
+            <FormField label={t("store:settings.general.region.numberFormat")}>
+              <Chips label={t("store:settings.general.region.numberFormat")} value={v.nf} onPick={(x) => set("nf", x)}
+                options={[["lakh", t("store:settings.general.region.lakh")], ["intl", "100,000.00"]]} />
             </FormField>
-            <FormField label="Date format">
-              <Chips label="Date format" value={v.df} onPick={(x) => set("df", x)}
+            <FormField label={t("store:settings.general.region.dateFormat")}>
+              <Chips label={t("store:settings.general.region.dateFormat")} value={v.df} onPick={(x) => set("df", x)}
                 options={[["dmy", fmtDate(today, "dmy")], ["mdy", fmtDate(today, "mdy")], ["long", fmtDate(today, "long")]]} />
             </FormField>
-            <div className="text-sm text-muted-foreground">Preview: <strong className="text-foreground">{money(125450)}</strong> · <strong className="text-foreground">{fmtDate(today, v.df)}</strong></div>
+            <div className="text-sm text-muted-foreground">{t("store:settings.general.region.preview")} <strong className="text-foreground">{money(125450)}</strong> · <strong className="text-foreground">{fmtDate(today, v.df)}</strong></div>
           </Section>
 
-          <Section title="Opening hours" sub="Used for online-store messages and staff schedules.">
+          <Section title={t("store:settings.general.hours.title")} sub={t("store:settings.general.hours.sub")}>
             <div className="flex flex-col">
               {DAYS.map((d, di) => {
                 const h = v.hours[d]
@@ -724,43 +743,43 @@ export default function GeneralSettingsPage() {
                   <div key={d}>
                   {di > 0 && <Separator />}
                   <div className="grid min-h-[52px] items-center gap-3 [grid-template-columns:110px_40px_minmax(0,1fr)]">
-                    <span className="font-medium">{DAY_LABEL[d]}</span>
-                    <Toggle on={h.open} label={`Open on ${DAY_LABEL[d]}`} onClick={() => setDay(d, { open: !h.open })} />
+                    <span className="font-medium">{t(DAY_LABEL[d])}</span>
+                    <Toggle on={h.open} label={t("store:settings.general.hours.openOn", { day: t(DAY_LABEL[d]) })} onClick={() => setDay(d, { open: !h.open })} />
                     {h.open ? (
                       <span className="flex flex-wrap items-center gap-2 text-sm">
-                        <Input type="time" className="w-auto" value={h.from} aria-label={`${DAY_LABEL[d]} opens`} onChange={(e) => setDay(d, { from: e.target.value })} />
-                        <span className="text-muted-foreground">to</span>
-                        <Input type="time" className="w-auto" value={h.to} aria-label={`${DAY_LABEL[d]} closes`} onChange={(e) => setDay(d, { to: e.target.value })} />
+                        <Input type="time" className="w-auto" value={h.from} aria-label={t("store:settings.general.hours.opens", { day: t(DAY_LABEL[d]) })} onChange={(e) => setDay(d, { from: e.target.value })} />
+                        <span className="text-muted-foreground">{t("store:settings.general.hours.to")}</span>
+                        <Input type="time" className="w-auto" value={h.to} aria-label={t("store:settings.general.hours.closes", { day: t(DAY_LABEL[d]) })} onChange={(e) => setDay(d, { to: e.target.value })} />
                       </span>
-                    ) : <span className="text-sm text-muted-foreground">Closed</span>}
+                    ) : <span className="text-sm text-muted-foreground">{t("store:settings.general.hours.closed")}</span>}
                   </div>
                   </div>
                 )
               })}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={copyMonday}>Copy Monday to weekdays</Button>
-              <Input type="date" className="w-auto" value={holDraft} aria-label="Holiday date" onChange={(e) => setHolDraft(e.target.value)} />
-              <Button type="button" variant="outline" onClick={addHoliday}>+ Add holiday closure</Button>
+              <Button type="button" variant="outline" onClick={copyMonday}>{t("store:settings.general.hours.copyMonday")}</Button>
+              <Input type="date" className="w-auto" value={holDraft} aria-label={t("store:settings.general.hours.holidayDate")} onChange={(e) => setHolDraft(e.target.value)} />
+              <Button type="button" variant="outline" onClick={addHoliday}>{t("store:settings.general.hours.addHoliday")}</Button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {[...v.holidays].sort().map((iso) => (
-                <Button key={iso} type="button" variant="outline" size="sm" aria-label={`Remove holiday ${fmtHoliday(iso)}`}
+                <Button key={iso} type="button" variant="outline" size="sm" aria-label={t("store:settings.general.hours.removeHoliday", { date: fmtHoliday(iso) })}
                   onClick={() => set("holidays", v.holidays.filter((x) => x !== iso))}>{fmtHoliday(iso)} ✕</Button>
               ))}
             </div>
           </Section>
 
-          <Section title="Promo banner" sub="A banner shown across the top of your online store.">
-            <SwitchRow title="Show promo banner" sub="Turn off to hide it without losing the text." on={v.promo.on} onClick={() => set("promo", { ...v.promo, on: !v.promo.on })} />
+          <Section title={t("store:settings.general.promo.title")} sub={t("store:settings.general.promo.sub")}>
+            <SwitchRow title={t("store:settings.general.promo.show")} sub={t("store:settings.general.promo.showSub")} on={v.promo.on} onClick={() => set("promo", { ...v.promo, on: !v.promo.on })} />
             <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))]">
-              <FormField label="Title" htmlFor="gs-promo-title" className="min-w-0">
+              <FormField label={t("store:settings.general.promo.titleField")} htmlFor="gs-promo-title" className="min-w-0">
                 <Input id="gs-promo-title" value={v.promo.title} onChange={(e) => set("promo", { ...v.promo, title: e.target.value })} /></FormField>
-              <FormField label="Button text" htmlFor="gs-promo-cta" className="min-w-0">
+              <FormField label={t("store:settings.general.promo.buttonText")} htmlFor="gs-promo-cta" className="min-w-0">
                 <Input id="gs-promo-cta" value={v.promo.cta} onChange={(e) => set("promo", { ...v.promo, cta: e.target.value })} /></FormField>
-              <FormField label="Subtitle" htmlFor="gs-promo-sub" className="min-w-0">
+              <FormField label={t("store:settings.general.promo.subtitle")} htmlFor="gs-promo-sub" className="min-w-0">
                 <Input id="gs-promo-sub" value={v.promo.sub} onChange={(e) => set("promo", { ...v.promo, sub: e.target.value })} /></FormField>
-              <FormField label="Button link" htmlFor="gs-promo-link" className="min-w-0">
+              <FormField label={t("store:settings.general.promo.buttonLink")} htmlFor="gs-promo-link" className="min-w-0">
                 <Input id="gs-promo-link" value={v.promo.link} placeholder="/shop" onChange={(e) => set("promo", { ...v.promo, link: e.target.value })} /></FormField>
             </div>
             <Card className={cn("flex-row flex-wrap items-center justify-between gap-3 border-transparent bg-primary px-4 py-3 text-primary-foreground", !v.promo.on && "opacity-45")}>
@@ -769,15 +788,15 @@ export default function GeneralSettingsPage() {
             </Card>
           </Section>
 
-          <Section title="Notification settings" sub="Manage how you receive notifications.">
+          <Section title={t("store:settings.general.notif.title")} sub={t("store:settings.general.notif.sub")}>
             <div className="flex flex-col gap-2.5">
-              <SwitchRow title="Email notifications" sub="Receive email updates about your account" on={v.notif.email} onClick={() => set("notif", { ...v.notif, email: !v.notif.email })} />
-              <SwitchRow title="Order notifications" sub="Get notified when orders are placed or updated" on={v.notif.order} onClick={() => set("notif", { ...v.notif, order: !v.notif.order })} />
-              <SwitchRow title="Marketing emails" sub="Receive promotional emails and updates" on={v.notif.marketing} onClick={() => set("notif", { ...v.notif, marketing: !v.notif.marketing })} />
+              <SwitchRow title={t("store:settings.general.notif.email")} sub={t("store:settings.general.notif.emailSub")} on={v.notif.email} onClick={() => set("notif", { ...v.notif, email: !v.notif.email })} />
+              <SwitchRow title={t("store:settings.general.notif.order")} sub={t("store:settings.general.notif.orderSub")} on={v.notif.order} onClick={() => set("notif", { ...v.notif, order: !v.notif.order })} />
+              <SwitchRow title={t("store:settings.general.notif.marketing")} sub={t("store:settings.general.notif.marketingSub")} on={v.notif.marketing} onClick={() => set("notif", { ...v.notif, marketing: !v.notif.marketing })} />
             </div>
           </Section>
 
-          <Section title="Payment gateway credentials" sub="SSLCommerz, PortWallet, Stripe, PayPal, bKash and Nagad credentials for online payments.">
+          <Section title={t("store:settings.general.gateways.title")} sub={t("store:settings.general.gateways.sub")}>
             {GATEWAYS.map((g) => {
               const x = v.gw[g.id]
               const setGw = (patch: Partial<GwState>) => set("gw", { ...v.gw, [g.id]: { ...x, ...patch } })
@@ -785,26 +804,26 @@ export default function GeneralSettingsPage() {
               return (
                 <Card key={g.id} className="gap-3 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="flex flex-col"><span className="font-medium">{g.name}</span><span className="text-xs text-muted-foreground">{g.sub}</span></span>
-                    <Toggle on={x.enabled} label={`Enable ${g.name}`} onClick={() => setGw({ enabled: !x.enabled })} />
+                    <span className="flex flex-col"><span className="font-medium">{g.name}</span><span className="text-xs text-muted-foreground">{t(g.sub)}</span></span>
+                    <Toggle on={x.enabled} label={t("store:settings.general.gateways.enable", { name: g.name })} onClick={() => setGw({ enabled: !x.enabled })} />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {g.fields.map(([k, label, type, ph]) => (
-                      <FormField key={k} label={label} htmlFor={`gs-${g.id}-${k}`} className="min-w-0">
-                        <Input id={`gs-${g.id}-${k}`} type={type} autoComplete="off" placeholder={ph} value={x.fields[k] ?? ""}
+                      <FormField key={k} label={t(label)} htmlFor={`gs-${g.id}-${k}`} className="min-w-0">
+                        <Input id={`gs-${g.id}-${k}`} type={type} autoComplete="off" placeholder={typeof ph === "string" ? ph : t(ph.key)} value={x.fields[k] ?? ""}
                           onChange={(e) => setGw({ fields: { ...x.fields, [k]: e.target.value } })} />
                       </FormField>
                     ))}
                   </div>
                   {g.sandbox && (
-                    <FormField orientation="horizontal" label="Sandbox mode (turn off for live payments)" htmlFor={`gs-${g.id}-sandbox`}>
-                      <Toggle id={`gs-${g.id}-sandbox`} on={x.sandbox} label={`${g.name} sandbox mode`} onClick={() => setGw({ sandbox: !x.sandbox })} />
+                    <FormField orientation="horizontal" label={t("store:settings.general.gateways.sandbox")} htmlFor={`gs-${g.id}-sandbox`}>
+                      <Toggle id={`gs-${g.id}-sandbox`} on={x.sandbox} label={t("store:settings.general.gateways.sandboxLabel", { name: g.name })} onClick={() => setGw({ sandbox: !x.sandbox })} />
                     </FormField>
                   )}
                   {showNote && (
                     <Alert>
-                      <AlertTitle>{g.note[0]}</AlertTitle>
-                      <AlertDescription>{g.note[1]}</AlertDescription>
+                      <AlertTitle>{t(g.note[0])}</AlertTitle>
+                      <AlertDescription>{t(g.note[1])}</AlertDescription>
                     </Alert>
                   )}
                 </Card>
@@ -812,13 +831,13 @@ export default function GeneralSettingsPage() {
             })}
             <Card className="gap-3 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="flex flex-col"><span className="font-medium">COD shipping deposit</span>
-                  <span className="text-xs text-muted-foreground">Require customers to pay shipping cost upfront before a Cash on Delivery order is confirmed.</span></span>
-                <Toggle on={v.cod.on} label="COD shipping deposit" onClick={() => set("cod", { ...v.cod, on: !v.cod.on })} />
+                <span className="flex flex-col"><span className="font-medium">{t("store:settings.general.gateways.cod")}</span>
+                  <span className="text-xs text-muted-foreground">{t("store:settings.general.gateways.codSub")}</span></span>
+                <Toggle on={v.cod.on} label={t("store:settings.general.gateways.cod")} onClick={() => set("cod", { ...v.cod, on: !v.cod.on })} />
               </div>
               {v.cod.on && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <FormField label="Payment gateway for deposit" htmlFor="gs-cod-gateway" className="min-w-0">
+                  <FormField label={t("store:settings.general.gateways.codGateway")} htmlFor="gs-cod-gateway" className="min-w-0">
                     <Select value={String(v.cod.gateway)} onValueChange={(val) => set("cod", { ...v.cod, gateway: val as GwId })}>
                       <SelectTrigger id="gs-cod-gateway" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -826,7 +845,7 @@ export default function GeneralSettingsPage() {
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label="Fixed deposit amount (0 = use actual shipping cost)" htmlFor="gs-cod-amount" className="min-w-0">
+                  <FormField label={t("store:settings.general.gateways.codAmount")} htmlFor="gs-cod-amount" className="min-w-0">
                     <Input id="gs-cod-amount" type="number" min={0} value={v.cod.amount} onChange={(e) => set("cod", { ...v.cod, amount: e.target.value })} />
                   </FormField>
                 </div>
@@ -834,9 +853,9 @@ export default function GeneralSettingsPage() {
             </Card>
           </Section>
 
-          <Section title="Aura Shop integration" sub="Connect your storefront to this company.">
+          <Section title={t("store:settings.general.aura.title")} sub={t("store:settings.general.aura.sub")}>
             <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium">Your company ID</span>
+              <span className="text-sm font-medium">{t("store:settings.general.aura.companyId")}</span>
               <div className="font-mono text-2xl font-bold">{company?.id ?? "—"}</div>
             </div>
             <Card className="gap-0 bg-muted p-3.5 font-mono text-xs leading-relaxed shadow-none">
@@ -844,34 +863,34 @@ export default function GeneralSettingsPage() {
             </Card>
             <div className="flex flex-wrap items-center gap-3">
               <Button type="button" variant="outline" onClick={copyEnv}>
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />} Copy .env
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />} {t("store:shared.copyEnv")}
               </Button>
-              <span className="text-xs text-muted-foreground">Set <code className="font-mono">VITE_COMPANY_ID</code> in the Aura Shop <code className="font-mono">.env</code> file. {apiUrlSaved ? "Change the company ID and API URL under Online store." : "No API URL saved yet, showing this site's /api. Set the real one under Online store."}</span>
+              <span className="text-xs text-muted-foreground"><Trans t={t} i18nKey="store:settings.general.aura.envHint" components={[<code key="0" className="font-mono" />, <code key="1" className="font-mono" />]} /> {apiUrlSaved ? t("store:settings.general.aura.apiSaved") : t("store:settings.general.aura.apiNotSaved")}</span>
             </div>
           </Section>
         </div>
 
         {/* ---------------- right column ---------------- */}
         <aside className="flex max-w-full flex-[1_1_340px] flex-col gap-4">
-          <Section title="Receipts & invoices" sub="Live preview updates as you type.">
+          <Section title={t("store:settings.general.receipts.title")} sub={t("store:settings.general.receipts.sub")}>
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="Invoice prefix" htmlFor="gs-prefix" className="min-w-0">
+              <FormField label={t("store:settings.general.receipts.invoicePrefix")} htmlFor="gs-prefix" className="min-w-0">
                 <Input id="gs-prefix" className="font-mono" value={v.prefix} onChange={setText("prefix")} /></FormField>
-              <FormField label="Next number" htmlFor="gs-nextNo" className="min-w-0">
+              <FormField label={t("store:settings.general.receipts.nextNumber")} htmlFor="gs-nextNo" className="min-w-0">
                 <Input id="gs-nextNo" type="number" value={v.nextNo} onChange={setText("nextNo")} /></FormField>
             </div>
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr))]">
-              <FormField label="PO prefix" htmlFor="gs-poPrefix" className="min-w-0">
+              <FormField label={t("store:settings.general.receipts.poPrefix")} htmlFor="gs-poPrefix" className="min-w-0">
                 <Input id="gs-poPrefix" value={v.poPrefix} onChange={setText("poPrefix")} /></FormField>
-              <FormField label="Tax rate (%)" htmlFor="gs-taxRate" className="min-w-0">
+              <FormField label={t("store:settings.general.receipts.taxRate")} htmlFor="gs-taxRate" className="min-w-0">
                 <Input id="gs-taxRate" type="number" min={0} max={100} step={0.01} value={v.taxRate} onChange={setText("taxRate")} /></FormField>
-              <FormField label="Low-stock default" htmlFor="gs-lowStock" className="min-w-0">
+              <FormField label={t("store:settings.general.receipts.lowStock")} htmlFor="gs-lowStock" className="min-w-0">
                 <Input id="gs-lowStock" type="number" min={0} step={1} value={v.lowStock} onChange={setText("lowStock")} /></FormField>
             </div>
-            <FormField label="Receipt paper">
-              <Chips label="Paper" value={v.paper} options={PAPERS} onPick={(x) => set("paper", x)} />
+            <FormField label={t("store:settings.general.receipts.paper")}>
+              <Chips label={t("store:settings.general.receipts.paperGroup")} value={v.paper} options={PAPERS.map(([p, k]) => [p, t(k)] as [Paper, string])} onPick={(x) => set("paper", x)} />
             </FormField>
-            <FormField label="Footer message" htmlFor="gs-footer">
+            <FormField label={t("store:settings.general.receipts.footer")} htmlFor="gs-footer">
               <Input id="gs-footer" value={v.footer} onChange={setText("footer")} /></FormField>
             <div style={{ width: PAPER_WIDTH[v.paper] }}
               className="flex max-w-full flex-col gap-1 self-center border bg-white p-4 text-center font-mono text-[11px] text-[#0E1525] shadow-[0_4px_16px_rgba(14,21,37,0.08)]">
@@ -879,19 +898,19 @@ export default function GeneralSettingsPage() {
               <span>{v.phone}</span>
               <span>{v.prefix}{v.nextNo} · {fmtDate(today, v.df)}</span>
               <span className="my-1 border-t border-dashed border-[#A9B3C9]" />
-              <span className="flex justify-between"><span>Sample item A ×1</span><span>250.00</span></span>
-              <span className="flex justify-between"><span>Sample item B ×1</span><span>400.00</span></span>
+              <span className="flex justify-between"><span>{t("store:settings.general.receipts.sampleA")}</span><span>250.00</span></span>
+              <span className="flex justify-between"><span>{t("store:settings.general.receipts.sampleB")}</span><span>400.00</span></span>
               <span className="my-1 border-t border-dashed border-[#A9B3C9]" />
-              <span className="flex justify-between font-bold"><span>TOTAL</span><span>{money(650)}</span></span>
+              <span className="flex justify-between font-bold"><span>{t("store:settings.general.receipts.total")}</span><span>{money(650)}</span></span>
               <span className="mt-1.5">{v.footer}</span>
             </div>
           </Section>
 
-          <Section title="Data" sub="Back up or restore your settings (including logo and banner links, excluding secrets) as a JSON file.">
+          <Section title={t("store:settings.general.data.title")} sub={t("store:settings.general.data.sub")}>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={exportData}>Export data</Button>
-              <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>Reset unsaved changes</Button>
-              <Button type="button" variant="outline" onClick={() => importRef.current?.click()} disabled={!writable}>Import data</Button>
+              <Button type="button" variant="outline" onClick={exportData}>{t("store:settings.general.data.export")}</Button>
+              <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>{t("store:settings.general.data.reset")}</Button>
+              <Button type="button" variant="outline" onClick={() => importRef.current?.click()} disabled={!writable}>{t("store:settings.general.data.import")}</Button>
               <Input ref={importRef} type="file" accept="application/json,.json" onChange={importData} className="hidden" />
             </div>
           </Section>
@@ -902,9 +921,9 @@ export default function GeneralSettingsPage() {
       <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
         <span className={cn("text-sm", err ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>{barText}</span>
         <div className="ml-auto flex gap-2">
-          <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>Discard</Button>
+          <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>{t("store:shared.discard")}</Button>
           <Button type="button" onClick={save} disabled={saving || !writable}>
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? t("common:actions.saving") : t("common:actions.saveChanges")}
           </Button>
         </div>
       </Card>

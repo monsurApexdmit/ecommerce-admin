@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { Trans, useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Search, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -26,15 +29,15 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
+type K = ParseKeys<["account", "common"]>
 type Tab = "all" | "active" | "invited" | "inactive"
-const TABS: { value: Tab; label: string }[] = [
-  { value: "all", label: "All" }, { value: "active", label: "Active" },
-  { value: "invited", label: "Invited" }, { value: "inactive", label: "Inactive" },
+const TABS: { value: Tab; label: K }[] = [
+  { value: "all", label: "common:status.all" }, { value: "active", label: "common:status.active" },
+  { value: "invited", label: "account:team.invited" }, { value: "inactive", label: "common:status.inactive" },
 ]
-const STATUS_LABEL: Record<string, string> = { active: "Active", invited: "Invited", inactive: "Inactive" }
-
-
-const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+const STATUS_LABEL: Record<string, K> = { active: "common:status.active", invited: "account:team.invited", inactive: "common:status.inactive" }
+// The backend's default description for new roles; shown translated
+const DEFAULT_ROLE_DESC = "Custom role"
 
 interface FormState { email: string; fullName: string; phone: string; roleId: string }
 const blank: FormState = { email: "", fullName: "", phone: "", roleId: "" }
@@ -43,6 +46,8 @@ const rowKey = (u: CompanyUser) => `${u.rowType ?? "user"}-${u.id}`
 
 export default function TeamUsersPage() {
   const blocked = useModuleGuard("Team Members")
+  const { t, i18n } = useTranslation(["account", "common"])
+  const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" }) : "—")
   const { user, canWrite } = useSaasAuth()
   const writable = canWrite("Team Members")
 
@@ -75,9 +80,9 @@ export default function TeamUsersPage() {
       setPlanName(d.planName ?? null)
       setCanAddMore(d.canAddMore !== false)
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to load team members")
+      toast.error(e?.response?.data?.message || t("account:team.loadFailed"))
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     (async () => {
@@ -92,7 +97,7 @@ export default function TeamUsersPage() {
 
   const assignable = useMemo(() => roles.filter((r) => !r.locked && r.name.trim().toLowerCase() !== "owner"), [roles])
   const unlimited = maxUsers >= 999999
-  const maxLabel = unlimited ? "unlimited" : String(maxUsers)
+  const maxLabel = unlimited ? t("account:team.unlimited") : String(maxUsers)
   const limitHit = !loading && !unlimited && maxUsers > 0 && !canAddMore
 
   const counts = useMemo(() => ({
@@ -113,13 +118,13 @@ export default function TeamUsersPage() {
 
   const pageRows = filtered.slice((page - 1) * perPage, page * perPage)
 
-  const roleNameOf = (u: CompanyUser) => (u.role === "owner" ? "Owner" : u.staffRole?.name ?? roles.find((r) => r.id === u.roleId)?.name ?? "No role")
+  const roleNameOf = (u: CompanyUser) => (u.role === "owner" ? t("account:team.owner") : u.staffRole?.name ?? roles.find((r) => r.id === u.roleId)?.name ?? t("account:team.noRole"))
   const isMe = (u: CompanyUser) => u.rowType !== "invitation" && u.id === user?.id
   const isOwner = (u: CompanyUser) => u.role === "owner" || u.isOwner === true
 
   const closePanel = () => { setPanel(null); setForm(blank); setErr("") }
   const openInvite = () => {
-    if (!canAddMore && !unlimited) { toast.error(`Team member limit reached (${maxLabel}). Upgrade your plan to add more.`); return }
+    if (!canAddMore && !unlimited) { toast.error(t("account:team.limitToast", { max: maxLabel })); return }
     setPanel("new"); setForm(blank); setErr("")
   }
   const openEdit = (u: CompanyUser) => {
@@ -133,10 +138,10 @@ export default function TeamUsersPage() {
 
   const save = async () => {
     const name = form.fullName.trim(), email = form.email.trim().toLowerCase(), phone = form.phone.trim()
-    if (!email || !name || (!ownEdit && !form.roleId)) { setErr("Please fill in all required fields"); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setErr("Enter a valid email address."); return }
+    if (!email || !name || (!ownEdit && !form.roleId)) { setErr(t("account:team.required")); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setErr(t("account:team.emailInvalid")); return }
     if (users.some((u) => u.email.toLowerCase() === email && !(editing && u.id === editing.id && u.rowType === editing.rowType))) {
-      setErr("A team member with this email already exists."); return
+      setErr(t("account:team.emailTaken")); return
     }
     setSaving(true)
     try {
@@ -144,21 +149,21 @@ export default function TeamUsersPage() {
         await saasCompanyApi.updateInvitation(editing.invitationId ?? editing.id, {
           fullName: name, phone, email, ...(form.roleId ? { roleId: Number(form.roleId) } : {}),
         })
-        toast.success("Invitation updated")
+        toast.success(t("account:team.invitationUpdated"))
       } else if (editing) {
         await saasCompanyApi.updateTeamMember(editing.id, {
           fullName: name, phone,
           ...(!ownEdit && form.roleId && Number(form.roleId) !== editing.roleId ? { roleId: Number(form.roleId) } : {}),
         })
-        toast.success("Team member updated")
+        toast.success(t("account:team.memberUpdated"))
       } else {
         await saasCompanyApi.inviteUser({ email, fullName: name, phone: phone || undefined, roleId: Number(form.roleId) })
-        toast.success(`Invitation created for ${email}`)
+        toast.success(t("account:team.invitationCreated", { email }))
       }
       closePanel()
       await load()
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.response?.data?.error || "Could not save the team member"
+      const msg = e?.response?.data?.message || e?.response?.data?.error || t("account:team.saveFailed")
       setErr(msg)
       if (e?.response?.status === 422 && /limit/i.test(msg)) toast.error(msg)
     } finally { setSaving(false) }
@@ -169,38 +174,38 @@ export default function TeamUsersPage() {
     try {
       if (u.rowType === "invitation") await saasCompanyApi.updateInvitation(u.invitationId ?? u.id, { roleId: Number(roleId) })
       else await saasCompanyApi.updateTeamMember(u.id, { roleId: Number(roleId) })
-      toast.success(`Role updated to ${roles.find((r) => r.id === Number(roleId))?.name ?? "new role"}`)
+      toast.success(t("account:team.roleUpdated", { role: roles.find((r) => r.id === Number(roleId))?.name ?? t("account:team.newRoleFallback") }))
       await load()
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to update role") }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("account:team.roleFailed")) }
   }
   const resend = async (u: CompanyUser) => {
-    try { await saasCompanyApi.resendInvitation(u.invitationId ?? u.id); toast.success(`Invitation resent to ${u.email}`); await load() }
-    catch (e: any) { toast.error(e?.response?.data?.message || "Failed to resend invitation") }
+    try { await saasCompanyApi.resendInvitation(u.invitationId ?? u.id); toast.success(t("account:team.resent", { email: u.email })); await load() }
+    catch (e: any) { toast.error(e?.response?.data?.message || t("account:team.resendFailed")) }
   }
   const revoke = async (u: CompanyUser) => {
-    if (!window.confirm(`Revoke the invitation for ${u.email}?`)) return
-    try { await saasCompanyApi.revokeInvitation(u.invitationId ?? u.id); toast.success("Invitation revoked"); if (editing?.id === u.id) closePanel(); await load() }
-    catch (e: any) { toast.error(e?.response?.data?.message || "Failed to revoke invitation") }
+    if (!window.confirm(t("account:team.revokeConfirm", { email: u.email }))) return
+    try { await saasCompanyApi.revokeInvitation(u.invitationId ?? u.id); toast.success(t("account:team.revoked")); if (editing?.id === u.id) closePanel(); await load() }
+    catch (e: any) { toast.error(e?.response?.data?.message || t("account:team.revokeFailed")) }
   }
   const toggle = async (u: CompanyUser) => {
     const next = u.status === "active" ? "inactive" : "active"
-    if (next === "inactive" && !window.confirm(`Deactivate ${u.fullName}? They will no longer be able to sign in.`)) return
-    try { await saasCompanyApi.setTeamMemberStatus(u.id, next); toast.success(`${u.fullName} ${next === "active" ? "activated" : "deactivated"}`); await load() }
-    catch (e: any) { toast.error(e?.response?.data?.message || "Failed to update status") }
+    if (next === "inactive" && !window.confirm(t("account:team.deactivateConfirm", { name: u.fullName }))) return
+    try { await saasCompanyApi.setTeamMemberStatus(u.id, next); toast.success(next === "active" ? t("account:team.activated", { name: u.fullName }) : t("account:team.deactivated", { name: u.fullName })); await load() }
+    catch (e: any) { toast.error(e?.response?.data?.message || t("account:team.statusFailed")) }
   }
   const remove = async (u: CompanyUser) => {
-    if (!window.confirm(`Are you sure you want to remove ${u.fullName}? This action cannot be undone.`)) return
-    try { await saasCompanyApi.removeUser(u.id); toast.success("User removed successfully"); if (editing?.id === u.id) closePanel(); await load() }
-    catch (e: any) { toast.error(e?.response?.data?.message || "Failed to remove user") }
+    if (!window.confirm(t("account:team.removeConfirm", { name: u.fullName }))) return
+    try { await saasCompanyApi.removeUser(u.id); toast.success(t("account:team.removed")); if (editing?.id === u.id) closePanel(); await load() }
+    catch (e: any) { toast.error(e?.response?.data?.message || t("account:team.removeFailed")) }
   }
 
   const guide = useMemo(() => {
-    const list = roles.map((r) => ({ key: String(r.id), name: r.name, desc: r.description || "Custom role", count: users.filter((u) => u.roleId === r.id && u.role !== "owner").length }))
+    const list = roles.map((r) => ({ key: String(r.id), name: r.name, desc: !r.description || r.description === DEFAULT_ROLE_DESC ? t("account:team.customRole") : r.description, count: users.filter((u) => u.roleId === r.id && u.role !== "owner").length }))
     const hasOwner = roles.some((r) => r.name.trim().toLowerCase() === "owner")
     const ownerCount = users.filter((u) => u.role === "owner").length
-    const owner = { key: "owner", name: "Owner", desc: "Full access to all features and settings", count: ownerCount }
+    const owner = { key: "owner", name: t("account:team.owner"), desc: t("account:team.ownerDesc"), count: ownerCount }
     return hasOwner ? list.map((g) => (g.name.trim().toLowerCase() === "owner" ? { ...g, count: ownerCount } : g)) : [owner, ...list]
-  }, [roles, users])
+  }, [roles, users, t])
 
   if (blocked) return blocked
 
@@ -209,20 +214,18 @@ export default function TeamUsersPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Team Members"
-        description={<>
-          Manage your team ({seatsUsed}/{maxLabel}). People here can sign in to the admin; staff records for payroll live in{" "}
-          <Link href="/dashboard/staff" className="font-semibold text-primary hover:underline">Staff</Link>.
-        </>}
-        actions={writable && <Button type="button" onClick={openInvite}>+ Invite member</Button>}
+        title={t("account:team.title")}
+        description={<Trans t={t} i18nKey="account:team.description" values={{ used: seatsUsed, max: maxLabel }}
+          components={{ link: <Link href="/dashboard/staff" className="font-semibold text-primary hover:underline" /> }} />}
+        actions={writable && <Button type="button" onClick={openInvite}>{t("account:team.invite")}</Button>}
       />
 
       {limitHit && (
         <Alert>
-          <AlertTitle>Team member limit reached.</AlertTitle>
+          <AlertTitle>{t("account:team.limitTitle")}</AlertTitle>
           <AlertDescription>
-            <p>You have reached the maximum number of team members ({maxLabel}) for your {planName ?? "current"} plan.{" "}
-            <Link href="/dashboard/billing/plans" className="font-semibold underline">Upgrade your plan</Link> to add more.</p>
+            <p><Trans t={t} i18nKey="account:team.limitText" values={{ max: maxLabel, plan: planName ?? t("account:team.currentPlanFallback") }}
+              components={{ link: <Link href="/dashboard/billing/plans" className="font-semibold underline" /> }} /></p>
           </AlertDescription>
         </Alert>
       )}
@@ -230,20 +233,20 @@ export default function TeamUsersPage() {
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
-            <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
-              tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: counts[t.value] }))} />
+            <StatusTabs value={tab} onChange={(v) => { setTab(v as Tab); setPage(1) }}
+              tabs={TABS.map((tb) => ({ value: tb.value, label: t(tb.label), count: counts[tb.value] }))} />
           </div>
           <div className="flex flex-wrap items-center gap-2.5 p-4">
             <Label className="flex min-w-[220px] flex-1 items-center gap-2">
-              <Search className="size-[18px]" aria-hidden /><span className="sr-only">Search</span>
-              <Input type="search" placeholder="Search name, email or phone…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
+              <Search className="size-[18px]" aria-hidden /><span className="sr-only">{t("common:actions.search")}</span>
+              <Input type="search" placeholder={t("account:team.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
                 className="min-w-0 flex-1" />
             </Label>
             <Select value={String(roleF)} onValueChange={(val) => { setRoleF(val); setPage(1) }}>
-              <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("account:team.role")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
-                {roles.some((r) => r.name.trim().toLowerCase() === "owner") ? null : <SelectItem value="owner">Owner</SelectItem>}
+                <SelectItem value="all">{t("account:team.allRoles")}</SelectItem>
+                {roles.some((r) => r.name.trim().toLowerCase() === "owner") ? null : <SelectItem value="owner">{t("account:team.owner")}</SelectItem>}
                 {roles.map((r) => <SelectItem key={r.id} value={String(r.name.trim().toLowerCase() === "owner" ? "owner" : r.id)}>{r.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -253,9 +256,9 @@ export default function TeamUsersPage() {
             <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead><TableHead>Joined / invited</TableHead><TableHead>Last login</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("common:fields.name")}</TableHead><TableHead>{t("common:fields.email")}</TableHead><TableHead>{t("account:team.role")}</TableHead>
+                  <TableHead>{t("common:fields.status")}</TableHead><TableHead>{t("account:team.joinedInvited")}</TableHead><TableHead>{t("account:team.lastLogin")}</TableHead>
+                  <TableHead className="text-right">{t("common:fields.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -263,11 +266,11 @@ export default function TeamUsersPage() {
                   pageRows.length === 0 ? (
                     <TableRow><TableCell colSpan={7}>
                       {users.length === 0 ? (
-                        <EmptyState icon={Users} title="No team members yet" className="p-4 md:p-6"
-                          action={writable ? <Button type="button" onClick={openInvite}>Invite first member</Button> : undefined} />
+                        <EmptyState icon={Users} title={t("account:team.empty")} className="p-4 md:p-6"
+                          action={writable ? <Button type="button" onClick={openInvite}>{t("account:team.inviteFirst")}</Button> : undefined} />
                       ) : (
-                        <EmptyState icon={Users} title="No team members match your filters." className="p-4 md:p-6"
-                          action={<Button type="button" variant="link" onClick={resetFilters}>Clear filters</Button>} />
+                        <EmptyState icon={Users} title={t("account:team.noMatch")} className="p-4 md:p-6"
+                          action={<Button type="button" variant="link" onClick={resetFilters}>{t("common:actions.clearFilters")}</Button>} />
                       )}
                     </TableCell></TableRow>
                   ) : pageRows.map((u) => {
@@ -278,16 +281,16 @@ export default function TeamUsersPage() {
                         <TableCell>
                           <div className="flex items-center gap-2.5">
                             <UserAvatar shape="square" name={u.fullName || u.email} className="size-9" />
-                            <span className="flex min-w-0 flex-col"><span className="font-medium">{u.fullName || "—"}</span>{me && <span className="text-xs text-muted-foreground">You</span>}</span>
+                            <span className="flex min-w-0 flex-col"><span className="font-medium">{u.fullName || "—"}</span>{me && <span className="text-xs text-muted-foreground">{t("account:team.you")}</span>}</span>
                           </div>
                         </TableCell>
                         <TableCell><div>{u.email}</div><div className="text-xs text-muted-foreground">{u.phone ?? ""}</div></TableCell>
                         <TableCell>
                           {roleEditable ? (
                             <Select value={String(u.roleId ?? "") === "" ? "__none" : String(u.roleId ?? "")} onValueChange={(val) => changeRole(u, (val === "__none" ? "" : val))}>
-                              <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
+                              <SelectTrigger aria-label={t("account:team.role")}><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="__none">Select role…</SelectItem>
+                                <SelectItem value="__none">{t("account:team.selectRole")}</SelectItem>
                                 {assignable.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
                                 {u.roleId && !assignable.some((r) => r.id === u.roleId) && <SelectItem value={String(u.roleId)}>{roleNameOf(u)}</SelectItem>}
                               </SelectContent>
@@ -297,19 +300,19 @@ export default function TeamUsersPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <StatusBadge status={u.status} variant={u.status === "invited" ? "secondary" : undefined} label={STATUS_LABEL[u.status] ?? u.status} />
-                          {invited && u.invitationExpired && <div className="mt-1 text-xs text-destructive">Invitation expired</div>}
+                          <StatusBadge status={u.status} variant={u.status === "invited" ? "secondary" : undefined} label={STATUS_LABEL[u.status] ? t(STATUS_LABEL[u.status]) : u.status} />
+                          {invited && u.invitationExpired && <div className="mt-1 text-xs text-destructive">{t("account:team.invitationExpired")}</div>}
                         </TableCell>
-                        <TableCell>{invited ? `Invited ${fmtD(u.invitedAt ?? u.joinedDate)}` : fmtD(u.joinedDate)}</TableCell>
-                        <TableCell>{u.lastLogin ? fmtD(u.lastLogin) : "Never"}</TableCell>
+                        <TableCell>{invited ? t("account:team.invitedOn", { date: fmtD(u.invitedAt ?? u.joinedDate) }) : fmtD(u.joinedDate)}</TableCell>
+                        <TableCell>{u.lastLogin ? fmtD(u.lastLogin) : t("account:team.never")}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            {writable && invited && <Button type="button" variant="link" size="sm" onClick={() => resend(u)}>Resend invite</Button>}
-                            {writable && invited && <Button type="button" variant="link" size="sm" className="text-destructive" onClick={() => revoke(u)}>Revoke</Button>}
-                            {writable && !own && !me && !invited && <Button type="button" variant="link" size="sm" onClick={() => toggle(u)}>{u.status === "active" ? "Deactivate" : "Activate"}</Button>}
-                            {writable && <Button type="button" variant="link" size="sm" aria-label={`Edit ${u.fullName}`} onClick={() => openEdit(u)}>Edit</Button>}
-                            {writable && !own && !me && !invited && <Button type="button" variant="link" size="sm" aria-label={`Remove ${u.fullName}`} className="text-destructive" onClick={() => remove(u)}>Remove</Button>}
-                            {(own || me) && <span className="text-xs text-muted-foreground">{own ? "Owner" : "Current user"}</span>}
+                            {writable && invited && <Button type="button" variant="link" size="sm" onClick={() => resend(u)}>{t("account:team.resendInvite")}</Button>}
+                            {writable && invited && <Button type="button" variant="link" size="sm" className="text-destructive" onClick={() => revoke(u)}>{t("account:team.revoke")}</Button>}
+                            {writable && !own && !me && !invited && <Button type="button" variant="link" size="sm" onClick={() => toggle(u)}>{u.status === "active" ? t("account:team.deactivate") : t("account:team.activate")}</Button>}
+                            {writable && <Button type="button" variant="link" size="sm" aria-label={t("account:team.editName", { name: u.fullName })} onClick={() => openEdit(u)}>{t("common:actions.edit")}</Button>}
+                            {writable && !own && !me && !invited && <Button type="button" variant="link" size="sm" aria-label={t("common:extra.removeName", { name: u.fullName })} className="text-destructive" onClick={() => remove(u)}>{t("common:actions.remove")}</Button>}
+                            {(own || me) && <span className="text-xs text-muted-foreground">{own ? t("account:team.owner") : t("account:team.currentUser")}</span>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -327,49 +330,49 @@ export default function TeamUsersPage() {
         <aside className="flex w-full shrink-0 flex-col gap-3.5 xl:w-[400px]">
           {panel && (
             <SectionCard
-              aria-label="Member form"
-              title={editing ? "Edit team member" : "Invite team member"}
-              description={editing ? (ownEdit ? "The owner role cannot be changed." : editing.rowType === "invitation" ? "Change the name, email, phone or role of this pending invitation." : "Change the name, phone or role.") : "They are added as a pending invitation for your company."}
+              aria-label={t("account:team.form.aria")}
+              title={editing ? t("account:team.form.editTitle") : t("account:team.form.inviteTitle")}
+              description={editing ? (ownEdit ? t("account:team.form.ownerLocked") : editing.rowType === "invitation" ? t("account:team.form.editInvitation") : t("account:team.form.editMember")) : t("account:team.form.inviteDesc")}
               contentClassName="flex flex-col gap-3.5"
             >
               {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
-              <FormField label="Email *" htmlFor="team-email">
+              <FormField label={t("account:team.form.email")} htmlFor="team-email">
                 <Input id="team-email" type="email" value={form.email} disabled={!!editing && editing.rowType !== "invitation"} onChange={(e) => set("email", e.target.value)} placeholder="user@example.com" /></FormField>
-              <FormField label="Full name *" htmlFor="team-fullName">
-                <Input id="team-fullName" value={form.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder="John Doe" /></FormField>
-              <FormField label="Phone" htmlFor="team-phone">
+              <FormField label={t("account:team.form.fullName")} htmlFor="team-fullName">
+                <Input id="team-fullName" value={form.fullName} onChange={(e) => set("fullName", e.target.value)} placeholder={t("account:team.form.namePlaceholder")} /></FormField>
+              <FormField label={t("common:fields.phone")} htmlFor="team-phone">
                 <Input id="team-phone" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="01XXX-XXXXXX" /></FormField>
               {!ownEdit && (
-                <FormField label="Role *" htmlFor="team-role">
+                <FormField label={t("account:team.form.role")} htmlFor="team-role">
                   <Select value={String(form.roleId) === "" ? "__none" : String(form.roleId)} onValueChange={(val) => set("roleId", (val === "__none" ? "" : val))}>
                     <SelectTrigger id="team-role" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none">Select a role...</SelectItem>
+                      <SelectItem value="__none">{t("account:team.form.selectRole")}</SelectItem>
                       {assignable.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FormField>
               )}
               {!ownEdit && assignable.length === 0 && (
-                <p className="text-xs text-muted-foreground">No roles yet. <Link href="/dashboard/staff/roles" className="font-semibold underline">Create a role</Link> first, then invite the member.</p>
+                <p className="text-xs text-muted-foreground"><Trans t={t} i18nKey="account:team.form.noRoles" components={{ link: <Link href="/dashboard/staff/roles" className="font-semibold underline" /> }} /></p>
               )}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={closePanel}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={closePanel}>{t("common:actions.cancel")}</Button>
                 <Button type="button" disabled={saving} onClick={save}>
-                  {saving ? "Saving…" : editing ? "Save changes" : "Send invitation"}
+                  {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("account:team.form.send")}
                 </Button>
               </div>
             </SectionCard>
           )}
 
-          <SectionCard aria-label="Team roles" title="Team roles" contentClassName="flex flex-col gap-3">
+          <SectionCard aria-label={t("account:team.roles.title")} title={t("account:team.roles.title")} contentClassName="flex flex-col gap-3">
             {loading ? <Skeleton className="h-24" /> : guide.map((g) => (
               <div key={g.key}>
-                <div className="text-sm font-medium">{g.name} <span className="font-normal text-muted-foreground">· {g.count} member{g.count === 1 ? "" : "s"}</span></div>
+                <div className="text-sm font-medium">{g.name} <span className="font-normal text-muted-foreground">{t("account:team.roles.members", { count: g.count })}</span></div>
                 <div className="text-xs text-muted-foreground">{g.desc}</div>
               </div>
             ))}
-            <p className="text-xs text-muted-foreground">Edit what each role can do in <Link href="/dashboard/staff/roles" className="font-semibold text-primary hover:underline">Roles &amp; access</Link>.</p>
+            <p className="text-xs text-muted-foreground"><Trans t={t} i18nKey="account:team.roles.editHint" components={{ link: <Link href="/dashboard/staff/roles" className="font-semibold text-primary hover:underline" /> }} /></p>
           </SectionCard>
         </aside>
       </div>

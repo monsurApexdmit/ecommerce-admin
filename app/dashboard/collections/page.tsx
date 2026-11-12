@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { ArrowDown, ArrowUp, Home, Layers, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -35,6 +36,7 @@ import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { cn } from "@/lib/utils"
 
 export default function CollectionsPage() {
+  const { t } = useTranslation(["catalog", "common"])
   const { toast } = useToast()
   const router = useRouter()
   const { hasPermission } = useSaasAuth()
@@ -50,7 +52,7 @@ export default function CollectionsPage() {
   const load = useCallback(() => {
     collectionApi.listAll()
       .then((list) => setCollections(list))
-      .catch((err) => toast({ variant: "destructive", title: "Could not load collections", description: apiErrorMessage(err) }))
+      .catch((err) => toast({ variant: "destructive", title: t("catalog:collections.list.loadFailed"), description: apiErrorMessage(err, t("common:extra.tryAgain")) }))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -82,7 +84,7 @@ export default function CollectionsPage() {
       if (data.showOnHomepage !== undefined) await collectionApi.update(c.id, { showOnHomepage: data.showOnHomepage })
     } catch (err) {
       setCollections((prev) => prev.map((x) => (x.id === c.id ? c : x)))
-      toast({ variant: "destructive", title: "Could not update", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotUpdate"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     } finally {
       setBusyId(null)
     }
@@ -100,7 +102,7 @@ export default function CollectionsPage() {
       await collectionApi.reorder(next.map((x) => x.id))
     } catch (err) {
       setCollections(prev)
-      toast({ variant: "destructive", title: "Could not reorder", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotReorder"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     }
   }
 
@@ -109,10 +111,10 @@ export default function CollectionsPage() {
     setDeleting(true)
     try {
       await collectionApi.delete(deleteTarget.id)
-      toast({ title: "Collection deleted", description: deleteTarget.name })
+      toast({ title: t("catalog:collections.list.deleted"), description: deleteTarget.name })
       setCollections((prev) => prev.filter((x) => x.id !== deleteTarget.id))
     } catch (err) {
-      toast({ variant: "destructive", title: "Could not delete", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotDelete"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
@@ -125,11 +127,11 @@ export default function CollectionsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Collections"
-        description="Curated groups of products for your online store — hand-picked or filled automatically by rules."
+        title={t("catalog:collections.list.title")}
+        description={t("catalog:collections.list.description")}
         actions={canWrite ? (
           <Button asChild>
-            <Link href="/dashboard/collections/new"><Plus className="size-4" aria-hidden /> Add collection</Link>
+            <Link href="/dashboard/collections/new"><Plus className="size-4" aria-hidden /> {t("catalog:collections.list.add")}</Link>
           </Button>
         ) : undefined}
       />
@@ -137,32 +139,32 @@ export default function CollectionsPage() {
       <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={setTab} tabs={[
-            { value: "all", label: "All", count: collections.length },
-            { value: "published", label: "Published", count: publishedCount },
-            { value: "hidden", label: "Hidden", count: collections.length - publishedCount },
-            { value: "homepage", label: "On homepage", count: homepageCount },
+            { value: "all", label: t("common:status.all"), count: collections.length },
+            { value: "published", label: t("common:status.published"), count: publishedCount },
+            { value: "hidden", label: t("catalog:shared.hidden"), count: collections.length - publishedCount },
+            { value: "homepage", label: t("catalog:collections.list.onHomepage"), count: homepageCount },
           ]} />
         </div>
 
         <Toolbar className="p-4">
           <div className="relative min-w-[240px] flex-1">
-            <Label htmlFor="collection-search" className="sr-only">Search collections</Label>
+            <Label htmlFor="collection-search" className="sr-only">{t("catalog:collections.list.searchLabel")}</Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id="collection-search" type="search" placeholder="Search name or slug…" value={search}
+            <Input id="collection-search" type="search" placeholder={t("catalog:collections.list.searchPlaceholder")} value={search}
               onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
-          <Label htmlFor="collection-type-filter" className="sr-only">Type</Label>
+          <Label htmlFor="collection-type-filter" className="sr-only">{t("common:fields.type")}</Label>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger id="collection-type-filter" className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="manual">Manual</SelectItem>
-              <SelectItem value="automatic">Automatic</SelectItem>
+              <SelectItem value="all">{t("catalog:collections.list.allTypes")}</SelectItem>
+              <SelectItem value="manual">{t("catalog:collections.type.manual")}</SelectItem>
+              <SelectItem value="automatic">{t("catalog:collections.type.automatic")}</SelectItem>
             </SelectContent>
           </Select>
           {(search || typeFilter !== "all") && (
             <Button type="button" variant="ghost" onClick={() => { setSearch(""); setTypeFilter("all") }}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </Toolbar>
@@ -170,12 +172,12 @@ export default function CollectionsPage() {
         <Table className="min-w-[820px]">
           <TableHeader>
             <TableRow>
-              <TableHead scope="col" className="pl-4">Collection</TableHead>
-              <TableHead scope="col">Type</TableHead>
-              <TableHead scope="col" className="text-right">Products</TableHead>
-              <TableHead scope="col">Published</TableHead>
-              <TableHead scope="col">Homepage</TableHead>
-              <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              <TableHead scope="col" className="pl-4">{t("catalog:collections.list.colCollection")}</TableHead>
+              <TableHead scope="col">{t("common:fields.type")}</TableHead>
+              <TableHead scope="col" className="text-right">{t("common:fields.products")}</TableHead>
+              <TableHead scope="col">{t("common:status.published")}</TableHead>
+              <TableHead scope="col">{t("catalog:collections.list.colHomepage")}</TableHead>
+              <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -185,12 +187,12 @@ export default function CollectionsPage() {
               <TableRow>
                 <TableCell colSpan={6}>
                   <EmptyState icon={Layers} className="p-4 md:p-6"
-                    title={collections.length === 0 ? "No collections yet" : "No collections found"}
+                    title={collections.length === 0 ? t("catalog:collections.list.emptyTitle") : t("catalog:collections.list.notFoundTitle")}
                     description={collections.length === 0
-                      ? "Group products like “Summer sale” or “New arrivals” and show them on your store."
-                      : "Try a different search, type or tab."}
+                      ? t("catalog:collections.list.emptyDesc")
+                      : t("catalog:collections.list.filteredDesc")}
                     action={collections.length === 0 && canWrite ? (
-                      <Button asChild><Link href="/dashboard/collections/new"><Plus className="size-4" aria-hidden /> Add collection</Link></Button>
+                      <Button asChild><Link href="/dashboard/collections/new"><Plus className="size-4" aria-hidden /> {t("catalog:collections.list.add")}</Link></Button>
                     ) : undefined} />
                 </TableCell>
               </TableRow>
@@ -211,28 +213,28 @@ export default function CollectionsPage() {
                     </TableCell>
                     <TableCell>
                       {c.type === "automatic" ? (
-                        <Badge variant="secondary"><Sparkles className="size-3" aria-hidden /> Automatic</Badge>
+                        <Badge variant="secondary"><Sparkles className="size-3" aria-hidden /> {t("catalog:collections.type.automatic")}</Badge>
                       ) : (
-                        <Badge variant="outline">Manual</Badge>
+                        <Badge variant="outline">{t("catalog:collections.type.manual")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      <div>{c.productCount} product{c.productCount === 1 ? "" : "s"}</div>
+                      <div>{t("common:count.products", { count: c.productCount })}</div>
                       {c.visibleProductCount < c.productCount && (
-                        <div className="text-xs text-muted-foreground">{c.visibleProductCount} visible online</div>
+                        <div className="text-xs text-muted-foreground">{t("catalog:collections.list.visibleOnline", { count: c.visibleProductCount })}</div>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Switch checked={c.isPublished} disabled={!canWrite || busyId === c.id} aria-label={`Published: ${c.name}`}
+                      <Switch checked={c.isPublished} disabled={!canWrite || busyId === c.id} aria-label={t("catalog:shared.publishedName", { name: c.name })}
                         onCheckedChange={(v) => patch(c, { isPublished: v })} />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Switch checked={c.showOnHomepage} disabled={!canWrite || busyId === c.id} aria-label={`Show on homepage: ${c.name}`}
+                        <Switch checked={c.showOnHomepage} disabled={!canWrite || busyId === c.id} aria-label={t("catalog:collections.list.homepageName", { name: c.name })}
                           onCheckedChange={(v) => patch(c, { showOnHomepage: v })} />
                         {c.showOnHomepage && !c.isPublished && (
-                          <WithTooltip content="Hidden collections are not shown on the homepage">
-                            <Badge variant="outline" tabIndex={0}><Home className="size-3" aria-hidden /> Not live</Badge>
+                          <WithTooltip content={t("catalog:collections.list.notLiveTip")}>
+                            <Badge variant="outline" tabIndex={0}><Home className="size-3" aria-hidden /> {t("catalog:collections.list.notLive")}</Badge>
                           </WithTooltip>
                         )}
                       </div>
@@ -241,36 +243,36 @@ export default function CollectionsPage() {
                       <div className="flex justify-end gap-1">
                         {canWrite && !filtering && (
                           <>
-                            <WithTooltip content={`Move ${c.name} up`}>
-                              <Button type="button" variant="outline" size="icon" aria-label={`Move ${c.name} up`} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button>
+                            <WithTooltip content={t("catalog:shared.moveUp", { name: c.name })}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moveUp", { name: c.name })} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button>
                             </WithTooltip>
-                            <WithTooltip content={`Move ${c.name} down`}>
-                              <Button type="button" variant="outline" size="icon" aria-label={`Move ${c.name} down`} disabled={idx < 0 || idx >= collections.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button>
+                            <WithTooltip content={t("catalog:shared.moveDown", { name: c.name })}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moveDown", { name: c.name })} disabled={idx < 0 || idx >= collections.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button>
                             </WithTooltip>
                           </>
                         )}
-                        <WithTooltip content={`Edit ${c.name}`}>
-                          <Button asChild variant="outline" size="icon" aria-label={`Edit ${c.name}`}>
+                        <WithTooltip content={t("catalog:shared.editName", { name: c.name })}>
+                          <Button asChild variant="outline" size="icon" aria-label={t("catalog:shared.editName", { name: c.name })}>
                             <Link href={href}><Pencil className="size-4" /></Link>
                           </Button>
                         </WithTooltip>
                         <DropdownMenu>
-                          <WithTooltip content={`More actions for ${c.name}`}><DropdownMenuTrigger asChild>
-                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.name}`}><MoreHorizontal className="size-4" /></Button>
+                          <WithTooltip content={t("catalog:shared.moreFor", { name: c.name })}><DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moreFor", { name: c.name })}><MoreHorizontal className="size-4" /></Button>
                           </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => router.push(href)}>Edit collection</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(href)}>{t("catalog:collections.list.editCollection")}</DropdownMenuItem>
                             {canWrite && (
                               <>
-                                <DropdownMenuItem onClick={() => patch(c, { isPublished: !c.isPublished })}>{c.isPublished ? "Hide from store" : "Publish"}</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => patch(c, { showOnHomepage: !c.showOnHomepage })}>{c.showOnHomepage ? "Remove from homepage" : "Show on homepage"}</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => patch(c, { isPublished: !c.isPublished })}>{c.isPublished ? t("catalog:collections.list.hideFromStore") : t("catalog:shared.publish")}</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => patch(c, { showOnHomepage: !c.showOnHomepage })}>{c.showOnHomepage ? t("catalog:collections.list.removeFromHomepage") : t("catalog:collections.list.showOnHomepage")}</DropdownMenuItem>
                               </>
                             )}
                             {canDelete && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(c)}>
-                                  <Trash2 className="size-4" aria-hidden /> Delete collection
+                                  <Trash2 className="size-4" aria-hidden /> {t("catalog:collections.list.deleteCollection")}
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -287,8 +289,10 @@ export default function CollectionsPage() {
 
         <Separator />
         <div className="px-4 py-3 text-xs text-muted-foreground">
-          {filtering ? `${filtered.length} of ${collections.length}` : collections.length} collection{collections.length === 1 ? "" : "s"}
-          {filtering && collections.length > 1 ? " · clear filters to reorder" : collections.length > 1 ? " · order here is the order on your store" : ""}
+          {filtering
+            ? t("catalog:collections.list.countFiltered", { shown: filtered.length, count: collections.length })
+            : t("catalog:collections.list.count", { count: collections.length })}
+          {filtering && collections.length > 1 ? ` ${t("catalog:collections.list.reorderFiltered")}` : collections.length > 1 ? ` ${t("catalog:collections.list.reorderHint")}` : ""}
         </div>
         <div className="px-4 pb-4">
           <PaginationControl currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}
@@ -299,15 +303,15 @@ export default function CollectionsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent className="font-dash-body text-dash-ink">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTarget?.name ?? "" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              The collection is removed from your store. Its products are not deleted. This can’t be undone.
+              {t("catalog:collections.list.deleteDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("catalog:shared.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

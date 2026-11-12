@@ -3,6 +3,8 @@
 import type React from "react"
 import { Fragment, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Download, Layers, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -44,21 +46,25 @@ type FormState = { name: string; displayName: string; option: Option; values: st
 
 const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
 const HEX = /^#[0-9a-f]{6}$/i
-const prod = (n: number) => `${n} product${n === 1 ? "" : "s"}`
+type K = ParseKeys<["catalog", "common"]>
 
 const emptyForm: FormState = { name: "", displayName: "", option: "dropdown", values: [], colors: {}, published: true }
-const OPTION_LABEL: Record<string, string> = { dropdown: "Dropdown", radio: "Buttons", button: "Buttons", swatch: "Colour swatch" }
+// Labels are translation keys, translated at render
+const OPTION_LABEL: Record<string, K> = { dropdown: "catalog:attributes.options.dropdown", radio: "catalog:attributes.options.buttons", button: "catalog:attributes.options.buttons", swatch: "catalog:attributes.options.swatch" }
 
-const OPTIONS: { value: Option; label: string; sub: string }[] = [
-  { value: "dropdown", label: "Dropdown", sub: "List menu" },
-  { value: "radio", label: "Buttons", sub: "S  M  L" },
-  { value: "swatch", label: "Colour swatch", sub: "● ● ●" },
+// `sub` is a translation key, or a glyph preview shown as-is
+const OPTIONS: { value: Option; label: K; sub: K | null; glyph?: string }[] = [
+  { value: "dropdown", label: "catalog:attributes.options.dropdown", sub: "catalog:attributes.options.listMenu" },
+  { value: "radio", label: "catalog:attributes.options.buttons", sub: null, glyph: "S  M  L" },
+  { value: "swatch", label: "catalog:attributes.options.swatch", sub: null, glyph: "● ● ●" },
 ]
 
 
 export default function AttributesPage() {
+  const { t } = useTranslation(["catalog", "common"])
   const { attributes, isLoading, addAttribute, updateAttribute, deleteAttribute } = useAttribute()
   const { toast } = useToast()
+  const prod = (n: number) => t("common:count.products", { count: n })
 
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState("all")
@@ -106,7 +112,7 @@ export default function AttributesPage() {
     const v = raw.replace(/,/g, " ").trim()
     if (!v) return
     if (form.values.some((x) => x.toLowerCase() === v.toLowerCase())) {
-      toast({ variant: "destructive", title: "Value already added", description: v })
+      toast({ variant: "destructive", title: t("catalog:attributes.toast.valueDuplicate"), description: v })
       setChipDraft("")
       return
     }
@@ -118,16 +124,16 @@ export default function AttributesPage() {
     const pending = chipDraft.replace(/,/g, " ").trim()
     const values = pending && !form.values.some((x) => x.toLowerCase() === pending.toLowerCase()) ? [...form.values, pending] : form.values
     if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "Name required", description: "Give the attribute a name, e.g. Material" })
+      toast({ variant: "destructive", title: t("catalog:shared.nameRequired"), description: t("catalog:attributes.toast.nameRequiredDesc") })
       return
     }
     if (values.length === 0) {
-      toast({ variant: "destructive", title: "Add at least one value", description: "Type a value and press Enter, e.g. Small" })
+      toast({ variant: "destructive", title: t("catalog:attributes.toast.needValue"), description: t("catalog:attributes.toast.needValueDesc") })
       return
     }
     const nm = form.name.trim().toLowerCase()
     if (attributes.some((a) => a.id !== editing?.id && (a.name.trim().toLowerCase() === nm))) {
-      toast({ variant: "destructive", title: "Name already used", description: `An attribute named "${form.name.trim()}" already exists` })
+      toast({ variant: "destructive", title: t("catalog:shared.nameUsed"), description: t("catalog:attributes.toast.nameUsedDesc", { name: form.name.trim() }) })
       return
     }
     setSaving(true)
@@ -142,14 +148,14 @@ export default function AttributesPage() {
       }
       if (editing) {
         await updateAttribute(editing.id, payload as any)
-        toast({ title: "Attribute updated", description: payload.name })
+        toast({ title: t("catalog:attributes.toast.updated"), description: payload.name })
       } else {
         await addAttribute(payload as any)
-        toast({ title: "Attribute added", description: payload.name })
+        toast({ title: t("catalog:attributes.toast.added"), description: payload.name })
       }
       resetForm()
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Could not save", description: error?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotSave"), description: error?.message || t("common:extra.tryAgain") })
     } finally {
       setSaving(false)
     }
@@ -158,8 +164,8 @@ export default function AttributesPage() {
   const setPublished = async (targets: Attribute[], published: boolean) => {
     const results = await Promise.allSettled(targets.map((a) => updateAttribute(a.id, { published })))
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${targets.length} could not be changed` })
-    else toast({ title: published ? "Published" : "Unpublished", description: `${targets.length} attribute${targets.length === 1 ? "" : "s"} updated` })
+    if (failed) toast({ variant: "destructive", title: t("catalog:shared.someFailed"), description: t("catalog:attributes.toast.failedOf", { failed, total: targets.length }) })
+    else toast({ title: published ? t("common:status.published") : t("catalog:shared.unpublished"), description: t("catalog:attributes.toast.updatedCount", { count: targets.length }) })
     setChecked(new Set())
   }
 
@@ -167,8 +173,8 @@ export default function AttributesPage() {
     setDeleting(true)
     const results = await Promise.allSettled(deleteTargets.map((a) => deleteAttribute(a.id)))
     const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[]
-    if (failed.length) toast({ variant: "destructive", title: `${deleteTargets.length - failed.length} deleted, ${failed.length} failed`, description: failed[0].reason?.message })
-    else toast({ title: "Deleted", description: `${deleteTargets.length} attribute${deleteTargets.length === 1 ? "" : "s"} removed` })
+    if (failed.length) toast({ variant: "destructive", title: t("catalog:shared.deletedFailed", { deleted: deleteTargets.length - failed.length, failed: failed.length }), description: failed[0].reason?.message })
+    else toast({ title: t("common:status.deleted"), description: t("catalog:attributes.toast.removedCount", { count: deleteTargets.length }) })
     if (editing && deleteTargets.some((a) => a.id === editing.id)) resetForm()
     setDeleting(false)
     setDeleteTargets([])
@@ -230,8 +236,8 @@ export default function AttributesPage() {
       const ok = results.filter((r) => r.status === "fulfilled").length
       toast({
         variant: ok === rows.length ? undefined : "destructive",
-        title: ok === rows.length ? "Import finished" : "Import partially completed",
-        description: `${ok} of ${rows.length} attributes added`,
+        title: ok === rows.length ? t("catalog:shared.importFinished") : t("catalog:attributes.toast.importPartial"),
+        description: t("catalog:attributes.toast.importResult", { ok, total: rows.length }),
       })
       setImportOpen(false)
     }
@@ -243,17 +249,17 @@ export default function AttributesPage() {
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       {/* Header */}
       <PageHeader
-        title="Attributes"
-        description="Options like colour and size that turn one product into variants."
+        title={t("catalog:attributes.title")}
+        description={t("catalog:attributes.description")}
         actions={<>
           <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="size-4" aria-hidden /> Import
+            <Upload className="size-4" aria-hidden /> {t("common:actions.import")}
           </Button>
           <Button type="button" variant="outline" onClick={handleExport}>
-            <Download className="size-4" aria-hidden /> Export
+            <Download className="size-4" aria-hidden /> {t("common:actions.export")}
           </Button>
           <Button type="button" onClick={() => { resetForm(); document.getElementById("attr-name")?.focus() }}>
-            <Plus className="size-4" aria-hidden /> Add attribute
+            <Plus className="size-4" aria-hidden /> {t("catalog:attributes.add")}
           </Button>
         </>}
       />
@@ -263,32 +269,32 @@ export default function AttributesPage() {
         <Card className="min-w-0 flex-[999_1_560px] gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(v) => { setTab(v); setChecked(new Set()); setCurrentPage(1) }} tabs={[
-              { value: "all", label: "All", count: attributes.length },
-              { value: "published", label: "Published", count: publishedCount },
-              { value: "unpublished", label: "Unpublished", count: attributes.length - publishedCount },
+              { value: "all", label: t("common:status.all"), count: attributes.length },
+              { value: "published", label: t("common:status.published"), count: publishedCount },
+              { value: "unpublished", label: t("catalog:shared.unpublished"), count: attributes.length - publishedCount },
             ]} />
           </div>
           <Toolbar className="p-4">
-            <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all attributes in this list" />
+            <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("catalog:attributes.selectAll")} />
             <div className="relative min-w-[240px] flex-1">
-              <Label htmlFor="attr-search" className="sr-only">Search attributes</Label>
+              <Label htmlFor="attr-search" className="sr-only">{t("catalog:attributes.searchLabel")}</Label>
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input id="attr-search" type="search" placeholder="Search attributes…" value={search}
+              <Input id="attr-search" type="search" placeholder={t("catalog:attributes.searchPlaceholder")} value={search}
                 onChange={(e) => { setSearch(e.target.value); setCurrentPage(1) }}
                 className="pl-9" />
             </div>
             {search && (
               <Button type="button" variant="ghost" onClick={() => setSearch("")}>
-                <X className="size-4" aria-hidden /> Clear
+                <X className="size-4" aria-hidden /> {t("common:actions.clear")}
               </Button>
             )}
           </Toolbar>
 
           <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
-            <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Publish</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Unpublish</Button>
-            <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>
-            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>{t("catalog:shared.publish")}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>{t("catalog:shared.unpublish")}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleExport}>{t("catalog:shared.exportSelected")}</Button>
+            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>{t("common:actions.delete")}</Button>
           </BulkBar>
 
           <Separator />
@@ -296,19 +302,24 @@ export default function AttributesPage() {
             {isLoading ? (
               [1, 2, 3].map((i) => <div key={i} className="p-4"><Skeleton className="h-16" /></div>)
             ) : currentItems.length === 0 ? (
-              <EmptyState icon={Layers} title="No attributes found"
-                description={search || tab !== "all" ? "Try a different search or tab." : "Add your first attribute using the form."} />
+              <EmptyState icon={Layers} title={t("catalog:attributes.emptyTitle")}
+                description={search || tab !== "all" ? t("catalog:shared.noMatchHint") : t("catalog:attributes.emptyDesc")} />
             ) : (
               <ItemGroup>
               {currentItems.map((a, idx) => (
                 <Fragment key={a.id}>
                 {idx > 0 && <ItemSeparator />}
                 <Item role="listitem" className={cn("rounded-none", editing?.id === a.id && "bg-muted/50")}>
-                  <Checkbox checked={checked.has(a.id)} onCheckedChange={() => toggleOne(a.id)} aria-label={`Select ${a.name}`} />
+                  <Checkbox checked={checked.has(a.id)} onCheckedChange={() => toggleOne(a.id)} aria-label={t("common:extra.selectRow", { name: a.name })} />
                   <ItemContent className="min-w-[140px] flex-none">
                     <ItemTitle><Link href={`/dashboard/attributes/${a.id}`} className="hover:underline">{a.displayName || a.name}</Link></ItemTitle>
                     <ItemDescription className="text-xs">
-                      Key: {slugify(a.name)} · {OPTION_LABEL[a.option] ?? "Dropdown"} · {a.values.length} value{a.values.length === 1 ? "" : "s"} · used in {prod(a.usedInProducts)}
+                      {t("catalog:attributes.meta", {
+                        key: slugify(a.name),
+                        option: t(OPTION_LABEL[a.option] ?? "catalog:attributes.options.dropdown"),
+                        values: t("catalog:attributes.valueCount", { count: a.values.length }),
+                        products: prod(a.usedInProducts),
+                      })}
                     </ItemDescription>
                   </ItemContent>
                   <div className="flex min-w-[160px] flex-1 flex-wrap items-center gap-1.5">
@@ -318,15 +329,15 @@ export default function AttributesPage() {
                         {v}
                       </Badge>
                     ))}
-                    {a.values.length > 8 && <span className="text-xs text-muted-foreground">+{a.values.length - 8} more</span>}
+                    {a.values.length > 8 && <span className="text-xs text-muted-foreground">{t("catalog:attributes.moreValues", { count: a.values.length - 8 })}</span>}
                     <Button type="button" variant="outline" size="sm" onClick={() => startEdit(a, true)} className="border-dashed">
-                      + Value
+                      {t("catalog:attributes.addValueChip")}
                     </Button>
                   </div>
                   <ItemActions className="gap-1.5">
-                    <Switch checked={a.published} onCheckedChange={(v) => setPublished([a], v)} aria-label={`Published: ${a.name}`} />
-                    <WithTooltip content={`Edit ${a.name}`}><Button type="button" variant="outline" size="icon" onClick={() => startEdit(a)} aria-label={`Edit ${a.name}`}><Pencil className="size-4" /></Button></WithTooltip>
-                    <WithTooltip content={`Delete ${a.name}`}><Button type="button" variant="outline" size="icon" onClick={() => setDeleteTargets([a])} aria-label={`Delete ${a.name}`}><Trash2 className="size-4" /></Button></WithTooltip>
+                    <Switch checked={a.published} onCheckedChange={(v) => setPublished([a], v)} aria-label={t("catalog:shared.publishedName", { name: a.name })} />
+                    <WithTooltip content={t("catalog:shared.editName", { name: a.name })}><Button type="button" variant="outline" size="icon" onClick={() => startEdit(a)} aria-label={t("catalog:shared.editName", { name: a.name })}><Pencil className="size-4" /></Button></WithTooltip>
+                    <WithTooltip content={t("catalog:shared.deleteName", { name: a.name })}><Button type="button" variant="outline" size="icon" onClick={() => setDeleteTargets([a])} aria-label={t("catalog:shared.deleteName", { name: a.name })}><Trash2 className="size-4" /></Button></WithTooltip>
                   </ItemActions>
                 </Item>
                 </Fragment>
@@ -353,41 +364,41 @@ export default function AttributesPage() {
         </Card>
 
         {/* Form panel */}
-        <aside aria-label="Attribute form" className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
-        <SectionCard title={editing ? `Edit ${editing.name}` : "New attribute"} description="Options like colour or size that create product variants."
+        <aside aria-label={t("catalog:attributes.form.aria")} className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
+        <SectionCard title={editing ? t("catalog:shared.editName", { name: editing.name }) : t("catalog:attributes.form.newTitle")} description={t("catalog:attributes.form.desc")}
           contentClassName="flex flex-col gap-4">
 
-          <FormField label="Name" required htmlFor="attr-name" className="min-w-0">
-            <Input id="attr-name" placeholder="e.g. Material" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <FormField label={t("common:fields.name")} required htmlFor="attr-name" className="min-w-0">
+            <Input id="attr-name" placeholder={t("catalog:attributes.form.namePlaceholder")} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </FormField>
-          <FormField label="Shown to customers as" htmlFor="attr-display-name" className="min-w-0">
-            <Input id="attr-display-name" placeholder="e.g. Fabric" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
+          <FormField label={t("catalog:attributes.form.displayName")} htmlFor="attr-display-name" className="min-w-0">
+            <Input id="attr-display-name" placeholder={t("catalog:attributes.form.displayPlaceholder")} value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
           </FormField>
 
-          <FormField label={<span id="attr-option-label">How customers pick</span>}>
+          <FormField label={<span id="attr-option-label">{t("catalog:attributes.form.howPick")}</span>}>
             <ChoiceCardGroup aria-labelledby="attr-option-label" className="grid-cols-3"
               value={form.option === "button" ? "radio" : form.option}
               onValueChange={(v) => setForm({ ...form, option: v as Option })}>
               {OPTIONS.map((o) => (
-                <ChoiceCard key={o.value} value={o.value} title={o.label} description={o.sub} className="p-3" />
+                <ChoiceCard key={o.value} value={o.value} title={t(o.label)} description={o.sub ? t(o.sub) : o.glyph} className="p-3" />
               ))}
             </ChoiceCardGroup>
           </FormField>
 
-          <FormField label="Values" htmlFor="attr-values" description="Press Enter after each value. Order here is the order customers see.">
+          <FormField label={t("catalog:attributes.form.values")} htmlFor="attr-values" description={t("catalog:attributes.form.valuesHelp")}>
             <InputGroup className="h-auto min-h-9 flex-wrap gap-1.5 p-1.5">
               {form.values.map((v) => (
                 <Badge key={v} variant="secondary" className="gap-1 pr-1">
                   {form.option === "swatch" && (
-                    <ColorPicker size="sm" aria-label={`Colour for ${v}`} value={form.colors[v] || "#2449E8"}
+                    <ColorPicker size="sm" aria-label={t("catalog:attributes.form.colourFor", { value: v })} value={form.colors[v] || "#2449E8"}
                       onChange={(hex) => setForm({ ...form, colors: { ...form.colors, [v]: hex } })} />
                   )}
                   {v}
-                  <WithTooltip content={`Remove ${v}`}><Button type="button" variant="ghost" size="icon" aria-label={`Remove ${v}`} onClick={() => setForm({ ...form, values: form.values.filter((x) => x !== v) })}
+                  <WithTooltip content={t("common:extra.removeName", { name: v })}><Button type="button" variant="ghost" size="icon" aria-label={t("common:extra.removeName", { name: v })} onClick={() => setForm({ ...form, values: form.values.filter((x) => x !== v) })}
                     className="size-4"><X className="size-3" /></Button></WithTooltip>
                 </Badge>
               ))}
-              <InputGroupInput id="attr-values" ref={chipRef} value={chipDraft} placeholder="Type and press Enter"
+              <InputGroupInput id="attr-values" ref={chipRef} value={chipDraft} placeholder={t("catalog:attributes.form.typeEnter")}
                 onChange={(e) => setChipDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addChip(chipDraft) }
@@ -399,8 +410,8 @@ export default function AttributesPage() {
 
           <Item variant="muted" size="sm">
             <ItemContent>
-              <ItemTitle id="attr-pub">Published</ItemTitle>
-              <ItemDescription>Use this attribute on products</ItemDescription>
+              <ItemTitle id="attr-pub">{t("common:status.published")}</ItemTitle>
+              <ItemDescription>{t("catalog:attributes.form.publishedDesc")}</ItemDescription>
             </ItemContent>
             <ItemActions>
               <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="attr-pub" />
@@ -408,9 +419,9 @@ export default function AttributesPage() {
           </Item>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={resetForm}>{editing ? "Cancel" : "Clear"}</Button>
+            <Button type="button" variant="outline" onClick={resetForm}>{editing ? t("common:actions.cancel") : t("common:actions.clear")}</Button>
             <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : editing ? "Save changes" : "Add attribute"}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("catalog:attributes.add")}
             </Button>
           </div>
         </SectionCard>
@@ -421,12 +432,12 @@ export default function AttributesPage() {
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">Import attributes</DialogTitle>
-            <DialogDescription>Upload a CSV with columns: name (required), display_name, option (dropdown, radio, button or swatch), published (Yes/No; blank means published), values (separated by ;, add a colour like "Red #DC2626" for swatches).</DialogDescription>
+            <DialogTitle className="font-dash-display text-xl font-bold">{t("catalog:attributes.import.title")}</DialogTitle>
+            <DialogDescription>{t("catalog:attributes.import.desc")}</DialogDescription>
           </DialogHeader>
-          <Input type="file" accept=".csv" onChange={handleImport} aria-label="CSV file" className="w-full" />
+          <Input type="file" accept=".csv" onChange={handleImport} aria-label={t("catalog:shared.csvFile")} className="w-full" />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>{t("common:actions.close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -435,7 +446,7 @@ export default function AttributesPage() {
       <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].name : `${deleteTargets.length} attributes`}?</AlertDialogTitle>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTargets.length === 1 ? deleteTargets[0].name : t("catalog:attributes.remove.many", { count: deleteTargets.length }) })}</AlertDialogTitle>
             <AlertDialogDescription>
               {(() => {
                 const inUse = deleteTargets.filter((a) => a.usedInProducts > 0)
@@ -444,19 +455,21 @@ export default function AttributesPage() {
                   <>
                     {inUse.length > 0 && (
                       <span className="mb-1 block font-semibold text-destructive">
-                        {inUse.length === 1 ? `"${inUse[0].name}" is` : `${inUse.length} of these attributes are`} used in {prod(total)}. Those products will lose {inUse.length === 1 ? "it" : "them"}.
+                        {inUse.length === 1
+                          ? t("catalog:attributes.remove.inUseOne", { name: inUse[0].name, products: prod(total) })
+                          : t("catalog:attributes.remove.inUseMany", { count: inUse.length, products: prod(total) })}
                       </span>
                     )}
-                    This can’t be undone.
+                    {t("common:confirm.cannotUndo")}
                   </>
                 )
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("catalog:shared.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Download, FolderTree, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -43,13 +44,14 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 
 interface Row { cat: Category; depth: number; hasChildren: boolean }
 
+// `name` is a translation key, translated at render
 const SWATCHES = [
-  { name: "Blue", value: "#2449E8" },
-  { name: "Purple", value: "#6D28D9" },
-  { name: "Amber", value: "#D97706" },
-  { name: "Red", value: "#DC2626" },
-  { name: "Teal", value: "#0F766E" },
-]
+  { name: "catalog:categories.colors.blue", value: "#2449E8" },
+  { name: "catalog:categories.colors.purple", value: "#6D28D9" },
+  { name: "catalog:categories.colors.amber", value: "#D97706" },
+  { name: "catalog:categories.colors.red", value: "#DC2626" },
+  { name: "catalog:categories.colors.teal", value: "#0F766E" },
+] as const
 
 const byOrder = (a: Category, b: Category) =>
   (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.category_name.localeCompare(b.category_name)
@@ -57,6 +59,7 @@ const byOrder = (a: Category, b: Category) =>
 const emptyForm = { name: "", parent_id: "none", published: true, description: "", color: SWATCHES[0].value as string, image: "" as string, imageFile: null as File | null }
 
 export default function CategoriesPage() {
+  const { t } = useTranslation(["catalog", "common"])
   const { categories, isLoading, getAllCategoriesFlat, addCategory, updateCategory, deleteCategory, bulkDeleteCategories, reorderCategories, refreshCategories } = useCategory()
   const { toast } = useToast()
   const [search, setSearch] = useState("")
@@ -112,7 +115,7 @@ export default function CategoriesPage() {
   const flatMode = !!term || tab !== "all"
   // Rows matching the active tab + search (name or description), in tree order
   const filteredList = useMemo(
-    () => treeOrder.map((t) => t.cat).filter((c) =>
+    () => treeOrder.map((n) => n.cat).filter((c) =>
       (tab === "all" || (tab === "published" ? c.status : !c.status)) &&
       (!term || c.category_name.toLowerCase().includes(term) || (c.description ?? "").toLowerCase().includes(term))),
     [treeOrder, tab, term],
@@ -169,12 +172,12 @@ export default function CategoriesPage() {
 
   const save = async () => {
     if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "Name required", description: "Give the category a name" })
+      toast({ variant: "destructive", title: t("catalog:shared.nameRequired"), description: t("catalog:categories.toast.nameRequiredDesc") })
       return
     }
     const wanted = form.name.trim().toLowerCase()
     if (flat.some((c) => c.id !== editing?.id && c.category_name.trim().toLowerCase() === wanted)) {
-      toast({ variant: "destructive", title: "Name already used", description: "A category with this name already exists." })
+      toast({ variant: "destructive", title: t("catalog:shared.nameUsed"), description: t("catalog:categories.toast.nameUsedDesc") })
       return
     }
     setSaving(true)
@@ -189,14 +192,14 @@ export default function CategoriesPage() {
       }
       if (editing) {
         await updateCategory(editing.id, payload)
-        toast({ title: "Category updated", description: payload.category_name })
+        toast({ title: t("catalog:categories.toast.updated"), description: payload.category_name })
       } else {
         await addCategory(payload)
-        toast({ title: "Category added", description: payload.category_name })
+        toast({ title: t("catalog:categories.toast.added"), description: payload.category_name })
       }
       setFormOpen(false)
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Could not save", description: error.message || "Please try again" })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotSave"), description: error.message || t("common:extra.tryAgain") })
     } finally {
       setSaving(false)
     }
@@ -205,8 +208,8 @@ export default function CategoriesPage() {
   const setPublished = async (list: Category[], status: boolean) => {
     const res = await Promise.allSettled(list.filter((c) => c.status !== status).map((c) => updateCategory(c.id, { status })))
     const failed = res.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} categories could not be updated` })
-    else toast({ title: status ? "Published" : "Unpublished", description: `${list.length} categor${list.length === 1 ? "y" : "ies"} updated` })
+    if (failed) toast({ variant: "destructive", title: t("catalog:shared.someFailed"), description: t("catalog:categories.toast.failedCount", { count: failed }) })
+    else toast({ title: status ? t("common:status.published") : t("catalog:shared.unpublished"), description: t("catalog:categories.toast.updatedCount", { count: list.length }) })
   }
 
   const confirmDelete = async () => {
@@ -214,17 +217,17 @@ export default function CategoriesPage() {
     try {
       if (deleteTargets.length === 1) {
         await deleteCategory(deleteTargets[0].id)
-        toast({ title: "Deleted", description: deleteTargets[0].category_name })
+        toast({ title: t("common:status.deleted"), description: deleteTargets[0].category_name })
       } else {
         const r = await bulkDeleteCategories(deleteTargets.map((c) => c.id))
         toast({
           variant: r.kept && !r.deleted ? "destructive" : undefined,
-          title: `${r.deleted} deleted, ${r.kept} kept`,
-          description: r.kept ? `Kept because they have products or sub-categories: ${r.keptNames.join(", ")}` : undefined,
+          title: t("catalog:categories.toast.deletedKept", { deleted: r.deleted, kept: r.kept }),
+          description: r.kept ? t("catalog:categories.toast.keptBecause", { names: r.keptNames.join(", ") }) : undefined,
         })
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not delete", description: e.message })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotDelete"), description: e.message })
     } finally {
       setDeleting(false)
       setDeleteTargets([])
@@ -240,7 +243,7 @@ export default function CategoriesPage() {
     if (i < 0 || j < 0 || j >= siblings.length) return
     const ids = siblings.map((s) => s.id)
     ;[ids[i], ids[j]] = [ids[j], ids[i]]
-    try { await reorderCategories(ids) } catch (e: any) { toast({ variant: "destructive", title: "Could not reorder", description: e.message }) }
+    try { await reorderCategories(ids) } catch (e: any) { toast({ variant: "destructive", title: t("catalog:shared.couldNotReorder"), description: e.message }) }
   }
 
   const handleExport = () => {
@@ -291,8 +294,12 @@ export default function CategoriesPage() {
       }
       await refreshCategories()
       toast({
-        title: "Import finished",
-        description: `${ok} added${dup ? `, ${dup} skipped (duplicate or invalid)` : ""}${pending.length ? `, ${pending.length} skipped (parent not found)` : ""}`,
+        title: t("catalog:shared.importFinished"),
+        description: [
+          t("catalog:shared.importAdded", { count: ok }),
+          dup ? t("catalog:shared.importSkipped", { count: dup }) : null,
+          pending.length ? t("catalog:categories.toast.importNoParent", { count: pending.length }) : null,
+        ].filter(Boolean).join(", "),
       })
       setImportOpen(false)
     }
@@ -306,13 +313,13 @@ export default function CategoriesPage() {
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       {/* Header */}
       <PageHeader
-        title="Categories"
-        description="Organise products into groups and sub-groups."
+        title={t("catalog:categories.title")}
+        description={t("catalog:categories.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> Import</Button>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> {t("common:actions.import")}</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
           <Button type="button" onClick={() => openForm(null)}>
-            <Plus className="size-4" aria-hidden /> Add category
+            <Plus className="size-4" aria-hidden /> {t("catalog:categories.add")}
           </Button>
         </>}
       />
@@ -320,43 +327,43 @@ export default function CategoriesPage() {
       <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(v) => { setTab(v); setCurrentPage(1) }} tabs={[
-            { value: "all", label: "All", count: flat.length },
-            { value: "published", label: "Published", count: publishedCount },
-            { value: "unpublished", label: "Unpublished", count: flat.length - publishedCount },
+            { value: "all", label: t("common:status.all"), count: flat.length },
+            { value: "published", label: t("common:status.published"), count: publishedCount },
+            { value: "unpublished", label: t("catalog:shared.unpublished"), count: flat.length - publishedCount },
           ]} />
         </div>
         <Toolbar className="p-4">
           <div className="relative min-w-[240px] flex-1">
-            <Label htmlFor="cat-search" className="sr-only">Search categories</Label>
+            <Label htmlFor="cat-search" className="sr-only">{t("catalog:categories.searchLabel")}</Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id="cat-search" type="search" placeholder="Search name or description…" value={search} onChange={(e) => setSearch(e.target.value)}
+            <Input id="cat-search" type="search" placeholder={t("catalog:categories.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)}
               className="pl-9" />
           </div>
           {search && (
             <Button type="button" variant="ghost" onClick={() => setSearch("")}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
           {!flatMode && parentsWithKids.length > 0 && (
-            <Button type="button" variant="outline" onClick={toggleExpandAll}>{anyCollapsed ? "Expand all" : "Collapse all"}</Button>
+            <Button type="button" variant="outline" onClick={toggleExpandAll}>{anyCollapsed ? t("catalog:categories.expandAll") : t("catalog:categories.collapseAll")}</Button>
           )}
         </Toolbar>
 
         <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
-          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Publish</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Unpublish</Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>
-          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>{t("catalog:shared.publish")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>{t("catalog:shared.unpublish")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleExport}>{t("catalog:shared.exportSelected")}</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>{t("common:actions.delete")}</Button>
         </BulkBar>
 
         <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
-              <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all categories on this page" /></TableHead>
-              <TableHead scope="col">Category</TableHead>
-              <TableHead scope="col" className="text-right">Products</TableHead>
-              <TableHead scope="col">Published</TableHead>
-              <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("catalog:categories.selectAll")} /></TableHead>
+              <TableHead scope="col">{t("common:fields.category")}</TableHead>
+              <TableHead scope="col" className="text-right">{t("common:fields.products")}</TableHead>
+              <TableHead scope="col">{t("common:status.published")}</TableHead>
+              <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -366,26 +373,26 @@ export default function CategoriesPage() {
               <TableRow>
                 <TableCell colSpan={5}>
                   <EmptyState icon={FolderTree} className="p-4 md:p-6"
-                    title={flatMode ? "No categories found" : "No categories yet"}
-                    description={flatMode ? "Try a different search or tab." : "Add your first category to group products."} />
+                    title={flatMode ? t("catalog:categories.notFoundTitle") : t("catalog:categories.emptyTitle")}
+                    description={flatMode ? t("catalog:shared.noMatchHint") : t("catalog:categories.emptyDesc")} />
                 </TableCell>
               </TableRow>
             ) : (
               rows.map(({ cat: c, depth, hasChildren }) => {
                 const kids = childrenOf.get(c.id)?.length ?? 0
                 const parent = parentName(c)
-                const sub = flatMode && parent ? `Sub-category of ${parent}` : depth > 0 ? `Sub-category of ${parent ?? "—"}` : kids > 0 ? `${kids} sub-categor${kids === 1 ? "y" : "ies"}` : "Top-level category"
+                const sub = flatMode && parent ? t("catalog:categories.subOf", { name: parent }) : depth > 0 ? t("catalog:categories.subOf", { name: parent ?? "—" }) : kids > 0 ? t("catalog:categories.subCount", { count: kids }) : t("catalog:categories.topLevel")
                 const ck = checked.has(c.id)
                 return (
                   <TableRow key={c.id} data-state={ck ? "selected" : undefined}>
                     <TableCell className="pl-4">
-                      <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.category_name}`} />
+                      <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={t("common:extra.selectRow", { name: c.category_name })} />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2.5" style={{ paddingLeft: depth * 28 }}>
                         {hasChildren && !flatMode ? (
-                          <WithTooltip content={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}><Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
-                            aria-label={`${collapsed.has(c.id) ? "Expand" : "Collapse"} ${c.category_name}`}
+                          <WithTooltip content={collapsed.has(c.id) ? t("catalog:categories.expandName", { name: c.category_name }) : t("catalog:categories.collapseName", { name: c.category_name })}><Button type="button" variant="ghost" size="icon-sm" onClick={() => toggleBranch(c.id)} aria-expanded={!collapsed.has(c.id)}
+                            aria-label={collapsed.has(c.id) ? t("catalog:categories.expandName", { name: c.category_name }) : t("catalog:categories.collapseName", { name: c.category_name })}
                             className="shrink-0">
                             {collapsed.has(c.id) ? <ChevronRight className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
                           </Button></WithTooltip>
@@ -404,10 +411,10 @@ export default function CategoriesPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {c.products_count == null ? "—" : `${c.products_count} product${c.products_count === 1 ? "" : "s"}`}
+                      {c.products_count == null ? "—" : t("common:count.products", { count: c.products_count })}
                     </TableCell>
                     <TableCell>
-                      <Switch checked={c.status} aria-label={`Published: ${c.category_name}`}
+                      <Switch checked={c.status} aria-label={t("catalog:shared.publishedName", { name: c.category_name })}
                         onCheckedChange={(v) => setPublished([c], v)} />
                     </TableCell>
                     <TableCell className="pr-4">
@@ -417,22 +424,22 @@ export default function CategoriesPage() {
                           const idx = sibs.findIndex((s) => s.id === c.id)
                           return (
                             <>
-                              <WithTooltip content={`Move ${c.category_name} up`}><Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} up`} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button></WithTooltip>
-                              <WithTooltip content={`Move ${c.category_name} down`}><Button type="button" variant="outline" size="icon" aria-label={`Move ${c.category_name} down`} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={t("catalog:shared.moveUp", { name: c.category_name })}><Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moveUp", { name: c.category_name })} disabled={idx <= 0} onClick={() => move(c, -1)}><ArrowUp className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={t("catalog:shared.moveDown", { name: c.category_name })}><Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moveDown", { name: c.category_name })} disabled={idx < 0 || idx >= sibs.length - 1} onClick={() => move(c, 1)}><ArrowDown className="size-4" /></Button></WithTooltip>
                             </>
                           )
                         })()}
-                        <WithTooltip content={`Edit ${c.category_name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.category_name}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
+                        <WithTooltip content={t("catalog:shared.editName", { name: c.category_name })}><Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.editName", { name: c.category_name })} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
                         <DropdownMenu>
-                          <WithTooltip content={`More actions for ${c.category_name}`}><DropdownMenuTrigger asChild>
-                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.category_name}`}><MoreHorizontal className="size-4" /></Button>
+                          <WithTooltip content={t("catalog:shared.moreFor", { name: c.category_name })}><DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moreFor", { name: c.category_name })}><MoreHorizontal className="size-4" /></Button>
                           </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openForm(c)}>Edit category</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setPublished([c], !c.status)}>{c.status ? "Unpublish" : "Publish"}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openForm(c)}>{t("catalog:categories.edit")}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setPublished([c], !c.status)}>{c.status ? t("catalog:shared.unpublish") : t("catalog:shared.publish")}</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>
-                              <Trash2 className="size-4" aria-hidden /> Delete category
+                              <Trash2 className="size-4" aria-hidden /> {t("catalog:categories.delete")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -447,7 +454,9 @@ export default function CategoriesPage() {
 
         <Separator />
         <div className="px-4 py-3 text-xs text-muted-foreground">
-          {flatMode ? `${filteredList.length} of ${total}` : total} categor{total === 1 ? "y" : "ies"} · {roots.length} top-level
+          {flatMode
+            ? t("catalog:categories.countFiltered", { shown: filteredList.length, count: total })
+            : t("catalog:categories.count", { count: total })} · {t("catalog:categories.topLevelCount", { count: roots.length })}
         </div>
         <div className="px-4 pb-4">
           <PaginationControl currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage}
@@ -459,54 +468,54 @@ export default function CategoriesPage() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[480px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[480px]">
           <DialogHeader className="border-b border-dash-border px-6 py-[18px] text-left">
-            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? `Edit ${editing.category_name}` : "New category"}</DialogTitle>
-            <DialogDescription className="text-[13px] text-dash-muted">Group products so they are easy to find in POS.</DialogDescription>
+            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? t("catalog:shared.editName", { name: editing.category_name }) : t("catalog:categories.form.newTitle")}</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">{t("catalog:categories.form.desc")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
-            <FormField label="Name" required htmlFor="cat-name" className="min-w-0">
-              <Input id="cat-name" placeholder="e.g. Panjabi" value={form.name} autoFocus
+            <FormField label={t("common:fields.name")} required htmlFor="cat-name" className="min-w-0">
+              <Input id="cat-name" placeholder={t("catalog:categories.form.namePlaceholder")} value={form.name} autoFocus
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") save() }} />
             </FormField>
-            <FormField label={<span id="cat-parent-label">Parent category</span>} htmlFor="cat-parent" className="min-w-0">
+            <FormField label={<span id="cat-parent-label">{t("catalog:categories.form.parent")}</span>} htmlFor="cat-parent" className="min-w-0">
               <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
                 <SelectTrigger id="cat-parent" aria-labelledby="cat-parent-label" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None (top level)</SelectItem>
+                  <SelectItem value="none">{t("catalog:categories.form.parentNone")}</SelectItem>
                   {treeOrder.filter(({ cat }) => !blockedParents.has(cat.id)).map(({ cat, depth }) => (
                     <SelectItem key={cat.id} value={cat.id}>
-                      <span style={{ paddingLeft: depth * 14 }}>{depth > 0 ? "└ " : ""}{cat.category_name}{cat.status ? "" : " (unpublished)"}</span>
+                      <span style={{ paddingLeft: depth * 14 }}>{depth > 0 ? "└ " : ""}{cat.category_name}{cat.status ? "" : ` ${t("catalog:categories.form.unpublishedSuffix")}`}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Description" htmlFor="cat-description" className="min-w-0">
-              <Textarea id="cat-description" rows={2} placeholder="Shown on the storefront category page" value={form.description}
+            <FormField label={t("common:fields.description")} htmlFor="cat-description" className="min-w-0">
+              <Textarea id="cat-description" rows={2} placeholder={t("catalog:categories.form.descPlaceholder")} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </FormField>
-            <FormField label={<span id="cat-color-label">Icon colour</span>} className="min-w-0">
-              <SwatchPicker size="sm" aria-label="Icon colour"
-                options={SWATCHES.map((sw) => ({ value: sw.value, label: sw.name, color: sw.value }))}
+            <FormField label={<span id="cat-color-label">{t("catalog:categories.form.iconColour")}</span>} className="min-w-0">
+              <SwatchPicker size="sm" aria-label={t("catalog:categories.form.iconColour")}
+                options={SWATCHES.map((sw) => ({ value: sw.value, label: t(sw.name), color: sw.value }))}
                 value={form.color} onValueChange={(v) => setForm({ ...form, color: v })} />
             </FormField>
-            <FormField label="Image (optional)" htmlFor="cat-image" className="min-w-0">
+            <FormField label={t("catalog:categories.form.imageOptional")} htmlFor="cat-image" className="min-w-0">
               <Button asChild variant="outline" className="h-20 w-full cursor-pointer gap-3 border-dashed">
                 <Label htmlFor="cat-image">
                   {form.imageFile || form.image ? (
                     <>
                       <UserAvatar shape="square" src={form.imageFile ? URL.createObjectURL(form.imageFile) : form.image} alt="" name={form.name} className="size-14" />
-                      <span className="truncate">{form.imageFile?.name ?? "Current image — click to replace"}</span>
+                      <span className="truncate">{form.imageFile?.name ?? t("catalog:categories.form.currentImage")}</span>
                     </>
-                  ) : "Drop an image or click to upload"}
+                  ) : t("catalog:categories.form.dropImage")}
                 </Label>
               </Button>
               <Input id="cat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => setForm({ ...form, imageFile: e.target.files?.[0] ?? null })} />
             </FormField>
             <Item variant="outline" size="sm">
               <ItemContent>
-                <ItemTitle id="cat-pub-label">Published</ItemTitle>
-                <ItemDescription>Show this category in POS and online</ItemDescription>
+                <ItemTitle id="cat-pub-label">{t("common:status.published")}</ItemTitle>
+                <ItemDescription>{t("catalog:categories.form.publishedDesc")}</ItemDescription>
               </ItemContent>
               <ItemActions>
                 <Switch checked={form.published} onCheckedChange={(v) => setForm({ ...form, published: v })} aria-labelledby="cat-pub-label" />
@@ -514,9 +523,9 @@ export default function CategoriesPage() {
             </Item>
           </div>
           <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button type="button" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : editing ? "Save changes" : "Add category"}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("catalog:categories.add")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -526,10 +535,10 @@ export default function CategoriesPage() {
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="max-w-md rounded-[18px] border-dash-border bg-dash-card font-dash-body text-dash-ink">
           <DialogHeader className="text-left">
-            <DialogTitle className="font-dash-display text-[22px] font-bold">Import categories</DialogTitle>
-            <DialogDescription className="text-[13px] text-dash-muted">Upload a CSV with the columns Name, Parent (parent category name), Description and Published (Yes/No). Products is ignored. Existing names are skipped.</DialogDescription>
+            <DialogTitle className="font-dash-display text-[22px] font-bold">{t("catalog:categories.import.title")}</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">{t("catalog:categories.import.desc")}</DialogDescription>
           </DialogHeader>
-          <FormField label="CSV file" htmlFor="cat-import-file" className="min-w-0">
+          <FormField label={t("catalog:shared.csvFile")} htmlFor="cat-import-file" className="min-w-0">
             <Input id="cat-import-file" type="file" accept=".csv" onChange={handleImport} />
           </FormField>
         </DialogContent>
@@ -538,13 +547,13 @@ export default function CategoriesPage() {
       <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
         <AlertDialogContent className="font-dash-body text-dash-ink">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].category_name : `${deleteTargets.length} categories`}?</AlertDialogTitle>
-            <AlertDialogDescription>Categories that have products or sub-categories are kept; the rest are deleted. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTargets.length === 1 ? deleteTargets[0].category_name : t("catalog:categories.remove.many", { count: deleteTargets.length }) })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("catalog:categories.remove.desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("catalog:shared.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

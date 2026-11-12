@@ -1,4 +1,7 @@
+"use client"
+
 import { cn } from "@/lib/utils"
+import { useTranslation } from "react-i18next"
 import type React from "react"
 import {
     Pagination,
@@ -29,6 +32,7 @@ export function PaginationControl({
     onItemsPerPageChange,
     totalItems
 }: PaginationControlProps) {
+    const { t } = useTranslation(["ui", "common"])
     if (totalPages <= 0) return null
 
     const getPageNumbers = () => {
@@ -67,16 +71,20 @@ export function PaginationControl({
 
     return (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 mt-4 border-t border-gray-100 bg-white rounded-b-lg px-6">
-            <div className="text-xs text-gray-500 font-medium">
-                SHOWING {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}-
-                {Math.min(currentPage * itemsPerPage, totalItems)} OF {totalItems}
+            <div className="text-xs text-gray-500 font-medium uppercase">
+                {t("common:table.showing", {
+                    from: Math.min((currentPage - 1) * itemsPerPage + 1, totalItems),
+                    to: Math.min(currentPage * itemsPerPage, totalItems),
+                    total: totalItems,
+                })}
             </div>
 
             <div className="flex items-center gap-4">
                 {onItemsPerPageChange && (
                     <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase">Records per page</span>
+                        <span className="text-xs font-bold text-gray-500 uppercase">{t("common:table.rowsPerPage")}</span>
                         <select
+                            aria-label={t("common:table.rowsPerPage")}
                             value={itemsPerPage}
                             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
                             className="h-8 w-16 rounded border-gray-200 bg-gray-50 text-xs font-medium focus:border-emerald-500 focus:ring-emerald-500"
@@ -101,7 +109,7 @@ export function PaginationControl({
                         disabled={currentPage === 1}
                     >
                         <ChevronLeft className="h-3 w-3 mr-1" />
-                        Previous
+                        {t("common:actions.previous")}
                     </Button>
 
                     <div className="flex items-center gap-1">
@@ -138,7 +146,7 @@ export function PaginationControl({
                         }}
                         disabled={currentPage === totalPages}
                     >
-                        Next
+                        {t("common:actions.next")}
                         <ChevronRight className="h-3 w-3 ml-1" />
                     </Button>
                 </div>

@@ -9,14 +9,17 @@ import {
   LayoutDashboard, Building2, CreditCard, LogOut, Zap, Menu, X, ChevronRight,
 } from "lucide-react"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { useTranslation } from "react-i18next"
+import { LanguageSwitcher } from "@/components/shell/language-switcher"
 
 const nav = [
-  { href: "/platform", label: "Overview", icon: LayoutDashboard, exact: true },
-  { href: "/platform/companies", label: "Companies", icon: Building2 },
-  { href: "/platform/plans", label: "Plans", icon: CreditCard },
-]
+  { href: "/platform", label: "auth:platform.nav.overview", icon: LayoutDashboard, exact: true },
+  { href: "/platform/companies", label: "auth:platform.nav.companies", icon: Building2, exact: false },
+  { href: "/platform/plans", label: "auth:platform.nav.plans", icon: CreditCard, exact: false },
+] as const
 
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation(["auth", "common"])
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -39,7 +42,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
     router.push("/auth/login")
   }
 
-  const isActive = (item: typeof nav[0]) =>
+  const isActive = (item: (typeof nav)[number]) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
   const Sidebar = () => (
@@ -51,7 +54,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
         </div>
         <div>
           <p className="font-bold text-sm">StockFlow</p>
-          <p className="text-xs text-emerald-400 font-medium">Platform Admin</p>
+          <p className="text-xs text-emerald-400 font-medium">{t("auth:platform.adminLabel")}</p>
         </div>
       </div>
 
@@ -66,7 +69,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           >
             <Link href={item.href} onClick={() => setSidebarOpen(false)}>
               <item.icon className="w-4 h-4" />
-              {item.label}
+              {t(item.label)}
             </Link>
           </Button>
         ))}
@@ -78,7 +81,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           <UserAvatar className="size-7" name={adminEmail} />
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white font-medium truncate">{adminEmail}</p>
-            <p className="text-xs text-gray-500">Super Admin</p>
+            <p className="text-xs text-gray-500">{t("auth:platform.superAdmin")}</p>
           </div>
         </div>
         <Button
@@ -87,7 +90,7 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           onClick={handleLogout}
           className="w-full justify-start"
         >
-          <LogOut className="w-3.5 h-3.5" /> Sign Out
+          <LogOut className="w-3.5 h-3.5" /> {t("auth:platform.signOut")}
         </Button>
       </div>
     </aside>
@@ -112,12 +115,15 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar (mobile) */}
-        <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
-          <WithTooltip content="Open menu"><Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+        {/* Top bar: menu + title on mobile, language picker top-right on every size */}
+        <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
+          <WithTooltip content={t("auth:platform.openMenu")}><Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSidebarOpen(true)} aria-label={t("auth:platform.openMenu")}>
             <Menu className="w-5 h-5" />
           </Button></WithTooltip>
-          <span className="font-semibold text-sm">Platform Admin</span>
+          <span className="md:hidden font-semibold text-sm truncate">{t("auth:platform.adminLabel")}</span>
+          <div className="ml-auto">
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <main className="flex-1 overflow-y-auto p-6">

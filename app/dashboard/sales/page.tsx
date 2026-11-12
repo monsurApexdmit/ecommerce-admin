@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { Trans, useTranslation } from "react-i18next"
 import {
   Banknote, CheckCircle2, ChevronsRight, Clock, Download, Eye, MapPin, Plus, Printer, Receipt, Search, Truck, Wallet, X, XCircle,
 } from "lucide-react"
@@ -28,7 +29,9 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 import { saleDisplayStatus, SALE_PAY_VARIANT, SaleDetailDialog } from "@/components/sales/sale-detail-dialog"
 import { RecordPaymentDialog, salePaymentDue } from "@/components/sales/record-payment-dialog"
 import { NewSaleModal } from "@/components/sales/new-sale-modal"
-import { AD_SOURCE_FILTERS, AdSourceBadge, OrderFlagBadges, adSourceLabel, campaignHint, isAdSourceFilter } from "@/components/sales/ad-source"
+import { AD_SOURCE_FILTERS, AdSourceBadge, OrderFlagBadges, adSourceText, campaignHint, isAdSourceFilter } from "@/components/sales/ad-source"
+import { ORDERS_NS, methodLabel, orderStatusLabel, payLabel, type OrdersKey } from "@/components/sales/i18n"
+import { localeTag } from "@/lib/i18n"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
 import { printSaleInvoice } from "@/lib/invoice-print"
 import { exportToCSV } from "@/lib/export-import-utils"
@@ -54,16 +57,22 @@ interface Stats {
 
 type Tab = "all" | "Pending" | "Processing" | "Packed" | "Shipped" | "Delivered" | "Cancelled" | "unpaid"
 
-const CHANNEL_LABEL: Record<string, string> = { manual: "Sales", pos: "POS", storefront: "Online" }
+const CHANNEL_LABEL: Record<string, OrdersKey> = { manual: "orders:labels.sales", pos: "orders:labels.pos", storefront: "orders:labels.online" }
 
-/** The one-click next step for a sale, by its displayed stage (Pending, Processing, Packed, Shipped). */
-type Step = { label: string; run: (id: number) => Promise<unknown> }
+/** Channel filter values (sent to the API as `source`). */
+const CHANNEL_FILTERS = ["manual", "pos", "storefront"]
+
+/** Payment method filter values (sent to the API); labels via `methodLabel`. */
+const METHOD_FILTERS = ["Cash", "Card", "Online", "COD", "bKash", "Nagad", "Bank"]
+
+/** The one-click next step for a sale, by its displayed stage (Pending, Processing, Packed, Shipped). `label` is a translation key. */
+type Step = { label: OrdersKey; run: (id: number) => Promise<unknown> }
 function nextStep(s: SellResponse): Step | null {
   switch (saleDisplayStatus(s)) {
-    case "Pending": return { label: "Confirm (mark processing)", run: (id) => sellsApi.updateStatus(id, "Processing") }
-    case "Processing": return { label: "Mark packed", run: (id) => sellsApi.updateFulfillment(id, "packed") }
-    case "Packed": return { label: "Mark shipped", run: (id) => sellsApi.updateFulfillment(id, "shipped") }
-    case "Shipped": return { label: "Mark delivered", run: (id) => sellsApi.updateStatus(id, "Delivered") }
+    case "Pending": return { label: "orders:sales.step.confirm", run: (id) => sellsApi.updateStatus(id, "Processing") }
+    case "Processing": return { label: "orders:sales.step.packed", run: (id) => sellsApi.updateFulfillment(id, "packed") }
+    case "Packed": return { label: "orders:sales.step.shipped", run: (id) => sellsApi.updateFulfillment(id, "shipped") }
+    case "Shipped": return { label: "orders:sales.step.delivered", run: (id) => sellsApi.updateStatus(id, "Delivered") }
     default: return null
   }
 }
@@ -81,8 +90,6 @@ function moneyParts(s: SellResponse) {
   const tax = s.taxAmount != null ? Number(s.taxAmount) : s.items?.length ? Math.max(0, Math.round((total - (subtotal - discount + delivery)) * 100) / 100) : 0
   return { subtotal, discount, tax, delivery, total }
 }
-
-const rangeLabel = (n: number) => `${n} sale${n === 1 ? "" : "s"}`
 
 function errMsg(e: unknown): string | undefined {
   return (e as any)?.response?.data?.message
@@ -107,6 +114,8 @@ function shippingLines(s: SellResponse): string[] {
 
 
 export default function SalesPage() {
+  const { t, i18n } = useTranslation(ORDERS_NS)
+  const tag = localeTag(i18n.language)
   const { formatCurrency, settings } = useCompanySettings()
   const { toast } = useToast()
   const searchParams = useSearchParams()
@@ -243,7 +252,7 @@ export default function SalesPage() {
     if (!sale.items?.length) {
       try { const res = await sellsApi.getById(sale.id); full = res.data } catch { /* use list row */ }
     }
-    printSaleInvoice(full, { formatCurrency, taxId: settings?.taxId })
+    printSaleInvoice(full, { formatCurrency, taxId: settings?.taxId }, i18n.language)
   }
 
   const openDetail = async (sale: SellResponse) => {
@@ -257,17 +266,17 @@ export default function SalesPage() {
     const failed = results.filter((r) => r.status === "rejected")
     if (failed.length) {
       const msg = errMsg((failed[0] as PromiseRejectedResult).reason)
-      toast({ variant: "destructive", title: "Some updates failed", description: msg || `${failed.length} of ${results.length} could not be changed` })
+      toast({ variant: "destructive", title: t("orders:toast.someFailed"), description: msg || t("orders:toast.failedOf", { failed: failed.length, total: results.length }) })
     } else {
-      toast({ title: okTitle, description: rangeLabel(results.length) + " updated" })
+      toast({ title: okTitle, description: t("orders:sales.updated", { count: results.length }) })
     }
   }
 
   const setStatus = async (targets: SellResponse[], status: SellResponse["status"]) => {
-    if (targets.length === 0) { toast({ title: "Nothing to update", description: "None of the selected sales can move to that status." }); return }
-    if (status === "Cancelled" && !window.confirm(`Cancel ${rangeLabel(targets.length)}? Stock goes back to inventory and any balance due is cleared.`)) return
+    if (targets.length === 0) { toast({ title: t("orders:sales.nothingToUpdate"), description: t("orders:sales.noneCanMove") }); return }
+    if (status === "Cancelled" && !window.confirm(t("orders:sales.cancelConfirm", { count: targets.length }))) return
     const results = await Promise.allSettled(targets.map((s) => sellsApi.updateStatus(s.id, status)))
-    toastResult(results, `Marked ${status.toLowerCase()}`)
+    toastResult(results, t("orders:toast.markedAs", { status: orderStatusLabel(t, status) }))
     setChecked(new Set())
     refresh()
   }
@@ -276,15 +285,15 @@ export default function SalesPage() {
     const step = nextStep(s)
     if (!step) return
     const results = await Promise.allSettled([step.run(s.id)])
-    toastResult(results, `#${s.invoiceNo}: ${step.label.toLowerCase()}`)
+    toastResult(results, t("orders:sales.stepDone", { invoice: s.invoiceNo, step: t(step.label) }))
     refresh()
   }
 
   const sendToCourier = async (targets: SellResponse[]) => {
     const eligible = targets.filter((s) => ["Pending", "Processing", "Packed"].includes(saleDisplayStatus(s)))
-    if (eligible.length === 0) { toast({ title: "Nothing to send", description: "Only pending, processing or packed sales can be sent to a courier." }); return }
+    if (eligible.length === 0) { toast({ title: t("orders:sales.nothingToSend"), description: t("orders:sales.onlySendable") }); return }
     const results = await Promise.allSettled(eligible.map((s) => sellsApi.updateFulfillment(s.id, "shipped")))
-    toastResult(results, "Sent to courier")
+    toastResult(results, t("orders:sales.sentToCourier"))
     setChecked(new Set())
     refresh()
   }
@@ -299,15 +308,15 @@ export default function SalesPage() {
     const qty = s.items?.reduce((n, it) => n + (it.quantity ?? 1), 0) ?? 0
     return {
       invoice: s.invoiceNo,
-      date: new Date(s.orderTime).toLocaleString(),
+      date: new Date(s.orderTime).toLocaleString(tag),
       customer: s.customerName,
       phone: s.shippingPhone ?? "",
-      channel: CHANNEL_LABEL[s.source ?? "manual"] ?? s.source ?? "",
-      ad_source: s.adSourceLabel || adSourceLabel(s.adSource),
+      channel: CHANNEL_LABEL[s.source ?? "manual"] ? t(CHANNEL_LABEL[s.source ?? "manual"]) : s.source ?? "",
+      ad_source: (s.adSource === "phone" || s.adSource === "other" ? "" : s.adSourceLabel) || adSourceText(t, s.adSource),
       campaign: s.campaignLink?.name || s.utmCampaign || "",
-      status: saleDisplayStatus(s),
-      payment: paymentOf(s).label,
-      method: s.method,
+      status: orderStatusLabel(t, saleDisplayStatus(s)),
+      payment: payLabel(t, paymentOf(s).label),
+      method: methodLabel(t, s.method),
       items: qty,
       delivery_address: shippingLines(s).slice(1, 4).join(", "),
       subtotal: m.subtotal.toFixed(2),
@@ -320,7 +329,14 @@ export default function SalesPage() {
     }
   }
 
-  const EXPORT_HEADERS = ["Invoice", "Date", "Customer", "Phone", "Channel", "Ad source", "Campaign", "Status", "Payment", "Method", "Items", "Delivery address", "Subtotal", "Discount", "Tax", "Delivery", "Total", "Paid", "Due"]
+  /** CSV columns: row field → header key. exportToCSV maps each header to a field by lower-casing it, so rows are keyed by the translated header. */
+  const EXPORT_COLUMNS: [keyof ReturnType<typeof toExportRow>, OrdersKey][] = [
+    ["invoice", "orders:export.invoice"], ["date", "orders:export.date"], ["customer", "orders:export.customer"], ["phone", "orders:export.phone"],
+    ["channel", "orders:export.channel"], ["ad_source", "orders:export.adSource"], ["campaign", "orders:export.campaign"], ["status", "orders:export.status"],
+    ["payment", "orders:export.payment"], ["method", "orders:export.method"], ["items", "orders:export.items"], ["delivery_address", "orders:export.deliveryAddress"],
+    ["subtotal", "orders:export.subtotal"], ["discount", "orders:export.discount"], ["tax", "orders:export.tax"], ["delivery", "orders:export.delivery"],
+    ["total", "orders:export.total"], ["paid", "orders:export.paid"], ["due", "orders:export.due"],
+  ]
 
   const handleExport = async () => {
     setExporting(true)
@@ -335,10 +351,15 @@ export default function SalesPage() {
           if (!res.data?.length || source.length >= (res.total ?? 0)) break
         }
       }
-      if (source.length === 0) { toast({ title: "Nothing to export" }); return }
-      exportToCSV(source.map(toExportRow), "sales", EXPORT_HEADERS)
+      if (source.length === 0) { toast({ title: t("orders:toast.nothingToExport") }); return }
+      const headers = EXPORT_COLUMNS.map(([, key]) => t(key))
+      const csvKey = (h: string) => h.toLowerCase().replace(/ /g, "_")
+      exportToCSV(
+        source.map((s) => { const r = toExportRow(s); return Object.fromEntries(EXPORT_COLUMNS.map(([field], i) => [csvKey(headers[i]), r[field]])) }),
+        "sales", headers,
+      )
     } catch (e) {
-      toast({ variant: "destructive", title: "Export failed", description: errMsg(e) })
+      toast({ variant: "destructive", title: t("orders:toast.exportFailed"), description: errMsg(e) })
     } finally {
       setExporting(false)
     }
@@ -351,17 +372,20 @@ export default function SalesPage() {
     <div className="flex flex-col gap-5">
       {/* Header */}
       <PageHeader
-        title="Sales"
-        description={<>
-          Sales, POS and online orders with customer, payment and delivery details. Fulfilment and shipments live in{" "}
-          <Link href="/dashboard/orders" className="font-medium text-primary underline-offset-4 hover:underline">Orders</Link>.
-        </>}
+        title={t("orders:sales.title")}
+        description={
+          <Trans
+            t={t}
+            i18nKey="orders:sales.description"
+            components={{ link: <Link href="/dashboard/orders" className="font-medium text-primary underline-offset-4 hover:underline" /> }}
+          />
+        }
         actions={<>
           <Button asChild variant="outline">
-            <Link href="/dashboard/pos">Open POS</Link>
+            <Link href="/dashboard/pos">{t("orders:sales.openPos")}</Link>
           </Button>
           <Button type="button" onClick={() => setNewOpen(true)}>
-            <Plus className="size-4" aria-hidden /> New sale
+            <Plus className="size-4" aria-hidden /> {t("orders:sales.newSale")}
             <Kbd>N</Kbd>
           </Button>
         </>}
@@ -374,16 +398,16 @@ export default function SalesPage() {
         </div>
       ) : (
         <StatsCards stats={[
-          { label: "Total sales", value: stats.totalSells, icon: <Receipt className="size-4" />, color: "blue",
-            hint: `${stats.cancelledOrders} cancelled` },
-          { label: "Revenue", value: formatCurrency(stats.totalRevenue), icon: <Banknote className="size-4" />, color: "green",
-            hint: stats.totalSells ? `Avg ${formatCurrency(stats.totalRevenue / stats.totalSells)} per sale` : undefined },
-          { label: "Amount due", value: formatCurrency(stats.totalDue), icon: <Clock className="size-4" />, color: "red",
-            hint: `${stats.unpaidCount} unpaid invoice${stats.unpaidCount === 1 ? "" : "s"}`,
+          { label: t("orders:sales.kpi.totalSales"), value: stats.totalSells, icon: <Receipt className="size-4" />, color: "blue",
+            hint: t("orders:sales.kpi.cancelled", { count: stats.cancelledOrders }) },
+          { label: t("orders:sales.kpi.revenue"), value: formatCurrency(stats.totalRevenue), icon: <Banknote className="size-4" />, color: "green",
+            hint: stats.totalSells ? t("orders:sales.kpi.avgPerSale", { amount: formatCurrency(stats.totalRevenue / stats.totalSells) }) : undefined },
+          { label: t("orders:sales.kpi.amountDue"), value: formatCurrency(stats.totalDue), icon: <Clock className="size-4" />, color: "red",
+            hint: t("orders:sales.kpi.unpaidInvoices", { count: stats.unpaidCount }),
             onClick: () => changeTab("unpaid"), active: tab === "unpaid" },
-          { label: "To deliver", value: stats.pendingOrders + stats.processingOrders, icon: <Truck className="size-4" />, color: "yellow",
-            hint: "Pending to shipped", onClick: () => changeTab("Pending"), active: tab === "Pending" },
-          { label: "Delivered", value: stats.deliveredOrders, icon: <CheckCircle2 className="size-4" />, color: "purple", hint: "Delivered + completed",
+          { label: t("orders:sales.kpi.toDeliver"), value: stats.pendingOrders + stats.processingOrders, icon: <Truck className="size-4" />, color: "yellow",
+            hint: t("orders:sales.kpi.pendingToShipped"), onClick: () => changeTab("Pending"), active: tab === "Pending" },
+          { label: t("common:orderStatus.delivered"), value: stats.deliveredOrders, icon: <CheckCircle2 className="size-4" />, color: "purple", hint: t("orders:sales.kpi.deliveredCompleted"),
             onClick: () => changeTab("Delivered"), active: tab === "Delivered" },
         ]} />
       )}
@@ -395,14 +419,14 @@ export default function SalesPage() {
             value={tab}
             onChange={changeTab}
             tabs={[
-              { value: "all", label: "All", count: stats?.totalSells },
-              { value: "Pending", label: "Pending", count: stats?.pendingOrders },
-              { value: "Processing", label: "Processing", count: stats?.processingOrders },
-              { value: "Packed", label: "Packed", count: stats?.packedOrders },
-              { value: "Shipped", label: "Shipped", count: stats?.shippedOrders },
-              { value: "Delivered", label: "Delivered", count: stats?.deliveredOrders },
-              { value: "Cancelled", label: "Cancelled", count: stats?.cancelledOrders },
-              { value: "unpaid", label: "Unpaid", count: stats?.unpaidCount },
+              { value: "all", label: t("common:status.all"), count: stats?.totalSells },
+              { value: "Pending", label: orderStatusLabel(t, "Pending"), count: stats?.pendingOrders },
+              { value: "Processing", label: orderStatusLabel(t, "Processing"), count: stats?.processingOrders },
+              { value: "Packed", label: orderStatusLabel(t, "Packed"), count: stats?.packedOrders },
+              { value: "Shipped", label: orderStatusLabel(t, "Shipped"), count: stats?.shippedOrders },
+              { value: "Delivered", label: orderStatusLabel(t, "Delivered"), count: stats?.deliveredOrders },
+              { value: "Cancelled", label: orderStatusLabel(t, "Cancelled"), count: stats?.cancelledOrders },
+              { value: "unpaid", label: t("common:payment.unpaid"), count: stats?.unpaidCount },
             ]}
           />
         </div>
@@ -410,53 +434,45 @@ export default function SalesPage() {
         <div className="flex flex-wrap items-center gap-2.5 p-4">
           <div className="relative min-w-[260px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Label htmlFor="sales-search" className="sr-only">Search sales</Label>
+            <Label htmlFor="sales-search" className="sr-only">{t("orders:sales.searchLabel")}</Label>
             <Input
               id="sales-search"
               type="search"
-              placeholder="Search invoice, customer or phone…"
+              placeholder={t("orders:filters.searchPlaceholder")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               className="pl-8"
             />
           </div>
           <Select value={paymentFilter} onValueChange={(v) => { setPaymentFilter(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment status" className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("orders:filters.paymentStatus")} className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Payment: All</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="partial">Partial</SelectItem>
-              <SelectItem value="due">Due</SelectItem>
+              <SelectItem value="all">{t("orders:filters.paymentAll")}</SelectItem>
+              <SelectItem value="paid">{t("common:payment.paid")}</SelectItem>
+              <SelectItem value="partial">{t("orders:labels.partial")}</SelectItem>
+              <SelectItem value="due">{t("common:payment.due")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment method" className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:payment.method")} className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Method: All</SelectItem>
-              <SelectItem value="Cash">Cash</SelectItem>
-              <SelectItem value="Card">Card</SelectItem>
-              <SelectItem value="Online">Online</SelectItem>
-              <SelectItem value="COD">COD</SelectItem>
-              <SelectItem value="bKash">bKash</SelectItem>
-              <SelectItem value="Nagad">Nagad</SelectItem>
-              <SelectItem value="Bank">Bank</SelectItem>
+              <SelectItem value="all">{t("orders:filters.methodAll")}</SelectItem>
+              {METHOD_FILTERS.map((m) => <SelectItem key={m} value={m}>{methodLabel(t, m)}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={channel} onValueChange={(v) => { setChannel(v); setPage(1) }}>
-            <SelectTrigger aria-label="Channel" className="w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("orders:filters.channel")} className="w-[150px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Channel: All</SelectItem>
-              <SelectItem value="manual">Channel: Sales</SelectItem>
-              <SelectItem value="pos">Channel: POS</SelectItem>
-              <SelectItem value="storefront">Channel: Online</SelectItem>
+              <SelectItem value="all">{t("orders:filters.channelAll")}</SelectItem>
+              {CHANNEL_FILTERS.map((c) => <SelectItem key={c} value={c}>{t("orders:filters.channelOption", { name: t(CHANNEL_LABEL[c]) })}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={adSource} onValueChange={(v) => { setAdSource(v); setPage(1) }}>
-            <SelectTrigger aria-label="Ad source" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("orders:filters.adSource")} className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {AD_SOURCE_FILTERS.map((f) => (
                 <SelectItem key={f.value} value={f.value}>
-                  {f.label}{f.value !== "all" && adCounts[f.value] !== undefined ? ` (${Number(adCounts[f.value]) || 0})` : ""}
+                  {adSourceText(t, f.value)}{f.value !== "all" && adCounts[f.value] !== undefined ? ` (${Number(adCounts[f.value]) || 0})` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -470,31 +486,31 @@ export default function SalesPage() {
           />
           {hasFilters && (
             <Button type="button" variant="ghost" onClick={resetFilters}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
           {mayExport && <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}>
-            <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : checked.size > 0 ? `Export ${checked.size}` : "Export"}
+            <Download className="size-4" aria-hidden /> {exporting ? t("orders:list.exporting") : checked.size > 0 ? t("orders:sales.exportN", { count: checked.size }) : t("common:actions.export")}
           </Button>}
         </div>
 
         {/* Bulk actions */}
-        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+        <BulkBar count={checked.size} label={t("common:table.selected", { count: checked.size })} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
             <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selectedSales.filter((s) => s.status === "Pending"), "Processing")}>
-              Mark processing
+              {t("orders:sales.bulk.markProcessing")}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selectedSales.filter((s) => s.status !== "Delivered" && s.status !== "Cancelled"), "Delivered")}>
-              Mark delivered
+              {t("orders:sales.bulk.markDelivered")}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={printSelected}>
-              Print invoices
+              {t("orders:sales.bulk.printInvoices")}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => sendToCourier(selectedSales)}>
-              Send to courier
+              {t("orders:sales.bulk.sendToCourier")}
             </Button>
             <Button type="button" variant="outline" size="sm" disabled={unpaidSelected.length === 0}
               onClick={() => setPayTargets(unpaidSelected)}>
-              Record payment
+              {t("orders:sales.bulk.recordPayment")}
             </Button>
         </BulkBar>
 
@@ -504,17 +520,17 @@ export default function SalesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead scope="col" className="w-5 pl-4">
-                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
+                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("common:actions.selectAll")} />
                 </TableHead>
-                <TableHead scope="col">Invoice</TableHead>
-                <TableHead scope="col">Customer</TableHead>
-                <TableHead scope="col">Delivery</TableHead>
-                <TableHead scope="col">Items</TableHead>
-                <TableHead scope="col">Method</TableHead>
-                <TableHead scope="col" className="text-right">Amount</TableHead>
-                <TableHead scope="col">Payment</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+                <TableHead scope="col">{t("orders:sales.col.invoice")}</TableHead>
+                <TableHead scope="col">{t("common:fields.customer")}</TableHead>
+                <TableHead scope="col">{t("orders:sales.col.delivery")}</TableHead>
+                <TableHead scope="col">{t("orders:sales.col.items")}</TableHead>
+                <TableHead scope="col">{t("orders:sales.col.method")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("common:money.amount")}</TableHead>
+                <TableHead scope="col">{t("orders:sales.col.payment")}</TableHead>
+                <TableHead scope="col">{t("common:fields.status")}</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -527,8 +543,8 @@ export default function SalesPage() {
                   <TableCell colSpan={10} className="whitespace-normal">
                     <EmptyState
                       icon={Receipt}
-                      title="No sales found"
-                      description={hasFilters ? "Try clearing the filters." : "Create your first sale with New sale."}
+                      title={t("orders:sales.empty")}
+                      description={hasFilters ? t("orders:filters.tryClearing") : t("orders:sales.emptyHint")}
                       className="p-4 md:p-6"
                     />
                   </TableCell>
@@ -543,21 +559,21 @@ export default function SalesPage() {
                   return (
                     <TableRow key={s.id} data-state={ck ? "selected" : undefined}>
                       <TableCell className="pl-4">
-                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(s.id)} aria-label={`Select ${s.invoiceNo}`} />
+                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(s.id)} aria-label={t("orders:list.selectRow", { invoice: s.invoiceNo })} />
                       </TableCell>
                       <TableCell>
                         <div className="font-semibold">#{s.invoiceNo}</div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(s.orderTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ·{" "}
-                          {new Date(s.orderTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase()}
+                          {new Date(s.orderTime).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" })} ·{" "}
+                          {new Date(s.orderTime).toLocaleTimeString(tag, { hour: "numeric", minute: "2-digit" }).toLowerCase()}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="font-semibold">{s.customerName}</div>
-                        <div className="text-xs text-muted-foreground">{s.shippingPhone || "—"} · {CHANNEL_LABEL[s.source ?? "manual"] ?? s.source}</div>
+                        <div className="text-xs text-muted-foreground">{s.shippingPhone || "—"} · {CHANNEL_LABEL[s.source ?? "manual"] ? t(CHANNEL_LABEL[s.source ?? "manual"]) : s.source}</div>
                         {(s.adSource || s.isQuickOrder || s.possibleDuplicate) && (
                           <div className="mt-1 flex flex-wrap gap-1">
-                            <AdSourceBadge source={s.adSource} label={s.adSourceLabel} title={campaignHint(s) || undefined} />
+                            <AdSourceBadge source={s.adSource} label={s.adSourceLabel} title={campaignHint(t, s) || undefined} />
                             <OrderFlagBadges order={s} />
                           </div>
                         )}
@@ -565,43 +581,43 @@ export default function SalesPage() {
                       <TableCell>
                         <div className="flex items-center gap-1">
                           {place && <MapPin className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />}
-                          <span>{place || "No delivery"}</span>
+                          <span>{place || t("orders:sales.noDelivery")}</span>
                         </div>
-                        <div className="text-xs text-muted-foreground">{s.carrier || s.shippingMethodName || "Pickup"}</div>
+                        <div className="text-xs text-muted-foreground">{s.carrier || s.shippingMethodName || t("orders:sales.pickup")}</div>
                       </TableCell>
                       <TableCell className="tabular-nums">
-                        {qty > 0 ? `${qty} item${qty === 1 ? "" : "s"}` : "—"}
+                        {qty > 0 ? t("common:count.items", { count: qty }) : "—"}
                       </TableCell>
-                      <TableCell>{s.method}</TableCell>
+                      <TableCell>{methodLabel(t, s.method)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatCurrency(Number(s.amount))}
-                        {pay.due > 0 && <div className="text-xs font-medium text-destructive">Due {formatCurrency(pay.due)}</div>}
+                        {pay.due > 0 && <div className="text-xs font-medium text-destructive">{t("orders:sales.dueAmount", { amount: formatCurrency(pay.due) })}</div>}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={pay.label} variant={PAY_STYLE[pay.label]} />
+                        <StatusBadge status={pay.label} variant={PAY_STYLE[pay.label]} label={payLabel(t, pay.label)} />
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={saleDisplayStatus(s)} />
+                        <StatusBadge status={saleDisplayStatus(s)} label={orderStatusLabel(t, saleDisplayStatus(s))} />
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <WithTooltip content={`View ${s.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${s.invoiceNo}`} onClick={() => openDetail(s)}><Eye className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content={`Print ${s.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${s.invoiceNo}`} onClick={() => printInvoice(s)}><Printer className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("orders:list.viewInvoice", { invoice: s.invoiceNo })}><Button type="button" variant="outline" size="icon" aria-label={t("orders:list.viewInvoice", { invoice: s.invoiceNo })} onClick={() => openDetail(s)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("orders:list.printInvoice", { invoice: s.invoiceNo })}><Button type="button" variant="outline" size="icon" aria-label={t("orders:list.printInvoice", { invoice: s.invoiceNo })} onClick={() => printInvoice(s)}><Printer className="size-4" /></Button></WithTooltip>
                           {step && (
-                            <WithTooltip content={step.label}>
-                              <Button type="button" variant="outline" size="icon" aria-label={`${step.label} ${s.invoiceNo}`}
+                            <WithTooltip content={t(step.label)}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("orders:sales.stepFor", { step: t(step.label), invoice: s.invoiceNo })}
                                 onClick={() => advance(s)}><ChevronsRight className="size-4" /></Button>
                             </WithTooltip>
                           )}
                           {pay.due > 0 && s.status !== "Cancelled" && (
-                            <WithTooltip content="Record payment">
-                              <Button type="button" variant="outline" size="icon" aria-label={`Record payment for ${s.invoiceNo}`}
+                            <WithTooltip content={t("orders:sales.recordPayment")}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("orders:sales.recordPaymentFor", { invoice: s.invoiceNo })}
                                 onClick={() => setPayTargets([s])}><Wallet className="size-4" /></Button>
                             </WithTooltip>
                           )}
                           {s.status !== "Delivered" && s.status !== "Cancelled" && (
-                            <WithTooltip content="Cancel sale">
-                              <Button type="button" variant="outline" size="icon" aria-label={`Cancel ${s.invoiceNo}`}
+                            <WithTooltip content={t("orders:sales.cancelSale")}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("orders:list.cancelInvoice", { invoice: s.invoiceNo })}
                                 className="text-destructive" onClick={() => setStatus([s], "Cancelled")}><XCircle className="size-4" /></Button>
                             </WithTooltip>
                           )}
@@ -620,9 +636,9 @@ export default function SalesPage() {
           <Separator />
           <div className="p-4 pt-3">
             {checked.size > 0 ? (
-              <p className="mb-3 text-xs text-muted-foreground tabular-nums">{checked.size} selected · Total {formatCurrency(selectedTotal)}</p>
+              <p className="mb-3 text-xs text-muted-foreground tabular-nums">{t("orders:sales.selectedTotal", { count: checked.size, amount: formatCurrency(selectedTotal) })}</p>
             ) : summary ? (
-              <p className="mb-3 text-xs text-muted-foreground tabular-nums">{rangeLabel(summary.count)} · Total {formatCurrency(summary.total)}</p>
+              <p className="mb-3 text-xs text-muted-foreground tabular-nums">{t("orders:sales.summaryTotal", { count: summary.count, amount: formatCurrency(summary.total) })}</p>
             ) : null}
             <PaginationControl
               currentPage={page}

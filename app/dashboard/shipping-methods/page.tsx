@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { Trans, useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Box, Globe, Package, Pencil, Plus, Trash2, Truck, Zap } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -26,12 +28,15 @@ import shippingMethodApi, { courierAccountApi, type CourierAccount, type Shippin
 import { settingsApi } from "@/lib/settingsApi"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
-const ICONS = [
-  { value: "package", label: "Package", Icon: Package },
-  { value: "truck", label: "Truck", Icon: Truck },
-  { value: "zap", label: "Express (zap)", Icon: Zap },
-  { value: "box", label: "Box", Icon: Box },
-  { value: "globe", label: "Globe", Icon: Globe },
+const NS = ["commerce", "common"] as const
+type Key = ParseKeys<typeof NS>
+
+const ICONS: { value: string; label: Key; Icon: typeof Package }[] = [
+  { value: "package", label: "commerce:shipping.icon.package", Icon: Package },
+  { value: "truck", label: "commerce:shipping.icon.truck", Icon: Truck },
+  { value: "zap", label: "commerce:shipping.icon.zap", Icon: Zap },
+  { value: "box", label: "commerce:shipping.icon.box", Icon: Box },
+  { value: "globe", label: "commerce:shipping.icon.globe", Icon: Globe },
 ]
 const iconOf = (v: string | null) => (ICONS.find((o) => o.value === v) ?? ICONS[0]).Icon
 
@@ -41,7 +46,11 @@ const COURIERS: [string, string, string][] = [
   ["RedX", "RX", "#C2410C"],
   ["Paperfly", "PF", "#1A2F99"],
 ]
+// Stored as English values in settings; shown via PACKAGE_LABEL
 const PACKAGES = ["Small pouch", "Medium box", "Large box"]
+const PACKAGE_LABEL: Record<string, Key> = {
+  "Small pouch": "commerce:shipping.pkg.small", "Medium box": "commerce:shipping.pkg.medium", "Large box": "commerce:shipping.pkg.large",
+}
 
 function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; onClick: () => void; disabled?: boolean }) {
   return (
@@ -54,6 +63,7 @@ type Opts = { freeOn: boolean; freeMin: string; weight: string; pkg: string }
 type CForm = { id: number | null; provider: string; accountId: string; apiKey: string; locked: boolean }
 
 export default function ShippingMethodsPage() {
+  const { t } = useTranslation(NS)
   const blocked = useModuleGuard("Shipping Methods")
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
@@ -94,7 +104,7 @@ export default function ShippingMethodsPage() {
       setBase(o)
       setOpts(o)
     } catch {
-      toast({ variant: "destructive", title: "Failed to load shipping settings" })
+      toast({ variant: "destructive", title: t("commerce:shipping.toast.loadFailed") })
     } finally {
       setLoading(false)
     }
@@ -106,7 +116,7 @@ export default function ShippingMethodsPage() {
   if (blocked) return blocked
 
   const fail = (title: string, e: any) =>
-    toast({ variant: "destructive", title, description: e?.response?.data?.message || "Please try again" })
+    toast({ variant: "destructive", title, description: e?.response?.data?.message || t("common:extra.tryAgain") })
   const money = (n: number) => formatCurrency(Number(n) || 0)
 
   // ---- shipping methods -------------------------------------------------
@@ -120,23 +130,23 @@ export default function ShippingMethodsPage() {
   const saveZone = async () => {
     if (!form) return
     const name = form.name.trim(), std = Number(form.std)
-    if (!name) return setFormErr("Name is required.")
-    if (zones.some((z) => z.id !== form.id && z.name.toLowerCase() === name.toLowerCase())) return setFormErr("An option with this name already exists.")
+    if (!name) return setFormErr(t("commerce:shipping.validation.nameRequired"))
+    if (zones.some((z) => z.id !== form.id && z.name.toLowerCase() === name.toLowerCase())) return setFormErr(t("commerce:shipping.validation.nameTaken"))
     const pickup = form.type === "pickup"
-    if (!pickup && (form.std === "" || !isFinite(std) || std < 0)) return setFormErr("Delivery charge must be 0 or more.")
-    if (form.sort !== "" && (!Number.isInteger(Number(form.sort)) || Number(form.sort) < 0)) return setFormErr("Sort order must be a whole number, 0 or more.")
+    if (!pickup && (form.std === "" || !isFinite(std) || std < 0)) return setFormErr(t("commerce:shipping.validation.charge"))
+    if (form.sort !== "" && (!Number.isInteger(Number(form.sort)) || Number(form.sort) < 0)) return setFormErr(t("commerce:shipping.validation.sort"))
     const body = {
       name, type: form.type, price: pickup ? 0 : std, estimated_days: form.time.trim(),
       description: form.desc.trim(), icon: form.icon, sort_order: form.sort === "" ? zones.length + 1 : Number(form.sort), is_active: form.active,
     }
     setSaving(true)
     try {
-      if (form.id) { await shippingMethodApi.update(form.id, body); toast({ title: "Delivery option updated" }) }
-      else { await shippingMethodApi.create(body); toast({ title: "Delivery option added" }) }
+      if (form.id) { await shippingMethodApi.update(form.id, body); toast({ title: t("commerce:shipping.toast.updated") }) }
+      else { await shippingMethodApi.create(body); toast({ title: t("commerce:shipping.toast.added") }) }
       setForm(null)
       await load()
     } catch (e: any) {
-      setFormErr(e?.response?.data?.message || "Could not save delivery option")
+      setFormErr(e?.response?.data?.message || t("commerce:shipping.validation.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -146,19 +156,19 @@ export default function ShippingMethodsPage() {
     setBusyId(z.id)
     setZones((p) => p.map((x) => (x.id === z.id ? { ...x, isActive: !x.isActive } : x)))
     try { await shippingMethodApi.toggle(z.id) }
-    catch (e) { setZones((p) => p.map((x) => (x.id === z.id ? { ...x, isActive: z.isActive } : x))); fail("Could not update status", e) }
+    catch (e) { setZones((p) => p.map((x) => (x.id === z.id ? { ...x, isActive: z.isActive } : x))); fail(t("commerce:shipping.toast.statusFailed"), e) }
     finally { setBusyId(null) }
   }
 
   const removeZone = async (z: ShippingMethod) => {
-    if (!window.confirm(`Delete delivery option "${z.name}"? It will be removed from checkout immediately.`)) return
+    if (!window.confirm(t("commerce:shipping.confirmDelete", { name: z.name }))) return
     setBusyId(z.id)
     try {
       await shippingMethodApi.delete(z.id)
-      toast({ title: "Delivery option deleted" })
+      toast({ title: t("commerce:shipping.toast.deleted") })
       if (form?.id === z.id) setForm(null)
       await load()
-    } catch (e) { fail("Could not delete delivery option", e) }
+    } catch (e) { fail(t("commerce:shipping.toast.deleteFailed"), e) }
     finally { setBusyId(null) }
   }
 
@@ -169,21 +179,21 @@ export default function ShippingMethodsPage() {
   const saveCourier = async () => {
     if (!cform) return
     const provider = cform.provider.trim()
-    if (!provider) return setCerr("Provider name is required.")
-    if (!cform.id && couriers.some((c) => c.provider.toLowerCase() === provider.toLowerCase())) return setCerr("This courier is already added.")
+    if (!provider) return setCerr(t("commerce:shipping.validation.providerRequired"))
+    if (!cform.id && couriers.some((c) => c.provider.toLowerCase() === provider.toLowerCase())) return setCerr(t("commerce:shipping.validation.courierExists"))
     setCsaving(true)
     try {
       if (cform.id) {
         await courierAccountApi.update(cform.id, { accountId: cform.accountId.trim(), apiKey: cform.apiKey.trim() || undefined })
-        toast({ title: "Courier account updated", description: provider })
+        toast({ title: t("commerce:shipping.toast.courierUpdated"), description: provider })
       } else {
         await courierAccountApi.create({ provider, accountId: cform.accountId.trim() || undefined, apiKey: cform.apiKey.trim() || undefined, isActive: true })
-        toast({ title: "Courier account added", description: provider })
+        toast({ title: t("commerce:shipping.toast.courierAdded"), description: provider })
       }
       setCform(null)
       await load()
     } catch (e: any) {
-      setCerr(e?.response?.data?.errors?.provider?.[0] || e?.response?.data?.message || "Could not save courier account")
+      setCerr(e?.response?.data?.errors?.provider?.[0] || e?.response?.data?.message || t("commerce:shipping.validation.courierSaveFailed"))
     } finally {
       setCsaving(false)
     }
@@ -192,19 +202,19 @@ export default function ShippingMethodsPage() {
   const toggleCourier = async (c: CourierAccount) => {
     setBusyId(-c.id)
     try { await courierAccountApi.update(c.id, { isActive: !c.isActive }); await load() }
-    catch (e) { fail("Could not update courier", e) }
+    catch (e) { fail(t("commerce:shipping.toast.courierFailed"), e) }
     finally { setBusyId(null) }
   }
 
   const removeCourier = async (c: CourierAccount) => {
-    if (!window.confirm(`Remove courier account "${c.provider}"?`)) return
+    if (!window.confirm(t("commerce:shipping.confirmRemoveCourier", { name: c.provider }))) return
     setBusyId(-c.id)
     try {
       await courierAccountApi.delete(c.id)
-      toast({ title: "Courier account removed", description: c.provider })
+      toast({ title: t("commerce:shipping.toast.courierRemoved"), description: c.provider })
       if (cform?.id === c.id) setCform(null)
       await load()
-    } catch (e) { fail("Could not remove courier", e) }
+    } catch (e) { fail(t("commerce:shipping.toast.courierRemoveFailed"), e) }
     finally { setBusyId(null) }
   }
 
@@ -212,19 +222,19 @@ export default function ShippingMethodsPage() {
   const saveOpts = async () => {
     const min = Number(opts.freeMin), w = Number(opts.weight)
     let e = ""
-    if (opts.freeMin === "" || !isFinite(min) || min < 0) e = "Free delivery minimum must be 0 or more."
-    else if (opts.freeOn && min === 0) e = "Set a minimum order above 0 for free delivery."
-    else if (opts.weight === "" || !isFinite(w) || w <= 0) e = "Default weight must be more than 0."
+    if (opts.freeMin === "" || !isFinite(min) || min < 0) e = t("commerce:shipping.validation.freeMin")
+    else if (opts.freeOn && min === 0) e = t("commerce:shipping.validation.freeMinZero")
+    else if (opts.weight === "" || !isFinite(w) || w <= 0) e = t("commerce:shipping.validation.weight")
     if (e) { setOptErr(e); toast({ variant: "destructive", title: e }); return }
     setOptSaving(true)
     try {
       await settingsApi.updateShipping({ freeOn: opts.freeOn, freeMin: min, weight: w, pkg: opts.pkg })
       // storefront reads the free-shipping threshold from general settings
       await settingsApi.updateGeneral({ freeShippingThreshold: opts.freeOn ? min : null })
-      toast({ title: "Shipping settings saved" })
+      toast({ title: t("commerce:shipping.toast.settingsSaved") })
       setOptErr("")
       await load()
-    } catch (err) { fail("Could not save shipping settings", err) }
+    } catch (err) { fail(t("commerce:shipping.toast.settingsFailed"), err) }
     finally { setOptSaving(false) }
   }
 
@@ -232,9 +242,9 @@ export default function ShippingMethodsPage() {
   const freeMin = Number(opts.freeMin) || 0
   const cart = Number(sampleCart) || 0
   const freeApplies = opts.freeOn && freeMin > 0 && cart >= freeMin
-  const fee = (z: ShippingMethod, rate: number) => (z.type === "pickup" || freeApplies || !rate ? "Free" : money(rate))
+  const fee = (z: ShippingMethod, rate: number) => (z.type === "pickup" || freeApplies || !rate ? t("commerce:shipping.free") : money(rate))
   const checkout = active.map((z) => ({
-    name: z.type === "pickup" ? `${z.name} (pickup, no address needed)` : z.name,
+    name: z.type === "pickup" ? t("commerce:shipping.pickupName", { name: z.name }) : z.name,
     time: [z.description, z.estimatedDays].filter(Boolean).join(" · ") || "—",
     price: fee(z, z.price),
   }))
@@ -249,20 +259,20 @@ export default function ShippingMethodsPage() {
         <div className="min-w-0 flex-1">
           <div className="truncate font-bold">{name}</div>
           <div className={cn("truncate text-xs", acct?.isActive ? "text-foreground" : "text-muted-foreground")}>
-            {acct ? (acct.isActive ? "Enabled" : "Off") : "Not set up"}
-            {acct?.accountId ? ` · ${acct.accountId}` : ""}{acct?.apiKey ? ` · key ${acct.apiKey}` : ""}
+            {acct ? (acct.isActive ? t("commerce:shipping.courier.enabled") : t("commerce:shipping.courier.off")) : t("commerce:shipping.courier.notSetUp")}
+            {acct?.accountId ? ` · ${acct.accountId}` : ""}{acct?.apiKey ? ` · ${t("commerce:shipping.courier.key", { key: acct.apiKey })}` : ""}
           </div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {acct ? (
           <>
-            <Button type="button" variant="outline" disabled={busyId === -acct.id} onClick={() => toggleCourier(acct)}>{acct.isActive ? "Turn off" : "Turn on"}</Button>
-            <WithTooltip content={`Edit ${name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${name}`} onClick={() => editCourier(acct)}><Pencil className="size-4" /></Button></WithTooltip>
-            <WithTooltip content={`Remove ${name}`}><Button type="button" variant="destructive" size="icon" aria-label={`Remove ${name}`} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></Button></WithTooltip>
+            <Button type="button" variant="outline" disabled={busyId === -acct.id} onClick={() => toggleCourier(acct)}>{acct.isActive ? t("commerce:shipping.courier.turnOff") : t("commerce:shipping.courier.turnOn")}</Button>
+            <WithTooltip content={t("commerce:shipping.courier.edit", { name })}><Button type="button" variant="outline" size="icon" aria-label={t("commerce:shipping.courier.edit", { name })} onClick={() => editCourier(acct)}><Pencil className="size-4" /></Button></WithTooltip>
+            <WithTooltip content={t("commerce:shipping.courier.remove", { name })}><Button type="button" variant="destructive" size="icon" aria-label={t("commerce:shipping.courier.remove", { name })} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></Button></WithTooltip>
           </>
         ) : (
-          <Button type="button" variant="outline" onClick={() => newCourier(name)}>Set up</Button>
+          <Button type="button" variant="outline" onClick={() => newCourier(name)}>{t("commerce:shipping.courier.setUp")}</Button>
         )}
       </div>
     </Card>
@@ -271,59 +281,59 @@ export default function ShippingMethodsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title={<>Shipping &amp; delivery</>}
-        description="Delivery options, couriers and what customers see at checkout."
+        title={t("commerce:shipping.title")}
+        description={t("commerce:shipping.description")}
       />
 
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-4">
           <SectionCard
-            title="Delivery options"
-            description="Customers pick one of these at checkout (e.g. Inside Dhaka / Outside Dhaka) and pay its fixed charge."
-            actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> Add option</Button>}
+            title={t("commerce:shipping.options.title")}
+            description={t("commerce:shipping.options.description")}
+            actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> {t("commerce:shipping.options.add")}</Button>}
           >
             {form && (
               <Card className="mb-3.5 gap-3 p-4 shadow-none">
-                <strong>{form.id ? "Edit delivery option" : "New delivery option"}</strong>
+                <strong>{form.id ? t("commerce:shipping.options.editTitle") : t("commerce:shipping.options.newTitle")}</strong>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <FormField label={"Name *"} htmlFor="sm-name">
-                    <Input id="sm-name" className="w-full" value={form.name} placeholder={form.type === "pickup" ? "Pick up from store" : "Inside Dhaka"} onChange={(e) => patch({ name: e.target.value })} />
+                  <FormField label={t("commerce:shipping.options.name")} htmlFor="sm-name">
+                    <Input id="sm-name" className="w-full" value={form.name} placeholder={form.type === "pickup" ? t("commerce:shipping.options.namePickup") : t("commerce:shipping.options.nameDelivery")} onChange={(e) => patch({ name: e.target.value })} />
                   </FormField>
-                  <FormField label={"Type"} htmlFor="sm-type">
+                  <FormField label={t("commerce:shipping.options.type")} htmlFor="sm-type">
                     <Select value={form.type} onValueChange={(v) => patch(v === "pickup" ? { type: "pickup", std: "0" } : { type: "delivery" })}>
                       <SelectTrigger id="sm-type" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="delivery">Delivery (ships to an address)</SelectItem>
-                        <SelectItem value="pickup">Pickup (collect in store, free)</SelectItem>
+                        <SelectItem value="delivery">{t("commerce:shipping.options.typeDelivery")}</SelectItem>
+                        <SelectItem value="pickup">{t("commerce:shipping.options.typePickup")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label={"Delivery charge *"} htmlFor="sm-std">
+                  <FormField label={t("commerce:shipping.options.charge")} htmlFor="sm-std">
                     <Input id="sm-std" className="w-full" type="number" min={0} value={form.std} disabled={form.type === "pickup"} onChange={(e) => patch({ std: e.target.value })} />
                   </FormField>
-                  <FormField label={"Estimated delivery"} htmlFor="sm-time">
-                    <Input id="sm-time" className="w-full" value={form.time} placeholder="1–2 days" onChange={(e) => patch({ time: e.target.value })} />
+                  <FormField label={t("commerce:shipping.options.estimate")} htmlFor="sm-time">
+                    <Input id="sm-time" className="w-full" value={form.time} placeholder={t("commerce:shipping.options.estimatePlaceholder")} onChange={(e) => patch({ time: e.target.value })} />
                   </FormField>
-                  <FormField label={"Description"} htmlFor="sm-desc">
-                    <Input id="sm-desc" className="w-full" value={form.desc} placeholder={form.type === "pickup" ? "Collect from our store" : "Delivery inside Dhaka city"} onChange={(e) => patch({ desc: e.target.value })} />
+                  <FormField label={t("common:fields.description")} htmlFor="sm-desc">
+                    <Input id="sm-desc" className="w-full" value={form.desc} placeholder={form.type === "pickup" ? t("commerce:shipping.options.descPickup") : t("commerce:shipping.options.descDelivery")} onChange={(e) => patch({ desc: e.target.value })} />
                   </FormField>
-                  <FormField label={"Sort order"} htmlFor="sm-sort">
+                  <FormField label={t("commerce:shipping.options.sortOrder")} htmlFor="sm-sort">
                     <Input id="sm-sort" className="w-full" type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
                   </FormField>
-                  <FormField label={"Icon"} htmlFor="sm-icon">
+                  <FormField label={t("commerce:shipping.options.iconLabel")} htmlFor="sm-icon">
                     <Select value={form.icon || undefined} onValueChange={(v) => patch({ icon: v })}>
                       <SelectTrigger id="sm-icon" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {ICONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                        {ICONS.map((o) => <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label={"Status"} htmlFor="sm-status">
+                  <FormField label={t("common:fields.status")} htmlFor="sm-status">
                     <Select value={form.active ? "active" : "inactive"} onValueChange={(v) => patch({ active: v === "active" })}>
                       <SelectTrigger id="sm-status" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="active">{t("common:status.active")}</SelectItem>
+                        <SelectItem value="inactive">{t("common:status.inactive")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormField>
@@ -331,18 +341,18 @@ export default function ShippingMethodsPage() {
                 <Item variant="outline" size="sm" className="flex-nowrap bg-card">
                   {(() => { const I = iconOf(form.icon); return <ItemMedia variant="icon"><I /></ItemMedia> })()}
                   <ItemContent className="min-w-0">
-                    <ItemTitle className="block w-full truncate">{form.name.trim() || "Option name"}</ItemTitle>
-                    <ItemDescription className="truncate">{form.desc.trim() || "Description"}</ItemDescription>
+                    <ItemTitle className="block w-full truncate">{form.name.trim() || t("commerce:shipping.options.previewName")}</ItemTitle>
+                    <ItemDescription className="truncate">{form.desc.trim() || t("common:fields.description")}</ItemDescription>
                   </ItemContent>
                   <ItemActions className="flex-col items-end gap-0">
-                    <strong>{form.type === "pickup" || !Number(form.std) ? "Free" : money(Number(form.std))}</strong>
-                    <span className="text-xs text-muted-foreground">{form.time.trim() || "Est. days"}</span>
+                    <strong>{form.type === "pickup" || !Number(form.std) ? t("commerce:shipping.free") : money(Number(form.std))}</strong>
+                    <span className="text-xs text-muted-foreground">{form.time.trim() || t("commerce:shipping.options.previewDays")}</span>
                   </ItemActions>
                 </Item>
                 {formErr && <p className="text-sm font-medium text-destructive">{formErr}</p>}
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
-                  <Button type="button" onClick={saveZone} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Add option"}</Button>
+                  <Button type="button" variant="outline" onClick={() => setForm(null)}>{t("common:actions.cancel")}</Button>
+                  <Button type="button" onClick={saveZone} disabled={saving}>{saving ? t("common:actions.saving") : form.id ? t("common:actions.saveChanges") : t("commerce:shipping.options.add")}</Button>
                 </div>
               </Card>
             )}
@@ -353,17 +363,17 @@ export default function ShippingMethodsPage() {
               <EmptyState
                 bordered
                 icon={Truck}
-                title="No delivery options yet"
-                description="Example: “Inside Dhaka” at ৳60 and “Outside Dhaka” at ৳120 — customers pick one at checkout."
-                action={<Button type="button" variant="outline" onClick={openNew}>Add first option</Button>}
+                title={t("commerce:shipping.options.emptyTitle")}
+                description={t("commerce:shipping.options.emptyDesc")}
+                action={<Button type="button" variant="outline" onClick={openNew}>{t("commerce:shipping.options.addFirst")}</Button>}
               />
             ) : (
               <div>
                 <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Option</TableHead><TableHead>Sort</TableHead><TableHead>Charge</TableHead>
-                      <TableHead>Time</TableHead><TableHead>On</TableHead><TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t("commerce:shipping.options.colOption")}</TableHead><TableHead>{t("commerce:shipping.options.colSort")}</TableHead><TableHead>{t("commerce:shipping.options.colCharge")}</TableHead>
+                      <TableHead>{t("commerce:shipping.options.colTime")}</TableHead><TableHead>{t("commerce:shipping.options.colOn")}</TableHead><TableHead className="text-right">{t("common:fields.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -375,19 +385,19 @@ export default function ShippingMethodsPage() {
                             <div className="flex items-center gap-2.5">
                               <UserAvatar shape="square" className={cn("size-9", !z.isActive && "opacity-60")} fallback={<I className="size-4" />} />
                               <div className="min-w-0">
-                                <div className={cn("truncate font-bold", !z.isActive && "text-muted-foreground")}>{z.name}{z.type === "pickup" && <Badge variant="secondary" className="ml-2 align-middle">Pickup</Badge>}</div>
+                                <div className={cn("truncate font-bold", !z.isActive && "text-muted-foreground")}>{z.name}{z.type === "pickup" && <Badge variant="secondary" className="ml-2 align-middle">{t("commerce:shipping.options.pickup")}</Badge>}</div>
                                 {z.description && <div className="max-w-[240px] truncate text-xs text-muted-foreground">{z.description}</div>}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell className="tabular-nums">{z.sortOrder}</TableCell>
-                          <TableCell className="font-semibold tabular-nums">{z.price ? money(z.price) : "Free"}</TableCell>
+                          <TableCell className="font-semibold tabular-nums">{z.price ? money(z.price) : t("commerce:shipping.free")}</TableCell>
                           <TableCell>{z.estimatedDays || "—"}</TableCell>
-                          <TableCell><Switch on={z.isActive} label={z.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === z.id} onClick={() => toggleZone(z)} /></TableCell>
+                          <TableCell><Switch on={z.isActive} label={z.isActive ? t("commerce:shipping.options.activeTurnOff") : t("commerce:shipping.options.inactiveTurnOn")} disabled={busyId === z.id} onClick={() => toggleZone(z)} /></TableCell>
                           <TableCell>
                             <div className="flex justify-end gap-1.5">
-                              <WithTooltip content={`Edit ${z.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${z.name}`} onClick={() => openEdit(z)}><Pencil className="size-4" /></Button></WithTooltip>
-                              <WithTooltip content={`Delete ${z.name}`}><Button type="button" variant="destructive" size="icon" aria-label={`Delete ${z.name}`} disabled={busyId === z.id} onClick={() => removeZone(z)}><Trash2 className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={t("commerce:shipping.courier.edit", { name: z.name })}><Button type="button" variant="outline" size="icon" aria-label={t("commerce:shipping.courier.edit", { name: z.name })} onClick={() => openEdit(z)}><Pencil className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={t("commerce:shipping.options.deleteName", { name: z.name })}><Button type="button" variant="destructive" size="icon" aria-label={t("commerce:shipping.options.deleteName", { name: z.name })} disabled={busyId === z.id} onClick={() => removeZone(z)}><Trash2 className="size-4" /></Button></WithTooltip>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -400,47 +410,47 @@ export default function ShippingMethodsPage() {
 
             <Alert role="note" className="mt-3.5">
               <AlertDescription>
-                <p><strong className="text-foreground">Display order.</strong> Options are shown to customers ordered by Sort order (lowest first); the first one is preselected. Only active options appear at checkout.</p>
+                <p><Trans t={t} i18nKey="commerce:shipping.options.orderNote" components={{ b: <strong className="text-foreground" /> }} /></p>
               </AlertDescription>
             </Alert>
 
             <div className="mt-3.5 flex flex-wrap items-center gap-3">
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-sm font-semibold">Free delivery over a minimum order</span>
-                <span className="text-xs text-muted-foreground">Shown as “Add {formatCurrency(0).replace(/[\d.,\s-]/g, "")}X more for free delivery” at checkout</span>
+                <span className="text-sm font-semibold">{t("commerce:shipping.options.freeTitle")}</span>
+                <span className="text-xs text-muted-foreground">{t("commerce:shipping.options.freeHint", { symbol: formatCurrency(0).replace(/[\d.,\s-]/g, "") })}</span>
               </span>
-              <Input type="number" min={0} aria-label="Free delivery threshold amount" value={opts.freeMin} disabled={loading}
+              <Input type="number" min={0} aria-label={t("commerce:shipping.options.freeAmount")} value={opts.freeMin} disabled={loading}
                 onChange={(e) => { setOpts({ ...opts, freeMin: e.target.value }); setOptErr("") }} className="w-28" />
-              <Switch on={opts.freeOn} label="Free delivery enabled" disabled={loading} onClick={() => { setOpts({ ...opts, freeOn: !opts.freeOn }); setOptErr("") }} />
+              <Switch on={opts.freeOn} label={t("commerce:shipping.options.freeEnabled")} disabled={loading} onClick={() => { setOpts({ ...opts, freeOn: !opts.freeOn }); setOptErr("") }} />
             </div>
           </SectionCard>
 
           <SectionCard
-            title="Courier accounts"
-            description="Turn on the couriers you ship with."
-            actions={<Button type="button" variant="outline" onClick={() => newCourier("")}><Plus className="size-4" /> Add courier</Button>}
+            title={t("commerce:shipping.couriers.title")}
+            description={t("commerce:shipping.couriers.description")}
+            actions={<Button type="button" variant="outline" onClick={() => newCourier("")}><Plus className="size-4" /> {t("commerce:shipping.couriers.add")}</Button>}
           >
             {cform && (
               <Card className="mb-3.5 gap-3 p-4 shadow-none">
-                <strong>{cform.id ? `Edit ${cform.provider}` : "Add courier account"}</strong>
+                <strong>{cform.id ? t("commerce:shipping.courier.edit", { name: cform.provider }) : t("commerce:shipping.couriers.addTitle")}</strong>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <FormField label={"Provider *"} htmlFor="cr-provider">
+                  <FormField label={t("commerce:shipping.couriers.provider")} htmlFor="cr-provider">
                     <Input id="cr-provider" className="w-full" list="courier-presets" value={cform.provider} disabled={cform.locked} placeholder="Pathao"
                       onChange={(e) => { setCform({ ...cform, provider: e.target.value }); setCerr("") }} />
                     <datalist id="courier-presets">{COURIERS.map(([n]) => <option key={n} value={n} />)}</datalist>
                   </FormField>
-                  <FormField label={"Account / merchant ID"} htmlFor="cr-account">
+                  <FormField label={t("commerce:shipping.couriers.account")} htmlFor="cr-account">
                     <Input id="cr-account" className="w-full" value={cform.accountId} onChange={(e) => setCform({ ...cform, accountId: e.target.value })} />
                   </FormField>
-                  <FormField label={"API key"} htmlFor="cr-key">
+                  <FormField label={t("commerce:shipping.couriers.apiKey")} htmlFor="cr-key">
                     <Input id="cr-key" className="w-full" type="password" autoComplete="off" value={cform.apiKey}
-                      placeholder={cform.id ? "Leave blank to keep the stored key" : ""} onChange={(e) => setCform({ ...cform, apiKey: e.target.value })} />
+                      placeholder={cform.id ? t("commerce:shipping.couriers.keepKey") : ""} onChange={(e) => setCform({ ...cform, apiKey: e.target.value })} />
                   </FormField>
                 </div>
                 {cerr && <p className="text-sm font-medium text-destructive">{cerr}</p>}
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setCform(null)}>Cancel</Button>
-                  <Button type="button" onClick={saveCourier} disabled={csaving}>{csaving ? "Saving…" : cform.id ? "Save changes" : "Add courier"}</Button>
+                  <Button type="button" variant="outline" onClick={() => setCform(null)}>{t("common:actions.cancel")}</Button>
+                  <Button type="button" onClick={saveCourier} disabled={csaving}>{csaving ? t("common:actions.saving") : cform.id ? t("common:actions.saveChanges") : t("commerce:shipping.couriers.add")}</Button>
                 </div>
               </Card>
             )}
@@ -457,12 +467,12 @@ export default function ShippingMethodsPage() {
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-          <SectionCard title="Checkout options" description="Built from your active delivery options.">
-            <FormField label="Sample cart subtotal" htmlFor="sample-cart" className="mb-3">
+          <SectionCard title={t("commerce:shipping.preview.title")} description={t("commerce:shipping.preview.description")}>
+            <FormField label={t("commerce:shipping.preview.sampleCart")} htmlFor="sample-cart" className="mb-3">
               <Input id="sample-cart" className="w-full" type="number" min={0} value={sampleCart} onChange={(e) => setSampleCart(e.target.value)} />
             </FormField>
             {loading ? <Skeleton className="h-24" /> : checkout.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active options — customers cannot choose a delivery option.</p>
+              <p className="text-sm text-muted-foreground">{t("commerce:shipping.preview.none")}</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {checkout.map((o, i) => (
@@ -479,22 +489,22 @@ export default function ShippingMethodsPage() {
             )}
             {!loading && opts.freeOn && freeMin > 0 && (
               <span className="mt-3 block text-xs text-muted-foreground">
-                {freeApplies ? `Free delivery applied for a ${money(cart)} cart.` : `Add ${money(Math.max(0, freeMin - cart))} more for free delivery (free on ${money(freeMin)}+).`}
+                {freeApplies ? t("commerce:shipping.preview.applied", { amount: money(cart) }) : t("commerce:shipping.preview.addMore", { amount: money(Math.max(0, freeMin - cart)), min: money(freeMin) })}
               </span>
             )}
           </SectionCard>
 
-          <SectionCard title="Packaging defaults" description="Used when booking couriers.">
+          <SectionCard title={t("commerce:shipping.packaging.title")} description={t("commerce:shipping.packaging.description")}>
             <div className="flex flex-col gap-3">
-              <FormField label={"Default weight (kg)"} htmlFor="pk-weight">
+              <FormField label={t("commerce:shipping.packaging.weight")} htmlFor="pk-weight">
                 <Input id="pk-weight" className="w-full" type="number" min={0} step={0.1} value={opts.weight} disabled={loading}
                   onChange={(e) => { setOpts({ ...opts, weight: e.target.value }); setOptErr("") }} />
               </FormField>
-              <FormField label={"Default package"} htmlFor="pk-package">
+              <FormField label={t("commerce:shipping.packaging.pkg")} htmlFor="pk-package">
                 <Select value={opts.pkg || undefined} disabled={loading} onValueChange={(v) => setOpts({ ...opts, pkg: v })}>
                   <SelectTrigger id="pk-package" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PACKAGES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    {(PACKAGES.includes(opts.pkg) || !opts.pkg ? PACKAGES : [...PACKAGES, opts.pkg]).map((p) => <SelectItem key={p} value={p}>{PACKAGE_LABEL[p] ? t(PACKAGE_LABEL[p]) : p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
@@ -505,11 +515,11 @@ export default function ShippingMethodsPage() {
 
       <Card className="sticky bottom-0 flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
         <span className={cn("text-sm", optErr ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>
-          {optErr || (dirty ? "You have unsaved changes." : "Delivery option changes save instantly; other rates apply to new orders only.")}
+          {optErr || (dirty ? t("commerce:shipping.footer.unsaved") : t("commerce:shipping.footer.hint"))}
         </span>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" disabled={!dirty} onClick={() => { setOpts(base); setOptErr("") }}>Discard</Button>
-          <Button type="button" disabled={optSaving || !dirty} onClick={saveOpts}>{optSaving ? "Saving…" : "Save changes"}</Button>
+          <Button type="button" variant="outline" disabled={!dirty} onClick={() => { setOpts(base); setOptErr("") }}>{t("commerce:shipping.footer.discard")}</Button>
+          <Button type="button" disabled={optSaving || !dirty} onClick={saveOpts}>{optSaving ? t("common:actions.saving") : t("common:actions.saveChanges")}</Button>
         </div>
       </Card>
     </div>

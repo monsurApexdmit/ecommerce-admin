@@ -2,12 +2,14 @@
 
 import * as React from "react"
 import { usePathname, useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { CalendarDays, Store } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { addDaysYmd, addMonthsYmd, formatDate, monthEnd, monthStart, todayIn } from "@/lib/finance-format"
+import { addDaysYmd, addMonthsYmd, monthEnd, monthStart, todayIn } from "@/lib/finance-format"
 import { cn } from "@/lib/utils"
 import { DatePicker } from "./date-picker"
+import { FIN_NS, formatDateIn, type FinKey, type FinT } from "./i18n"
 
 /**
  * FND-2: one Period + Channel filter for every finance page.
@@ -17,34 +19,40 @@ import { DatePicker } from "./date-picker"
  * the client only computes a window for endpoints that take plain dates (e.g. Expenses).
  */
 
+/** Period presets (values sent to the server) with their label keys, translated at render. */
 export const PERIOD_PRESETS = [
-  ["today", "Today"],
-  ["yesterday", "Yesterday"],
-  ["this_week", "This week"],
-  ["last_7_days", "Last 7 days"],
-  ["this_month", "This month"],
-  ["last_month", "Last month"],
-  ["last_30_days", "Last 30 days"],
-  ["this_quarter", "This quarter"],
-  ["last_quarter", "Last quarter"],
-  ["this_year", "This year"],
-  ["last_year", "Last year"],
-  ["all_time", "All time"],
-  ["custom", "Custom range"],
-] as const
+  ["today", "common:time.today"],
+  ["yesterday", "common:time.yesterday"],
+  ["this_week", "common:time.thisWeek"],
+  ["last_7_days", "common:time.last7Days"],
+  ["this_month", "common:time.thisMonth"],
+  ["last_month", "finance:period.lastMonth"],
+  ["last_30_days", "common:time.last30Days"],
+  ["this_quarter", "finance:period.thisQuarter"],
+  ["last_quarter", "finance:period.lastQuarter"],
+  ["this_year", "finance:period.thisYear"],
+  ["last_year", "finance:period.lastYear"],
+  ["all_time", "common:time.allTime"],
+  ["custom", "finance:period.custom"],
+] as const satisfies readonly (readonly [string, FinKey])[]
 export type PeriodPreset = (typeof PERIOD_PRESETS)[number][0]
 const PRESET_SET = new Set<string>(PERIOD_PRESETS.map(([v]) => v))
-export const presetLabel = (p: string) => PERIOD_PRESETS.find(([v]) => v === p)?.[1] ?? p
+export const presetLabel = (t: FinT, p: string) => { const k = PERIOD_PRESETS.find(([v]) => v === p)?.[1]; return k ? t(k) : p }
 
+/** Sales channels (values sent to the server) with their label keys. */
 export const CHANNELS = [
-  ["all", "All channels"],
-  ["pos", "POS"],
-  ["online", "Online store"],
-  ["manual", "Manual"],
-] as const
+  ["all", "finance:channel.all"],
+  ["pos", "finance:channel.pos"],
+  ["online", "finance:channel.online"],
+  ["manual", "finance:channel.manual"],
+] as const satisfies readonly (readonly [string, FinKey])[]
 export type Channel = (typeof CHANNELS)[number][0]
 const CHANNEL_SET = new Set<string>(CHANNELS.map(([v]) => v))
-export const channelLabel = (c?: string | null) => CHANNELS.find(([v]) => v === c)?.[1] ?? (c || "All channels")
+/** Translated channel; unknown codes fall back to the server label, then the raw code. */
+export const channelLabel = (t: FinT, c?: string | null, serverLabel?: string | null) => {
+  const k = CHANNELS.find(([v]) => v === c)?.[1]
+  return k ? t(k) : serverLabel || c || t("finance:channel.all")
+}
 
 export interface FinanceFilterValue { preset: PeriodPreset; from: string; to: string; channel: Channel }
 
@@ -156,6 +164,7 @@ export function useFinanceFilters({ defaultPreset = "this_month", debounceMs = 2
   const sp = useSearchParams()
   const pathname = usePathname()
   const { timezone } = useCompanySettings()
+  const { t, i18n } = useTranslation(FIN_NS)
   const defaults = React.useMemo<FinanceFilterValue>(() => ({ preset: defaultPreset, from: "", to: "", channel: "all" }), [defaultPreset])
 
   // Initial value from the URL (same on server and client → no hydration mismatch). Remembered filters are
@@ -214,10 +223,11 @@ export function useFinanceFilters({ defaultPreset = "this_month", debounceMs = 2
 
   const incomplete = applied.preset === "custom" && !applied.from && !applied.to
   const [wFrom, wTo] = presetWindow(applied, timezone)
+  const d = (v: string) => formatDateIn(i18n.language, v, timezone)
   const label = applied.preset === "custom"
-    ? (applied.from && applied.to ? (applied.from === applied.to ? formatDate(applied.from, timezone) : `${formatDate(applied.from, timezone)} – ${formatDate(applied.to, timezone)}`)
-      : applied.from ? `From ${formatDate(applied.from, timezone)}` : applied.to ? `Up to ${formatDate(applied.to, timezone)}` : "Custom range")
-    : presetLabel(applied.preset)
+    ? (applied.from && applied.to ? (applied.from === applied.to ? d(applied.from) : `${d(applied.from)} – ${d(applied.to)}`)
+      : applied.from ? t("finance:period.fromDate", { date: d(applied.from) }) : applied.to ? t("finance:period.upToDate", { date: d(applied.to) }) : t("finance:period.custom"))
+    : presetLabel(t, applied.preset)
 
   return {
     value, applied, set, incomplete, timezone,
@@ -245,32 +255,33 @@ export function FinanceFilters({ filters, channel = true, className, idPrefix = 
   idPrefix?: string
 }) {
   const v = filters.value
+  const { t } = useTranslation(FIN_NS)
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       <Select value={v.preset} onValueChange={(p) => filters.set({ preset: p as PeriodPreset })}>
-        <SelectTrigger id={`${idPrefix}-period`} aria-label="Period" className="w-44">
+        <SelectTrigger id={`${idPrefix}-period`} aria-label={t("common:extra.period")} className="w-44">
           <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {PERIOD_PRESETS.map(([p, l]) => <SelectItem key={p} value={p}>{l}</SelectItem>)}
+          {PERIOD_PRESETS.map(([p, l]) => <SelectItem key={p} value={p}>{t(l)}</SelectItem>)}
         </SelectContent>
       </Select>
       {v.preset === "custom" && (
         <>
-          <DatePicker aria-label="From" className="w-40" value={v.from} max={v.to || "today"} onChange={(d) => filters.set({ from: d })} placeholder="From" />
-          <span className="text-sm text-muted-foreground">to</span>
-          <DatePicker aria-label="To" className="w-40" value={v.to} min={v.from || undefined} max="today" onChange={(d) => filters.set({ to: d })} placeholder="To" />
+          <DatePicker aria-label={t("common:extra.from")} className="w-40" value={v.from} max={v.to || "today"} onChange={(d) => filters.set({ from: d })} placeholder={t("common:extra.from")} />
+          <span className="text-sm text-muted-foreground">{t("finance:period.toSep")}</span>
+          <DatePicker aria-label={t("common:extra.to")} className="w-40" value={v.to} min={v.from || undefined} max="today" onChange={(d) => filters.set({ to: d })} placeholder={t("common:extra.to")} />
         </>
       )}
       {channel && (
         <Select value={v.channel} onValueChange={(c) => filters.set({ channel: c as Channel })}>
-          <SelectTrigger id={`${idPrefix}-channel`} aria-label="Channel" className="w-40">
+          <SelectTrigger id={`${idPrefix}-channel`} aria-label={t("finance:channel.label")} className="w-40">
             <Store className="size-4 text-muted-foreground" aria-hidden />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CHANNELS.map(([c, l]) => <SelectItem key={c} value={c}>{l}</SelectItem>)}
+            {CHANNELS.map(([c, l]) => <SelectItem key={c} value={c}>{t(l)}</SelectItem>)}
           </SelectContent>
         </Select>
       )}
@@ -280,5 +291,6 @@ export function FinanceFilters({ filters, channel = true, className, idPrefix = 
 
 /** "As things stand now" marker for period-independent figures (FND-2 / PAY-3). */
 export function AsOfNowLabel({ className }: { className?: string }) {
-  return <span className={cn("rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground", className)}>As things stand now</span>
+  const { t } = useTranslation(FIN_NS)
+  return <span className={cn("rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground", className)}>{t("finance:period.asOfNow")}</span>
 }

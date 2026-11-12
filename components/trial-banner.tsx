@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { Clock, AlertTriangle } from "lucide-react"
 import { saasBillingApi } from "@/lib/saasBillingApi"
 import { Alert } from "@/components/ui/alert"
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button"
  * fields in the auth context.
  */
 export function TrialBanner() {
+  const { t } = useTranslation(["ui", "common"])
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [show, setShow] = useState(false)
   const [expired, setExpired] = useState(false)
@@ -68,11 +70,11 @@ export function TrialBanner() {
       )}
       <span>
         {expired
-          ? "Your free trial has expired."
-          : `You're on a free trial — ${daysLeft} ${daysLeft === 1 ? "day" : "days"} remaining.`}
+          ? t("ui:trialBanner.expired")
+          : t("ui:trialBanner.onTrial", { count: daysLeft ?? 0 })}
       </span>
       <Button asChild variant="link" size="sm" className="h-auto p-0">
-        <Link href="/dashboard/billing/subscriptions">Upgrade now</Link>
+        <Link href="/dashboard/billing/subscriptions">{t("ui:trialBanner.upgradeLink")}</Link>
       </Button>
     </Alert>
   )

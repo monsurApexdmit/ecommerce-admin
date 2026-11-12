@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { Globe } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { settingsApi, resolveStorageUrl, type AuraShopHeroSlide } from "@/lib/settingsApi"
 import { useModuleGuard } from "@/hooks/use-module-guard"
@@ -22,12 +24,18 @@ import { SlideDots } from "@/components/common/SlideDots"
 import { EmptyState } from "@/components/common/EmptyState"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
+// Saved as these English values; labels translated at render
 const TYPES = ["Retail", "Wholesale", "Manufacturing", "Service", "Restaurant", "Other"]
-const PRESETS: [string, string][] = [
-  ["Primary", "from-primary/80 via-primary/40 to-transparent"],
-  ["Accent", "from-accent/70 via-accent/30 to-transparent"],
-  ["Dark", "from-foreground/70 via-foreground/30 to-transparent"],
+const TYPE_LABEL: Record<string, ParseKeys<["store"]>> = {
+  Retail: "store:shared.bizTypes.Retail", Wholesale: "store:shared.bizTypes.Wholesale", Manufacturing: "store:shared.bizTypes.Manufacturing",
+  Service: "store:shared.bizTypes.Service", Restaurant: "store:shared.bizTypes.Restaurant", Other: "store:shared.bizTypes.Other",
+}
+const PRESETS: [ParseKeys<["store"]>, string][] = [
+  ["store:settings.aura.presets.primary", "from-primary/80 via-primary/40 to-transparent"],
+  ["store:settings.aura.presets.accent", "from-accent/70 via-accent/30 to-transparent"],
+  ["store:settings.aura.presets.dark", "from-foreground/70 via-foreground/30 to-transparent"],
 ]
+// Built-in starter slides: storefront content the owner edits and saves, so not translated
 const DEFAULT_SLIDES: Slide[] = [
   { tag: "New Collection 2026", title: "Discover Products That Define Your Style", subtitle: "Curated selections across fashion, electronics, health & more — all in one place.", cta: "Explore Now", link: "/shop", gradient: PRESETS[0][1] },
   { tag: "Farm Fresh", title: "Fresh Grocery Delivered in 30 Minutes", subtitle: "Handpicked organic fruits, vegetables, and daily essentials at your doorstep.", cta: "Order Fresh", link: "/shop?category=grocery", gradient: PRESETS[1][1] },
@@ -100,6 +108,7 @@ const overlay = (g: string) => {
 const imgBg = (path: string) => `center / cover no-repeat url("${resolveStorageUrl(path).replace(/"/g, "%22")}")`
 
 export default function AuraShopSettingsPage() {
+  const { t } = useTranslation(["store", "common"])
   const blocked = useModuleGuard("Aura Shop")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -117,7 +126,7 @@ export default function AuraShopSettingsPage() {
       setSaved(form)
       setD(form)
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to load Aura Shop settings")
+      toast.error(e?.response?.data?.message || t("store:settings.aura.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -130,7 +139,7 @@ export default function AuraShopSettingsPage() {
   if (blocked) return blocked
 
   const shell = "flex flex-col gap-5"
-  const header = <PageHeader title="Aura Shop" description="Manage the Aura Shop storefront homepage hero slider." />
+  const header = <PageHeader title={t("store:settings.aura.title")} description={t("store:settings.aura.description")} />
 
   if (loading || !d || !saved) {
     return (
@@ -160,20 +169,20 @@ export default function AuraShopSettingsPage() {
   const curIdx = cur !== undefined && enabledIdx.includes(cur) ? cur : enabledIdx[0] ?? -1
   const c = curIdx >= 0 ? d.slides[curIdx] : null
   const pv = c
-    ? { tag: c.tag || " ", title: c.title || "(untitled)", sub: c.subtitle, cta: c.cta || "Learn more", bg: c.imagePath ? imgBg(c.imagePath) : "#2A3858", over: overlay(c.gradient), note: `PREVIEW · Slide ${curIdx + 1}${c.imagePath ? "" : " · no image"}` }
-    : { tag: "Aura Shop", title: d.slides.length ? "All slides are disabled" : "No slides yet", sub: "Enable or add a slide to show the hero slider.", cta: "Explore", bg: "#2A3858", over: "none", note: "PREVIEW" }
+    ? { tag: c.tag || " ", title: c.title || t("store:shared.untitled"), sub: c.subtitle, cta: c.cta || t("store:shared.learnMore"), bg: c.imagePath ? imgBg(c.imagePath) : "#2A3858", over: overlay(c.gradient), note: c.imagePath ? t("store:settings.aura.previewSlide", { n: curIdx + 1 }) : t("store:settings.aura.previewSlideNoImage", { n: curIdx + 1 }) }
+    : { tag: "Aura Shop", title: d.slides.length ? t("store:settings.aura.allDisabled") : t("store:shared.noSlides"), sub: t("store:settings.aura.enableHint"), cta: t("store:settings.aura.explore"), bg: "#2A3858", over: "none", note: t("store:shared.preview") }
 
   const upload = async (i: number, file?: File) => {
     if (!file) return
-    if (!/^image\//.test(file.type)) return toast.error("Please choose an image file (PNG, JPG, WEBP).")
-    if (file.size > 10 * 1024 * 1024) return toast.error("Image must be 10MB or smaller.")
+    if (!/^image\//.test(file.type)) return toast.error(t("store:shared.chooseImage"))
+    if (file.size > 10 * 1024 * 1024) return toast.error(t("store:shared.imageTooBig"))
     try {
       setUploading(i)
       const res = await settingsApi.uploadStorefrontImage(file)
       setD((cd) => (cd ? { ...cd, slides: cd.slides.map((x, k) => (k === i ? { ...x, imagePath: res.data.imagePath } : x)) } : cd))
-      toast.success(`Slide ${i + 1} image uploaded`)
+      toast.success(t("store:shared.slideImageUploaded", { n: i + 1 }))
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to upload storefront image")
+      toast.error(e?.response?.data?.message || t("store:shared.uploadFailed"))
     } finally {
       setUploading(null)
     }
@@ -186,19 +195,19 @@ export default function AuraShopSettingsPage() {
 
   const save = async () => {
     const name = d.name.trim()
-    if (!name) return fail("Business name is required.")
-    if (d.web.trim() && !URLRE.test(d.web.trim())) return fail("Website must be a full URL starting with http:// or https://")
+    if (!name) return fail(t("store:settings.aura.errors.name"))
+    if (d.web.trim() && !URLRE.test(d.web.trim())) return fail(t("store:settings.aura.errors.website"))
     for (const [k, l] of [["fb", "Facebook"], ["ig", "Instagram"], ["tw", "Twitter"]] as const) {
       const v = d[k].trim()
-      if (v && !URLRE.test(v)) return fail(`${l} link must be a full URL starting with http(s)://`)
+      if (v && !URLRE.test(v)) return fail(t("store:shared.socialUrl", { name: l }))
     }
     const ms = Number(d.auto)
-    if (!/^\d+$/.test(d.auto.trim()) || ms < 2000) return fail("Autoplay interval must be a whole number of at least 2000 milliseconds.")
+    if (!/^\d+$/.test(d.auto.trim()) || ms < 2000) return fail(t("store:settings.aura.errors.autoplay"))
     for (let i = 0; i < d.slides.length; i++) {
       const x = d.slides[i]
-      if (x.enabled && !x.title.trim()) return fail(`Slide ${i + 1} needs a title before it can be shown.`)
+      if (x.enabled && !x.title.trim()) return fail(t("store:settings.aura.errors.slideTitle", { n: i + 1 }))
       const l = x.link.trim()
-      if (l && !/^(\/|https?:\/\/)/i.test(l)) return fail(`Slide ${i + 1} button link must start with / or http(s)://`)
+      if (l && !/^(\/|https?:\/\/)/i.test(l)) return fail(t("store:settings.aura.errors.slideLink", { n: i + 1 }))
     }
     try {
       setSaving(true)
@@ -214,12 +223,12 @@ export default function AuraShopSettingsPage() {
           slides: d.slides.map((x, i) => ({ ...x, id: x.id || `aura-slide-${i + 1}`, tag: x.tag.trim(), title: x.title.trim(), subtitle: x.subtitle.trim(), cta: x.cta.trim(), link: x.link.trim(), gradient: x.gradient.trim() })),
         },
       })
-      toast.success("Aura Shop settings saved successfully")
+      toast.success(t("store:settings.aura.saved"))
       await load()
     } catch (e: any) {
       const errors = e?.response?.data?.errors
       const first = errors ? (Object.values(errors)[0] as string[])?.[0] : undefined
-      fail(first || e?.response?.data?.message || "Failed to save Aura Shop settings")
+      fail(first || e?.response?.data?.message || t("store:settings.aura.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -235,37 +244,37 @@ export default function AuraShopSettingsPage() {
     <div className={shell}>
       {header}
 
-      <SectionCard aria-label="Business details" title="Business details" description="Shown on the storefront footer and contact areas.">
+      <SectionCard aria-label={t("store:settings.aura.details")} title={t("store:settings.aura.details")} description={t("store:settings.aura.detailsSub")}>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
-          {text("Business name *", "name", "e.g. Aura Retail")}
-          <FormField label="Business type" htmlFor="aura-type" className="min-w-0">
+          {text(t("store:settings.aura.name"), "name", t("store:settings.aura.namePh"))}
+          <FormField label={t("store:shared.businessType")} htmlFor="aura-type" className="min-w-0">
             <Select value={String(d.type)} onValueChange={(val) => patch({ type: val })}>
               <SelectTrigger id="aura-type" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {TYPES.map((t) => <SelectItem key={t} value={String(t)}>{t}</SelectItem>)}
+                {TYPES.map((ty) => <SelectItem key={ty} value={String(ty)}>{TYPE_LABEL[ty] ? t(TYPE_LABEL[ty]) : ty}</SelectItem>)}
               </SelectContent>
             </Select>
           </FormField>
-          {text("Registration number", "reg")}
-          {text("GST / VAT number", "gst")}
-          {text("Website", "web", "https://example.com")}
+          {text(t("store:shared.registration"), "reg")}
+          {text(t("store:settings.aura.gst"), "gst")}
+          {text(t("store:shared.website"), "web", "https://example.com")}
           {text("Facebook", "fb", "https://facebook.com/…")}
           {text("Instagram", "ig", "https://instagram.com/…")}
-          {text("Twitter / X", "tw", "https://x.com/…")}
+          {text(t("store:settings.aura.twitter"), "tw", "https://x.com/…")}
         </div>
       </SectionCard>
 
       <SectionCard
-        aria-label="Homepage hero"
-        title={<span className="flex items-center gap-2"><Globe className="size-5 text-muted-foreground" />Homepage Hero</span>}
-        description="Control the large slider shown on the Aura Shop landing page."
+        aria-label={t("store:settings.aura.heroAria")}
+        title={<span className="flex items-center gap-2"><Globe className="size-5 text-muted-foreground" />{t("store:settings.aura.heroTitle")}</span>}
+        description={t("store:settings.aura.heroSub")}
         contentClassName="flex flex-col gap-4"
       >
-        <FormField label="Autoplay Interval (milliseconds)" htmlFor="aura-auto" description="Example: 6000 rotates slides every 6 seconds. Minimum 2000." className="max-w-[360px]">
+        <FormField label={t("store:settings.aura.autoplay")} htmlFor="aura-auto" description={t("store:settings.aura.autoplayHelp")} className="max-w-[360px]">
           <Input id="aura-auto" type="number" min={2000} step={500} value={d.auto} onChange={(e) => patch({ auto: e.target.value })} />
         </FormField>
 
-        <div aria-label="Live preview" className="relative flex h-[220px] flex-col justify-center gap-2.5 overflow-hidden rounded-2xl px-9 text-white" style={{ background: pv.bg }}>
+        <div aria-label={t("store:shared.livePreview")} className="relative flex h-[220px] flex-col justify-center gap-2.5 overflow-hidden rounded-2xl px-9 text-white" style={{ background: pv.bg }}>
           <span className="absolute inset-0" style={{ background: pv.over }} />
           <Badge variant="secondary" className="relative self-start">{pv.tag}</Badge>
           <span className="relative max-w-[560px] text-[28px] font-bold leading-[1.1]">{pv.title}</span>
@@ -275,11 +284,11 @@ export default function AuraShopSettingsPage() {
           <SlideDots tone="light" indices={enabledIdx} current={curIdx} onSelect={setCur} className="absolute bottom-3 left-1/2 -translate-x-1/2" />
         </div>
         <p className="text-sm text-muted-foreground">
-          {enabledIdx.length} of {d.slides.length} slide(s) enabled · rotates every {(Number(d.auto) || 6000) / 1000}s on the storefront.
+          {t("store:settings.aura.summary", { enabled: enabledIdx.length, total: d.slides.length, secs: (Number(d.auto) || 6000) / 1000 })}
         </p>
 
         {d.slides.length === 0 && (
-          <EmptyState bordered title="No slides yet" description="Use “+ Add slide” to create the first hero slide." />
+          <EmptyState bordered title={t("store:shared.noSlides")} description={t("store:settings.aura.emptyHint")} />
         )}
 
         <div className="flex flex-col gap-4">
@@ -287,41 +296,41 @@ export default function AuraShopSettingsPage() {
             <Card key={s.id + i} className="gap-4 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2.5">
                 <div>
-                  <h3 className="text-base font-semibold">Slide {i + 1}</h3>
-                  <p className="mt-0.5 text-sm text-muted-foreground">Edit image, headline, CTA, and link.</p>
+                  <h3 className="text-base font-semibold">{t("store:settings.aura.slide", { n: i + 1 })}</h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{t("store:settings.aura.slideSub")}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <FormField orientation="horizontal" label="Enabled" htmlFor={`slide-${i}-enabled`} className="w-auto gap-2">
-                    <Switch id={`slide-${i}-enabled`} checked={s.enabled} aria-label="Slide enabled" onCheckedChange={() => patchSlide(i, { enabled: !s.enabled })} />
+                  <FormField orientation="horizontal" label={t("store:settings.aura.enabled")} htmlFor={`slide-${i}-enabled`} className="w-auto gap-2">
+                    <Switch id={`slide-${i}-enabled`} checked={s.enabled} aria-label={t("store:settings.aura.slideEnabled")} onCheckedChange={() => patchSlide(i, { enabled: !s.enabled })} />
                   </FormField>
-                  <WithTooltip content="Move slide up"><Button type="button" variant="outline" size="icon-sm" disabled={i === 0} aria-label="Move slide up" onClick={() => move(i, -1)}>↑</Button></WithTooltip>
-                  <WithTooltip content="Move slide down"><Button type="button" variant="outline" size="icon-sm" disabled={i === d.slides.length - 1} aria-label="Move slide down" onClick={() => move(i, 1)}>↓</Button></WithTooltip>
-                  <Button type="button" variant="destructive" size="sm" onClick={() => { if (window.confirm(`Delete slide ${i + 1}? Save to apply.`)) patch({ slides: d.slides.filter((_, k) => k !== i) }) }}>Delete</Button>
+                  <WithTooltip content={t("store:settings.aura.moveUp")}><Button type="button" variant="outline" size="icon-sm" disabled={i === 0} aria-label={t("store:settings.aura.moveUp")} onClick={() => move(i, -1)}>↑</Button></WithTooltip>
+                  <WithTooltip content={t("store:settings.aura.moveDown")}><Button type="button" variant="outline" size="icon-sm" disabled={i === d.slides.length - 1} aria-label={t("store:settings.aura.moveDown")} onClick={() => move(i, 1)}>↓</Button></WithTooltip>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => { if (window.confirm(t("store:settings.aura.confirmDelete", { n: i + 1 }))) patch({ slides: d.slides.filter((_, k) => k !== i) }) }}>{t("common:actions.delete")}</Button>
                 </div>
               </div>
               <div className="flex flex-wrap gap-4">
                 <div className="flex max-w-[320px] flex-[1_1_240px] flex-col gap-2.5">
                   <div className="flex h-40 items-center justify-center overflow-hidden rounded-md border bg-muted text-sm text-muted-foreground" style={s.imagePath ? { background: imgBg(s.imagePath) } : undefined}>
-                    {s.imagePath ? "" : "No image uploaded"}
+                    {s.imagePath ? "" : t("store:settings.aura.noImage")}
                   </div>
                   <Label className="cursor-pointer">
                     <Input type="file" accept="image/*" className="sr-only" disabled={uploading !== null} onChange={(e) => { upload(i, e.target.files?.[0]); e.target.value = "" }} />
-                    <span className="block text-sm font-semibold text-primary">{uploading === i ? "Uploading…" : s.imagePath ? "Change slide image" : "Upload slide image"}</span>
-                    <span className="block text-xs text-muted-foreground">PNG, JPG, WEBP up to 10MB</span>
+                    <span className="block text-sm font-semibold text-primary">{uploading === i ? t("store:shared.uploading") : s.imagePath ? t("store:shared.changeSlideImage") : t("store:settings.aura.uploadImage")}</span>
+                    <span className="block text-xs text-muted-foreground">{t("store:settings.aura.imageSpec")}</span>
                   </Label>
-                  {s.imagePath && <Button type="button" variant="outline" size="sm" onClick={() => patchSlide(i, { imagePath: "" })}>Remove image</Button>}
+                  {s.imagePath && <Button type="button" variant="outline" size="sm" onClick={() => patchSlide(i, { imagePath: "" })}>{t("store:shared.removeImage")}</Button>}
                 </div>
                 <div className="grid min-w-0 flex-[999_1_360px] grid-cols-[repeat(auto-fit,minmax(240px,1fr))] content-start gap-3">
-                  <FormField label="Badge Tag" htmlFor={`slide-${i}-tag`} className="min-w-0"><Input id={`slide-${i}-tag`} type="text" value={s.tag} onChange={(e) => patchSlide(i, { tag: e.target.value })} /></FormField>
-                  <FormField label="CTA Label" htmlFor={`slide-${i}-cta`} className="min-w-0"><Input id={`slide-${i}-cta`} type="text" value={s.cta} onChange={(e) => patchSlide(i, { cta: e.target.value })} /></FormField>
-                  <FormField label="Title *" htmlFor={`slide-${i}-title`} className="col-span-full min-w-0"><Textarea id={`slide-${i}-title`} rows={2} value={s.title} onChange={(e) => patchSlide(i, { title: e.target.value })} /></FormField>
-                  <FormField label="Subtitle" htmlFor={`slide-${i}-subtitle`} className="col-span-full min-w-0"><Textarea id={`slide-${i}-subtitle`} rows={3} value={s.subtitle} onChange={(e) => patchSlide(i, { subtitle: e.target.value })} /></FormField>
-                  <FormField label="Button Link" htmlFor={`slide-${i}-link`} className="min-w-0"><Input id={`slide-${i}-link`} type="text" value={s.link} placeholder="/shop" onChange={(e) => patchSlide(i, { link: e.target.value })} /></FormField>
-                  <FormField label="Overlay Gradient Classes" htmlFor={`slide-${i}-gradient`} className="min-w-0">
+                  <FormField label={t("store:settings.aura.badge")} htmlFor={`slide-${i}-tag`} className="min-w-0"><Input id={`slide-${i}-tag`} type="text" value={s.tag} onChange={(e) => patchSlide(i, { tag: e.target.value })} /></FormField>
+                  <FormField label={t("store:settings.aura.cta")} htmlFor={`slide-${i}-cta`} className="min-w-0"><Input id={`slide-${i}-cta`} type="text" value={s.cta} onChange={(e) => patchSlide(i, { cta: e.target.value })} /></FormField>
+                  <FormField label={t("store:settings.aura.titleField")} htmlFor={`slide-${i}-title`} className="col-span-full min-w-0"><Textarea id={`slide-${i}-title`} rows={2} value={s.title} onChange={(e) => patchSlide(i, { title: e.target.value })} /></FormField>
+                  <FormField label={t("store:settings.aura.subtitle")} htmlFor={`slide-${i}-subtitle`} className="col-span-full min-w-0"><Textarea id={`slide-${i}-subtitle`} rows={3} value={s.subtitle} onChange={(e) => patchSlide(i, { subtitle: e.target.value })} /></FormField>
+                  <FormField label={t("store:settings.aura.link")} htmlFor={`slide-${i}-link`} className="min-w-0"><Input id={`slide-${i}-link`} type="text" value={s.link} placeholder="/shop" onChange={(e) => patchSlide(i, { link: e.target.value })} /></FormField>
+                  <FormField label={t("store:settings.aura.gradient")} htmlFor={`slide-${i}-gradient`} className="min-w-0">
                     <Input id={`slide-${i}-gradient`} type="text" value={s.gradient} onChange={(e) => patchSlide(i, { gradient: e.target.value })} />
                     <div className="flex flex-wrap gap-1.5">
                       {PRESETS.map(([l, g]) => (
-                        <Button key={l} type="button" variant="outline" size="sm" onClick={() => patchSlide(i, { gradient: g })}>{l}</Button>
+                        <Button key={l} type="button" variant="outline" size="sm" onClick={() => patchSlide(i, { gradient: g })}>{t(l)}</Button>
                       ))}
                     </div>
                   </FormField>
@@ -334,20 +343,20 @@ export default function AuraShopSettingsPage() {
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline"
             onClick={() => patch({ slides: [...d.slides, { id: `aura-${Date.now().toString(36)}`, imagePath: "", tag: "", title: "New slide", subtitle: "", cta: "Shop now", link: "/shop", gradient: PRESETS[0][1], enabled: true }] })}>
-            + Add slide
+            {t("store:shared.addSlide")}
           </Button>
-          <Button type="button" variant="outline" onClick={() => { if (window.confirm("Replace all slides with the three default slides? Save to apply.")) patch({ slides: DEFAULT_SLIDES.map((x) => ({ ...x })) }) }}>
-            Restore default slides
+          <Button type="button" variant="outline" onClick={() => { if (window.confirm(t("store:settings.aura.confirmRestore"))) patch({ slides: DEFAULT_SLIDES.map((x) => ({ ...x })) }) }}>
+            {t("store:settings.aura.restore")}
           </Button>
         </div>
       </SectionCard>
 
       <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
-        <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>{err || (dirty ? "You have unsaved changes." : "All changes saved.")}</span>
+        <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>{err || (dirty ? t("store:shared.unsaved") : t("store:shared.allSaved"))}</span>
         <div className="ml-auto flex gap-2">
-          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(undefined); toast.success("Changes discarded") }}>Discard</Button>
+          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(undefined); toast.success(t("store:shared.changesDiscarded")) }}>{t("store:shared.discard")}</Button>
           <Button type="button" disabled={!dirty || saving || uploading !== null} onClick={save}>
-            {saving ? "Saving…" : "Save Aura Shop Settings"}
+            {saving ? t("common:actions.saving") : t("store:settings.aura.save")}
           </Button>
         </div>
       </Card>

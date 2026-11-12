@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import {
   Banknote, CheckCircle2, Clock, Download, Eye, MoreHorizontal, Package, Phone, PhoneCall, Plus, Printer, Search, ShoppingCart, Truck, X, XCircle,
 } from "lucide-react"
@@ -36,7 +37,9 @@ import {
   SaleDetailDialog, SALE_PAY_VARIANT, salePayment,
 } from "@/components/sales/sale-detail-dialog"
 import { FollowUpDialog, canFollowUp, followUpSummary } from "@/components/sales/order-follow-up"
-import { AD_SOURCE_FILTERS, AdSourceBadge, OrderFlagBadges, adSourceLabel, campaignHint, isAdSourceFilter } from "@/components/sales/ad-source"
+import { AD_SOURCE_FILTERS, AdSourceBadge, OrderFlagBadges, adSourceText, campaignHint, isAdSourceFilter } from "@/components/sales/ad-source"
+import { ORDERS_NS, channelLabel, methodLabel, orderStatusLabel, payLabel, type OrdersKey } from "@/components/sales/i18n"
+import { localeTag } from "@/lib/i18n"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
 import { fetchSection } from "@/lib/dashboard/api"
 import { printSaleInvoice } from "@/lib/invoice-print"
@@ -66,19 +69,22 @@ interface Stats {
   delivered: number
 }
 
-const SOURCES: { value: Source; label: string }[] = [
-  { value: "all", label: "All sources" },
-  { value: "pos", label: "POS" },
-  { value: "online", label: "Online" },
-  { value: "sales", label: "Manual" },
+const SOURCES: { value: Source; label: OrdersKey }[] = [
+  { value: "all", label: "orders:filters.allSources" },
+  { value: "pos", label: "orders:labels.pos" },
+  { value: "online", label: "orders:labels.online" },
+  { value: "sales", label: "orders:labels.manual" },
 ]
 
-const PAYMENTS: { value: Pay; label: string }[] = [
-  { value: "all", label: "Payment: All" },
-  { value: "paid", label: "Paid" },
-  { value: "partial", label: "Partial" },
-  { value: "unpaid", label: "Unpaid" },
+const PAYMENTS: { value: Pay; label: OrdersKey }[] = [
+  { value: "all", label: "orders:filters.paymentAll" },
+  { value: "paid", label: "common:payment.paid" },
+  { value: "partial", label: "orders:labels.partial" },
+  { value: "unpaid", label: "common:payment.unpaid" },
 ]
+
+/** Payment method filter values (sent to the API); labels via `methodLabel`. */
+const METHOD_FILTERS = ["Cash", "Card", "Online", "COD", "bKash", "Nagad", "Bank"]
 
 /** Derived order stage: no extra DB statuses, built from status + fulfillment + payment. */
 function orderStage(o: SellResponse): Tab {
@@ -97,21 +103,33 @@ const humanize = (v?: string) => {
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : ""
 }
 
-const SOURCE_CHIP: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
-  pos: { label: "POS", variant: "secondary" },
-  storefront: { label: "Online store", variant: "default" },
-  manual: { label: "Manual", variant: "outline" },
+/** Shipment status codes → label keys (unknown codes are humanized). */
+const SHIPMENT_STATUS_KEY: Record<string, OrdersKey> = {
+  pending: "orders:shipments.status.pending",
+  picked_up: "orders:shipments.status.picked_up",
+  in_transit: "orders:shipments.status.in_transit",
+  out_for_delivery: "orders:shipments.status.out_for_delivery",
+  delivered: "orders:shipments.status.delivered",
+  failed: "orders:shipments.status.failed",
+  returned: "orders:shipments.status.returned",
 }
 
-function ageOf(iso: string): { text: string; days: number } {
+const SOURCE_CHIP: Record<string, { label: OrdersKey; variant: "default" | "secondary" | "outline" }> = {
+  pos: { label: "orders:labels.pos", variant: "secondary" },
+  storefront: { label: "orders:labels.onlineStore", variant: "default" },
+  manual: { label: "orders:labels.manual", variant: "outline" },
+}
+
+function ageOf(iso: string): { days: number; hours: number } {
   const ms = Date.now() - new Date(iso).getTime()
   const days = Math.floor(ms / 86_400_000)
-  if (days >= 1) return { text: `${days}d ago`, days }
-  const hrs = Math.floor(ms / 3_600_000)
-  return { text: hrs >= 1 ? `${hrs}h ago` : "just now", days: 0 }
+  if (days >= 1) return { days, hours: 0 }
+  return { days: 0, hours: Math.floor(ms / 3_600_000) }
 }
 
 export default function OrdersPage() {
+  const { t, i18n } = useTranslation(ORDERS_NS)
+  const tag = localeTag(i18n.language)
   const { formatCurrency, settings } = useCompanySettings()
   const { canRead, canDo } = useSaasAuth()
   const mayExport = canDo("export")
@@ -158,8 +176,8 @@ export default function OrdersPage() {
   useEffect(() => {
     const st = searchParams.get("status")?.toLowerCase()
     if (st) {
-      const t = st === "processing" ? "Confirmed" : TAB_VALUES.find((v) => v.toLowerCase() === st)
-      if (t) { setTab(t); setPage(1) }
+      const tv = st === "processing" ? "Confirmed" : TAB_VALUES.find((v) => v.toLowerCase() === st)
+      if (tv) { setTab(tv); setPage(1) }
     }
     const q = searchParams.get("customer") || searchParams.get("q") || searchParams.get("search")
     if (q) { setSearch(q); setPage(1) }
@@ -172,7 +190,7 @@ export default function OrdersPage() {
     if (pay && ["paid", "partial", "unpaid"].includes(pay)) { setPayFilter(pay as Pay); setPage(1) }
     const method = searchParams.get("method")
     if (method) {
-      const m = ["Cash", "Card", "Online", "COD", "bKash", "Nagad", "Bank"].find((x) => x.toLowerCase() === method.toLowerCase())
+      const m = METHOD_FILTERS.find((x) => x.toLowerCase() === method.toLowerCase())
       if (m) { setMethodFilter(m); setPage(1) }
     }
     if (searchParams.get("followUp")?.toLowerCase() === "due") { setDueOnly(true); setPage(1) }
@@ -278,7 +296,7 @@ export default function OrdersPage() {
     try { return (await sellsApi.getById(order.id)).data } catch { return order }
   }
   const printInvoice = async (order: SellResponse) =>
-    printSaleInvoice(await fullOrder(order), { formatCurrency, taxId: settings?.taxId })
+    printSaleInvoice(await fullOrder(order), { formatCurrency, taxId: settings?.taxId }, i18n.language)
   const openDetail = async (order: SellResponse) => {
     setSelected(order)
     const full = await fullOrder(order)
@@ -287,23 +305,23 @@ export default function OrdersPage() {
 
   const report = (results: PromiseSettledResult<unknown>[], okTitle: string) => {
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${results.length} could not be changed` })
-    else toast({ title: okTitle, description: `${results.length} order${results.length === 1 ? "" : "s"} updated` })
+    if (failed) toast({ variant: "destructive", title: t("orders:toast.someFailed"), description: t("orders:toast.failedOf", { failed, total: results.length }) })
+    else toast({ title: okTitle, description: t("orders:list.updated", { count: results.length }) })
     setChecked(new Set())
     refresh()
   }
 
   const cancelOrders = async (targets: SellResponse[]) => {
     const eligible = targets.filter((o) => !["Cancelled", "Delivered", "Completed"].includes(orderStage(o)))
-    if (eligible.length === 0) { toast({ variant: "destructive", title: "Nothing to cancel", description: "Delivered or cancelled orders can't be cancelled" }); return }
-    if (!window.confirm(`Cancel ${eligible.length} order${eligible.length === 1 ? "" : "s"}? Stock goes back to inventory and any balance due is cleared.`)) return
-    report(await Promise.allSettled(eligible.map((o) => sellsApi.updateStatus(o.id, "Cancelled"))), "Cancelled")
+    if (eligible.length === 0) { toast({ variant: "destructive", title: t("orders:list.nothingToCancel"), description: t("orders:list.cannotCancel") }); return }
+    if (!window.confirm(t("orders:list.cancelConfirm", { count: eligible.length }))) return
+    report(await Promise.allSettled(eligible.map((o) => sellsApi.updateStatus(o.id, "Cancelled"))), t("common:orderStatus.cancelled"))
   }
 
   const confirmOrders = async (targets: SellResponse[]) => {
     const eligible = targets.filter((o) => orderStage(o) === "Pending")
-    if (eligible.length === 0) { toast({ variant: "destructive", title: "Nothing to confirm", description: "Only pending orders can be confirmed" }); return }
-    report(await Promise.allSettled(eligible.map((o) => sellsApi.updateStatus(o.id, "Processing"))), "Confirmed")
+    if (eligible.length === 0) { toast({ variant: "destructive", title: t("orders:list.nothingToConfirm"), description: t("orders:list.onlyPending") }); return }
+    report(await Promise.allSettled(eligible.map((o) => sellsApi.updateStatus(o.id, "Processing"))), t("common:orderStatus.confirmed"))
   }
 
   /** Row status select: maps each stage onto status + fulfillment calls. */
@@ -325,9 +343,9 @@ export default function OrdersPage() {
       } else if (to === "Delivered") {
         await sellsApi.updateStatus(o.id, "Delivered")
       }
-      toast({ title: `Marked ${to.toLowerCase()}`, description: `#${o.invoiceNo}` })
+      toast({ title: t("orders:toast.markedAs", { status: orderStatusLabel(t, to) }), description: `#${o.invoiceNo}` })
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not update", description: err?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("orders:toast.couldNotUpdate"), description: err?.response?.data?.message || t("orders:toast.tryAgain") })
     }
     refresh()
   }
@@ -337,18 +355,25 @@ export default function OrdersPage() {
     setDeleting(true)
     try {
       await sellsApi.delete(deleteTarget.id)
-      toast({ title: "Order deleted", description: `#${deleteTarget.invoiceNo}` })
+      toast({ title: t("orders:list.orderDeleted"), description: `#${deleteTarget.invoiceNo}` })
       setDeleteTarget(null)
       if (selected?.id === deleteTarget.id) setSelected(null)
       refresh()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not delete", description: err?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("orders:list.couldNotDelete"), description: err?.response?.data?.message || t("orders:toast.tryAgain") })
     } finally {
       setDeleting(false)
     }
   }
 
-  const EXPORT_HEADERS = ["Invoice", "Date", "Customer", "Phone", "Channel", "Ad source", "Campaign", "Status", "Payment", "Method", "Items", "Delivery address", "Subtotal", "Discount", "Tax", "Delivery", "Total", "Paid", "Due"]
+  /** CSV columns: row field → header key. exportToCSV maps each header to a field by lower-casing it, so rows are keyed by the translated header. */
+  const EXPORT_COLUMNS: [keyof ReturnType<typeof toExportRow>, OrdersKey][] = [
+    ["invoice", "orders:export.invoice"], ["date", "orders:export.date"], ["customer", "orders:export.customer"], ["phone", "orders:export.phone"],
+    ["channel", "orders:export.channel"], ["ad_source", "orders:export.adSource"], ["campaign", "orders:export.campaign"], ["status", "orders:export.status"],
+    ["payment", "orders:export.payment"], ["method", "orders:export.method"], ["items", "orders:export.items"], ["delivery_address", "orders:export.deliveryAddress"],
+    ["subtotal", "orders:export.subtotal"], ["discount", "orders:export.discount"], ["tax", "orders:export.tax"], ["delivery", "orders:export.delivery"],
+    ["total", "orders:export.total"], ["paid", "orders:export.paid"], ["due", "orders:export.due"],
+  ]
 
   const toExportRow = (o: SellResponse) => {
     const total = num(o.amount), delivery = num(o.shippingCost), discount = num(o.discount)
@@ -358,15 +383,15 @@ export default function OrdersPage() {
     const pay = salePayment(o)
     return {
       invoice: o.invoiceNo,
-      date: new Date(o.orderTime).toLocaleString(),
+      date: new Date(o.orderTime).toLocaleString(tag),
       customer: o.customerName,
       phone: o.shippingPhone ?? "",
-      channel: SOURCE_CHIP[o.source ?? "manual"]?.label ?? o.source ?? "",
-      ad_source: o.adSourceLabel || adSourceLabel(o.adSource),
+      channel: SOURCE_CHIP[o.source ?? "manual"] ? t(SOURCE_CHIP[o.source ?? "manual"].label) : o.source ?? "",
+      ad_source: (o.adSource === "phone" || o.adSource === "other" ? "" : o.adSourceLabel) || adSourceText(t, o.adSource),
       campaign: o.campaignLink?.name || o.utmCampaign || "",
-      status: orderStage(o),
-      payment: o.status === "Cancelled" ? "Cancelled" : pay.label === "Due" ? "Unpaid" : pay.label,
-      method: o.method,
+      status: orderStatusLabel(t, orderStage(o)),
+      payment: o.status === "Cancelled" ? t("common:orderStatus.cancelled") : payLabel(t, pay.label === "Due" ? "Unpaid" : pay.label),
+      method: methodLabel(t, o.method),
       items: (o.items ?? []).reduce((n, it) => n + (it.quantity ?? 1), 0),
       delivery_address: [o.shippingAddressLine1, o.shippingAddressLine2, o.shippingCity, o.shippingState].filter(Boolean).join(", "),
       subtotal: subtotal.toFixed(2),
@@ -391,17 +416,22 @@ export default function OrdersPage() {
           if (!res.data?.length || rows.length >= (res.total ?? 0)) break
         }
       }
-      if (rows.length === 0) { toast({ title: "Nothing to export" }); return }
-      exportToCSV(rows.map(toExportRow), "orders", EXPORT_HEADERS)
+      if (rows.length === 0) { toast({ title: t("orders:toast.nothingToExport") }); return }
+      const headers = EXPORT_COLUMNS.map(([, key]) => t(key))
+      const csvKey = (h: string) => h.toLowerCase().replace(/ /g, "_")
+      exportToCSV(
+        rows.map((o) => { const r = toExportRow(o); return Object.fromEntries(EXPORT_COLUMNS.map(([field], i) => [csvKey(headers[i]), r[field]])) }),
+        "orders", headers,
+      )
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Export failed", description: err?.response?.data?.message })
+      toast({ variant: "destructive", title: t("orders:toast.exportFailed"), description: err?.response?.data?.message })
     } finally {
       setExporting(false)
     }
   }
 
   const printSelectedInvoices = async () => { for (const o of selectedOrders) await printInvoice(o) }
-  const printSlips = async () => printPackingSlips(await Promise.all(selectedOrders.map(fullOrder)))
+  const printSlips = async () => printPackingSlips(await Promise.all(selectedOrders.map(fullOrder)), i18n.language)
 
   const hasLiveShipment = (o: SellResponse) => !!o.shipments?.some(isLiveShipment)
   const canShipOrder = (o: SellResponse) =>
@@ -409,23 +439,32 @@ export default function OrdersPage() {
   const firstShippable = selectedOrders.find(canShipOrder)
 
   const oldestAge = oldestPending ? ageOf(oldestPending) : null
+  const oldestText = !oldestAge ? ""
+    : oldestAge.days >= 1 ? t("orders:list.oldestDays", { count: oldestAge.days })
+    : oldestAge.hours >= 1 ? t("orders:list.oldestHours", { count: oldestAge.hours }) : ""
+  const ageText = (a: { days: number; hours: number }) =>
+    a.days >= 1 ? t("orders:time.daysAgo", { count: a.days }) : a.hours >= 1 ? t("orders:time.hoursAgo", { count: a.hours }) : t("orders:time.justNow")
+  const shipmentStatusText = (st?: string) => {
+    const key = SHIPMENT_STATUS_KEY[String(st ?? "").toLowerCase()]
+    return key ? t(key) : humanize(st)
+  }
   const createShipment = (id: number) => router.push(`/dashboard/orders/shipments?new=1&order=${id}`)
 
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
       <PageHeader
-        title="Orders"
-        description="Every order from POS, your online store and manual sales, in one place."
+        title={t("orders:list.title")}
+        description={t("orders:list.description")}
         actions={<>
           {mayExport && <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}>
-            <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}
+            <Download className="size-4" aria-hidden /> {exporting ? t("orders:list.exporting") : t("common:actions.export")}
           </Button>}
           <Button asChild variant="outline">
-            <Link href="/dashboard/orders/shipments">Shipments</Link>
+            <Link href="/dashboard/orders/shipments">{t("orders:list.shipments")}</Link>
           </Button>
           <Button asChild>
-            <Link href="/dashboard/sales?new=1"><Plus className="size-4" aria-hidden /> Create order</Link>
+            <Link href="/dashboard/sales?new=1"><Plus className="size-4" aria-hidden /> {t("orders:list.createOrder")}</Link>
           </Button>
         </>}
       />
@@ -434,11 +473,11 @@ export default function OrdersPage() {
       {stats && stats.pending > 0 && (
         <Alert>
           <Clock aria-hidden />
-          <AlertTitle>{stats.pending} order{stats.pending === 1 ? "" : "s"} need action.</AlertTitle>
+          <AlertTitle>{t("orders:list.needAction", { count: stats.pending })}</AlertTitle>
           <AlertDescription>
-            <p>{oldestAge ? `The oldest has been pending for ${oldestAge.days >= 1 ? `${oldestAge.days} days` : oldestAge.text.replace(" ago", "")}. ` : ""}Confirm them so fulfillment can start.</p>
+            <p>{oldestText ? `${oldestText} ` : ""}{t("orders:list.confirmToStart")}</p>
             <Button type="button" size="sm" className="mt-2" onClick={() => changeTab("Pending")}>
-              Review pending
+              {t("orders:list.reviewPending")}
             </Button>
           </AlertDescription>
         </Alert>
@@ -452,18 +491,20 @@ export default function OrdersPage() {
       ) : (
         <div className="[&>div]:xl:grid-cols-6">
           <StatsCards stats={[
-            { label: "Total orders", value: stats.total, icon: <ShoppingCart className="size-4" />, color: "blue", hint: `${stats.last30} in last 30 days`,
+            { label: t("orders:list.kpi.totalOrders"), value: stats.total, icon: <ShoppingCart className="size-4" />, color: "blue", hint: t("orders:list.kpi.last30", { count: stats.last30 }),
               active: tab === "all", onClick: () => changeTab("all") },
-            { label: "Needs action", value: stats.pending, icon: <Clock className="size-4" />, color: "yellow", hint: "Pending confirmation",
+            { label: t("orders:list.kpi.needsAction"), value: stats.pending, icon: <Clock className="size-4" />, color: "yellow", hint: t("orders:list.kpi.pendingConfirmation"),
               active: tab === "Pending", onClick: () => changeTab("Pending") },
-            { label: "Processing", value: stats.processing, icon: <Package className="size-4" />, color: "blue", hint: "Confirmed or packed",
+            { label: t("common:orderStatus.processing"), value: stats.processing, icon: <Package className="size-4" />, color: "blue", hint: t("orders:list.kpi.confirmedOrPacked"),
               active: tab === "Confirmed", onClick: () => changeTab("Confirmed") },
-            { label: "Shipped", value: stats.shipped, icon: <Truck className="size-4" />, color: "purple", hint: "With courier",
+            { label: t("common:orderStatus.shipped"), value: stats.shipped, icon: <Truck className="size-4" />, color: "purple", hint: t("orders:list.kpi.withCourier"),
               active: tab === "Shipped", onClick: () => changeTab("Shipped") },
-            { label: "Delivered", value: stats.delivered, icon: <CheckCircle2 className="size-4" />, color: "green", hint: "Completed",
+            { label: t("common:orderStatus.delivered"), value: stats.delivered, icon: <CheckCircle2 className="size-4" />, color: "green", hint: t("common:orderStatus.completed"),
               active: tab === "Delivered", onClick: () => changeTab("Delivered") },
-            { label: "Revenue", value: formatCurrency(stats.revenue), icon: <Banknote className="size-4" />, color: "green",
-              hint: `Due to collect ${formatCurrency(stats.due)}${stats.unpaid ? ` · ${stats.unpaid} unpaid` : ""}` },
+            { label: t("orders:list.kpi.revenue"), value: formatCurrency(stats.revenue), icon: <Banknote className="size-4" />, color: "green",
+              hint: stats.unpaid
+                ? t("orders:list.kpi.dueToCollectUnpaid", { amount: formatCurrency(stats.due), count: stats.unpaid })
+                : t("orders:list.kpi.dueToCollect", { amount: formatCurrency(stats.due) }) },
           ]} />
         </div>
       )}
@@ -475,8 +516,8 @@ export default function OrdersPage() {
             value={tab}
             onChange={changeTab}
             tabs={[
-              { value: "all", label: "All", count: tabCounts.all },
-              ...TAB_VALUES.map((t) => ({ value: t, label: t, count: tabCounts[t] })),
+              { value: "all", label: t("common:status.all"), count: tabCounts.all },
+              ...TAB_VALUES.map((v) => ({ value: v, label: orderStatusLabel(t, v), count: tabCounts[v] })),
             ]}
           />
         </div>
@@ -484,49 +525,43 @@ export default function OrdersPage() {
         <div className="flex flex-wrap items-center gap-2.5 p-4">
           <div className="relative min-w-[260px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Label htmlFor="orders-search" className="sr-only">Search orders</Label>
+            <Label htmlFor="orders-search" className="sr-only">{t("orders:list.searchLabel")}</Label>
             <Input
               id="orders-search"
               type="search"
-              placeholder="Search invoice, customer or phone…"
+              placeholder={t("orders:filters.searchPlaceholder")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               className="pl-8"
             />
           </div>
           <SegmentedControl
-            aria-label="Source"
+            aria-label={t("orders:filters.source")}
             value={source}
             onValueChange={(v) => { setSource(v as Source); setPage(1) }}
-            options={SOURCES}
+            options={SOURCES.map((o) => ({ value: o.value, label: t(o.label) }))}
           />
           <Select value={adSource} onValueChange={(v) => { setAdSource(v); setPage(1) }}>
-            <SelectTrigger aria-label="Ad source" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("orders:filters.adSource")} className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {AD_SOURCE_FILTERS.map((f) => (
                 <SelectItem key={f.value} value={f.value}>
-                  {f.label}{f.value !== "all" && adCounts[f.value] !== undefined ? ` (${num(adCounts[f.value])})` : ""}
+                  {adSourceText(t, f.value)}{f.value !== "all" && adCounts[f.value] !== undefined ? ` (${num(adCounts[f.value])})` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={payFilter} onValueChange={(v) => { setPayFilter(v as Pay); setPage(1) }}>
-            <SelectTrigger aria-label="Payment status" className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("orders:filters.paymentStatus")} className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {PAYMENTS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              {PAYMENTS.map((p) => <SelectItem key={p.value} value={p.value}>{t(p.label)}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment method" className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:payment.method")} className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Method: All</SelectItem>
-              <SelectItem value="Cash">Cash</SelectItem>
-              <SelectItem value="Card">Card</SelectItem>
-              <SelectItem value="Online">Online</SelectItem>
-              <SelectItem value="COD">COD</SelectItem>
-              <SelectItem value="bKash">bKash</SelectItem>
-              <SelectItem value="Nagad">Nagad</SelectItem>
-              <SelectItem value="Bank">Bank</SelectItem>
+              <SelectItem value="all">{t("orders:filters.methodAll")}</SelectItem>
+              {METHOD_FILTERS.map((m) => <SelectItem key={m} value={m}>{methodLabel(t, m)}</SelectItem>)}
             </SelectContent>
           </Select>
           <DateRangeFilter
@@ -542,16 +577,16 @@ export default function OrdersPage() {
             aria-pressed={dueOnly}
             onClick={() => { setDueOnly((v) => !v); setPage(1); setChecked(new Set()) }}
           >
-            <PhoneCall className="size-4" aria-hidden /> Follow-up due
+            <PhoneCall className="size-4" aria-hidden /> {t("orders:list.followUpDue")}
             {followUpDue !== null && (
               <Badge variant={dueOnly ? "secondary" : followUpDue > 0 ? "destructive" : "outline"} className="tabular-nums">{followUpDue}</Badge>
             )}
           </Button>
           {campaignLinkId && (
             <Badge variant="secondary" className="h-9 gap-1.5 pr-1 text-sm">
-              {orders.find((o) => o.campaignLinkId === campaignLinkId)?.campaignLink?.name ?? `Order link #${campaignLinkId}`}
-              <WithTooltip content="Show all orders">
-                <Button type="button" variant="ghost" size="icon" className="size-6" aria-label="Remove order link filter"
+              {orders.find((o) => o.campaignLinkId === campaignLinkId)?.campaignLink?.name ?? t("orders:list.orderLink", { id: campaignLinkId })}
+              <WithTooltip content={t("orders:list.showAllOrders")}>
+                <Button type="button" variant="ghost" size="icon" className="size-6" aria-label={t("orders:list.removeLinkFilter")}
                   onClick={() => { setCampaignLinkId(null); setPage(1); router.replace("/dashboard/orders") }}>
                   <X className="size-3.5" />
                 </Button>
@@ -560,34 +595,34 @@ export default function OrdersPage() {
           )}
           {hasFilters && (
             <Button type="button" variant="ghost" onClick={resetFilters}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </div>
 
         {/* Bulk actions */}
-        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+        <BulkBar count={checked.size} label={t("common:table.selected", { count: checked.size })} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
             <Button type="button" variant="outline" size="sm" onClick={() => confirmOrders(selectedOrders)}>
-              Confirm
+              {t("common:actions.confirm")}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={printSelectedInvoices}>
-              Print invoices
+              {t("orders:list.bulk.printInvoices")}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={printSlips}>
-              Print packing slips
+              {t("orders:list.bulk.printSlips")}
             </Button>
-            <WithTooltip content={firstShippable ? `Ship #${firstShippable.invoiceNo}` : "No selected order is ready to ship"}>
+            <WithTooltip content={firstShippable ? t("orders:list.bulk.shipInvoice", { invoice: firstShippable.invoiceNo }) : t("orders:list.bulk.noneReady")}>
               <span tabIndex={firstShippable ? undefined : 0}>
                 <Button type="button" variant="outline" size="sm" disabled={!firstShippable} onClick={() => firstShippable && createShipment(firstShippable.id)}>
-                  Create shipment
+                  {t("orders:list.createShipment")}
                 </Button>
               </span>
             </WithTooltip>
             <Button type="button" variant="destructive" size="sm" onClick={() => cancelOrders(selectedOrders)}>
-              Cancel orders
+              {t("orders:list.bulk.cancelOrders")}
             </Button>
             {mayExport && <Button type="button" variant="outline" size="sm" onClick={handleExport}>
-              Export selected
+              {t("orders:list.bulk.exportSelected")}
             </Button>}
         </BulkBar>
 
@@ -597,16 +632,16 @@ export default function OrdersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead scope="col" className="w-5 pl-4">
-                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" />
+                  <Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("common:actions.selectAll")} />
                 </TableHead>
-                <TableHead scope="col">Order</TableHead>
-                <TableHead scope="col">Customer</TableHead>
-                <TableHead scope="col">Source</TableHead>
-                <TableHead scope="col">Payment</TableHead>
-                <TableHead scope="col" className="text-right">Amount</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col">Shipment</TableHead>
-                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+                <TableHead scope="col">{t("orders:list.col.order")}</TableHead>
+                <TableHead scope="col">{t("common:fields.customer")}</TableHead>
+                <TableHead scope="col">{t("orders:list.col.source")}</TableHead>
+                <TableHead scope="col">{t("orders:list.col.payment")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("common:money.amount")}</TableHead>
+                <TableHead scope="col">{t("common:fields.status")}</TableHead>
+                <TableHead scope="col">{t("orders:list.col.shipment")}</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -619,8 +654,8 @@ export default function OrdersPage() {
                   <TableCell colSpan={9} className="whitespace-normal">
                     <EmptyState
                       icon={ShoppingCart}
-                      title="No orders found"
-                      description={hasFilters ? "Try clearing the filters." : "Orders from POS, your store and manual sales appear here."}
+                      title={t("orders:list.empty")}
+                      description={hasFilters ? t("orders:filters.tryClearing") : t("orders:list.emptyHint")}
                       className="p-4 md:p-6"
                     />
                   </TableCell>
@@ -636,60 +671,60 @@ export default function OrdersPage() {
                   const shipment = o.shipments?.find(isLiveShipment) ?? o.shipments?.[0]
                   const canShip = canShipOrder(o)
                   const followable = canFollowUp(o)
-                  const fu = followable || (Number(o.followUpCount) || 0) > 0 ? followUpSummary(o) : null
+                  const fu = followable || (Number(o.followUpCount) || 0) > 0 ? followUpSummary(t, i18n.language, o) : null
                   const ck = checked.has(o.id)
                   return (
                     <TableRow key={o.id} data-state={ck ? "selected" : undefined}>
                       <TableCell className="pl-4">
-                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(o.id)} aria-label={`Select ${o.invoiceNo}`} />
+                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(o.id)} aria-label={t("orders:list.selectRow", { invoice: o.invoiceNo })} />
                       </TableCell>
                       <TableCell>
                         <div className="font-semibold">#{o.invoiceNo}</div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(o.orderTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })},{" "}
-                          {new Date(o.orderTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase()} ·{" "}
-                          <span className={cn("font-semibold", stale && "text-destructive")}>{age.text}</span>
+                          {new Date(o.orderTime).toLocaleDateString(tag, { month: "short", day: "numeric" })},{" "}
+                          {new Date(o.orderTime).toLocaleTimeString(tag, { hour: "numeric", minute: "2-digit" }).toLowerCase()} ·{" "}
+                          <span className={cn("font-semibold", stale && "text-destructive")}>{ageText(age)}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="font-semibold">{o.customerName}</div>
-                        <div className="text-xs text-muted-foreground">{qty > 0 ? `${qty} item${qty === 1 ? "" : "s"}` : "—"}</div>
+                        <div className="text-xs text-muted-foreground">{qty > 0 ? t("common:count.items", { count: qty }) : "—"}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">
-                          <Badge variant={src.variant}>{src.label}</Badge>
-                          <AdSourceBadge source={o.adSource} label={o.adSourceLabel} title={campaignHint(o) || undefined} />
+                          <Badge variant={src.variant}>{t(src.label)}</Badge>
+                          <AdSourceBadge source={o.adSource} label={o.adSourceLabel} title={campaignHint(t, o) || undefined} />
                         </div>
                         <OrderFlagBadges order={o} className="mt-1" />
                       </TableCell>
                       <TableCell>
-                        <div>{o.method}</div>
+                        <div>{methodLabel(t, o.method)}</div>
                         <StatusBadge
                           className="mt-0.5"
                           status={o.status === "Cancelled" ? "Cancelled" : pay.label}
                           variant={o.status === "Cancelled" ? "outline" : SALE_PAY_VARIANT[pay.label]}
-                          label={o.status === "Cancelled" ? "Cancelled" : pay.label === "Due" ? "Unpaid" : pay.label}
+                          label={o.status === "Cancelled" ? t("common:orderStatus.cancelled") : payLabel(t, pay.label === "Due" ? "Unpaid" : pay.label)}
                         />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatCurrency(Number(o.amount))}</TableCell>
                       <TableCell>
                         <Select value={stage} disabled={stage === "Cancelled"} onValueChange={(v) => moveTo(o, v as Tab)}>
                           <SelectTrigger
-                            aria-label={`Status for ${o.invoiceNo}`}
+                            aria-label={t("orders:list.statusFor", { invoice: o.invoiceNo })}
                             size="sm"
                             className="w-auto"
                           >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {TAB_VALUES.map((t) => (
-                              <SelectItem key={t} value={t} disabled={t === "Completed" && stage !== "Completed"}>{t}</SelectItem>
+                            {TAB_VALUES.map((v) => (
+                              <SelectItem key={v} value={v} disabled={v === "Completed" && stage !== "Completed"}>{orderStatusLabel(t, v)}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         {fu && (
                           <div className={cn("mt-1 text-xs", fu.overdue ? "font-semibold text-destructive" : "text-muted-foreground")}>
-                            {fu.text}{fu.overdue ? " (overdue)" : ""}
+                            {fu.overdue ? t("orders:list.overdue", { text: fu.text }) : fu.text}
                           </div>
                         )}
                       </TableCell>
@@ -697,42 +732,42 @@ export default function OrdersPage() {
                         {shipment ? (
                           <div>
                             <Link href="/dashboard/orders/shipments" className="font-medium text-primary underline-offset-4 hover:underline">
-                              {shipment.trackingNumber || shipment.carrier || "Courier"}
-                              {humanize(shipment.status) ? ` · ${humanize(shipment.status)}` : ""}
+                              {shipment.trackingNumber || shipment.carrier || t("orders:list.courier")}
+                              {shipmentStatusText(shipment.status) ? ` · ${shipmentStatusText(shipment.status)}` : ""}
                             </Link>
-                            {canShip && <Button type="button" variant="link" size="sm" className="ml-2" onClick={() => createShipment(o.id)}>+ Create</Button>}
+                            {canShip && <Button type="button" variant="link" size="sm" className="ml-2" onClick={() => createShipment(o.id)}>{t("orders:list.plusCreate")}</Button>}
                           </div>
                         ) : o.source === "pos" ? (
-                          <span className="text-muted-foreground">Picked up in store</span>
+                          <span className="text-muted-foreground">{t("orders:list.pickedUpInStore")}</span>
                         ) : canShip ? (
-                          <Button type="button" variant="link" size="sm" onClick={() => createShipment(o.id)}>+ Create</Button>
+                          <Button type="button" variant="link" size="sm" onClick={() => createShipment(o.id)}>{t("orders:list.plusCreate")}</Button>
                         ) : (
-                          <span className="text-muted-foreground">No shipment</span>
+                          <span className="text-muted-foreground">{t("orders:list.noShipment")}</span>
                         )}
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <WithTooltip content={`View ${o.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${o.invoiceNo}`} onClick={() => openDetail(o)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("orders:list.viewInvoice", { invoice: o.invoiceNo })}><Button type="button" variant="outline" size="icon" aria-label={t("orders:list.viewInvoice", { invoice: o.invoiceNo })} onClick={() => openDetail(o)}><Eye className="size-4" /></Button></WithTooltip>
                           {followable && (
-                            <WithTooltip content="Follow up">
-                              <Button type="button" variant="outline" size="icon" aria-label="Follow up" onClick={() => setFollowUpTarget(o)}><Phone className="size-4" /></Button>
+                            <WithTooltip content={t("orders:list.followUp")}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("orders:list.followUp")} onClick={() => setFollowUpTarget(o)}><Phone className="size-4" /></Button>
                             </WithTooltip>
                           )}
-                          <WithTooltip content={`Print ${o.invoiceNo}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${o.invoiceNo}`} onClick={() => printInvoice(o)}><Printer className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("orders:list.printInvoice", { invoice: o.invoiceNo })}><Button type="button" variant="outline" size="icon" aria-label={t("orders:list.printInvoice", { invoice: o.invoiceNo })} onClick={() => printInvoice(o)}><Printer className="size-4" /></Button></WithTooltip>
                           {!["Cancelled", "Delivered", "Completed"].includes(stage) && (
-                            <WithTooltip content="Cancel order">
-                              <Button type="button" variant="outline" size="icon" aria-label={`Cancel ${o.invoiceNo}`} className="text-destructive" onClick={() => cancelOrders([o])}><XCircle className="size-4" /></Button>
+                            <WithTooltip content={t("orders:list.cancelOrder")}>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("orders:list.cancelInvoice", { invoice: o.invoiceNo })} className="text-destructive" onClick={() => cancelOrders([o])}><XCircle className="size-4" /></Button>
                             </WithTooltip>
                           )}
                           <DropdownMenu>
-                            <WithTooltip content={`More actions for ${o.invoiceNo}`}><DropdownMenuTrigger asChild>
-                              <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${o.invoiceNo}`}><MoreHorizontal className="size-4" /></Button>
+                            <WithTooltip content={t("orders:list.moreFor", { invoice: o.invoiceNo })}><DropdownMenuTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("orders:list.moreFor", { invoice: o.invoiceNo })}><MoreHorizontal className="size-4" /></Button>
                             </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
-                              {canShip && <DropdownMenuItem onClick={() => createShipment(o.id)}>Create shipment</DropdownMenuItem>}
-                              <DropdownMenuItem onClick={async () => printPackingSlips([await fullOrder(o)])}>Print packing slip</DropdownMenuItem>
+                              {canShip && <DropdownMenuItem onClick={() => createShipment(o.id)}>{t("orders:list.createShipment")}</DropdownMenuItem>}
+                              <DropdownMenuItem onClick={async () => printPackingSlips([await fullOrder(o)], i18n.language)}>{t("orders:list.printSlip")}</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(o)}>Delete order</DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(o)}>{t("orders:list.deleteOrder")}</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -769,13 +804,13 @@ export default function OrdersPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete order #{deleteTarget?.invoiceNo}?</AlertDialogTitle>
-            <AlertDialogDescription>This removes the order permanently. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("orders:list.deleteTitle", { invoice: deleteTarget?.invoiceNo ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("orders:list.deleteDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete order"}
+              {deleting ? t("orders:list.deleting") : t("orders:list.deleteOrder")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

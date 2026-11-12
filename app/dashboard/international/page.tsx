@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
 import { Spinner } from "@/components/ui/spinner"
 import { PageHeader } from "@/components/common/PageHeader"
 import { SectionCard } from "@/components/common/SectionCard"
@@ -135,7 +137,23 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   GHS: "₵",
 }
 
+/** Name from Intl.DisplayNames in the admin language; undefined when unsupported. */
+function displayName(tag: string, type: "currency" | "language", code: string): string | undefined {
+  try { return new Intl.DisplayNames([tag], { type }).of(code) } catch { return undefined }
+}
+
 export default function InternationalPage() {
+  const { t, i18n } = useTranslation(["commerce", "common"])
+  const tag = localeTag(i18n.language)
+  const isEn = i18n.language === "en"
+  // English keeps the list names; other admin languages get names from Intl (codes / native names stay)
+  const currencyName = (c: { code: string; name: string }) => (isEn ? c.name : displayName(tag, "currency", c.code) || c.name)
+  const languageName = (l: { code: string; name: string }) => {
+    if (isEn) return l.name
+    const native = l.name.replace(/ \(.*\)$/, "")
+    const local = displayName(tag, "language", l.code)
+    return local && local !== native ? `${native} (${local})` : native
+  }
   const { canRead } = useSaasAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -182,7 +200,7 @@ export default function InternationalPage() {
       setTimeFormat(regional.timeFormat || "12h")
     } catch (error) {
       console.error("Failed to load settings:", error)
-      toast.error("Failed to load international settings")
+      toast.error(t("commerce:international.loadFailed"))
     } finally {
       setIsLoading(false)
     }
@@ -204,10 +222,10 @@ export default function InternationalPage() {
         dateFormat,
         timeFormat,
       })
-      toast.success("International settings updated successfully")
+      toast.success(t("commerce:international.saved"))
     } catch (error) {
       console.error("Failed to save settings:", error)
-      toast.error("Failed to save international settings")
+      toast.error(t("commerce:international.saveFailed"))
     } finally {
       setIsSaving(false)
     }
@@ -250,20 +268,20 @@ export default function InternationalPage() {
 
   return (
     <div className="space-y-8 pb-12">
-      <PageHeader title="International Settings" description="Configure regional settings, currency, timezone, and language for your store" />
+      <PageHeader title={t("commerce:international.title")} description={t("commerce:international.description")} />
 
       {/* Currency Settings */}
-      <SectionCard title={<span className="flex items-center gap-2"><DollarSign className="size-5 text-muted-foreground" />Currency</span>}>
+      <SectionCard title={<span className="flex items-center gap-2"><DollarSign className="size-5 text-muted-foreground" />{t("commerce:international.currency")}</span>}>
 
         <div className="space-y-6">
           {/* Currency Code */}
-          <FormField label="Currency" htmlFor="intl-currency">
+          <FormField label={t("commerce:international.currency")} htmlFor="intl-currency">
             <Select value={String(currency)} onValueChange={(val) => setCurrency(val)}>
               <SelectTrigger id="intl-currency" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {CURRENCY_LIST.map((c) => (
                   <SelectItem key={c.code} value={String(c.code)}>
-                    {c.code} - {c.name}
+                    {c.code} - {currencyName(c)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -272,23 +290,23 @@ export default function InternationalPage() {
 
           {/* Symbol Position */}
           <div className="grid grid-cols-2 gap-6">
-            <FormField label="Symbol Position" htmlFor="intl-symbol-position">
+            <FormField label={t("commerce:international.symbolPosition")} htmlFor="intl-symbol-position">
               <Select value={String(currencySymbolPosition)} onValueChange={(val) => setCurrencySymbolPosition(val as "before" | "after")}>
                 <SelectTrigger id="intl-symbol-position" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="before">Before amount (e.g., $1,234.56)</SelectItem>
-                  <SelectItem value="after">After amount (e.g., 1,234.56 $)</SelectItem>
+                  <SelectItem value="before">{t("commerce:international.before")}</SelectItem>
+                  <SelectItem value="after">{t("commerce:international.after")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
 
             {/* Decimal Separator */}
-            <FormField label="Decimal Separator" htmlFor="intl-decimal-separator">
+            <FormField label={t("commerce:international.decimalSeparator")} htmlFor="intl-decimal-separator">
               <Select value={String(currencyDecimalSeparator)} onValueChange={(val) => setCurrencyDecimalSeparator(val as "." | ",")}>
                 <SelectTrigger id="intl-decimal-separator" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value=".">Period (.)</SelectItem>
-                  <SelectItem value=",">Comma (,)</SelectItem>
+                  <SelectItem value=".">{t("commerce:international.period")}</SelectItem>
+                  <SelectItem value=",">{t("commerce:international.comma")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
@@ -296,26 +314,26 @@ export default function InternationalPage() {
 
           {/* Thousands Separator */}
           <div className="grid grid-cols-2 gap-6">
-            <FormField label="Thousands Separator" htmlFor="intl-thousands-separator">
+            <FormField label={t("commerce:international.thousandsSeparator")} htmlFor="intl-thousands-separator">
               <Select value={String(currencyThousandsSeparator) === "" ? "__none" : String(currencyThousandsSeparator)} onValueChange={(val) => setCurrencyThousandsSeparator((val === "__none" ? "" : val) as any)}>
                 <SelectTrigger id="intl-thousands-separator" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value=",">Comma (,)</SelectItem>
-                  <SelectItem value=".">Period (.)</SelectItem>
-                  <SelectItem value=" ">Space</SelectItem>
-                  <SelectItem value="__none">None</SelectItem>
+                  <SelectItem value=",">{t("commerce:international.comma")}</SelectItem>
+                  <SelectItem value=".">{t("commerce:international.period")}</SelectItem>
+                  <SelectItem value=" ">{t("commerce:international.space")}</SelectItem>
+                  <SelectItem value="__none">{t("common:status.none")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
 
             {/* Decimal Places */}
-            <FormField label="Decimal Places" htmlFor="intl-decimal-places">
+            <FormField label={t("commerce:international.decimalPlaces")} htmlFor="intl-decimal-places">
               <Select value={String(currencyDecimalPlaces)} onValueChange={(val) => setCurrencyDecimalPlaces(parseInt(val) as any)}>
                 <SelectTrigger id="intl-decimal-places" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">0 decimal places (e.g., 1,235)</SelectItem>
-                  <SelectItem value="1">1 decimal place (e.g., 1,234.5)</SelectItem>
-                  <SelectItem value="2">2 decimal places (e.g., 1,234.56)</SelectItem>
+                  <SelectItem value="0">{t("commerce:international.places0")}</SelectItem>
+                  <SelectItem value="1">{t("commerce:international.places1")}</SelectItem>
+                  <SelectItem value="2">{t("commerce:international.places2")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
@@ -324,11 +342,11 @@ export default function InternationalPage() {
       </SectionCard>
 
       {/* Regional Settings */}
-      <SectionCard title={<span className="flex items-center gap-2"><Globe className="size-5 text-muted-foreground" />Regional Settings</span>}>
+      <SectionCard title={<span className="flex items-center gap-2"><Globe className="size-5 text-muted-foreground" />{t("commerce:international.regional")}</span>}>
 
         <div className="space-y-6">
           {/* Timezone */}
-          <FormField label="Timezone" htmlFor="intl-timezone">
+          <FormField label={t("commerce:international.timezone")} htmlFor="intl-timezone">
             <Select value={String(timezone)} onValueChange={(val) => setTimezone(val)}>
               <SelectTrigger id="intl-timezone" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -342,13 +360,13 @@ export default function InternationalPage() {
           </FormField>
 
           {/* Language */}
-          <FormField label="Language" htmlFor="intl-language">
+          <FormField label={t("commerce:international.language")} htmlFor="intl-language">
             <Select value={String(language)} onValueChange={(val) => setLanguage(val)}>
               <SelectTrigger id="intl-language" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LANGUAGE_LIST.map((lang) => (
                   <SelectItem key={lang.code} value={String(lang.code)}>
-                    {lang.name}
+                    {languageName(lang)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -358,31 +376,31 @@ export default function InternationalPage() {
       </SectionCard>
 
       {/* Units of Measurement */}
-      <SectionCard title={<span className="flex items-center gap-2"><Ruler className="size-5 text-muted-foreground" />Units of Measurement</span>}>
+      <SectionCard title={<span className="flex items-center gap-2"><Ruler className="size-5 text-muted-foreground" />{t("commerce:international.units")}</span>}>
 
         <div className="space-y-6">
           {/* Weight Unit */}
           <div className="grid grid-cols-2 gap-6">
-            <FormField label="Weight Unit" htmlFor="intl-weight-unit">
+            <FormField label={t("commerce:international.weightUnit")} htmlFor="intl-weight-unit">
               <Select value={String(weightUnit)} onValueChange={(val) => setWeightUnit(val as any)}>
                 <SelectTrigger id="intl-weight-unit" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kg">Kilogram (kg)</SelectItem>
-                  <SelectItem value="lb">Pound (lb)</SelectItem>
-                  <SelectItem value="g">Gram (g)</SelectItem>
-                  <SelectItem value="oz">Ounce (oz)</SelectItem>
+                  <SelectItem value="kg">{t("commerce:international.kg")}</SelectItem>
+                  <SelectItem value="lb">{t("commerce:international.lb")}</SelectItem>
+                  <SelectItem value="g">{t("commerce:international.g")}</SelectItem>
+                  <SelectItem value="oz">{t("commerce:international.oz")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
 
             {/* Dimension Unit */}
-            <FormField label="Dimension Unit" htmlFor="intl-dimension-unit">
+            <FormField label={t("commerce:international.dimensionUnit")} htmlFor="intl-dimension-unit">
               <Select value={String(dimensionUnit)} onValueChange={(val) => setDimensionUnit(val as any)}>
                 <SelectTrigger id="intl-dimension-unit" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cm">Centimeter (cm)</SelectItem>
-                  <SelectItem value="in">Inch (in)</SelectItem>
-                  <SelectItem value="mm">Millimeter (mm)</SelectItem>
+                  <SelectItem value="cm">{t("commerce:international.cm")}</SelectItem>
+                  <SelectItem value="in">{t("commerce:international.inch")}</SelectItem>
+                  <SelectItem value="mm">{t("commerce:international.mm")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
@@ -391,12 +409,12 @@ export default function InternationalPage() {
       </SectionCard>
 
       {/* Date & Time Format */}
-      <SectionCard title={<span className="flex items-center gap-2"><Calendar className="size-5 text-muted-foreground" />Date & Time Format</span>}>
+      <SectionCard title={<span className="flex items-center gap-2"><Calendar className="size-5 text-muted-foreground" />{t("commerce:international.dateTime")}</span>}>
 
         <div className="space-y-6">
           {/* Date Format */}
           <div className="grid grid-cols-2 gap-6">
-            <FormField label="Date Format" htmlFor="intl-date-format">
+            <FormField label={t("commerce:international.dateFormat")} htmlFor="intl-date-format">
               <Select value={String(dateFormat)} onValueChange={(val) => setDateFormat(val as any)}>
                 <SelectTrigger id="intl-date-format" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -408,12 +426,12 @@ export default function InternationalPage() {
             </FormField>
 
             {/* Time Format */}
-            <FormField label="Time Format" htmlFor="intl-time-format">
+            <FormField label={t("commerce:international.timeFormat")} htmlFor="intl-time-format">
               <Select value={String(timeFormat)} onValueChange={(val) => setTimeFormat(val as any)}>
                 <SelectTrigger id="intl-time-format" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="12h">12-hour (2:30 PM)</SelectItem>
-                  <SelectItem value="24h">24-hour (14:30)</SelectItem>
+                  <SelectItem value="12h">{t("commerce:international.h12")}</SelectItem>
+                  <SelectItem value="24h">{t("commerce:international.h24")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
@@ -422,18 +440,18 @@ export default function InternationalPage() {
       </SectionCard>
 
       {/* Number Format Preview */}
-      <SectionCard title={<span className="flex items-center gap-2"><Hash className="size-5 text-muted-foreground" />Number Format Preview</span>}>
+      <SectionCard title={<span className="flex items-center gap-2"><Hash className="size-5 text-muted-foreground" />{t("commerce:international.preview")}</span>}>
 
         <div className="grid gap-4">
-          <StatTile label="Sample price: 1,234.56" value={formatNumberPreview(1234.56)} />
-          <StatTile label="Sample price: 99.99" value={formatNumberPreview(99.99)} />
+          <StatTile label={t("commerce:international.sample", { value: "1,234.56" })} value={formatNumberPreview(1234.56)} />
+          <StatTile label={t("commerce:international.sample", { value: "99.99" })} value={formatNumberPreview(99.99)} />
         </div>
       </SectionCard>
 
       {/* Save Button */}
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={loadSettings} disabled={isSaving}>
-          Cancel
+          {t("common:actions.cancel")}
         </Button>
         <Button
           onClick={handleSave}
@@ -442,10 +460,10 @@ export default function InternationalPage() {
           {isSaving ? (
             <>
               <Spinner />
-              Saving...
+              {t("common:actions.saving")}
             </>
           ) : (
-            "Save Changes"
+            t("common:actions.saveChanges")
           )}
         </Button>
       </div>

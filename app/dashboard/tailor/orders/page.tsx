@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { Banknote, Clock, Download, Eye, FileText, Package, Printer, Scissors, Search, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -27,6 +28,7 @@ import { OrderDetailDialog } from "@/components/tailor/OrderDetailDialog"
 import {
   PayBadge, StageBadge, StageBar, UrgentBadge, apiError, fmtDate, whenText,
 } from "@/components/tailor/order-ui"
+import { TAILOR_NS, stageLabel, type TailorKey } from "@/components/tailor/i18n"
 import {
   TAILOR_STAGE_LABEL, tailorApi, tailorOrdersApi,
   type TailorBoardResponse, type TailorBoardRow, type TailorDorji,
@@ -41,15 +43,17 @@ import { cn } from "@/lib/utils"
 
 type Tab = "open" | "new" | "cutting" | "stitching" | "trial" | "ready" | "delivered" | "cancelled"
 
-const TABS: [Tab, string][] = [
-  ["open", "In progress"], ["new", "Received"], ["cutting", "Cutting"], ["stitching", "Stitching"],
-  ["trial", "Trial"], ["ready", "Ready"], ["delivered", "Delivered"], ["cancelled", "Cancelled"],
+const TABS: [Tab, TailorKey][] = [
+  ["open", "tailor:orders.tabOpen"], ["new", "tailor:stage.new"], ["cutting", "tailor:stage.cutting"], ["stitching", "tailor:stage.stitching"],
+  ["trial", "tailor:stage.trial"], ["ready", "tailor:stage.ready"], ["delivered", "tailor:stage.delivered"], ["cancelled", "tailor:stage.cancelled"],
 ]
-const DELIVERY_OPTS = [["all", "Delivery: Any date"], ["overdue", "Overdue"], ["today", "Due today"], ["week", "Next 7 days"]] as const
-const PAY_OPTS = [["all", "Payment: All"], ["unpaid", "Unpaid"], ["partial", "Partial"], ["paid", "Paid"]] as const
+const DELIVERY_OPTS: [string, TailorKey][] = [["all", "tailor:orders.deliveryAny"], ["overdue", "tailor:shared.overdue"], ["today", "tailor:shared.dueToday"], ["week", "tailor:shared.next7Days"]]
+const PAY_OPTS: [string, TailorKey][] = [["all", "tailor:orders.paymentAll"], ["unpaid", "tailor:pay.unpaid"], ["partial", "tailor:pay.partial"], ["paid", "tailor:pay.paid"]]
 
 export default function TailorOrdersPage() {
   const { formatCurrency } = useCompanySettings()
+  const { t, i18n } = useTranslation(TAILOR_NS)
+  const lng = i18n.language
   const { canWrite } = useSaasAuth()
   const blocked = useModuleGuard("TailorOrders")
   const writable = canWrite("TailorOrders")
@@ -100,11 +104,11 @@ export default function TailorOrdersPage() {
       })
       setData(res)
     } catch {
-      toast.error("Failed to load tailor orders")
+      toast.error(t("tailor:orders.failedLoad"))
     } finally {
       setLoading(false)
     }
-  }, [tab, page, perPage, searchD, dorjiF, deliveryF, payF, fromD, toD])
+  }, [tab, page, perPage, searchD, dorjiF, deliveryF, payF, fromD, toD, t])
   useEffect(() => { load() }, [load])
 
   const resetPage = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1) }
@@ -120,11 +124,11 @@ export default function TailorOrdersPage() {
     setBusyId(r.id)
     try {
       await tailorOrdersApi.transition(r.id, r.nextStage)
-      toast.success(r.nextStage === "delivered" ? `${r.orderNumber} delivered` : `${r.orderNumber} moved to ${TAILOR_STAGE_LABEL[r.nextStage].toLowerCase()}`)
+      toast.success(r.nextStage === "delivered" ? t("tailor:orders.delivered", { order: r.orderNumber }) : t("tailor:shared.movedTo", { order: r.orderNumber, stage: stageLabel(t, r.nextStage) }))
       setConfirmRow(null)
       await load()
     } catch (e) {
-      toast.error(apiError(e, "Failed to update status"))
+      toast.error(apiError(e, t("tailor:shared.failedUpdateStatus")))
     } finally {
       setBusyId(null)
     }
@@ -138,18 +142,18 @@ export default function TailorOrdersPage() {
   const printCard = async (r: TailorBoardRow) => {
     try {
       const d = await tailorOrdersApi.detail(r.id)
-      if (!printJobCard(d)) toast.error("Allow pop-ups to print.")
+      if (!printJobCard(d, i18n.language)) toast.error(t("tailor:shared.allowPopups"))
     } catch {
-      toast.error("Failed to load order")
+      toast.error(t("tailor:shared.failedLoadOrder"))
     }
   }
 
   const printInv = async (r: TailorBoardRow) => {
     try {
       const d = await tailorOrdersApi.detail(r.id)
-      if (!printInvoice(d, businessName, formatCurrency)) toast.error("Allow pop-ups to print.")
+      if (!printInvoice(d, businessName, formatCurrency, i18n.language)) toast.error(t("tailor:shared.allowPopups"))
     } catch {
-      toast.error("Failed to load order")
+      toast.error(t("tailor:shared.failedLoadOrder"))
     }
   }
 
@@ -167,14 +171,14 @@ export default function TailorOrdersPage() {
         all.push(...res.orders)
         if (p >= res.pagination.lastPage) break
       }
-      if (all.length === 0) { toast.error("Nothing to export"); return }
+      if (all.length === 0) { toast.error(t("common:extra.nothingToExport")); return }
       exportToCSV(all.map((o) => ({
         order: o.orderNumber, order_date: o.orderDate ?? "", customer: o.customer?.name ?? "", phone: o.customer?.phone ?? "", items: o.itemsSummary,
         status: TAILOR_STAGE_LABEL[o.stage], payment: o.paymentStatus, dorji: o.dorjiNames.join(", "), delivery: o.deliveryDate ?? "",
         total: o.totalAmount, paid: o.paidAmount, due: o.dueAmount, notes: o.notes ?? "",
       })), "tailor-orders", ["order", "order_date", "customer", "phone", "items", "status", "payment", "dorji", "delivery", "total", "paid", "due", "notes"])
     } catch {
-      toast.error("Export failed")
+      toast.error(t("tailor:shared.exportFailed"))
     }
   }
 
@@ -183,11 +187,11 @@ export default function TailorOrdersPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Tailor orders"
-        description="Every stitching job from measurement to delivery."
+        title={t("tailor:orders.title")}
+        description={t("tailor:orders.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
-          {writable && <Button asChild><Link href="/dashboard/tailor/orders/new">+ New tailor order</Link></Button>}
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
+          {writable && <Button asChild><Link href="/dashboard/tailor/orders/new">{t("tailor:shared.newTailorOrder")}</Link></Button>}
         </>}
       />
 
@@ -195,45 +199,45 @@ export default function TailorOrdersPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px]" />)}</div>
       ) : stats ? (
         <StatsCards stats={[
-          { label: "Open orders", value: stats.openOrders, icon: <Package className="size-4" />, color: "blue", hint: `${stats.readyForPickup} ready for pickup` },
-          { label: "Due in 7 days", value: stats.dueIn7Days, icon: <Clock className="size-4" />, color: "yellow", hint: "Delivery this week",
+          { label: t("tailor:orders.openOrders"), value: stats.openOrders, icon: <Package className="size-4" />, color: "blue", hint: t("tailor:orders.readyForPickup", { count: stats.readyForPickup }) },
+          { label: t("tailor:orders.dueIn7"), value: stats.dueIn7Days, icon: <Clock className="size-4" />, color: "yellow", hint: t("tailor:orders.deliveryThisWeek"),
             onClick: () => { setTab("open"); setDeliveryF("week"); setPage(1) }, active: deliveryF === "week" },
-          { label: "Overdue", value: stats.overdue, icon: <TriangleAlert className="size-4" />, color: "red", hint: stats.overdue ? "Needs attention" : "On schedule",
+          { label: t("tailor:shared.overdue"), value: stats.overdue, icon: <TriangleAlert className="size-4" />, color: "red", hint: stats.overdue ? t("tailor:orders.needsAttention") : t("tailor:orders.onSchedule"),
             onClick: () => { setTab("open"); setDeliveryF("overdue"); setPage(1) }, active: deliveryF === "overdue" },
-          { label: "Balance to collect", value: formatCurrency(stats.balanceToCollect), icon: <Banknote className="size-4" />, color: "green", hint: `${stats.balanceOrders} order${stats.balanceOrders === 1 ? "" : "s"}` },
+          { label: t("tailor:orders.balanceToCollect"), value: formatCurrency(stats.balanceToCollect), icon: <Banknote className="size-4" />, color: "green", hint: t("common:count.orders", { count: stats.balanceOrders }) },
         ]} />
       ) : null}
 
       <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
-            tabs={TABS.map(([v, label]) => ({ value: v, label, count: counts?.[v] }))} />
+            tabs={TABS.map(([v, label]) => ({ value: v, label: t(label), count: counts?.[v] }))} />
         </div>
         <FilterBar className="gap-2.5 p-4">
           <InputGroup className="min-w-[240px] flex-1">
             <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-            <InputGroupInput type="search" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order, customer or phone…" />
+            <InputGroupInput type="search" aria-label={t("common:actions.search")} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("tailor:orders.searchPlaceholder")} />
           </InputGroup>
           <Select value={dorjiF} onValueChange={(v) => resetPage(setDorjiF)(v)}>
-            <SelectTrigger aria-label="Dorji" className="min-w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("tailor:shared.dorji")} className="min-w-[150px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Dorji: All</SelectItem><SelectItem value="none">Unassigned</SelectItem>
+              <SelectItem value="all">{t("tailor:shared.dorjiAll")}</SelectItem><SelectItem value="none">{t("tailor:shared.unassigned")}</SelectItem>
               {dorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={deliveryF} onValueChange={(v) => resetPage(setDeliveryF)(v)}>
-            <SelectTrigger aria-label="Delivery" className="min-w-[160px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{DELIVERY_OPTS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+            <SelectTrigger aria-label={t("tailor:shared.delivery")} className="min-w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{DELIVERY_OPTS.map(([v, l]) => <SelectItem key={v} value={v}>{t(l)}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={payF} onValueChange={(v) => resetPage(setPayF)(v)}>
-            <SelectTrigger aria-label="Payment" className="min-w-[140px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{PAY_OPTS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+            <SelectTrigger aria-label={t("tailor:orders.paymentAria")} className="min-w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectContent>{PAY_OPTS.map(([v, l]) => <SelectItem key={v} value={v}>{t(l)}</SelectItem>)}</SelectContent>
           </Select>
-          <FormField orientation="horizontal" className="w-auto gap-2" label="Delivery from" htmlFor="tailor-orders-from">
-            <Input id="tailor-orders-from" type="date" aria-label="Delivery from" className="w-auto" value={fromD} onChange={(e) => resetPage(setFromD)(e.target.value)} />
+          <FormField orientation="horizontal" className="w-auto gap-2" label={t("tailor:orders.deliveryFrom")} htmlFor="tailor-orders-from">
+            <Input id="tailor-orders-from" type="date" aria-label={t("tailor:orders.deliveryFrom")} className="w-auto" value={fromD} onChange={(e) => resetPage(setFromD)(e.target.value)} />
           </FormField>
-          <FormField orientation="horizontal" className="w-auto gap-2" label="to" htmlFor="tailor-orders-to">
-            <Input id="tailor-orders-to" type="date" aria-label="Delivery to" className="w-auto" value={toD} onChange={(e) => resetPage(setToD)(e.target.value)} />
+          <FormField orientation="horizontal" className="w-auto gap-2" label={t("tailor:orders.toShort")} htmlFor="tailor-orders-to">
+            <Input id="tailor-orders-to" type="date" aria-label={t("tailor:orders.deliveryTo")} className="w-auto" value={toD} onChange={(e) => resetPage(setToD)(e.target.value)} />
           </FormField>
         </FilterBar>
 
@@ -241,21 +245,21 @@ export default function TailorOrdersPage() {
           <Table className="min-w-[1040px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Order</TableHead><TableHead>Customer</TableHead>
-                <TableHead>Items</TableHead><TableHead>Progress</TableHead>
-                <TableHead>Dorji</TableHead><TableHead>Delivery</TableHead>
-                <TableHead className="text-right">Total / due</TableHead><TableHead className="text-right">Next step</TableHead>
+                <TableHead>{t("tailor:shared.order")}</TableHead><TableHead>{t("common:fields.customer")}</TableHead>
+                <TableHead>{t("tailor:orders.colItems")}</TableHead><TableHead>{t("tailor:orders.colProgress")}</TableHead>
+                <TableHead>{t("tailor:shared.dorji")}</TableHead><TableHead>{t("tailor:shared.delivery")}</TableHead>
+                <TableHead className="text-right">{t("tailor:orders.colTotalDue")}</TableHead><TableHead className="text-right">{t("tailor:orders.colNextStep")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-10" /></TableCell></TableRow>) :
                 rows.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="whitespace-normal">
-                    <EmptyState icon={Scissors} title="No orders found" className="p-4 md:p-6"
-                      description={hasFilter || tab !== "open" ? "No orders match these filters." : "No tailor orders yet. Create the first one with “+ New tailor order”."} />
+                    <EmptyState icon={Scissors} title={t("tailor:orders.noOrdersFound")} className="p-4 md:p-6"
+                      description={hasFilter || tab !== "open" ? t("tailor:orders.noMatch") : t("tailor:orders.noOrdersYet")} />
                   </TableCell></TableRow>
                 ) : rows.map((r) => {
-                  const when = whenText(r.daysLeft, r.stage)
+                  const when = whenText(t, r.daysLeft, r.stage)
                   const open = r.stage !== "delivered" && r.stage !== "cancelled"
                   const busy = busyId === r.id
                   return (
@@ -265,7 +269,7 @@ export default function TailorOrdersPage() {
                           <Button type="button" variant="link" onClick={() => openView(r.id)} className="h-auto p-0">{r.orderNumber}</Button>
                           {r.isUrgent && <UrgentBadge />}
                         </div>
-                        <div className="text-xs text-muted-foreground">{fmtDate(r.orderDate)}</div>
+                        <div className="text-xs text-muted-foreground">{fmtDate(r.orderDate, lng)}</div>
                       </TableCell>
                       <TableCell>
                         <div className="font-semibold">{r.customer?.name ?? "—"}</div>
@@ -275,20 +279,20 @@ export default function TailorOrdersPage() {
                       <TableCell>
                         <StageBadge stage={r.stage} />
                         <StageBar stageIndex={r.stageIndex} stage={r.stage} />
-                        {r.progress.total > 0 && <div className="mt-1 text-[11px] text-muted-foreground">{r.progress.done}/{r.progress.total} done by dorji</div>}
+                        {r.progress.total > 0 && <div className="mt-1 text-[11px] text-muted-foreground">{t("tailor:orders.doneByDorji", { done: r.progress.done, total: r.progress.total })}</div>}
                       </TableCell>
                       <TableCell>
                         {r.dorjiNames.length > 0 ? <Badge variant="secondary">{r.dorjiNames.join(", ")}</Badge>
-                          : open ? <Link href="/dashboard/tailor/assignments" className="text-xs font-medium text-primary underline-offset-4 hover:underline">+ Assign</Link> : <span className="text-muted-foreground">—</span>}
+                          : open ? <Link href="/dashboard/tailor/assignments" className="text-xs font-medium text-primary underline-offset-4 hover:underline">{t("tailor:orders.assign")}</Link> : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>
-                        <div className="font-semibold">{fmtDate(r.deliveryDate)}</div>
+                        <div className="font-semibold">{fmtDate(r.deliveryDate, lng)}</div>
                         <div className={cn("text-xs font-semibold", when.cls)}>{when.text}</div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <div className="font-bold">{formatCurrency(r.totalAmount)}</div>
                         <div className={cn("text-xs font-semibold", r.stage === "cancelled" ? "text-muted-foreground" : r.dueAmount > 0 ? "text-destructive" : "text-dash-success-fg")}>
-                          {r.stage === "cancelled" ? "Cancelled" : r.dueAmount > 0 ? `Due ${formatCurrency(r.dueAmount)}` : "Paid in full"}
+                          {r.stage === "cancelled" ? t("tailor:stage.cancelled") : r.dueAmount > 0 ? t("tailor:orders.dueAmount", { amount: formatCurrency(r.dueAmount) }) : t("tailor:orders.paidInFull")}
                         </div>
                         <PayBadge status={r.paymentStatus} className="mt-0.5" />
                       </TableCell>
@@ -297,13 +301,13 @@ export default function TailorOrdersPage() {
                           {writable && open && r.nextStage && (
                             <Button type="button" disabled={busy} onClick={() => onMove(r)}
                               variant={r.stage === "ready" ? "default" : "secondary"} className="mr-1">
-                              {r.stage === "ready" ? `Deliver${r.dueAmount > 0 ? ` & collect ${formatCurrency(r.dueAmount)}` : ""}` : `→ ${TAILOR_STAGE_LABEL[r.nextStage]}`}
+                              {r.stage === "ready" ? (r.dueAmount > 0 ? t("tailor:orders.deliverCollect", { amount: formatCurrency(r.dueAmount) }) : t("tailor:orders.deliver")) : t("tailor:orders.moveTo", { stage: stageLabel(t, r.nextStage) })}
                             </Button>
                           )}
-                          {writable && r.dueAmount > 0 && <WithTooltip content="Record payment"><Button type="button" variant="outline" size="icon" aria-label="Record payment" onClick={() => openView(r.id, true)}><Banknote className="size-4" /></Button></WithTooltip>}
-                          <WithTooltip content="View order"><Button type="button" variant="outline" size="icon" aria-label="View order" onClick={() => openView(r.id)}><Eye className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content="Print invoice"><Button type="button" variant="outline" size="icon" aria-label="Print invoice" onClick={() => printInv(r)}><FileText className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content="Print job card"><Button type="button" variant="outline" size="icon" aria-label="Print job card" onClick={() => printCard(r)}><Printer className="size-4" /></Button></WithTooltip>
+                          {writable && r.dueAmount > 0 && <WithTooltip content={t("tailor:shared.recordPayment")}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.recordPayment")} onClick={() => openView(r.id, true)}><Banknote className="size-4" /></Button></WithTooltip>}
+                          <WithTooltip content={t("tailor:shared.viewOrder")}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.viewOrder")} onClick={() => openView(r.id)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("tailor:shared.printInvoice")}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.printInvoice")} onClick={() => printInv(r)}><FileText className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("tailor:shared.printJobCard")}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.printJobCard")} onClick={() => printCard(r)}><Printer className="size-4" /></Button></WithTooltip>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -323,7 +327,7 @@ export default function TailorOrdersPage() {
           </>
         )}
         <Separator />
-        <div className="px-4 py-2.5 text-xs text-muted-foreground">Showing {total} order{total === 1 ? "" : "s"}</div>
+        <div className="px-4 py-2.5 text-xs text-muted-foreground">{t("tailor:orders.showing", { count: total })}</div>
       </Card>
 
       <OrderDetailDialog orderId={viewId} focusPay={focusPay} canWrite={writable}
@@ -332,12 +336,12 @@ export default function TailorOrdersPage() {
       <Dialog open={!!confirmRow} onOpenChange={(o) => !o && setConfirmRow(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Deliver {confirmRow?.orderNumber}</DialogTitle>
-            <DialogDescription>Collect {formatCurrency(confirmRow?.dueAmount ?? 0)} in cash and mark this order as delivered?</DialogDescription>
+            <DialogTitle>{t("tailor:orders.deliverTitle", { order: confirmRow?.orderNumber ?? "" })}</DialogTitle>
+            <DialogDescription>{t("tailor:orders.deliverDesc", { amount: formatCurrency(confirmRow?.dueAmount ?? 0) })}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmRow(null)} disabled={busyId != null}>Cancel</Button>
-            <Button type="button" onClick={() => confirmRow && move(confirmRow)} disabled={busyId != null}>Collect &amp; deliver</Button>
+            <Button type="button" variant="outline" onClick={() => setConfirmRow(null)} disabled={busyId != null}>{t("common:actions.cancel")}</Button>
+            <Button type="button" onClick={() => confirmRow && move(confirmRow)} disabled={busyId != null}>{t("tailor:orders.collectDeliver")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

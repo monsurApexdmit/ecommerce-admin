@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -35,21 +37,22 @@ const UNLIMITED = 999999
 const TAX_RATE = 0.1
 
 const METHODS = [
-  { id: "card", label: "Credit / debit card" },
-  { id: "bkash", label: "bKash" },
-  { id: "bank", label: "Bank transfer" },
+  { id: "card", label: "account:billing.shared.methods.card" },
+  { id: "bkash", label: "account:billing.shared.methods.bkash" },
+  { id: "bank", label: "account:billing.shared.methods.bank" },
 ] as const
 type Method = (typeof METHODS)[number]["id"]
 type Period = "monthly" | "yearly"
 
-const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 const featName = (f: unknown): string => (typeof f === "string" ? f : String((f as { name?: string })?.name ?? ""))
-const limitLabel = (v?: number | null) => (!v || v >= UNLIMITED ? "Unlimited" : v.toLocaleString("en-US"))
 
 interface Checkout { plan: Plan; period: Period; method: Method; email: string; terms: boolean; err: string; busy: boolean }
 
 export default function PlanBillingPage() {
   const blocked = useModuleGuard("Subscriptions")
+  const { t, i18n } = useTranslation(["account", "common"])
+  const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" }) : "—")
+  const limitLabel = (v?: number | null) => (!v || v >= UNLIMITED ? t("account:billing.shared.unlimited") : v.toLocaleString("en-US"))
   const { formatCurrency } = useCompanySettings()
   const { canWrite } = useSaasAuth()
   const writable = canWrite("Subscriptions")
@@ -69,7 +72,7 @@ export default function PlanBillingPage() {
     try {
       const res = await saasBillingApi.getPlans()
       setPlans(Array.isArray(res.data) ? res.data : [])
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to load plans") }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("account:billing.shared.loadPlansFailed")) }
     try {
       const s: any = (await saasBillingApi.getCurrentSubscription()).data
       setSub(s && s.status !== "none" && s.id ? (s as Subscription) : null)
@@ -79,7 +82,7 @@ export default function PlanBillingPage() {
       const r = await saasBillingApi.getPaymentHistory(1, 50)
       setInvoices((r.data.payments || []).filter((p) => p.amount > 0 && !!p.invoiceNumber))
     } catch { setInvoices([]) }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { (async () => { setLoading(true); await load(); setLoading(false) })() }, [load])
 
@@ -111,28 +114,28 @@ export default function PlanBillingPage() {
   const dPlanObj = plans.find((p) => p.id === dPlan) ?? null
 
   const meters = usage ? [
-    { label: "Team members", used: usage.teamMembers.used, limit: usage.teamMembers.limit as number | null },
-    { label: "Products", used: usage.products.used, limit: usage.products.limit as number | null },
-    { label: "Locations", used: usage.branches.used, limit: usage.branches.limit as number | null },
-    { label: "Sales this month", used: usage.salesThisMonth, limit: null as number | null },
+    { label: t("account:billing.shared.teamMembers"), used: usage.teamMembers.used, limit: usage.teamMembers.limit as number | null },
+    { label: t("account:billing.shared.products"), used: usage.products.used, limit: usage.products.limit as number | null },
+    { label: t("account:billing.shared.locations"), used: usage.branches.used, limit: usage.branches.limit as number | null },
+    { label: t("account:billing.shared.salesThisMonth"), used: usage.salesThisMonth, limit: null as number | null },
   ] : []
   const overAny = meters.some((m) => m.limit !== null && m.limit < UNLIMITED && m.limit > 0 && m.used > m.limit)
 
   const STATUS_PILL = ({
-    none: { label: "No plan", variant: "outline" },
-    trial: { label: "Trial", variant: "secondary" },
-    active: { label: "Active", variant: "default" },
-    cancelled: { label: "Cancelled", variant: "destructive" },
-    expired: { label: "Expired", variant: "outline" },
+    none: { label: t("account:billing.shared.status.none"), variant: "outline" },
+    trial: { label: t("account:billing.shared.status.trial"), variant: "secondary" },
+    active: { label: t("account:billing.shared.status.active"), variant: "default" },
+    cancelled: { label: t("account:billing.shared.status.cancelled"), variant: "destructive" },
+    expired: { label: t("account:billing.shared.status.expired"), variant: "outline" },
   } as Record<typeof status, { label: string; variant: StatusVariant }>)[status]
 
   let note: { danger: boolean; title: string; text: string }
-  if (!sub) note = { danger: false, title: "No active plan.", text: "Pick a plan below to get started." }
-  else if (status === "cancelled") note = { danger: true, title: "Plan cancelled.", text: `Access continues until ${fmtD(periodEnd)}. Renew to reactivate the ${sub.planName} plan.` }
-  else if (status === "expired") note = { danger: true, title: "Plan expired.", text: `Expired on ${fmtD(periodEnd)}. Choose a plan to regain access.` }
-  else if (!sub.currentPeriodStart || !periodEnd) note = { danger: true, title: "Billing date missing.", text: "No subscription start date is saved. Renew once to set it." }
-  else if (isTrial) note = { danger: false, title: `Trial ends on ${fmtD(periodEnd)}.`, text: `Started ${fmtD(sub.currentPeriodStart)}.` }
-  else note = { danger: false, title: `Renews on ${fmtD(sub.nextBillingDate ?? periodEnd)}.`, text: overAny ? "You are over a plan limit — consider upgrading." : `Started ${fmtD(sub.currentPeriodStart)}.` }
+  if (!sub) note = { danger: false, title: t("account:billing.shared.noPlanTitle"), text: t("account:billing.shared.noPlanText") }
+  else if (status === "cancelled") note = { danger: true, title: t("account:billing.overview.cancelledTitle"), text: t("account:billing.overview.cancelledText", { date: fmtD(periodEnd), plan: sub.planName }) }
+  else if (status === "expired") note = { danger: true, title: t("account:billing.overview.expiredTitle"), text: t("account:billing.overview.expiredText", { date: fmtD(periodEnd) }) }
+  else if (!sub.currentPeriodStart || !periodEnd) note = { danger: true, title: t("account:billing.overview.missingTitle"), text: t("account:billing.overview.missingText") }
+  else if (isTrial) note = { danger: false, title: t("account:billing.overview.trialTitle", { date: fmtD(periodEnd) }), text: t("account:billing.overview.startedOn", { date: fmtD(sub.currentPeriodStart) }) }
+  else note = { danger: false, title: t("account:billing.overview.renewsTitle", { date: fmtD(sub.nextBillingDate ?? periodEnd) }), text: overAny ? t("account:billing.overview.overLimit") : t("account:billing.overview.startedOn", { date: fmtD(sub.currentPeriodStart) }) }
 
   const basePrice = isTrial ? 0 : sub?.periodPrice ?? sub?.price ?? 0
 
@@ -146,14 +149,14 @@ export default function PlanBillingPage() {
   const overLimits = (p: Plan): string[] => {
     if (!usage) return []
     const out: string[] = []
-    const chk = (label: string, used: number, limit?: number | null) => { if (limit && limit < UNLIMITED && used > limit) out.push(`${label} (${used.toLocaleString("en-US")} of ${limit.toLocaleString("en-US")})`) }
-    chk("team members", usage.teamMembers.used, p.maxUsers)
-    chk("products", usage.products.used, p.maxProducts)
-    chk("branches", usage.branches.used, p.maxBranches)
+    const chk = (label: string, used: number, limit?: number | null) => { if (limit && limit < UNLIMITED && used > limit) out.push(t("account:billing.co.overItem", { label, used: used.toLocaleString("en-US"), limit: limit.toLocaleString("en-US") })) }
+    chk(t("account:billing.co.overTeam"), usage.teamMembers.used, p.maxUsers)
+    chk(t("account:billing.co.overProducts"), usage.products.used, p.maxProducts)
+    chk(t("account:billing.co.overBranches"), usage.branches.used, p.maxBranches)
     return out
   }
 
-  const discard = () => { if (!dirty) return; setDraft({}); toast("Changes discarded") }
+  const discard = () => { if (!dirty) return; setDraft({}); toast(t("account:billing.overview.discarded")) }
 
   const openCheckout = (p: Plan) => {
     setCo({ plan: p, period: isFree(p) ? "monthly" : dPeriod, method: "card", email: "", terms: false, err: "", busy: false })
@@ -165,7 +168,7 @@ export default function PlanBillingPage() {
   }
 
   const save = async () => {
-    if (!dirty) { toast("No changes to save"); return }
+    if (!dirty) { toast(t("account:billing.overview.noChanges")); return }
     if (!writable || busy) return
     if (planChanged && dPlanObj) { openCheckout(dPlanObj); return }
     if (!sub) return
@@ -173,17 +176,17 @@ export default function PlanBillingPage() {
     try {
       if (periodChanged) await saasBillingApi.setBillingPeriod(sub.id, dPeriod)
       if (autoChanged) await saasBillingApi.setAutoRenew(sub.id, dAuto)
-      toast.success("Billing preferences saved")
+      toast.success(t("account:billing.overview.prefsSaved"))
       setDraft({})
       await load()
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Could not save billing preferences") } finally { setBusy(false) }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("account:billing.overview.prefsFailed")) } finally { setBusy(false) }
   }
 
   const confirmCheckout = async () => {
     if (!co || co.busy) return
     const paid = !isFree(co.plan)
-    if (paid && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email.trim())) { setCo({ ...co, err: "Enter a valid billing email." }); return }
-    if (!co.terms) { setCo({ ...co, err: "Please accept the terms to continue." }); return }
+    if (paid && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email.trim())) { setCo({ ...co, err: t("account:billing.co.invalidEmail") }); return }
+    if (!co.terms) { setCo({ ...co, err: t("account:billing.co.acceptTerms") }); return }
     setCo({ ...co, busy: true, err: "" })
     const payload = { planId: co.plan.id, billingPeriod: co.period, paymentMethod: co.method, billingEmail: co.email.trim() || undefined }
     try {
@@ -196,11 +199,11 @@ export default function PlanBillingPage() {
           if (fresh?.id) await saasBillingApi.setAutoRenew(fresh.id, false)
         } catch { /* keep default */ }
       }
-      toast.success(`Plan changed to ${co.plan.name}`)
+      toast.success(t("account:billing.overview.planChanged", { plan: co.plan.name }))
       setCo(null); setDraft({})
       await load()
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.response?.data?.error || "Payment failed. Please try again."
+      const msg = e?.response?.data?.message || e?.response?.data?.error || t("account:billing.co.paymentFailed")
       setCo((c) => (c ? { ...c, busy: false, err: msg } : c))
     }
   }
@@ -208,33 +211,34 @@ export default function PlanBillingPage() {
   const renew = async () => {
     if (!sub || isTrial || busy || !writable) return
     const early = status === "active" && !!periodEnd && (new Date(periodEnd).getTime() - Date.now()) / 864e5 > 7
-    const verb = status === "cancelled" || status === "expired" ? "Reactivate" : "Renew"
+    const reactivating = status === "cancelled" || status === "expired"
     const totalCents = Math.round(basePrice * (1 + TAX_RATE))
-    if (!window.confirm(`${early ? `Your plan is paid until ${fmtD(periodEnd)}. ` : ""}${verb} ${sub.planName} for ${money(totalCents)} (incl. 10% tax)?`)) return
+    const vars = { plan: sub.planName, amount: money(totalCents), date: fmtD(periodEnd) }
+    if (!window.confirm(reactivating ? t("account:billing.shared.reactivateConfirm", vars) : early ? t("account:billing.shared.renewConfirmEarly", vars) : t("account:billing.shared.renewConfirm", vars))) return
     setBusy(true)
     try {
       await saasBillingApi.renewSubscription({ subscriptionId: sub.id, billingPeriod: sub.billingPeriod, autoRenew: true })
-      toast.success(verb === "Renew" ? "Plan renewed" : "Plan reactivated")
+      toast.success(reactivating ? t("account:billing.overview.reactivated") : t("account:billing.overview.renewed"))
       await load()
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to renew plan") } finally { setBusy(false) }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("account:billing.overview.renewFailed")) } finally { setBusy(false) }
   }
 
   if (blocked) return blocked
 
   const canCancel = !!sub && status === "active" && !isTrial
   const statusText = dirty
-    ? `You have unsaved changes${planChanged && dPlanObj ? ` — plan will switch to ${dPlanObj.name}.` : "."}`
-    : "All changes saved."
+    ? (planChanged && dPlanObj ? t("account:billing.overview.unsavedPlan", { plan: dPlanObj.name }) : t("account:billing.overview.unsaved"))
+    : t("account:billing.overview.allSaved")
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Plan & billing"
-        description="Your subscription, usage and invoices."
+        title={t("account:billing.overview.title")}
+        description={t("account:billing.overview.description")}
         actions={<>
-          <Button asChild variant="outline"><Link href="/dashboard/billing/plans">Plans</Link></Button>
-          <Button asChild variant="outline"><Link href="/dashboard/billing/subscriptions">Subscriptions</Link></Button>
-          <Button asChild variant="outline"><Link href="/dashboard/company/billing-contact">Billing contact</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/plans">{t("account:billing.overview.plans")}</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/billing/subscriptions">{t("account:billing.overview.subscriptions")}</Link></Button>
+          <Button asChild variant="outline"><Link href="/dashboard/company/billing-contact">{t("account:billing.overview.billingContact")}</Link></Button>
         </>}
       />
 
@@ -244,11 +248,11 @@ export default function PlanBillingPage() {
         <Card className="grid gap-6 p-6 lg:grid-cols-2">
           <div className="flex flex-col gap-2">
             <StatusBadge status={status} variant={STATUS_PILL.variant} label={STATUS_PILL.label} className="self-start" />
-            <h2 className="text-[28px] font-bold">{sub?.planName ?? "No plan"}</h2>
+            <h2 className="text-[28px] font-bold">{sub?.planName ?? t("account:billing.shared.status.none")}</h2>
             {sub && (
               <span className="text-sm text-muted-foreground">
-                <strong className="text-[22px] text-foreground tabular-nums">{isTrial ? "Free" : money(basePrice)}</strong>{" "}
-                {isTrial ? "· 10-day trial" : sub.billingPeriod === "yearly" ? "/ year · billed yearly" : "/ month · billed monthly"}
+                <strong className="text-[22px] text-foreground tabular-nums">{isTrial ? t("account:billing.shared.free") : money(basePrice)}</strong>{" "}
+                {isTrial ? t("account:billing.shared.trialSuffix") : sub.billingPeriod === "yearly" ? t("account:billing.shared.billedYearly") : t("account:billing.shared.billedMonthly")}
               </span>
             )}
             <Alert variant={note.danger ? "destructive" : "default"}>
@@ -257,16 +261,16 @@ export default function PlanBillingPage() {
             </Alert>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {sub && !isTrial && writable && (
-                <Button type="button" disabled={busy} onClick={renew}>{status === "cancelled" || status === "expired" ? "Reactivate" : "Renew now"}</Button>
+                <Button type="button" disabled={busy} onClick={renew}>{status === "cancelled" || status === "expired" ? t("account:billing.shared.reactivate") : t("account:billing.shared.renewNow")}</Button>
               )}
-              <Button asChild variant="outline"><a href="#compare-plans">Change plan</a></Button>
+              <Button asChild variant="outline"><a href="#compare-plans">{t("account:billing.overview.changePlan")}</a></Button>
               {canCancel && writable && (
-                <Button asChild variant="link" className="text-destructive"><Link href="/dashboard/billing/subscriptions?cancel=1">Cancel plan</Link></Button>
+                <Button asChild variant="link" className="text-destructive"><Link href="/dashboard/billing/subscriptions?cancel=1">{t("account:billing.overview.cancelPlan")}</Link></Button>
               )}
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-semibold">Usage this month</h3>
+            <h3 className="text-sm font-semibold">{t("account:billing.overview.usageThisMonth")}</h3>
             {!usage ? <Skeleton className="h-32" /> : meters.map((m) => {
               const finite = m.limit !== null && m.limit > 0 && m.limit < UNLIMITED
               const over = finite && m.used > (m.limit as number)
@@ -274,9 +278,9 @@ export default function PlanBillingPage() {
                 <div key={m.label}>
                   <div className="flex justify-between text-sm"><span>{m.label}</span>
                     <span className="text-muted-foreground"><strong className="text-foreground tabular-nums">{m.used.toLocaleString("en-US")}</strong>{" "}
-                      {m.limit === null ? "this month" : finite ? `of ${(m.limit as number).toLocaleString("en-US")}` : "of unlimited"}</span></div>
+                      {m.limit === null ? t("account:billing.shared.thisMonth") : finite ? t("account:billing.shared.ofLimit", { limit: (m.limit as number).toLocaleString("en-US") }) : t("account:billing.shared.ofUnlimited")}</span></div>
                   <Progress
-                    aria-label={`${m.label} usage`}
+                    aria-label={t("account:billing.shared.usageAria", { name: m.label })}
                     value={finite ? Math.min(100, Math.round((m.used / (m.limit as number)) * 100)) : 0}
                     className={cn("mt-1.5", over && "*:data-[slot=progress-indicator]:bg-destructive")}
                   />
@@ -285,11 +289,11 @@ export default function PlanBillingPage() {
             })}
             <Item variant="outline" size="sm">
               <ItemContent>
-                <ItemTitle>Auto-renew</ItemTitle>
-                <ItemDescription>{!periodSavable ? "Available on an active paid plan" : dAuto ? "Renews automatically each period" : "You will renew manually"}</ItemDescription>
+                <ItemTitle>{t("account:billing.overview.autoRenew")}</ItemTitle>
+                <ItemDescription>{!periodSavable ? t("account:billing.overview.autoUnavailable") : dAuto ? t("account:billing.overview.autoOn") : t("account:billing.overview.autoOff")}</ItemDescription>
               </ItemContent>
               <ItemActions>
-                <Switch checked={dAuto} aria-label="Auto renew" disabled={!periodSavable || !writable}
+                <Switch checked={dAuto} aria-label={t("account:billing.overview.autoRenewAria")} disabled={!periodSavable || !writable}
                   onCheckedChange={() => setDraft({ ...draft, auto: !dAuto })} />
               </ItemActions>
             </Item>
@@ -299,35 +303,35 @@ export default function PlanBillingPage() {
 
       <SectionCard
         id="compare-plans"
-        title="Compare plans"
+        title={t("account:billing.shared.compare")}
         actions={
           <SegmentedControl
-            aria-label="Billing period"
+            aria-label={t("account:billing.shared.billingPeriod")}
             size="default"
             value={dPeriod}
             onValueChange={(id) => setDraft({ ...draft, period: id as Period })}
-            options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly · 2 months free" }]}
+            options={[{ value: "monthly", label: t("account:billing.shared.monthly") }, { value: "yearly", label: t("account:billing.shared.yearlyPromo") }]}
           />
         }
         contentClassName="px-0"
       >
         {loading ? <div className="px-6"><Skeleton className="h-60" /></div> : plans.length === 0 ? (
-          <EmptyState title="No plans available. Please contact support." />
+          <EmptyState title={t("account:billing.overview.noPlans")} />
         ) : (
           <div className="overflow-x-auto">
             <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="align-bottom">Plan</TableHead>
+                  <TableHead className="align-bottom">{t("account:billing.shared.plan")}</TableHead>
                   {plans.map((p) => {
                     const isCur = p.id === curId
                     const isSel = p.id === dPlan && !isCur
                     return (
                       <TableHead key={p.id} className={cn("h-auto py-2 align-top", isCur ? "bg-muted/50" : isSel && "bg-muted/30")}>
-                        {(isCur || p.isFeatured) && <Badge variant={isCur ? "default" : "secondary"} className="mb-1.5">{isCur ? "Your plan" : "Most popular"}</Badge>}
+                        {(isCur || p.isFeatured) && <Badge variant={isCur ? "default" : "secondary"} className="mb-1.5">{isCur ? t("account:billing.shared.yourPlan") : t("account:billing.shared.mostPopular")}</Badge>}
                         <div className="text-base font-bold text-foreground">{p.name}</div>
-                        <div className="mt-1 text-xl font-bold text-foreground tabular-nums">{isFree(p) ? "Free" : money(priceOf(p, dPeriod))}
-                          <span className="text-xs font-medium text-muted-foreground">{isFree(p) ? " · 10 days" : dPeriod === "yearly" ? " /year" : " /month"}</span></div>
+                        <div className="mt-1 text-xl font-bold text-foreground tabular-nums">{isFree(p) ? t("account:billing.shared.free") : money(priceOf(p, dPeriod))}
+                          <span className="text-xs font-medium text-muted-foreground"> {isFree(p) ? t("account:billing.shared.tenDays") : dPeriod === "yearly" ? t("account:billing.shared.perYear") : t("account:billing.shared.perMonth")}</span></div>
                       </TableHead>
                     )
                   })}
@@ -335,9 +339,9 @@ export default function PlanBillingPage() {
               </TableHeader>
               <TableBody>
                 {([
-                  ["Team members", (p: Plan) => limitLabel(p.maxUsers)],
-                  ["Products", (p: Plan) => limitLabel(p.maxProducts)],
-                  ["Branches", (p: Plan) => limitLabel(p.maxBranches)],
+                  [t("account:billing.shared.teamMembers"), (p: Plan) => limitLabel(p.maxUsers)],
+                  [t("account:billing.shared.products"), (p: Plan) => limitLabel(p.maxProducts)],
+                  [t("account:billing.shared.branches"), (p: Plan) => limitLabel(p.maxBranches)],
                   ...featUnion.map((f) => [f, (p: Plan) => ((p.features || []).map(featName).includes(f) ? "✓" : "—")] as [string, (p: Plan) => string]),
                 ] as [string, (p: Plan) => string][]).map(([name, fn]) => (
                   <TableRow key={name}>
@@ -354,8 +358,8 @@ export default function PlanBillingPage() {
                     const isCur = p.id === curId
                     const isSel = p.id === dPlan && !isCur
                     const trialLocked = isFree(p) && paidEver && !isCur
-                    const cta = isCur ? "Current plan" : trialLocked ? "Trial used" : isSel ? "Selected"
-                      : curId === null ? "Select" : rank(p.id) > rank(curId) ? "Upgrade" : "Downgrade"
+                    const cta = isCur ? t("account:billing.shared.currentPlan") : trialLocked ? t("account:billing.overview.trialUsed") : isSel ? t("account:billing.overview.selected")
+                      : curId === null ? t("common:actions.select") : rank(p.id) > rank(curId) ? t("account:billing.shared.upgrade") : t("account:billing.overview.downgrade")
                     return (
                       <TableCell key={p.id} className={cn(isCur ? "bg-muted/50" : isSel && "bg-muted/30")}>
                         <Button type="button" disabled={isCur || trialLocked || !writable}
@@ -371,16 +375,16 @@ export default function PlanBillingPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="Payment history" description="Invoices for your subscription.">
+      <SectionCard title={t("account:billing.shared.paymentHistory")} description={t("account:billing.overview.historyDescription")}>
         {loading ? <Skeleton className="h-24" /> : invoices.length === 0 ? (
-          <EmptyState bordered title="No invoices yet — your first invoice will appear here after renewal or a plan change." />
+          <EmptyState bordered title={t("account:billing.overview.noInvoices")} />
         ) : (
           <div className="overflow-x-auto">
             <Table className="min-w-[560px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Invoice</TableHead><TableHead>Date</TableHead><TableHead>Plan</TableHead>
-                  <TableHead>Period</TableHead><TableHead className="text-right">Amount</TableHead>
+                  <TableHead>{t("account:billing.shared.invoice")}</TableHead><TableHead>{t("common:fields.date")}</TableHead><TableHead>{t("account:billing.shared.plan")}</TableHead>
+                  <TableHead>{t("account:billing.shared.period")}</TableHead><TableHead className="text-right">{t("common:money.amount")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -389,7 +393,7 @@ export default function PlanBillingPage() {
                     <TableCell>{p.invoiceNumber}</TableCell>
                     <TableCell>{fmtD(p.paymentDate ?? p.createdAt)}</TableCell>
                     <TableCell>{p.planName || "—"}</TableCell>
-                    <TableCell>{p.billingPeriod === "yearly" ? "Yearly" : "Monthly"}</TableCell>
+                    <TableCell>{p.billingPeriod === "yearly" ? t("account:billing.shared.yearly") : t("account:billing.shared.monthly")}</TableCell>
                     <TableCell className="text-right tabular-nums">{money(p.amount)}</TableCell>
                   </TableRow>
                 ))}
@@ -402,8 +406,8 @@ export default function PlanBillingPage() {
       <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
         <span className="text-sm text-muted-foreground">{statusText}</span>
         <div className="ml-auto flex gap-2">
-          <Button type="button" variant="outline" onClick={discard} disabled={!dirty || busy}>Discard</Button>
-          <Button type="button" onClick={save} disabled={!dirty || busy || !writable}>{busy ? "Saving…" : "Save changes"}</Button>
+          <Button type="button" variant="outline" onClick={discard} disabled={!dirty || busy}>{t("account:billing.overview.discard")}</Button>
+          <Button type="button" onClick={save} disabled={!dirty || busy || !writable}>{busy ? t("common:actions.saving") : t("common:actions.saveChanges")}</Button>
         </div>
       </Card>
 
@@ -416,44 +420,44 @@ export default function PlanBillingPage() {
             const over = overLimits(co.plan)
             return (
               <>
-                <DialogTitle>{free ? "Start your free trial" : `Confirm ${co.plan.name} plan`}</DialogTitle>
-                <DialogDescription>Review your order, choose how you want to pay and confirm.</DialogDescription>
+                <DialogTitle>{free ? t("account:billing.co.trialTitle") : t("account:billing.co.confirmTitle", { plan: co.plan.name })}</DialogTitle>
+                <DialogDescription>{t("account:billing.co.description")}</DialogDescription>
                 <Card className="gap-1.5 bg-muted/50 p-4 shadow-none">
                   <InfoList className="gap-1.5">
-                    <InfoRow label={`${co.plan.name} (${free ? "10-day trial" : co.period === "yearly" ? "Yearly" : "Monthly"})`} value={<span className="tabular-nums">{money(sub0)}</span>} />
-                    <InfoRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} value={<span className="tabular-nums">{money(tax)}</span>} />
+                    <InfoRow label={t("account:billing.co.line", { plan: co.plan.name, period: free ? t("account:billing.co.trialPeriod") : co.period === "yearly" ? t("account:billing.shared.yearly") : t("account:billing.shared.monthly") })} value={<span className="tabular-nums">{money(sub0)}</span>} />
+                    <InfoRow label={t("account:billing.co.tax", { rate: Math.round(TAX_RATE * 100) })} value={<span className="tabular-nums">{money(tax)}</span>} />
                   </InfoList>
                   <Separator />
-                  <div className="flex justify-between text-sm font-bold"><span>Total</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
+                  <div className="flex justify-between text-sm font-bold"><span>{t("common:money.total")}</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
                 </Card>
                 {over.length > 0 && (
                   <Alert>
                     <AlertDescription>
-                      You currently exceed this plan&apos;s limits for {over.join(", ")}. Existing data is kept, but you will not be able to add more until you are within the limit.
+                      {t("account:billing.co.overLimits", { list: over.join(", ") })}
                     </AlertDescription>
                   </Alert>
                 )}
                 {!free && (
                   <div className="flex flex-col gap-3">
-                    <FormField label="Payment method" htmlFor="co-method">
+                    <FormField label={t("account:billing.co.paymentMethod")} htmlFor="co-method">
                       <Select value={String(co.method)} onValueChange={(val) => setCo({ ...co, method: val as Method, err: "" })}>
                         <SelectTrigger id="co-method" className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {METHODS.map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.label}</SelectItem>)}
+                          {METHODS.map((m) => <SelectItem key={m.id} value={String(m.id)}>{t(m.label)}</SelectItem>)}
                         </SelectContent>
                       </Select></FormField>
-                    <FormField label="Billing email *" htmlFor="co-email">
-                      <Input id="co-email" type="email" value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder="billing@yourshop.com" /></FormField>
+                    <FormField label={t("account:billing.co.billingEmail")} htmlFor="co-email">
+                      <Input id="co-email" type="email" value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder={t("account:billing.co.emailPlaceholder")} /></FormField>
                   </div>
                 )}
-                <FormField orientation="horizontal" label="I agree to the terms of service and the 30-day money-back policy." htmlFor="co-terms"
+                <FormField orientation="horizontal" label={t("account:billing.co.terms")} htmlFor="co-terms"
                   className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
                   <Checkbox id="co-terms" checked={co.terms} onCheckedChange={(c) => setCo({ ...co, terms: c === true, err: "" })} />
                 </FormField>
                 {co.err && <Alert variant="destructive"><AlertDescription>{co.err}</AlertDescription></Alert>}
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" disabled={co.busy} onClick={() => setCo(null)}>Cancel</Button>
-                  <Button type="button" disabled={co.busy} onClick={confirmCheckout}>{co.busy ? "Processing…" : free ? "Start free trial" : `Pay ${money(sub0 + tax)}`}</Button>
+                  <Button type="button" variant="outline" disabled={co.busy} onClick={() => setCo(null)}>{t("common:actions.cancel")}</Button>
+                  <Button type="button" disabled={co.busy} onClick={confirmCheckout}>{co.busy ? t("account:billing.co.processing") : free ? t("account:billing.co.startTrial") : t("account:billing.co.pay", { amount: money(sub0 + tax) })}</Button>
                 </div>
               </>
             )

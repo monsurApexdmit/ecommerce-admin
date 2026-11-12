@@ -5,12 +5,29 @@ import type { DashboardFilters } from "@/lib/dashboard/types"
 
 export type RangePreset = "today" | "7d" | "30d" | "year"
 
-export const RANGE_LABELS: Record<RangePreset, string> = {
-  today: "Today",
-  "7d": "7D",
-  "30d": "30D",
-  year: "This year",
-}
+/** Translation keys for the range picker (translated at render). */
+export const RANGE_LABELS = {
+  today: "common:time.today",
+  "7d": "dashboard:range.d7",
+  "30d": "dashboard:range.d30",
+  year: "dashboard:range.year",
+} as const satisfies Record<RangePreset, string>
+
+/** Translation keys for the selected period, e.g. "Last 7 days". */
+export const PERIOD_LABELS = {
+  today: "common:time.today",
+  "7d": "common:time.last7Days",
+  "30d": "common:time.last30Days",
+  year: "dashboard:range.year",
+} as const satisfies Record<RangePreset, string>
+
+/** Translation keys for the period inside a sentence, e.g. "Cash in · last 7 days". */
+export const PERIOD_INLINE_LABELS = {
+  today: "dashboard:periodInline.today",
+  "7d": "dashboard:periodInline.d7",
+  "30d": "dashboard:periodInline.d30",
+  year: "dashboard:periodInline.year",
+} as const satisfies Record<RangePreset, string>
 
 const iso = (d: Date) => {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000)

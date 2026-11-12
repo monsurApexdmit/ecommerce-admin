@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { ColorPicker } from "@/components/common/ColorPicker"
@@ -17,6 +18,7 @@ const DEFAULTS = { primaryColor: "#1C1917", accentColor: "#94234A", backgroundCo
  * page. Distinct from the admin accent picker, which recolours the dashboard.
  */
 export function StorefrontBrandColors() {
+  const { t } = useTranslation(["store", "common"])
   const { toast } = useToast()
   const [colors, setColors] = useState(DEFAULTS)
   const [loading, setLoading] = useState(true)
@@ -43,23 +45,23 @@ export function StorefrontBrandColors() {
     setSaving(true)
     try {
       await settingsApi.updateGeneral(colors)
-      toast({ title: "Saved", description: "Storefront brand colors updated" })
+      toast({ title: t("common:status.saved"), description: t("store:settings.brandColors.saved") })
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err?.response?.data?.message || "Failed to save" })
+      toast({ variant: "destructive", title: t("common:extra.error"), description: err?.response?.data?.message || t("store:settings.brandColors.saveFailed") })
     } finally {
       setSaving(false)
     }
   }
 
   const fields: { label: string; key: keyof typeof colors }[] = [
-    { label: "Primary Color", key: "primaryColor" },
-    { label: "Accent Color", key: "accentColor" },
-    { label: "Background Color", key: "backgroundColor" },
+    { label: t("store:shared.primaryColor"), key: "primaryColor" },
+    { label: t("store:shared.accentColor"), key: "accentColor" },
+    { label: t("store:shared.backgroundColor"), key: "backgroundColor" },
   ]
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Applied to the customer-facing storefront.</p>
+      <p className="text-sm text-muted-foreground">{t("store:settings.brandColors.hint")}</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {fields.map(({ label, key }) => (
@@ -70,7 +72,7 @@ export function StorefrontBrandColors() {
               value={colors[key]}
               disabled={loading}
               onChange={(hex) => set(key, hex)}
-              aria-label={`${label} picker`}
+              aria-label={t("store:shared.colorPicker", { label })}
             />
           </FormField>
         ))}
@@ -78,7 +80,7 @@ export function StorefrontBrandColors() {
 
       <div className="flex justify-end">
         <Button onClick={save} disabled={saving || loading}>
-          {saving ? <><Spinner />Saving...</> : "Save colors"}
+          {saving ? <><Spinner />{t("common:actions.saving")}</> : t("store:settings.brandColors.save")}
         </Button>
       </div>
     </div>

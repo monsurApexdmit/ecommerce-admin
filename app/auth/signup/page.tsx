@@ -16,8 +16,32 @@ import { FormField } from "@/components/common/FormField"
 import { Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { Trans, useTranslation } from "react-i18next"
+
+// Validation messages are kept as keys and translated at render, so they follow a language switch
+const ERR = {
+  companyName: "auth:signup.errors.companyName",
+  ownerName: "auth:signup.errors.ownerName",
+  emailRequired: "auth:signup.errors.emailRequired",
+  emailInvalid: "auth:signup.errors.emailInvalid",
+  passwordRequired: "auth:signup.errors.passwordRequired",
+  passwordMin: "auth:signup.errors.passwordMin",
+  mismatch: "auth:password.mismatch",
+  phone: "auth:signup.errors.phone",
+  terms: "auth:signup.errors.terms",
+} as const
+type ErrKey = (typeof ERR)[keyof typeof ERR]
+
+const STRENGTH = [
+  { text: null, color: "" },
+  { text: "auth:password.weak", color: "text-red-600" },
+  { text: "auth:password.fair", color: "text-yellow-600" },
+  { text: "auth:password.good", color: "text-blue-600" },
+  { text: "auth:password.strong", color: "text-green-600" },
+] as const
 
 export default function SignupPage() {
+  const { t } = useTranslation(["auth", "common"])
   const router = useRouter()
   const { signup } = useSaasAuth()
 
@@ -30,7 +54,7 @@ export default function SignupPage() {
     phone: "",
   })
 
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Partial<Record<string, ErrKey>>>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -39,38 +63,38 @@ export default function SignupPage() {
   const [signupSuccess, setSignupSuccess] = useState(false)
 
   const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {}
+    const newErrors: Partial<Record<string, ErrKey>> = {}
 
     if (!formData.companyName.trim()) {
-      newErrors.companyName = "Company name is required"
+      newErrors.companyName = ERR.companyName
     }
 
     if (!formData.ownerFullName.trim()) {
-      newErrors.ownerFullName = "Owner name is required"
+      newErrors.ownerFullName = ERR.ownerName
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = "Email is required"
+      newErrors.email = ERR.emailRequired
     } else if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      newErrors.email = "Please enter a valid email"
+      newErrors.email = ERR.emailInvalid
     }
 
     if (!formData.password) {
-      newErrors.password = "Password is required"
+      newErrors.password = ERR.passwordRequired
     } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters"
+      newErrors.password = ERR.passwordMin
     }
 
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match"
+      newErrors.confirmPassword = ERR.mismatch
     }
 
     if (!formData.phone.trim()) {
-      newErrors.phone = "Phone number is required"
+      newErrors.phone = ERR.phone
     }
 
     if (!agreedToTerms) {
-      newErrors.terms = "You must agree to the terms and conditions"
+      newErrors.terms = ERR.terms
     }
 
     setErrors(newErrors)
@@ -82,7 +106,7 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
     // Clear error for this field when user starts typing
     if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }))
+      setErrors((prev) => ({ ...prev, [name]: undefined }))
     }
   }
 
@@ -110,14 +134,20 @@ export default function SignupPage() {
       setLoading(false)
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.message || error.message || "Signup failed. Please try again."
+        error.response?.data?.message || error.message || t("auth:signup.failed")
       setServerError(errorMessage)
       setLoading(false)
     }
   }
 
-  const passwordStrength = (): { level: number; text: string; color: string } => {
-    if (!formData.password) return { level: 0, text: "", color: "" }
+  /** Translated validation message for a field, if any */
+  const err = (field: string) => {
+    const key = errors[field]
+    return key ? t(key) : undefined
+  }
+
+  const passwordStrength = () => {
+    if (!formData.password) return { level: 0, ...STRENGTH[0] }
 
     let strength = 0
     if (formData.password.length >= 8) strength++
@@ -125,15 +155,7 @@ export default function SignupPage() {
     if (formData.password.match(/[0-9]/)) strength++
     if (formData.password.match(/[^a-zA-Z0-9]/)) strength++
 
-    const levels = [
-      { text: "", color: "" },
-      { text: "Weak", color: "text-red-600" },
-      { text: "Fair", color: "text-yellow-600" },
-      { text: "Good", color: "text-blue-600" },
-      { text: "Strong", color: "text-green-600" },
-    ]
-
-    return { level: strength, ...levels[strength] }
+    return { level: strength, ...STRENGTH[strength] }
   }
 
   const strength = passwordStrength()
@@ -145,19 +167,23 @@ export default function SignupPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-6 mx-auto">
             <CheckCircle className="w-9 h-9 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold">Check your email</h1>
+          <h1 className="text-2xl font-bold">{t("auth:signup.success.title")}</h1>
           <p className="text-sm text-muted-foreground mt-3">
-            We sent a verification link to{" "}
-            <span className="font-medium text-foreground">{formData.email}</span>.
+            <Trans
+              t={t}
+              i18nKey="auth:signup.success.sent"
+              values={{ email: formData.email }}
+              components={{ b: <span className="font-medium text-foreground" /> }}
+            />
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            Please verify your email to activate your account, then log in.
+            {t("auth:signup.success.next")}
           </p>
           <Button
             className="w-full mt-8"
             onClick={() => router.push("/auth/login")}
           >
-            Go to Login
+            {t("auth:login.goToLogin")}
           </Button>
         </Card>
       </div>
@@ -183,18 +209,18 @@ export default function SignupPage() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold">Start Your Free Trial</h1>
-          <p className="text-sm text-muted-foreground mt-2">Get 10 days of free access with no credit card</p>
+          <h1 className="text-2xl font-bold">{t("auth:signup.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-2">{t("auth:signup.subtitle")}</p>
         </div>
 
         <form onSubmit={handleSignup} className="space-y-5">
           {/* Company Name */}
-          <FormField label="Company Name" htmlFor="companyName" error={errors.companyName || undefined}>
+          <FormField label={t("auth:signup.companyName")} htmlFor="companyName" error={err("companyName")}>
             <Input
               id="companyName"
               name="companyName"
               type="text"
-              placeholder="Your Company"
+              placeholder={t("auth:signup.companyNamePlaceholder")}
               value={formData.companyName}
               onChange={handleInputChange}
               aria-invalid={errors.companyName ? true : undefined}
@@ -203,12 +229,12 @@ export default function SignupPage() {
           </FormField>
 
           {/* Owner Full Name */}
-          <FormField label="Your Full Name" htmlFor="ownerFullName" error={errors.ownerFullName || undefined}>
+          <FormField label={t("auth:signup.fullName")} htmlFor="ownerFullName" error={err("ownerFullName")}>
             <Input
               id="ownerFullName"
               name="ownerFullName"
               type="text"
-              placeholder="John Doe"
+              placeholder={t("auth:signup.fullNamePlaceholder")}
               value={formData.ownerFullName}
               onChange={handleInputChange}
               aria-invalid={errors.ownerFullName ? true : undefined}
@@ -217,7 +243,7 @@ export default function SignupPage() {
           </FormField>
 
           {/* Email */}
-          <FormField label="Email Address" htmlFor="email" error={errors.email || undefined}>
+          <FormField label={t("auth:login.emailAddress")} htmlFor="email" error={err("email")}>
             <Input
               id="email"
               name="email"
@@ -231,12 +257,12 @@ export default function SignupPage() {
           </FormField>
 
           {/* Phone */}
-          <FormField label="Phone Number" htmlFor="phone" error={errors.phone || undefined}>
+          <FormField label={t("auth:signup.phone")} htmlFor="phone" error={err("phone")}>
             <Input
               id="phone"
               name="phone"
               type="tel"
-              placeholder="+1 (555) 123-4567"
+              placeholder={t("auth:signup.phonePlaceholder")}
               value={formData.phone}
               onChange={handleInputChange}
               aria-invalid={errors.phone ? true : undefined}
@@ -245,25 +271,25 @@ export default function SignupPage() {
           </FormField>
 
           {/* Password */}
-          <FormField label="Password" htmlFor="password" error={errors.password || undefined}>
+          <FormField label={t("auth:login.password")} htmlFor="password" error={err("password")}>
             <div className="relative">
               <Input
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter a strong password"
+                placeholder={t("auth:signup.passwordPlaceholder")}
                 value={formData.password}
                 onChange={handleInputChange}
                 className="pr-10"
                 aria-invalid={errors.password ? true : undefined}
                 disabled={loading}
               />
-              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
+              <WithTooltip content={showPassword ? t("auth:password.hide") : t("auth:password.show")}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("auth:password.hide") : t("auth:password.show")}
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -273,7 +299,7 @@ export default function SignupPage() {
               <div className="flex items-center gap-2 text-xs">
                 <Progress
                   value={strength.level * 25}
-                  aria-label="Password strength"
+                  aria-label={t("auth:password.strength")}
                   className={cn("flex-1 bg-muted", strength.level === 1
                       ? "[&>[data-slot=progress-indicator]]:bg-red-500"
                       : strength.level === 2
@@ -282,31 +308,31 @@ export default function SignupPage() {
                           ? "[&>[data-slot=progress-indicator]]:bg-blue-500"
                           : "[&>[data-slot=progress-indicator]]:bg-green-500")}
                 />
-                <span className={strength.color}>{strength.text}</span>
+                <span className={strength.color}>{strength.text && t(strength.text)}</span>
               </div>
             )}
           </FormField>
 
           {/* Confirm Password */}
-          <FormField label="Confirm Password" htmlFor="confirmPassword" error={errors.confirmPassword || undefined}>
+          <FormField label={t("auth:signup.confirmPassword")} htmlFor="confirmPassword" error={err("confirmPassword")}>
             <div className="relative">
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
-                placeholder="Confirm your password"
+                placeholder={t("auth:signup.confirmPasswordPlaceholder")}
                 value={formData.confirmPassword}
                 onChange={handleInputChange}
                 className="pr-10"
                 aria-invalid={errors.confirmPassword ? true : undefined}
                 disabled={loading}
               />
-              <WithTooltip content={showConfirmPassword ? "Hide password" : "Show password"}><Button
+              <WithTooltip content={showConfirmPassword ? t("auth:password.hide") : t("auth:password.show")}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                aria-label={showConfirmPassword ? t("auth:password.hide") : t("auth:password.show")}
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -314,7 +340,7 @@ export default function SignupPage() {
             </div>
             {!errors.confirmPassword && formData.password && formData.confirmPassword && formData.password === formData.confirmPassword && (
               <p className="text-green-600 text-xs flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" /> Passwords match
+                <CheckCircle className="w-3 h-3" /> {t("auth:password.match")}
               </p>
             )}
           </FormField>
@@ -328,7 +354,7 @@ export default function SignupPage() {
           )}
 
           {/* Terms & Conditions */}
-          <FormField error={errors.terms || undefined}>
+          <FormField error={err("terms")}>
             <div className="flex items-start gap-3">
             <Checkbox
               id="terms"
@@ -336,21 +362,21 @@ export default function SignupPage() {
               onCheckedChange={(v) => {
                 setAgreedToTerms(v === true)
                 if (errors.terms) {
-                  setErrors((prev) => ({ ...prev, terms: "" }))
+                  setErrors((prev) => ({ ...prev, terms: undefined }))
                 }
               }}
               className="mt-1"
               disabled={loading}
             />
             <Label htmlFor="terms" className="block leading-normal font-normal">
-              I agree to the{" "}
-              <a href="/terms" className="text-primary hover:underline">
-                Terms of Service
-              </a>{" "}
-              and{" "}
-              <a href="/privacy" className="text-primary hover:underline">
-                Privacy Policy
-              </a>
+              <Trans
+                t={t}
+                i18nKey="auth:signup.terms"
+                components={{
+                  terms: <a href="/terms" className="text-primary hover:underline" />,
+                  privacy: <a href="/privacy" className="text-primary hover:underline" />,
+                }}
+              />
             </Label>
             </div>
           </FormField>
@@ -360,21 +386,21 @@ export default function SignupPage() {
             className="w-full"
             disabled={loading}
           >
-            {loading ? "Creating Account..." : "Start 10-Day Free Trial"}
+            {loading ? t("auth:signup.submitting") : t("auth:signup.submit")}
           </Button>
 
           <div className="text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
+            {t("auth:signup.haveAccount")}{" "}
             <a href="/auth/login" className="text-primary hover:underline font-medium">
-              Sign In
+              {t("auth:login.signIn")}
             </a>
           </div>
 
           <Separator />
           <div className="text-center text-xs text-muted-foreground">
-            <p className="mb-2">✓ No credit card required</p>
-            <p>✓ 10 days of free access</p>
-            <p>✓ Cancel anytime</p>
+            <p className="mb-2">✓ {t("auth:signup.perks.noCard")}</p>
+            <p>✓ {t("auth:signup.perks.trial")}</p>
+            <p>✓ {t("auth:signup.perks.cancel")}</p>
           </div>
         </form>
       </Card>

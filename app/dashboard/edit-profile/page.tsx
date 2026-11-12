@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
@@ -12,11 +14,19 @@ import { UserAvatar } from "@/components/common/UserAvatar"
 import Swal from "sweetalert2"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
+// Role codes from the auth user → display labels (unknown codes are shown capitalised)
+const ROLE_KEY: Record<string, ParseKeys<["account"]>> = {
+  owner: "account:profile.roles.owner", admin: "account:profile.roles.admin", manager: "account:profile.roles.manager",
+  staff: "account:profile.roles.staff", super_admin: "account:profile.roles.superAdmin",
+}
+
 export default function EditProfilePage() {
+  const { t } = useTranslation(["account", "common"])
   const { user } = useSaasAuth()
   const userEmail = user?.email || ""
   const userName = user?.fullName || ""
-  const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "N/A"
+  const roleCode = user?.role ? String(user.role) : ""
+  const userRole = !roleCode ? t("account:profile.notAvailable") : ROLE_KEY[roleCode] ? t(ROLE_KEY[roleCode]) : roleCode.charAt(0).toUpperCase() + roleCode.slice(1)
   const [name, setName] = useState(userName || "")
   const [email, setEmail] = useState(userEmail || "")
   const [avatar, setAvatar] = useState("/admin-avatar.jpg")
@@ -39,9 +49,10 @@ export default function EditProfilePage() {
     setTimeout(() => {
       setIsLoading(false)
       Swal.fire({
-        title: "Success!",
-        text: "Profile updated successfully!",
+        title: t("account:profile.successTitle"),
+        text: t("account:profile.profileUpdated"),
         icon: "success",
+        confirmButtonText: t("account:profile.ok"),
         confirmButtonColor: "#10b981",
       })
     }, 1000)
@@ -67,9 +78,10 @@ export default function EditProfilePage() {
     
     if (newPassword !== confirmPassword) {
       Swal.fire({
-        title: "Error!",
-        text: "Passwords do not match!",
+        title: t("account:profile.errorTitle"),
+        text: t("account:profile.mismatch"),
         icon: "error",
+        confirmButtonText: t("account:profile.ok"),
         confirmButtonColor: "#ef4444",
       })
       return
@@ -77,9 +89,10 @@ export default function EditProfilePage() {
 
     if (newPassword.length < 8) {
       Swal.fire({
-        title: "Error!",
-        text: "Password must be at least 8 characters!",
+        title: t("account:profile.errorTitle"),
+        text: t("account:profile.tooShort"),
         icon: "error",
+        confirmButtonText: t("account:profile.ok"),
         confirmButtonColor: "#ef4444",
       })
       return
@@ -90,9 +103,10 @@ export default function EditProfilePage() {
     setTimeout(() => {
       setIsLoading(false)
       Swal.fire({
-        title: "Success!",
-        text: "Password updated successfully!",
+        title: t("account:profile.successTitle"),
+        text: t("account:profile.passwordUpdated"),
         icon: "success",
+        confirmButtonText: t("account:profile.ok"),
         confirmButtonColor: "#10b981",
       })
       setCurrentPassword("")
@@ -103,25 +117,25 @@ export default function EditProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <PageHeader title="Edit Profile" description="Update your personal information and security settings" />
+      <PageHeader title={t("account:profile.title")} description={t("account:profile.description")} />
 
       <div className="grid grid-cols-1 gap-6">
         {/* Profile Information */}
         <SectionCard
-          title={<span className="flex items-center gap-2"><User className="size-4 text-muted-foreground" />Profile Information</span>}
-          description="Update your account details and public profile"
+          title={<span className="flex items-center gap-2"><User className="size-4 text-muted-foreground" />{t("account:profile.info")}</span>}
+          description={t("account:profile.infoDesc")}
         >
 
           <form onSubmit={handleSaveProfile} className="space-y-6">
             <div className="flex flex-col md:flex-row gap-8 items-start">
               <div className="flex flex-col items-center gap-4">
                 <div className="relative group">
-                  <UserAvatar className="size-32" src={avatar} alt="Profile" fallback="AD" />
-                  <WithTooltip content="Change profile photo"><Button
+                  <UserAvatar className="size-32" src={avatar} alt={t("account:profile.photoAlt")} fallback="AD" />
+                  <WithTooltip content={t("account:profile.changePhoto")}><Button
                     type="button"
                     size="icon-sm"
                     onClick={triggerFileInput}
-                    aria-label="Change profile photo"
+                    aria-label={t("account:profile.changePhoto")}
                     className="absolute bottom-0 right-0 rounded-full"
                   >
                     <Camera className="w-4 h-4" />
@@ -134,11 +148,11 @@ export default function EditProfilePage() {
                     onChange={handleImageUpload}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">Allowed *.jpeg, *.jpg, *.png, *.gif</p>
+                <p className="text-sm text-muted-foreground">{t("account:profile.allowed")}</p>
               </div>
 
               <div className="flex-1 space-y-4 w-full">
-                <FormField label="Full Name" htmlFor="name">
+                <FormField label={t("account:profile.fullName")} htmlFor="name">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -146,12 +160,12 @@ export default function EditProfilePage() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="pl-10"
-                      placeholder="Enter your full name"
+                      placeholder={t("account:profile.namePlaceholder")}
                     />
                   </div>
                 </FormField>
 
-                <FormField label="Email Address" htmlFor="email">
+                <FormField label={t("account:profile.email")} htmlFor="email">
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -160,12 +174,12 @@ export default function EditProfilePage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="pl-10"
-                      placeholder="Enter your email"
+                      placeholder={t("account:profile.emailPlaceholder")}
                     />
                   </div>
                 </FormField>
 
-                <FormField label="Role" htmlFor="role">
+                <FormField label={t("account:profile.role")} htmlFor="role">
                   <Input
                     id="role"
                     value={userRole}
@@ -175,7 +189,7 @@ export default function EditProfilePage() {
 
                 <div className="pt-2">
                   <Button type="submit" disabled={isLoading}>
-                    {isLoading ? "Saving..." : "Save Changes"}
+                    {isLoading ? t("common:actions.saving") : t("common:actions.saveChanges")}
                   </Button>
                 </div>
               </div>
@@ -185,44 +199,44 @@ export default function EditProfilePage() {
 
         {/* Security Settings */}
         <SectionCard
-          title={<span className="flex items-center gap-2"><Lock className="size-4 text-muted-foreground" />Security</span>}
-          description="Change your password"
+          title={<span className="flex items-center gap-2"><Lock className="size-4 text-muted-foreground" />{t("account:profile.security")}</span>}
+          description={t("account:profile.securityDesc")}
         >
 
           <form onSubmit={handleUpdatePassword} className="max-w-xl space-y-4">
-            <FormField label="Current Password" htmlFor="currentPassword">
+            <FormField label={t("account:profile.currentPassword")} htmlFor="currentPassword">
               <Input
                 id="currentPassword"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
+                placeholder={t("account:profile.currentPlaceholder")}
               />
             </FormField>
 
-            <FormField label="New Password" htmlFor="newPassword">
+            <FormField label={t("account:profile.newPassword")} htmlFor="newPassword">
               <Input
                 id="newPassword"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min. 8 characters)"
+                placeholder={t("account:profile.newPlaceholder")}
               />
             </FormField>
 
-            <FormField label="Confirm New Password" htmlFor="confirmPassword">
+            <FormField label={t("account:profile.confirmPassword")} htmlFor="confirmPassword">
               <Input
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
+                placeholder={t("account:profile.confirmPlaceholder")}
               />
             </FormField>
 
             <div className="pt-2">
               <Button type="submit" variant="outline" disabled={isLoading}>
-                Update Password
+                {t("account:profile.updatePassword")}
               </Button>
             </div>
           </form>

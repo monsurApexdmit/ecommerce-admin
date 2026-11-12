@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { Trans, useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -16,6 +18,7 @@ const FMT: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "
 export default function SuccessPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t, i18n } = useTranslation(["account", "common"])
   const [loaded, setLoaded] = useState(false)
 
   const subscriptionId = searchParams.get("subscriptionId")
@@ -49,10 +52,10 @@ export default function SuccessPage() {
             <CheckCircle className="mx-auto mb-6 size-16 text-primary" />
 
             <h1 className="text-4xl font-bold mb-2">
-              Payment Successful! 🎉
+              {t("account:billing.success.title")}
             </h1>
             <p className="text-lg text-muted-foreground">
-              Your subscription is now active. Welcome to premium access!
+              {t("account:billing.success.subtitle")}
             </p>
           </div>
 
@@ -60,22 +63,22 @@ export default function SuccessPage() {
           <Card className="bg-muted/50 p-6 mb-8 shadow-none">
             <InfoList className="grid-cols-2 gap-6 md:gap-8">
               {/* Subscription ID */}
-              <InfoRow layout="stacked" label="Subscription ID" value={<span className="text-xl font-bold font-mono">{subscriptionId || "Loading..."}</span>} />
+              <InfoRow layout="stacked" label={t("account:billing.success.subscriptionId")} value={<span className="text-xl font-bold font-mono">{subscriptionId || t("common:status.loading")}</span>} />
 
               {/* Status */}
-              <InfoRow layout="stacked" label="Status" value={<StatusBadge status="active" label="Active" />} />
+              <InfoRow layout="stacked" label={t("common:fields.status")} value={<StatusBadge status="active" label={t("common:status.active")} />} />
 
               {/* Activation */}
-              <InfoRow layout="stacked" label="Activated" value={
+              <InfoRow layout="stacked" label={t("account:billing.success.activated")} value={
                 <span className="text-lg font-semibold">
-                  {new Date().toLocaleDateString("en-US", FMT)}
+                  {new Date().toLocaleDateString(localeTag(i18n.language), FMT)}
                 </span>
               } />
 
               {/* Next Billing */}
-              <InfoRow layout="stacked" label="Next Billing" value={
+              <InfoRow layout="stacked" label={t("account:billing.success.nextBilling")} value={
                 <span className="text-lg font-semibold">
-                  {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", FMT)}
+                  {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(localeTag(i18n.language), FMT)}
                 </span>
               } />
             </InfoList>
@@ -83,37 +86,37 @@ export default function SuccessPage() {
 
           {/* What's Included */}
           <div className="mb-8">
-            <h2 className="text-xl font-bold mb-4">What You Get</h2>
+            <h2 className="text-xl font-bold mb-4">{t("account:billing.success.whatYouGet")}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-start gap-3">
                 <CheckCircle className="size-6 text-primary flex-shrink-0 mt-1" />
                 <div>
-                  <p className="font-semibold">Full Platform Access</p>
-                  <p className="text-sm text-muted-foreground">All features & modules unlocked</p>
+                  <p className="font-semibold">{t("account:billing.success.fullAccess")}</p>
+                  <p className="text-sm text-muted-foreground">{t("account:billing.success.fullAccessDesc")}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <CheckCircle className="size-6 text-primary flex-shrink-0 mt-1" />
                 <div>
-                  <p className="font-semibold">Priority Support</p>
-                  <p className="text-sm text-muted-foreground">Get help when you need it</p>
+                  <p className="font-semibold">{t("account:billing.success.prioritySupport")}</p>
+                  <p className="text-sm text-muted-foreground">{t("account:billing.success.prioritySupportDesc")}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <CheckCircle className="size-6 text-primary flex-shrink-0 mt-1" />
                 <div>
-                  <p className="font-semibold">Team Members</p>
-                  <p className="text-sm text-muted-foreground">Invite and manage your team</p>
+                  <p className="font-semibold">{t("account:billing.success.teamMembers")}</p>
+                  <p className="text-sm text-muted-foreground">{t("account:billing.success.teamMembersDesc")}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-3">
                 <CheckCircle className="size-6 text-primary flex-shrink-0 mt-1" />
                 <div>
-                  <p className="font-semibold">Advanced Analytics</p>
-                  <p className="text-sm text-muted-foreground">Detailed insights & reports</p>
+                  <p className="font-semibold">{t("account:billing.success.analytics")}</p>
+                  <p className="text-sm text-muted-foreground">{t("account:billing.success.analyticsDesc")}</p>
                 </div>
               </div>
             </div>
@@ -121,23 +124,23 @@ export default function SuccessPage() {
 
           {/* Next Steps */}
           <Card className="p-6 mb-8 gap-3">
-            <h3 className="font-bold">Next Steps</h3>
+            <h3 className="font-bold">{t("account:billing.success.nextSteps")}</h3>
             <ol className="space-y-2 text-sm">
               <li className="flex items-start gap-2">
                 <span className="font-bold flex-shrink-0">1.</span>
-                <span>Check your email for a receipt and invoice</span>
+                <span>{t("account:billing.success.step1")}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="font-bold flex-shrink-0">2.</span>
-                <span>Review your subscription details in Billing settings</span>
+                <span>{t("account:billing.success.step2")}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="font-bold flex-shrink-0">3.</span>
-                <span>Invite team members to collaborate</span>
+                <span>{t("account:billing.success.step3")}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="font-bold flex-shrink-0">4.</span>
-                <span>Start using all premium features immediately</span>
+                <span>{t("account:billing.success.step4")}</span>
               </li>
             </ol>
           </Card>
@@ -150,7 +153,7 @@ export default function SuccessPage() {
               disabled={!invoiceUrl}
             >
               <Download className="size-5" />
-              Download Invoice
+              {t("account:billing.success.downloadInvoice")}
             </Button>
 
             {/* Go to Dashboard */}
@@ -158,7 +161,7 @@ export default function SuccessPage() {
               onClick={() => router.push("/dashboard")}
             >
               <Home className="size-5" />
-              Go to Dashboard
+              {t("account:billing.success.goToDashboard")}
             </Button>
 
             {/* View Subscription */}
@@ -166,67 +169,65 @@ export default function SuccessPage() {
               onClick={() => router.push("/dashboard/billing/subscriptions")}
               variant="outline"
             >
-              View Subscription
+              {t("account:billing.success.viewSubscription")}
             </Button>
           </div>
 
           {/* Email Confirmation */}
           <Alert>
             <Mail />
-            <AlertTitle>Confirmation Email Sent</AlertTitle>
+            <AlertTitle>{t("account:billing.success.emailSent")}</AlertTitle>
             <AlertDescription>
-              Check your email for receipt, invoice, and subscription details
+              {t("account:billing.success.emailSentDesc")}
             </AlertDescription>
           </Alert>
 
           {/* FAQ Section */}
           <Separator className="mt-8" />
           <div className="pt-8">
-            <h3 className="font-bold mb-4">Frequently Asked Questions</h3>
+            <h3 className="font-bold mb-4">{t("account:billing.success.faqTitle")}</h3>
 
             <div className="space-y-4">
               <div>
-                <p className="font-semibold mb-1">When does my subscription start?</p>
+                <p className="font-semibold mb-1">{t("account:billing.success.q1")}</p>
                 <p className="text-sm text-muted-foreground">
-                  Your subscription starts immediately. You have full access right now!
+                  {t("account:billing.success.a1")}
                 </p>
               </div>
 
               <div>
-                <p className="font-semibold mb-1">Can I change my plan later?</p>
+                <p className="font-semibold mb-1">{t("account:billing.success.q2")}</p>
                 <p className="text-sm text-muted-foreground">
-                  Yes! You can upgrade or downgrade anytime from your billing settings. Changes take
-                  effect immediately.
+                  {t("account:billing.success.a2")}
                 </p>
               </div>
 
               <div>
-                <p className="font-semibold mb-1">Is there a money-back guarantee?</p>
+                <p className="font-semibold mb-1">{t("account:billing.success.q3")}</p>
                 <p className="text-sm text-muted-foreground">
-                  Yes! If you're not satisfied within 30 days, we'll refund your money. No questions
-                  asked.
+                  {t("account:billing.success.a3")}
                 </p>
               </div>
 
               <div>
-                <p className="font-semibold mb-1">How do I cancel my subscription?</p>
+                <p className="font-semibold mb-1">{t("account:billing.success.q4")}</p>
                 <p className="text-sm text-muted-foreground">
-                  You can cancel anytime from your subscription settings. No penalties or long-term
-                  contracts.
+                  {t("account:billing.success.a4")}
                 </p>
               </div>
 
               <div>
-                <p className="font-semibold mb-1">Where do I get support?</p>
+                <p className="font-semibold mb-1">{t("account:billing.success.q5")}</p>
                 <p className="text-sm text-muted-foreground">
-                  Email us at{" "}
-                  <a href="mailto:support@company.com" className="text-primary hover:underline">
-                    support@company.com
-                  </a>{" "}
-                  or visit our{" "}
-                  <a href="#" className="text-primary hover:underline">
-                    help center
-                  </a>
+                  <Trans
+                    t={t}
+                    i18nKey="account:billing.success.a5"
+                    values={{ email: "support@company.com" }}
+                    components={{
+                      mail: <a href="mailto:support@company.com" className="text-primary hover:underline" />,
+                      help: <a href="#" className="text-primary hover:underline" />,
+                    }}
+                  />
                 </p>
               </div>
             </div>
@@ -236,9 +237,9 @@ export default function SuccessPage() {
           <Separator className="mt-8" />
           <div className="text-center text-sm text-muted-foreground pt-8">
             <p>
-              Thank you for upgrading! We're excited to have you on our premium plan.{" "}
+              {t("account:billing.success.thanks")}{" "}
               <Link href="/dashboard" className="text-primary hover:underline">
-                Start exploring →
+                {t("account:billing.success.startExploring")}
               </Link>
             </p>
           </div>

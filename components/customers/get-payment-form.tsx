@@ -9,8 +9,15 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { FormField } from "@/components/common/FormField"
 import { SegmentedControl } from "@/components/common/SegmentedControl"
+import { useTranslation } from "react-i18next"
 
-const METHODS = ["Cash", "bKash", "Card", "Bank"]
+// Values are sent to the backend as-is; only the label is translated
+const METHODS = [
+  ["Cash", "customers:shared.methods.cash"],
+  ["bKash", "customers:shared.methods.bkash"],
+  ["Card", "customers:shared.methods.card"],
+  ["Bank", "customers:shared.methods.bank"],
+] as const
 
 interface Props {
   customerId: number
@@ -21,6 +28,7 @@ interface Props {
 
 /** Inline "Get payment" form: records a payment against the customer's open dues. */
 export function GetPaymentForm({ customerId, due, onPaid, onCancel }: Props) {
+  const { t } = useTranslation(["customers", "common"])
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const [amount, setAmount] = useState(String(due))
@@ -30,16 +38,17 @@ export function GetPaymentForm({ customerId, due, onPaid, onCancel }: Props) {
 
   const submit = async () => {
     const n = Number(amount)
-    if (!(n > 0)) return setError("Enter an amount above 0")
-    if (n > due + 0.001) return setError(`Amount can't be more than the ${formatCurrency(due)} due`)
+    if (!(n > 0)) return setError(t("customers:payment.errAmount"))
+    if (n > due + 0.001) return setError(t("customers:payment.errMax", { due: formatCurrency(due) }))
     setError("")
     setSaving(true)
     try {
       await dueApi.settle("customers", customerId, { amount: n, method })
-      toast({ title: "Payment recorded", description: `${formatCurrency(n)} received by ${method}` })
+      const methodKey = METHODS.find(([v]) => v === method)?.[1]
+      toast({ title: t("customers:payment.recorded"), description: t("customers:payment.recordedDesc", { amount: formatCurrency(n), method: methodKey ? t(methodKey) : method }) })
       onPaid()
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Could not record the payment")
+      setError(e?.response?.data?.message || e?.message || t("customers:payment.failed"))
     } finally {
       setSaving(false)
     }
@@ -47,21 +56,21 @@ export function GetPaymentForm({ customerId, due, onPaid, onCancel }: Props) {
 
   return (
     <Card className="gap-2.5 p-3">
-      <FormField label={`Amount received (due ${formatCurrency(due)})`} htmlFor={`get-payment-amount-${customerId}`}>
+      <FormField label={t("customers:payment.amount", { due: formatCurrency(due) })} htmlFor={`get-payment-amount-${customerId}`}>
         <Input id={`get-payment-amount-${customerId}`} type="number" min={0} max={due} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
       </FormField>
       <SegmentedControl
-        aria-label="Payment method"
+        aria-label={t("common:payment.method")}
         value={method}
         onValueChange={setMethod}
-        options={METHODS.map((m) => ({ value: m, label: m }))}
+        options={METHODS.map(([value, key]) => ({ value, label: t(key) }))}
       />
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
         <Button type="button" onClick={submit} disabled={saving} className="flex-1">
-          {saving ? "Saving…" : "Record payment"}
+          {saving ? t("common:actions.saving") : t("customers:payment.record")}
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button type="button" variant="outline" onClick={onCancel}>{t("common:actions.cancel")}</Button>
       </div>
     </Card>
   )

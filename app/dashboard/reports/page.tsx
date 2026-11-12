@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Download, Printer } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PaginationControl } from "@/components/ui/pagination-control"
@@ -21,13 +23,19 @@ import { StatTile } from "@/components/common/StatTile"
 import { FormField } from "@/components/common/FormField"
 import { Toolbar } from "@/components/common/Toolbar"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { localeTag } from "@/lib/i18n"
+import { REPORTS_NS, reportMoneySub, reportText } from "./report-text"
 
-const TABS: [ReportType, string][] = [
-  ["sales", "Sales summary"], ["purchases", "Purchases"], ["stock", "Stock valuation"], ["dues", "Receivables & payables"], ["pnl", "Profit & loss"],
+type Key = ParseKeys<typeof REPORTS_NS>
+
+const TABS: [ReportType, Key][] = [
+  ["sales", "commerce:reports.tabs.sales"], ["purchases", "commerce:reports.tabs.purchases"], ["stock", "commerce:reports.tabs.stock"],
+  ["dues", "commerce:reports.tabs.dues"], ["pnl", "commerce:reports.tabs.pnl"],
 ]
 const RANGES = [
-  ["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"], ["lastmonth", "Last month"], ["ytd", "This year"], ["custom", "Custom…"],
-] as const
+  ["today", "common:time.today"], ["7", "common:time.last7Days"], ["30", "common:time.last30Days"], ["month", "common:time.thisMonth"],
+  ["lastmonth", "commerce:reports.range.lastMonth"], ["ytd", "commerce:reports.range.thisYear"], ["custom", "commerce:reports.range.custom"],
+] as const satisfies readonly (readonly [string, Key])[]
 type RangeId = (typeof RANGES)[number][0]
 
 const TONE: Record<Tone, string> = {
@@ -63,19 +71,19 @@ const short = (n: number) => {
   return (n < 0 ? "-" : "") + s.replace(".0", "")
 }
 
-function PagedTable({ table, fmt }: { table: ReportTable; fmt: (c: ReportCell) => string }) {
+function PagedTable({ table, fmt, tx }: { table: ReportTable; fmt: (c: ReportCell) => string; tx: (s: string) => string }) {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
   useEffect(() => { setPage(1) }, [table.title, table.rows.length])
   const rows = table.rows.slice((page - 1) * perPage, page * perPage)
   const paged = table.rows.length > 10
   return (
-    <SectionCard title={table.title} className="gap-3 print:break-inside-avoid" contentClassName="px-2">
+    <SectionCard title={tx(table.title)} className="gap-3 print:break-inside-avoid" contentClassName="px-2">
       <div className="overflow-x-auto">
         <Table className="min-w-[480px]">
           <TableHeader>
             <TableRow>
-              {table.columns.map((c, i) => <TableHead key={c + i} scope="col" className={i === 0 ? "text-left" : "text-right"}>{c}</TableHead>)}
+              {table.columns.map((c, i) => <TableHead key={c + i} scope="col" className={i === 0 ? "text-left" : "text-right"}>{tx(c)}</TableHead>)}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -98,7 +106,7 @@ function PagedTable({ table, fmt }: { table: ReportTable; fmt: (c: ReportCell) =
           )}
         </Table>
       </div>
-      {table.rows.length === 0 && <p className="px-3 text-sm text-muted-foreground">{table.empty}</p>}
+      {table.rows.length === 0 && <p className="px-3 text-sm text-muted-foreground">{tx(table.empty)}</p>}
       {paged && (
         <div className="print:hidden">
           <Separator className="mb-3" />
@@ -111,6 +119,9 @@ function PagedTable({ table, fmt }: { table: ReportTable; fmt: (c: ReportCell) =
 }
 
 export default function ReportsPage() {
+  const { t, i18n } = useTranslation(REPORTS_NS)
+  const tag = localeTag(i18n.language)
+  const tx = useCallback((s: string) => reportText(t, s, tag), [t, tag])
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const blocked = useModuleGuard("Reports")
@@ -134,10 +145,11 @@ export default function ReportsPage() {
       setReport(await reportsApi.get(type, showRange ? { from: wFrom || undefined, to: wTo || undefined } : undefined))
     } catch (e: any) {
       setReport(null)
-      setError(e?.response?.data?.message || "Could not load this report.")
+      setError(e?.response?.data?.message || t("commerce:reports.loadFailed"))
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, showRange, wFrom, wTo, customIncomplete])
   useEffect(() => { load() }, [load])
 
@@ -145,20 +157,20 @@ export default function ReportsPage() {
     if (c.t === "money") return formatCurrency(Number(c.v) || 0)
     if (c.t === "int") return String(Math.round(Number(c.v) || 0))
     if (c.t === "pct") return typeof c.v === "number" ? `${Math.round(c.v)}%` : String(c.v)
-    return String(c.v ?? "")
-  }, [formatCurrency])
+    return c.t === "text" ? tx(String(c.v ?? "")) : String(c.v ?? "")
+  }, [formatCurrency, tx])
   const fmtKpi = (k: ReportKpi) => (k.kind === "money" ? formatCurrency(Number(k.value) || 0) : k.kind === "int" ? String(Math.round(Number(k.value) || 0)) : String(k.value))
   const fmtMix = (kind: "money" | "int", v: number) => (kind === "money" ? formatCurrency(v) : String(Math.round(v)))
 
   const periodTxt = useMemo(() => {
-    if (!showRange) return `Snapshot as of ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-    if (!wFrom && !wTo) return "Pick a start and end date to see this report."
-    const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    return `Period: ${wFrom ? f(wFrom) : "start"} to ${wTo ? f(wTo) : "today"}`
-  }, [showRange, wFrom, wTo])
+    if (!showRange) return t("commerce:reports.snapshot", { date: new Date().toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" }) })
+    if (!wFrom && !wTo) return t("commerce:reports.pickDates")
+    const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" })
+    return t("commerce:reports.period", { from: wFrom ? f(wFrom) : t("commerce:reports.periodStart"), to: wTo ? f(wTo) : t("common:time.today") })
+  }, [showRange, wFrom, wTo, t, tag])
 
   const handleExport = () => {
-    if (!report || !report.tables.some((t) => t.rows.length)) { toast({ variant: "destructive", title: "Nothing to export for this report" }); return }
+    if (!report || !report.tables.some((tb) => tb.rows.length)) { toast({ variant: "destructive", title: t("commerce:reports.nothingToExport") }); return }
     const out: string[][] = []
     report.kpis.forEach((k) => out.push([k.label, fmtKpi(k)]))
     report.tables.forEach((tb) => {
@@ -184,26 +196,26 @@ export default function ReportsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       <PageHeader
-        title="Reports"
-        description={report?.subtitle ?? "Sales, purchases, stock, dues and profit in one place."}
+        title={t("commerce:reports.title")}
+        description={report?.subtitle ? tx(report.subtitle) : t("commerce:reports.description")}
         actions={<div className="flex gap-2 print:hidden">
-          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> Print</Button>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> {t("common:actions.print")}</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("commerce:reports.exportCsv")}</Button>
         </div>}
       />
 
       <Toolbar className="gap-3 print:hidden">
         <Tabs value={type} onValueChange={(v) => setType(v as ReportType)}>
-          <TabsList aria-label="Report" className="h-auto flex-wrap">
+          <TabsList aria-label={t("commerce:reports.tabsLabel")} className="h-auto flex-wrap">
             {TABS.map(([id, label]) => (
-              <TabsTrigger key={id} value={id}>{label}</TabsTrigger>
+              <TabsTrigger key={id} value={id}>{t(label)}</TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
         {showRange && (
-          <div role="group" aria-label="Date range" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label={t("commerce:reports.rangeLabel")} className="flex flex-wrap gap-1.5">
             {RANGES.map(([id, label]) => (
-              <Button key={id} type="button" variant={range === id ? "default" : "outline"} aria-pressed={range === id} onClick={() => setRange(id)}>{label}</Button>
+              <Button key={id} type="button" variant={range === id ? "default" : "outline"} aria-pressed={range === id} onClick={() => setRange(id)}>{t(label)}</Button>
             ))}
           </div>
         )}
@@ -211,9 +223,9 @@ export default function ReportsPage() {
 
       {showRange && range === "custom" && (
         <div className="flex flex-wrap gap-3 print:hidden">
-          <FormField orientation="horizontal" className="w-auto" label="From" htmlFor="report-from">
+          <FormField orientation="horizontal" className="w-auto" label={t("common:extra.from")} htmlFor="report-from">
             <Input id="report-from" type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField>
-          <FormField orientation="horizontal" className="w-auto" label="To" htmlFor="report-to">
+          <FormField orientation="horizontal" className="w-auto" label={t("common:extra.to")} htmlFor="report-to">
             <Input id="report-to" type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} /></FormField>
         </div>
       )}
@@ -225,32 +237,32 @@ export default function ReportsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : report ? (
         <>
-          <section aria-label="Summary" className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length === 5 && "xl:grid-cols-5", report.kpis.length >= 6 && "xl:grid-cols-6", loading && "opacity-60")}>
+          <section aria-label={t("common:extra.summary")} className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length === 5 && "xl:grid-cols-5", report.kpis.length >= 6 && "xl:grid-cols-6", loading && "opacity-60")}>
             {report.kpis.map((k) => (
               <StatTile
                 key={k.label}
-                label={k.label}
+                label={tx(k.label)}
                 value={fmtKpi(k)}
                 icon={<span aria-hidden className={cn("block size-3 rounded-full", TONE[k.tone])} />}
-                hint={<span className={SUB_TONE[k.subTone ?? "muted"]}>{k.subMoney ? `${k.subMoney.prefix}${formatCurrency(k.subMoney.amount)}${k.subMoney.suffix}` : k.sub}</span>}
+                hint={<span className={SUB_TONE[k.subTone ?? "muted"]}>{k.subMoney ? reportMoneySub(t, k.subMoney.prefix, formatCurrency(k.subMoney.amount), k.subMoney.suffix) : tx(k.sub)}</span>}
               />
             ))}
           </section>
 
           <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr] print:grid-cols-1">
             {report.chart && (
-              <SectionCard title={report.chart.title} className="print:break-inside-avoid">
-                {!hasBars ? <p className="py-10 text-center text-sm text-muted-foreground">Nothing to chart for this period.</p> : (
+              <SectionCard title={tx(report.chart.title)} className="print:break-inside-avoid">
+                {!hasBars ? <p className="py-10 text-center text-sm text-muted-foreground">{t("commerce:reports.nothingToChart")}</p> : (
                   <>
                     <div className="flex h-[200px] items-end gap-1.5">
                       {bars.map((b) => (
-                        <div key={b.label} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${b.label}: ${formatCurrency(b.value)}`}>
+                        <div key={b.label} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${tx(b.label)}: ${formatCurrency(b.value)}`}>
                           <span className="text-[10px] font-medium tabular-nums text-muted-foreground">{b.value !== 0 ? short(b.value) : ""}</span>
                           <div className="w-full rounded-t-md" style={{ height: `${Math.max(2, Math.round((Math.abs(b.value) / maxBar) * 160))}px`, background: b.value < 0 ? "var(--destructive)" : "var(--primary)" }} />
                         </div>
                       ))}
                     </div>
-                    <div className="mt-1.5 flex gap-1.5">{bars.map((b) => <span key={b.label} className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground">{b.label}</span>)}</div>
+                    <div className="mt-1.5 flex gap-1.5">{bars.map((b) => <span key={b.label} className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground">{tx(b.label)}</span>)}</div>
                   </>
                 )}
               </SectionCard>
@@ -259,12 +271,12 @@ export default function ReportsPage() {
               const top = mx.items.slice(0, 6)
               const peak = Math.max(1, ...top.map((i) => Math.abs(i.value)))
               return (
-                <SectionCard key={mx.title} title={mx.title} className="print:break-inside-avoid">
-                  {top.length === 0 ? <p className="py-6 text-sm text-muted-foreground">Nothing to show for this period.</p> : (
+                <SectionCard key={mx.title} title={tx(mx.title)} className="print:break-inside-avoid">
+                  {top.length === 0 ? <p className="py-6 text-sm text-muted-foreground">{t("commerce:reports.nothingToShow")}</p> : (
                     <div className="flex flex-col gap-3">
                       {top.map((m, i) => (
                         <div key={m.label} className="flex flex-col gap-1.5">
-                          <div className="flex justify-between text-sm"><span className="font-medium">{m.label}</span><span className="tabular-nums text-muted-foreground">{fmtMix(mx.kind, m.value)}</span></div>
+                          <div className="flex justify-between text-sm"><span className="font-medium">{tx(m.label)}</span><span className="tabular-nums text-muted-foreground">{fmtMix(mx.kind, m.value)}</span></div>
                           <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${Math.round((Math.abs(m.value) / peak) * 100)}%`, background: MIX_COLORS[i % MIX_COLORS.length] }} /></div>
                         </div>
                       ))}
@@ -275,7 +287,7 @@ export default function ReportsPage() {
             })}
           </div>
 
-          {report.tables.map((tb) => <PagedTable key={tb.title} table={tb} fmt={fmt} />)}
+          {report.tables.map((tb) => <PagedTable key={tb.title} table={tb} fmt={fmt} tx={tx} />)}
         </>
       ) : null}
     </div>

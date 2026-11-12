@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils"
 import type React from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import Link from "next/link"
 import { Download, MoreHorizontal, Pencil, Plus, Search, Tag, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -46,6 +47,7 @@ const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "—"
 
 export default function BrandsPage() {
+  const { t } = useTranslation(["catalog", "common"])
   const { toast } = useToast()
   const [brands, setBrands] = useState<BrandResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,7 +66,7 @@ export default function BrandsPage() {
   const load = useCallback(() => {
     brandApi.getAll({ limit: 200 })
       .then((r) => { setBrands(r.data); setNoBrandCount(r.noBrandCount) })
-      .catch(() => toast({ variant: "destructive", title: "Could not load brands" }))
+      .catch(() => toast({ variant: "destructive", title: t("catalog:brands.toast.loadFailed") }))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -90,35 +92,35 @@ export default function BrandsPage() {
 
   const save = async () => {
     if (!form.brandName.trim()) {
-      toast({ variant: "destructive", title: "Name required", description: "Give the brand a name" })
+      toast({ variant: "destructive", title: t("catalog:shared.nameRequired"), description: t("catalog:brands.toast.nameRequiredDesc") })
       return
     }
     const wanted = form.brandName.trim().toLowerCase()
     if (brands.some((b) => b.id !== editing?.id && b.brandName.trim().toLowerCase() === wanted)) {
-      toast({ variant: "destructive", title: "Name already used", description: "A brand with this name already exists." })
+      toast({ variant: "destructive", title: t("catalog:shared.nameUsed"), description: t("catalog:brands.toast.nameUsedDesc") })
       return
     }
     const logoUrl = form.logo.trim()
     if (logoUrl && !/^https?:\/\/\S+\.\S+/i.test(logoUrl)) {
-      toast({ variant: "destructive", title: "Check the logo URL", description: "The logo must be an http:// or https:// link" })
+      toast({ variant: "destructive", title: t("catalog:brands.toast.checkLogo"), description: t("catalog:brands.toast.checkLogoDesc") })
       return
     }
     setSaving(true)
     try {
       const web = form.website.trim()
       if (web && !/^https?:\/\/\S+\.\S+/.test(web)) {
-        toast({ variant: "destructive", title: "Check the website", description: "Start it with https://" })
+        toast({ variant: "destructive", title: t("catalog:brands.toast.checkWebsite"), description: t("catalog:brands.toast.checkWebsiteDesc") })
         setSaving(false)
         return
       }
       const payload = { brandName: form.brandName.trim(), logo: form.logo.trim(), website: web, description: form.description.trim(), status: form.status }
       if (editing) await brandApi.update(editing.id, payload)
       else await brandApi.create(payload)
-      toast({ title: editing ? "Brand updated" : "Brand added", description: payload.brandName })
+      toast({ title: editing ? t("catalog:brands.toast.updated") : t("catalog:brands.toast.added"), description: payload.brandName })
       setFormOpen(false)
       load()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not save", description: err?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotSave"), description: err?.response?.data?.message || t("common:extra.tryAgain") })
     } finally {
       setSaving(false)
     }
@@ -129,7 +131,7 @@ export default function BrandsPage() {
       await brandApi.update(b.id, { status })
       load()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not update", description: err?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotUpdate"), description: err?.response?.data?.message || t("common:extra.tryAgain") })
     }
   }
 
@@ -138,10 +140,10 @@ export default function BrandsPage() {
     setDeleting(true)
     try {
       await brandApi.delete(deleteTarget.id)
-      toast({ title: "Brand deleted", description: deleteTarget.brandName })
+      toast({ title: t("catalog:brands.toast.deleted"), description: deleteTarget.brandName })
       load()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not delete", description: err?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotDelete"), description: err?.response?.data?.message || t("common:extra.tryAgain") })
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
@@ -179,7 +181,10 @@ export default function BrandsPage() {
           seen.add(key); ok++
         } catch { skipped++ }
       }
-      toast({ title: "Import finished", description: `${ok} added${skipped ? `, ${skipped} skipped (duplicate or invalid)` : ""}` })
+      toast({
+        title: t("catalog:shared.importFinished"),
+        description: [t("catalog:shared.importAdded", { count: ok }), skipped ? t("catalog:shared.importSkipped", { count: skipped }) : null].filter(Boolean).join(", "),
+      })
       setImportOpen(false)
       load()
     }
@@ -192,13 +197,13 @@ export default function BrandsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Brands"
-        description="Companies that make the products you sell."
+        title={t("catalog:brands.title")}
+        description={t("catalog:brands.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> Import</Button>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" variant="outline" onClick={() => setImportOpen(true)}><Upload className="size-4" aria-hidden /> {t("common:actions.import")}</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
           <Button type="button" onClick={() => openForm(null)}>
-            <Plus className="size-4" aria-hidden /> Add brand
+            <Plus className="size-4" aria-hidden /> {t("catalog:brands.add")}
           </Button>
         </>}
       />
@@ -206,22 +211,22 @@ export default function BrandsPage() {
       <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={setTab} tabs={[
-            { value: "all", label: "All", count: brands.length },
-            { value: "active", label: "Active", count: activeCount },
-            { value: "inactive", label: "Inactive", count: brands.length - activeCount },
+            { value: "all", label: t("common:status.all"), count: brands.length },
+            { value: "active", label: t("common:status.active"), count: activeCount },
+            { value: "inactive", label: t("common:status.inactive"), count: brands.length - activeCount },
           ]} />
         </div>
 
         <Toolbar className="p-4">
           <div className="relative min-w-[240px] flex-1">
-            <Label htmlFor="brand-search" className="sr-only">Search brands</Label>
+            <Label htmlFor="brand-search" className="sr-only">{t("catalog:brands.searchLabel")}</Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id="brand-search" type="search" placeholder="Search brands…" value={search} onChange={(e) => setSearch(e.target.value)}
+            <Input id="brand-search" type="search" placeholder={t("catalog:brands.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)}
               className="pl-9" />
           </div>
           {search && (
             <Button type="button" variant="ghost" onClick={() => setSearch("")}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </Toolbar>
@@ -233,8 +238,8 @@ export default function BrandsPage() {
             </div>
           ) : currentItems.length === 0 ? (
             <EmptyState icon={Tag}
-              title={brands.length === 0 ? "No brands yet" : "No brands found"}
-              description={brands.length === 0 ? "Add a brand to use it on products." : "Try a different search or tab."} />
+              title={brands.length === 0 ? t("catalog:brands.emptyTitle") : t("catalog:brands.notFoundTitle")}
+              description={brands.length === 0 ? t("catalog:brands.emptyDesc") : t("catalog:shared.noMatchHint")} />
           ) : (
             <ul className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
               {currentItems.map((b) => {
@@ -247,10 +252,10 @@ export default function BrandsPage() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold">{b.brandName}</div>
                         <div className="text-xs tabular-nums text-muted-foreground">
-                          {b.productsCount == null ? "—" : `${b.productsCount} product${b.productsCount === 1 ? "" : "s"}`}
+                          {b.productsCount == null ? "—" : t("common:count.products", { count: b.productsCount })}
                         </div>
                       </div>
-                      <Switch checked={b.status} aria-label={`Active: ${b.brandName}`} onCheckedChange={(v) => setActive(b, v)} />
+                      <Switch checked={b.status} aria-label={t("catalog:shared.activeName", { name: b.brandName })} onCheckedChange={(v) => setActive(b, v)} />
                     </div>
                     {b.description && <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{b.description}</p>}
                     {b.website && /^https?:\/\//i.test(b.website) && (
@@ -259,25 +264,25 @@ export default function BrandsPage() {
                       </Button>
                     )}
                     <InfoList className="text-xs">
-                      <InfoRow label="Stock value" value={<span className="tabular-nums">{b.stockValue == null ? "—" : formatCurrency(b.stockValue)}</span>} />
+                      <InfoRow label={t("catalog:brands.stockValue")} value={<span className="tabular-nums">{b.stockValue == null ? "—" : formatCurrency(b.stockValue)}</span>} />
                     </InfoList>
                     <Button asChild variant="link" size="sm" className="h-auto justify-start p-0 text-xs">
-                      <Link href={`/dashboard/products?brand=${b.id}`}>View products</Link>
+                      <Link href={`/dashboard/products?brand=${b.id}`}>{t("catalog:brands.viewProducts")}</Link>
                     </Button>
                     <Separator />
                     <div className="flex items-center justify-between">
-                      <StatusBadge status={b.status ? "active" : "inactive"} label={b.status ? "Active" : "Inactive"} />
+                      <StatusBadge status={b.status ? "active" : "inactive"} label={b.status ? t("common:status.active") : t("common:status.inactive")} />
                       <div className="flex gap-1">
-                        <WithTooltip content={`Edit ${b.brandName}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.brandName}`} onClick={() => openForm(b)}><Pencil className="size-4" /></Button></WithTooltip>
+                        <WithTooltip content={t("catalog:shared.editName", { name: b.brandName })}><Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.editName", { name: b.brandName })} onClick={() => openForm(b)}><Pencil className="size-4" /></Button></WithTooltip>
                         <DropdownMenu>
-                          <WithTooltip content={`More actions for ${b.brandName}`}><DropdownMenuTrigger asChild>
-                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${b.brandName}`}><MoreHorizontal className="size-4" /></Button>
+                          <WithTooltip content={t("catalog:shared.moreFor", { name: b.brandName })}><DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moreFor", { name: b.brandName })}><MoreHorizontal className="size-4" /></Button>
                           </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openForm(b)}>Edit brand</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setActive(b, !b.status)}>{b.status ? "Mark inactive" : "Mark active"}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openForm(b)}>{t("catalog:brands.edit")}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setActive(b, !b.status)}>{b.status ? t("catalog:shared.markInactive") : t("catalog:shared.markActive")}</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(b)}>Delete brand</DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(b)}>{t("catalog:brands.delete")}</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -286,19 +291,19 @@ export default function BrandsPage() {
                   </li>
                 )
               })}
-              {tab === "all" && noBrandCount > 0 && (!term || "no brand".includes(term)) && (
+              {tab === "all" && noBrandCount > 0 && (!term || "no brand".includes(term) || t("catalog:brands.noBrand").toLowerCase().includes(term)) && (
                 <li>
                 <Card className="h-full gap-3.5 border-dashed p-4">
                   <div className="flex items-center gap-3">
                     <UserAvatar shape="square" aria-hidden fallback="—" className="size-11" />
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold">No brand</div>
-                      <div className="text-xs tabular-nums text-muted-foreground">{noBrandCount} product{noBrandCount === 1 ? "" : "s"}</div>
+                      <div className="font-semibold">{t("catalog:brands.noBrand")}</div>
+                      <div className="text-xs tabular-nums text-muted-foreground">{t("common:count.products", { count: noBrandCount })}</div>
                     </div>
-                    <Badge variant="secondary">Unassigned</Badge>
+                    <Badge variant="secondary">{t("catalog:brands.unassigned")}</Badge>
                   </div>
                   <Button asChild variant="link" size="sm" className="h-auto justify-start p-0 text-xs">
-                    <Link href="/dashboard/products?brand=none">View products</Link>
+                    <Link href="/dashboard/products?brand=none">{t("catalog:brands.viewProducts")}</Link>
                   </Button>
                 </Card>
                 </li>
@@ -306,7 +311,7 @@ export default function BrandsPage() {
               <li>
                 <Button type="button" variant="outline" onClick={() => openForm(null)}
                   className="h-full min-h-[112px] w-full border-dashed">
-                  <Plus className="size-4" aria-hidden /> Add brand
+                  <Plus className="size-4" aria-hidden /> {t("catalog:brands.add")}
                 </Button>
               </li>
             </ul>
@@ -322,32 +327,32 @@ export default function BrandsPage() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[480px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[480px]">
           <DialogHeader className="border-b border-dash-border px-6 py-[18px] text-left">
-            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? `Edit ${editing.brandName}` : "New brand"}</DialogTitle>
-            <DialogDescription className="text-[13px] text-dash-muted">Brands help you group and filter products.</DialogDescription>
+            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? t("catalog:shared.editName", { name: editing.brandName }) : t("catalog:brands.form.newTitle")}</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">{t("catalog:brands.form.desc")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
-            <FormField label="Brand name" required htmlFor="brand-name" className="min-w-0">
-              <Input id="brand-name" placeholder="e.g. Aarong" value={form.brandName} autoFocus
+            <FormField label={t("catalog:brands.form.name")} required htmlFor="brand-name" className="min-w-0">
+              <Input id="brand-name" placeholder={t("catalog:brands.form.namePlaceholder")} value={form.brandName} autoFocus
                 onChange={(e) => setForm({ ...form, brandName: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") save() }} />
             </FormField>
-            <FormField label="Logo URL" htmlFor="brand-logo" className="min-w-0">
+            <FormField label={t("catalog:brands.form.logo")} htmlFor="brand-logo" className="min-w-0">
               <Input id="brand-logo" placeholder="https://…/logo.png" value={form.logo} onChange={(e) => setForm({ ...form, logo: e.target.value })} />
               {/^(https?:)?\/\//.test(form.logo.trim()) && (
                 <UserAvatar shape="square" src={form.logo.trim()} alt="" name={form.brandName} className="mt-1 size-14" />
               )}
             </FormField>
-            <FormField label="Website" htmlFor="brand-website" className="min-w-0">
+            <FormField label={t("catalog:brands.form.website")} htmlFor="brand-website" className="min-w-0">
               <Input id="brand-website" placeholder="https://brand.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
             </FormField>
-            <FormField label="Short description" htmlFor="brand-description" className="min-w-0">
-              <Textarea id="brand-description" rows={2} placeholder="What this brand is known for" value={form.description}
+            <FormField label={t("catalog:brands.form.shortDesc")} htmlFor="brand-description" className="min-w-0">
+              <Textarea id="brand-description" rows={2} placeholder={t("catalog:brands.form.descPlaceholder")} value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </FormField>
             <Item variant="outline" size="sm">
               <ItemContent>
-                <ItemTitle id="brand-active-label">Active</ItemTitle>
-                <ItemDescription>Available when creating products</ItemDescription>
+                <ItemTitle id="brand-active-label">{t("common:status.active")}</ItemTitle>
+                <ItemDescription>{t("catalog:shared.availableForProducts")}</ItemDescription>
               </ItemContent>
               <ItemActions>
                 <Switch checked={form.status} onCheckedChange={(v) => setForm({ ...form, status: v })} aria-labelledby="brand-active-label" />
@@ -355,9 +360,9 @@ export default function BrandsPage() {
             </Item>
           </div>
           <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button type="button" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : editing ? "Save changes" : "Add brand"}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("catalog:brands.add")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -366,10 +371,10 @@ export default function BrandsPage() {
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="max-w-md rounded-[18px] border-dash-border bg-dash-card font-dash-body text-dash-ink">
           <DialogHeader className="text-left">
-            <DialogTitle className="font-dash-display text-[22px] font-bold">Import brands</DialogTitle>
-            <DialogDescription className="text-[13px] text-dash-muted">Upload a CSV with the columns Name, Website, Description, Logo and Active (Yes/No). Existing names and invalid links are skipped.</DialogDescription>
+            <DialogTitle className="font-dash-display text-[22px] font-bold">{t("catalog:brands.import.title")}</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">{t("catalog:brands.import.desc")}</DialogDescription>
           </DialogHeader>
-          <FormField label="CSV file" htmlFor="brand-import-file" className="min-w-0">
+          <FormField label={t("catalog:shared.csvFile")} htmlFor="brand-import-file" className="min-w-0">
             <Input id="brand-import-file" type="file" accept=".csv" onChange={handleImport} />
           </FormField>
         </DialogContent>
@@ -378,13 +383,13 @@ export default function BrandsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent className="font-dash-body text-dash-ink">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTarget?.brandName}?</AlertDialogTitle>
-            <AlertDialogDescription>A brand that still has products can’t be deleted — reassign or delete those products first. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTarget?.brandName ?? "" })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("catalog:brands.deleteDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("catalog:shared.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

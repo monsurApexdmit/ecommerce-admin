@@ -301,6 +301,8 @@ export interface CreateSellData {
     unit_price?: number;
     /** Per-line discount amount */
     discount?: number;
+    /** Staff set this price by hand: the server keeps it instead of re-pricing the line */
+    priceOverride?: boolean;
   }[];
 }
 

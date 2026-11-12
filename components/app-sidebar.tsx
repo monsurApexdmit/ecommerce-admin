@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { isFinanceHref, useFinanceQuery, withFinanceQuery } from "@/components/finance/finance-filters"
 import {
     LayoutDashboard,
@@ -60,149 +61,170 @@ import { cn } from "@/lib/utils"
 
 // Each item declares which permission module controls its visibility.
 // Sections group the nav into scannable blocks; order here is the render order.
+// `name` is the stable id (badges, open state); `label` is the translation key shown to the user.
 const SECTIONS = ["Overview", "Sell", "Catalog", "Operations", "Finance", "Workspace"] as const
 
-const NAV_CONFIG = [
-    { section: "Overview", name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "Dashboard" },
-    // Sales / purchases / stock reports. Finance → Reports holds the money reports (P&L, cash flow, tax, aging).
-    { section: "Overview", name: "Analytics", href: "/dashboard/reports", icon: BarChart3, module: "Reports" },
+const SECTION_LABEL = {
+    Overview: "nav:sections.overview",
+    Sell: "nav:sections.sell",
+    Catalog: "nav:sections.catalog",
+    Operations: "nav:sections.operations",
+    Finance: "nav:sections.finance",
+    Workspace: "nav:sections.workspace",
+} as const satisfies Record<(typeof SECTIONS)[number], string>
 
-    { section: "Sell", name: "POS",       href: "/dashboard/pos",       icon: CreditCard, module: "POS" },
-    { section: "Sell", name: "Sales",     href: "/dashboard/sales",     icon: Receipt,    module: "Orders" },
+const NAV_CONFIG = [
+    { section: "Overview", name: "Dashboard", label: "nav:items.dashboard", href: "/dashboard", icon: LayoutDashboard, module: "Dashboard" },
+    // Sales / purchases / stock reports. Finance → Reports holds the money reports (P&L, cash flow, tax, aging).
+    { section: "Overview", name: "Analytics", label: "nav:items.analytics", href: "/dashboard/reports", icon: BarChart3, module: "Reports" },
+
+    { section: "Sell", name: "POS",       label: "nav:items.pos",   href: "/dashboard/pos",       icon: CreditCard, module: "POS" },
+    { section: "Sell", name: "Sales",     label: "nav:items.sales", href: "/dashboard/sales",     icon: Receipt,    module: "Orders" },
     {
         section: "Sell",
         name: "Orders",
+        label: "nav:items.orders",
         icon: ShoppingCart,
         items: [
-            { name: "All orders", href: "/dashboard/orders",           module: "Orders" },
-            { name: "Shipments",  href: "/dashboard/orders/shipments", module: "Shipments" },
+            { name: "All orders", label: "nav:sub.allOrders", href: "/dashboard/orders",           module: "Orders" },
+            { name: "Shipments",  label: "nav:sub.shipments", href: "/dashboard/orders/shipments", module: "Shipments" },
         ],
     },
-    { section: "Sell", name: "Customers", href: "/dashboard/customers", icon: Users, module: "Customers" },
+    { section: "Sell", name: "Customers", label: "nav:items.customers", href: "/dashboard/customers", icon: Users, module: "Customers" },
     {
         section: "Sell",
         name: "Marketing",
+        label: "nav:items.marketing",
         icon: Megaphone,
         items: [
-            { name: "Ad order links", href: "/dashboard/marketing/links", module: "Marketing" },
+            { name: "Ad order links", label: "nav:sub.adOrderLinks", href: "/dashboard/marketing/links", module: "Marketing" },
         ],
     },
 
     {
         section: "Catalog",
         name: "Catalog",
+        label: "nav:items.catalog",
         icon: Grid3x3,
         items: [
-            { name: "Products",      href: "/dashboard/products",               module: "Products" },
-            { name: "Categories",    href: "/dashboard/categories",             module: "Categories" },
-            { name: "Collections",   href: "/dashboard/collections",            module: "Collections" },
-            { name: "Units",         href: "/dashboard/units",                  module: "Units" },
-            { name: "Brands",        href: "/dashboard/brands",                 module: "Brands" },
-            { name: "Attributes",    href: "/dashboard/attributes",             module: "Attributes" },
-            { name: "Coupons",       href: "/dashboard/coupons",                module: "Coupons" },
-            { name: "Print barcode", href: "/dashboard/products/print-barcode", module: "Print Barcode" },
+            { name: "Products",      label: "nav:sub.products",     href: "/dashboard/products",               module: "Products" },
+            { name: "Categories",    label: "nav:sub.categories",   href: "/dashboard/categories",             module: "Categories" },
+            { name: "Collections",   label: "nav:sub.collections",  href: "/dashboard/collections",            module: "Collections" },
+            { name: "Units",         label: "nav:sub.units",        href: "/dashboard/units",                  module: "Units" },
+            { name: "Brands",        label: "nav:sub.brands",       href: "/dashboard/brands",                 module: "Brands" },
+            { name: "Attributes",    label: "nav:sub.attributes",   href: "/dashboard/attributes",             module: "Attributes" },
+            { name: "Coupons",       label: "nav:sub.coupons",      href: "/dashboard/coupons",                module: "Coupons" },
+            { name: "Print barcode", label: "nav:sub.printBarcode", href: "/dashboard/products/print-barcode", module: "Print Barcode" },
         ],
     },
 
     {
         section: "Operations",
         name: "Suppliers",
+        label: "nav:items.suppliers",
         icon: Truck,
         items: [
-            { name: "All suppliers",    href: "/dashboard/vendors",                  module: "Vendors" },
-            { name: "Purchase orders",  href: "/dashboard/vendors/purchase-orders",  module: "Vendors" },
+            { name: "All suppliers",    label: "nav:sub.allSuppliers",   href: "/dashboard/vendors",                  module: "Vendors" },
+            { name: "Purchase orders",  label: "nav:sub.purchaseOrders", href: "/dashboard/vendors/purchase-orders",  module: "Vendors" },
         ],
     },
     {
         section: "Operations",
         name: "Inventory",
+        label: "nav:items.inventory",
         icon: Package,
         items: [
-            { name: "Stock overview",   href: "/dashboard/inventory",               module: "Inventory" },
-            { name: "Transfers",        href: "/dashboard/inventory/transfer",      module: "Transfers" },
-            { name: "Stock adjustment", href: "/dashboard/inventory/adjustment",    module: "Inventory" },
-            { name: "Serial & batch",   href: "/dashboard/inventory/serial-batch",  module: "Inventory" },
+            { name: "Stock overview",   label: "nav:sub.stockOverview",   href: "/dashboard/inventory",               module: "Inventory" },
+            { name: "Transfers",        label: "nav:sub.transfers",       href: "/dashboard/inventory/transfer",      module: "Transfers" },
+            { name: "Stock adjustment", label: "nav:sub.stockAdjustment", href: "/dashboard/inventory/adjustment",    module: "Inventory" },
+            { name: "Serial & batch",   label: "nav:sub.serialBatch",     href: "/dashboard/inventory/serial-batch",  module: "Inventory" },
         ],
     },
     {
         section: "Operations",
         name: "Returns",
+        label: "nav:items.returns",
         icon: RotateCcw,
         items: [
-            { name: "Customer returns", href: "/dashboard/returns/customer", module: "Customer Returns" },
-            { name: "Supplier returns", href: "/dashboard/returns/vendor",   module: "Vendor Returns" },
+            { name: "Customer returns", label: "nav:sub.customerReturns", href: "/dashboard/returns/customer", module: "Customer Returns" },
+            { name: "Supplier returns", label: "nav:sub.supplierReturns", href: "/dashboard/returns/vendor",   module: "Vendor Returns" },
         ],
     },
     {
         section: "Operations",
         name: "Tailor shop",
+        label: "nav:items.tailorShop",
         icon: Scissors,
         items: [
-            { name: "Dashboard",    href: "/dashboard/tailor",              module: "TailorDashboard" },
-            { name: "Orders",       href: "/dashboard/tailor/orders",       module: "TailorOrders" },
-            { name: "Fabrics",      href: "/dashboard/tailor/fabrics",      module: "TailorFabrics" },
-            { name: "Measurements", href: "/dashboard/tailor/measurements", module: "TailorMeasurements" },
-            { name: "Dorjis",       href: "/dashboard/tailor/dorjis",       module: "TailorDorji" },
-            { name: "Assignments",  href: "/dashboard/tailor/assignments",  module: "TailorOrders" },
-            { name: "Payments",     href: "/dashboard/tailor/payments",     module: "TailorPayments" },
-            { name: "Reports",      href: "/dashboard/tailor/reports",      module: "TailorReports" },
+            { name: "Dashboard",    label: "nav:items.dashboard",  href: "/dashboard/tailor",              module: "TailorDashboard" },
+            { name: "Orders",       label: "nav:items.orders",     href: "/dashboard/tailor/orders",       module: "TailorOrders" },
+            { name: "Fabrics",      label: "nav:sub.fabrics",      href: "/dashboard/tailor/fabrics",      module: "TailorFabrics" },
+            { name: "Measurements", label: "nav:sub.measurements", href: "/dashboard/tailor/measurements", module: "TailorMeasurements" },
+            { name: "Dorjis",       label: "nav:sub.dorjis",       href: "/dashboard/tailor/dorjis",       module: "TailorDorji" },
+            { name: "Assignments",  label: "nav:sub.assignments",  href: "/dashboard/tailor/assignments",  module: "TailorOrders" },
+            { name: "Payments",     label: "nav:sub.payments",     href: "/dashboard/tailor/payments",     module: "TailorPayments" },
+            { name: "Reports",      label: "nav:sub.reports",      href: "/dashboard/tailor/reports",      module: "TailorReports" },
         ],
     },
 
     {
         section: "Finance",
         name: "Finance",
+        label: "nav:items.finance",
         icon: Landmark,
         items: [
-            { name: "Overview",              href: "/dashboard/finance",              module: "Finance" },
-            { name: "Inventory and ledger",  href: "/dashboard/finance/inventory",    module: "Finance" },
-            { name: "Expenses",              href: "/dashboard/expenses",             module: "Expenses" },
-            { name: "Payouts",               href: "/dashboard/finance/payouts",      module: "Finance" },
-            { name: "Receivables",           href: "/dashboard/finance/receivables",  module: "Finance" },
-            { name: "Payments",              href: "/dashboard/finance/payments",     module: "Finance" },
-            { name: "Transactions",          href: "/dashboard/finance/transactions", module: "Finance" },
-            { name: "Reports",               href: "/dashboard/finance/reports",      module: "Finance" },
+            { name: "Overview",              label: "nav:sub.overview",        href: "/dashboard/finance",              module: "Finance" },
+            { name: "Inventory and ledger",  label: "nav:sub.inventoryLedger", href: "/dashboard/finance/inventory",    module: "Finance" },
+            { name: "Expenses",              label: "nav:sub.expenses",        href: "/dashboard/expenses",             module: "Expenses" },
+            { name: "Payouts",               label: "nav:sub.payouts",         href: "/dashboard/finance/payouts",      module: "Finance" },
+            { name: "Receivables",           label: "nav:sub.receivables",     href: "/dashboard/finance/receivables",  module: "Finance" },
+            { name: "Payments",              label: "nav:sub.payments",        href: "/dashboard/finance/payments",     module: "Finance" },
+            { name: "Transactions",          label: "nav:sub.transactions",    href: "/dashboard/finance/transactions", module: "Finance" },
+            { name: "Reports",               label: "nav:sub.reports",         href: "/dashboard/finance/reports",      module: "Finance" },
         ],
     },
 
     {
         section: "Workspace",
         name: "Staff",
+        label: "nav:items.staff",
         icon: UserPlus,
         items: [
-            { name: "All staff",         href: "/dashboard/staff",        module: "Staff" },
-            { name: "Role & permission", href: "/dashboard/staff/roles",  module: "Role & Permission" },
-            { name: "Salary management", href: "/dashboard/staff/salary", module: "Salary Management" },
+            { name: "All staff",         label: "nav:sub.allStaff",         href: "/dashboard/staff",        module: "Staff" },
+            { name: "Role & permission", label: "nav:sub.rolePermission",   href: "/dashboard/staff/roles",  module: "Role & Permission" },
+            { name: "Salary management", label: "nav:sub.salaryManagement", href: "/dashboard/staff/salary", module: "Salary Management" },
         ],
     },
     {
         section: "Workspace",
         name: "Settings",
+        label: "nav:items.settings",
         icon: Settings,
         items: [
-            { name: "Store settings",     href: "/dashboard/settings",                  module: "Settings" },
-            { name: "Aura shop",          href: "/dashboard/settings/aura-shop",        module: "Aura Shop" },
-            { name: "Notifications",      href: "/dashboard/settings/notifications",    module: "Settings" },
-            { name: "Company settings",   href: "/dashboard/company/settings",          module: "Company Settings" },
-            { name: "Team members",       href: "/dashboard/team/users",                module: "Team Members" },
-            { name: "Plan & billing",      href: "/dashboard/billing/overview",          module: "Subscriptions" },
-            { name: "Subscriptions",      href: "/dashboard/billing/subscriptions",     module: "Subscriptions" },
-            { name: "Billing plans",      href: "/dashboard/billing/plans",             module: "Billing Plans" },
+            { name: "Store settings",     label: "nav:sub.storeSettings",   href: "/dashboard/settings",                  module: "Settings" },
+            { name: "Aura shop",          label: "nav:sub.auraShop",        href: "/dashboard/settings/aura-shop",        module: "Aura Shop" },
+            { name: "Notifications",      label: "nav:sub.notifications",   href: "/dashboard/settings/notifications",    module: "Settings" },
+            { name: "Company settings",   label: "nav:sub.companySettings", href: "/dashboard/company/settings",          module: "Company Settings" },
+            { name: "Team members",       label: "nav:sub.teamMembers",     href: "/dashboard/team/users",                module: "Team Members" },
+            { name: "Plan & billing",     label: "nav:sub.planBilling",     href: "/dashboard/billing/overview",          module: "Subscriptions" },
+            { name: "Subscriptions",      label: "nav:sub.subscriptions",   href: "/dashboard/billing/subscriptions",     module: "Subscriptions" },
+            { name: "Billing plans",      label: "nav:sub.billingPlans",    href: "/dashboard/billing/plans",             module: "Billing Plans" },
         ],
     },
     {
         section: "Workspace",
         name: "Store",
+        label: "nav:items.store",
         icon: Store,
         items: [
-            { name: "Store settings",      href: "/dashboard/store",                      module: "Store" },
-            { name: "Shipping methods",    href: "/dashboard/shipping-methods",           module: "Shipping Methods" },
-            { name: "Payment methods",     href: "/dashboard/payment-methods",            module: "Payment Methods" },
-            { name: "Shipping addresses",  href: "/dashboard/store/shipping-addresses",   module: "Shipping Addresses" },
+            { name: "Store settings",      label: "nav:sub.storeSettings",     href: "/dashboard/store",                      module: "Store" },
+            { name: "Shipping methods",    label: "nav:sub.shippingMethods",   href: "/dashboard/shipping-methods",           module: "Shipping Methods" },
+            { name: "Payment methods",     label: "nav:sub.paymentMethods",    href: "/dashboard/payment-methods",            module: "Payment Methods" },
+            { name: "Shipping addresses",  label: "nav:sub.shippingAddresses", href: "/dashboard/store/shipping-addresses",   module: "Shipping Addresses" },
         ],
     },
-    { section: "Workspace", name: "Support", href: "/dashboard/support", icon: Headphones, module: "Support" },
-    { section: "Workspace", name: "Pages",   href: "/dashboard/pages",   icon: FileText,   module: "Pages" },
+    { section: "Workspace", name: "Support", label: "nav:items.support", href: "/dashboard/support", icon: Headphones, module: "Support" },
+    { section: "Workspace", name: "Pages",   label: "nav:items.pages",   href: "/dashboard/pages",   icon: FileText,   module: "Pages" },
 ] as const
 
 type NavEntry = typeof NAV_CONFIG[number]
@@ -295,6 +317,7 @@ function RailFlyout({ trigger, children }: { trigger: (p: { onClick: () => void;
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const { t } = useTranslation(["nav", "common"])
     const pathname = usePathname() ?? ""
     const { logout } = useAuth()
     const { state, isMobile } = useSidebar()
@@ -302,7 +325,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const navBadges = useNavBadges()
     const { canRead, isPlanModule, user, company } = useSaasAuth()
     const { setOpen: setSidebarOpen } = useSidebar()
-    const businessName = company?.name?.trim() || "Your business"
+    const businessName = company?.name?.trim() || t("nav:workspace.defaultName")
     // FND-2: finance links carry the Period / Channel last picked on a finance page (kept in sessionStorage)
     const financeQuery = useFinanceQuery()
     const linkHref = (href: string) => (isFinanceHref(href) ? withFinanceQuery(href, financeQuery) : href)
@@ -328,7 +351,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     const [open, setOpen] = React.useState<Record<string, boolean>>({})
 
-    const userName = user?.fullName || "Admin User"
+    const userName = user?.fullName || t("nav:account.defaultUser")
     const userEmail = user?.email || ""
     const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ""
     const initials = userName
@@ -367,8 +390,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     /** Small count chip on a sub-menu row. */
     const kidCount = (parent: string, kid: string): string => {
         if (parent === "Orders" && kid === "All orders" && navBadges.orders > 0) return String(navBadges.orders)
-        if (parent === "Inventory" && kid === "Stock overview" && navBadges.stock > 0) return `${navBadges.stock} low`
-        if (parent === "Staff" && kid === "Salary management" && navBadges.salaryDue > 0) return `${navBadges.salaryDue} due`
+        if (parent === "Inventory" && kid === "Stock overview" && navBadges.stock > 0) return t("nav:counts.low", { count: navBadges.stock })
+        if (parent === "Staff" && kid === "Salary management" && navBadges.salaryDue > 0) return t("nav:counts.due", { count: navBadges.salaryDue })
         return ""
     }
 
@@ -382,17 +405,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const renderLeaf = (item: Extract<NavEntry, { href: string }>) => {
         const active = matches(pathname, item.href)
         const badge = badgeFor(item.name)
+        const label = t(item.label)
         return (
             <li key={item.name}>
-                <WithTooltip content={collapsed ? item.name : undefined} side="right">
+                <WithTooltip content={collapsed ? label : undefined} side="right">
                     <Link
                         href={linkHref(item.href)}
-                        aria-label={item.name}
+                        aria-label={label}
                         data-active={active}
                         className={cn("nav-btn", collapsed && "justify-center px-0")}
                     >
                         {iconWrap(item.icon, badge)}
-                        {!collapsed && <span className="flex-1 whitespace-nowrap">{item.name}</span>}
+                        {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
                         {!collapsed && badge > 0 && <NavBadge>{badge}</NavBadge>}
                     </Link>
                 </WithTooltip>
@@ -405,6 +429,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         const parentActive = !!activeKid
         const expanded = open[group.name] ?? parentActive
         const badge = badgeFor(group.name)
+        const label = t(group.label)
 
         // Icon rail: the children open in a flyout menu
         if (collapsed) {
@@ -416,7 +441,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 ref={ref}
                                 type="button"
                                 variant="ghost"
-                                aria-label={group.name}
+                                aria-label={label}
                                 aria-haspopup="menu"
                                 aria-expanded={expanded}
                                 data-active={parentActive}
@@ -427,7 +452,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             </Button>
                         )}
                     >
-                        <SectionTitle as="p" className="px-2.5 pb-2 pt-1.5">{group.name}</SectionTitle>
+                        <SectionTitle as="p" className="truncate px-2.5 pb-2 pt-1.5">{label}</SectionTitle>
                         {group.items.map((kid) => {
                             const count = kidCount(group.name, kid.name)
                             return (
@@ -441,7 +466,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                         kid.href === activeKid && "font-semibold text-brand-fg",
                                     )}
                                 >
-                                    <span>{kid.name}</span>
+                                    <span className="min-w-0 truncate">{t(kid.label)}</span>
                                     {count && <Badge variant="secondary">{count}</Badge>}
                                 </Link>
                             )
@@ -457,13 +482,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     type="button"
                     variant="ghost"
                     aria-expanded={expanded}
-                    aria-label={group.name}
+                    aria-label={label}
                     data-parent-active={parentActive}
                     onClick={() => setOpen((o) => ({ ...o, [group.name]: !expanded }))}
                     className={NAV_BUTTON}
                 >
                     {iconWrap(group.icon, badge)}
-                    <span className="flex-1 whitespace-nowrap">{group.name}</span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
                     {badge > 0 && <NavBadge>{badge}</NavBadge>}
                     <ChevronRight
                         className={cn("size-4 flex-none transition-transform duration-200", expanded && "rotate-90")}
@@ -477,7 +502,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             return (
                                 <li key={kid.name}>
                                     <Link href={linkHref(kid.href)} prefetch={isFinanceHref(kid.href) ? false : undefined} data-active={kid.href === activeKid} className="nav-sub">
-                                        <span>{kid.name}</span>
+                                        <span className="min-w-0 truncate">{t(kid.label)}</span>
                                         {count && <span className="nav-count">{count}</span>}
                                     </Link>
                                 </li>
@@ -500,7 +525,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     {!collapsed && (
                         <div className="flex min-w-0 flex-col leading-tight">
                             <span className="max-w-[150px] truncate whitespace-nowrap font-dash-display text-base font-bold text-white"title={businessName}>{businessName}</span>
-                            {userRole && <span className="text-xs text-[var(--nav-muted)]">{userRole} workspace</span>}
+                            {userRole && <span className="max-w-[150px] truncate text-xs text-[var(--nav-muted)]">{t("nav:workspace.role", { role: userRole })}</span>}
                         </div>
                     )}
                 </div>
@@ -516,7 +541,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             {collapsed ? (
                                 <Separator className="mx-2.5 mb-2 mt-0.5 bg-white/10 data-[orientation=horizontal]:w-auto" />
                             ) : (
-                                <span className="nav-section px-3 pb-1.5">{section}</span>
+                                <span className="nav-section truncate px-3 pb-1.5">{t(SECTION_LABEL[section])}</span>
                             )}
                             <ul className="flex flex-col gap-0.5">
                                 {entries.map((entry) => ("items" in entry ? renderGroup(entry) : renderLeaf(entry)))}
@@ -524,15 +549,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                 {/* Notifications pinned at the end of Workspace */}
                                 {showNotif && (
                                     <li>
-                                        <WithTooltip content={collapsed ? "Notifications" : undefined} side="right">
+                                        <WithTooltip content={collapsed ? t("nav:items.notifications") : undefined} side="right">
                                             <Link
                                                 href="/dashboard/notifications"
-                                                aria-label="Notifications"
+                                                aria-label={t("nav:items.notifications")}
                                                 data-active={matches(pathname, "/dashboard/notifications")}
                                                 className={cn("nav-btn", collapsed && "justify-center px-0")}
                                             >
                                                 {iconWrap(Bell, unreadCount)}
-                                                {!collapsed && <span className="flex-1 whitespace-nowrap">Notifications</span>}
+                                                {!collapsed && <span className="min-w-0 flex-1 truncate">{t("nav:items.notifications")}</span>}
                                                 {!collapsed && unreadCount > 0 && <NavBadge>{unreadCount > 99 ? "99+" : unreadCount}</NavBadge>}
                                             </Link>
                                         </WithTooltip>
@@ -554,7 +579,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <Button
                             type="button"
                             variant="ghost"
-                            aria-label="Account menu"
+                            aria-label={t("nav:account.menu")}
                             className={cn(
                                 "nav-user h-auto w-full justify-start gap-2.5 rounded-[14px] p-3 text-left hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-[var(--brand-ring)] dark:hover:bg-white/10",
                                 collapsed && "justify-center p-1.5",
@@ -576,18 +601,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </DropdownMenuTrigger>
                     </WithTooltip>
                     <DropdownMenuContent side={collapsed ? "right" : "top"} align="start" className="w-56">
-                        <DropdownMenuLabel>My account</DropdownMenuLabel>
+                        <DropdownMenuLabel>{t("nav:account.title")}</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
                             <Link href="/dashboard/edit-profile" className="cursor-pointer">
                                 <Settings className="mr-2 h-4 w-4" />
-                                <span>Edit profile</span>
+                                <span>{t("nav:account.editProfile")}</span>
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={logout} className="cursor-pointer text-red-600 focus:text-red-600">
                             <LogOut className="mr-2 h-4 w-4" />
-                            <span>Log out</span>
+                            <span>{t("nav:account.logout")}</span>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

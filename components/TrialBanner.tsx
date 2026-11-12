@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Alert } from "@/components/ui/alert"
 import { AlertCircle, AlertTriangle, Clock, CheckCircle } from "lucide-react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 
 export function TrialBanner() {
   const { company, companyStatus, trialDaysRemaining } = useSaasAuth()
+  const { t } = useTranslation(["ui", "common"])
 
   if (!company) return null
 
@@ -20,15 +22,15 @@ export function TrialBanner() {
             <Clock className="w-5 h-5" />
             <div>
               <p className="text-sm font-medium">
-                🎉 Free Trial Active
+                {t("ui:trialBanner.activeTitle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                {trialDaysRemaining} days remaining • Trial ends {company.trialEndDate}
+                {t("ui:trialBanner.activeBody", { count: trialDaysRemaining, date: company.trialEndDate })}
               </p>
             </div>
           </div>
           <Button asChild size="sm">
-            <Link href="/dashboard/billing/plans">Upgrade Now →</Link>
+            <Link href="/dashboard/billing/plans">{t("ui:trialBanner.upgradeNow")}</Link>
           </Button>
         </div>
       </Alert>
@@ -44,15 +46,15 @@ export function TrialBanner() {
             <AlertTriangle className="w-5 h-5" />
             <div>
               <p className="text-sm font-medium">
-                ⚠️ Trial Expires Soon
+                {t("ui:trialBanner.soonTitle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                Only {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} left • Choose a plan to continue
+                {t("ui:trialBanner.soonBody", { count: trialDaysRemaining })}
               </p>
             </div>
           </div>
           <Button asChild size="sm">
-            <Link href="/dashboard/billing/plans">Choose Plan →</Link>
+            <Link href="/dashboard/billing/plans">{t("ui:trialBanner.choosePlan")}</Link>
           </Button>
         </div>
       </Alert>
@@ -68,15 +70,15 @@ export function TrialBanner() {
             <AlertCircle className="w-5 h-5" />
             <div>
               <p className="text-sm font-medium">
-                🚫 Trial Expired
+                {t("ui:trialBanner.expiredTitle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                Your trial has ended • Subscribe to continue using the platform
+                {t("ui:trialBanner.expiredBody")}
               </p>
             </div>
           </div>
           <Button asChild size="sm">
-            <Link href="/dashboard/billing/plans">View Plans →</Link>
+            <Link href="/dashboard/billing/plans">{t("ui:trialBanner.viewPlans")}</Link>
           </Button>
         </div>
       </Alert>
@@ -92,15 +94,15 @@ export function TrialBanner() {
             <CheckCircle className="w-5 h-5" />
             <div>
               <p className="text-sm font-medium">
-                ✓ Active Subscription
+                {t("ui:trialBanner.activeSubTitle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                Your subscription is active and running smoothly
+                {t("ui:trialBanner.activeSubBody")}
               </p>
             </div>
           </div>
           <Button asChild size="sm" variant="outline">
-            <Link href="/dashboard/billing/subscriptions">Manage →</Link>
+            <Link href="/dashboard/billing/subscriptions">{t("ui:trialBanner.manage")}</Link>
           </Button>
         </div>
       </Alert>
@@ -116,15 +118,15 @@ export function TrialBanner() {
             <AlertCircle className="w-5 h-5" />
             <div>
               <p className="text-sm font-medium">
-                ⚠️ Subscription Expired
+                {t("ui:trialBanner.subExpiredTitle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                Your subscription has expired • Renew to regain access
+                {t("ui:trialBanner.subExpiredBody")}
               </p>
             </div>
           </div>
           <Button asChild size="sm">
-            <Link href="/dashboard/billing/subscriptions">Renew Now →</Link>
+            <Link href="/dashboard/billing/subscriptions">{t("ui:trialBanner.renewNow")}</Link>
           </Button>
         </div>
       </Alert>
@@ -140,15 +142,15 @@ export function TrialBanner() {
             <AlertCircle className="w-5 h-5" />
             <div>
               <p className="text-sm font-medium">
-                🚫 Account Suspended
+                {t("ui:trialBanner.suspendedTitle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                Your account has been suspended • Contact support for assistance
+                {t("ui:trialBanner.suspendedBody")}
               </p>
             </div>
           </div>
           <Button size="sm" variant="destructive" asChild>
-            <a href="mailto:support@company.com">Contact Support</a>
+            <a href="mailto:support@company.com">{t("ui:trialBanner.contactSupport")}</a>
           </Button>
         </div>
       </Alert>

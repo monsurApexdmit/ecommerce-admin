@@ -1,12 +1,18 @@
 import type { SellResponse } from "@/lib/sellsApi"
+import { createI18n, isLang, localeTag } from "@/lib/i18n"
 
 const esc = (v: unknown) =>
   String(v ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
 
-/** One printable packing slip per order (invoice, customer, address, items with quantities, no prices). */
-export function printPackingSlips(orders: SellResponse[]): void {
+/**
+ * One printable packing slip per order (invoice, customer, address, items with quantities, no prices).
+ * `lng` ("en" | "bn", e.g. the caller's `i18n.language`) sets the printed labels; English when omitted.
+ */
+export function printPackingSlips(orders: SellResponse[], lng?: string): void {
   if (orders.length === 0) return
+  const lang = isLang(lng) ? lng : "en"
+  const t = createI18n(lang).getFixedT(lang, ["print", "common"])
   const pages = orders.map((o) => {
     const addr = [
       [o.shippingAddressLine1, o.shippingAddressLine2].filter(Boolean).join(", "),
@@ -14,24 +20,24 @@ export function printPackingSlips(orders: SellResponse[]): void {
       o.shippingCountry,
     ].filter(Boolean).map(esc).join("<br>")
     const rows = (o.items ?? []).map((it, i) => `
-      <tr><td class="n">${i + 1}</td><td>${esc(it.productName)}${it.bundleItems?.length ? ` <span class="m">(bundle)</span>` : ""}</td><td class="r">${it.quantity}</td></tr>`).join("")
+      <tr><td class="n">${i + 1}</td><td>${esc(it.productName)}${it.bundleItems?.length ? ` <span class="m">${esc(t("print:slip.bundle"))}</span>` : ""}</td><td class="r">${it.quantity}</td></tr>`).join("")
     const totalQty = (o.items ?? []).reduce((n, it) => n + (it.quantity ?? 1), 0)
     return `<section class="pg">
-      <h1>Packing slip</h1>
-      <div class="m">Invoice #${esc(o.invoiceNo)} &middot; ${esc(new Date(o.orderTime).toLocaleString())}</div>
+      <h1>${esc(t("print:slip.title"))}</h1>
+      <div class="m">${esc(t("print:slip.invoiceNo", { no: o.invoiceNo }))} &middot; ${esc(new Date(o.orderTime).toLocaleString(localeTag(lang)))}</div>
       <p><strong>${esc(o.shippingFullName || o.customerName)}</strong>
         ${o.shippingPhone ? `<br>${esc(o.shippingPhone)}` : ""}${addr ? `<br>${addr}` : ""}</p>
-      <table><thead><tr><th class="n">#</th><th>Item</th><th class="r">Qty</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="3" class="m">No item details</td></tr>`}</tbody>
-        <tfoot><tr><td></td><td class="r">Total units</td><td class="r">${totalQty}</td></tr></tfoot></table>
-      ${o.notes ? `<p class="m">Note: ${esc(o.notes)}</p>` : ""}
+      <table><thead><tr><th class="n">#</th><th>${esc(t("print:slip.item"))}</th><th class="r">${esc(t("print:slip.qty"))}</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="3" class="m">${esc(t("print:slip.noItems"))}</td></tr>`}</tbody>
+        <tfoot><tr><td></td><td class="r">${esc(t("print:slip.totalUnits"))}</td><td class="r">${totalQty}</td></tr></tfoot></table>
+      ${o.notes ? `<p class="m">${esc(t("print:slip.note", { note: o.notes }))}</p>` : ""}
     </section>`
   }).join("")
 
   const w = window.open("", "_blank")
   if (!w) return
-  w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
-<title>Packing slips</title>
+  w.document.write(`<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8" />
+<title>${esc(t("print:slip.docTitle"))}</title>
 <style>
   body{font-family:system-ui,Arial,sans-serif;color:#111827;margin:0}
   .pg{padding:32px;page-break-after:always;max-width:720px}

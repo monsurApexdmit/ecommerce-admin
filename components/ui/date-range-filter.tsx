@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { CalendarDays } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -34,6 +35,7 @@ function presetRange(preset: string): [string, string] {
 
 /** Preset dropdown (Today, 7 days, This month…) with a custom from/to option. */
 export function DateRangeFilter({ start, end, onChange, className }: DateRangeFilterProps) {
+  const { t } = useTranslation(["ui", "common"])
   const [preset, setPreset] = useState(start || end ? "custom" : "all")
   const custom = preset === "custom"
 
@@ -49,23 +51,23 @@ export function DateRangeFilter({ start, end, onChange, className }: DateRangeFi
       <Select value={preset} onValueChange={pick}>
         <SelectTrigger className="w-full lg:w-44">
           <CalendarDays className="size-4 text-muted-foreground" />
-          <SelectValue placeholder="Any date" />
+          <SelectValue placeholder={t("common:extra.anyDate")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Any date</SelectItem>
-          <SelectItem value="today">Today</SelectItem>
-          <SelectItem value="7d">Last 7 days</SelectItem>
-          <SelectItem value="30d">Last 30 days</SelectItem>
-          <SelectItem value="month">This month</SelectItem>
-          <SelectItem value="lastmonth">Last month</SelectItem>
-          <SelectItem value="custom">Custom range…</SelectItem>
+          <SelectItem value="all">{t("common:extra.anyDate")}</SelectItem>
+          <SelectItem value="today">{t("common:time.today")}</SelectItem>
+          <SelectItem value="7d">{t("common:time.last7Days")}</SelectItem>
+          <SelectItem value="30d">{t("common:time.last30Days")}</SelectItem>
+          <SelectItem value="month">{t("common:time.thisMonth")}</SelectItem>
+          <SelectItem value="lastmonth">{t("ui:dateRange.lastMonth")}</SelectItem>
+          <SelectItem value="custom">{t("ui:dateRange.custom")}</SelectItem>
         </SelectContent>
       </Select>
       {custom && (
         <>
-          <Input type="date" aria-label="From" className="w-36" value={start} onChange={(e) => onChange(e.target.value, end)} />
-          <span className="text-muted-foreground text-sm">to</span>
-          <Input type="date" aria-label="To" className="w-36" value={end} onChange={(e) => onChange(start, e.target.value)} />
+          <Input type="date" aria-label={t("common:extra.from")} className="w-36" value={start} onChange={(e) => onChange(e.target.value, end)} />
+          <span className="text-muted-foreground text-sm">{t("ui:dateRange.to")}</span>
+          <Input type="date" aria-label={t("common:extra.to")} className="w-36" value={end} onChange={(e) => onChange(start, e.target.value)} />
         </>
       )}
     </div>

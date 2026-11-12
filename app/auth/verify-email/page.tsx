@@ -11,10 +11,12 @@ import { Spinner } from "@/components/ui/spinner"
 import { FormField } from "@/components/common/FormField"
 import { saasAuthApi } from "@/lib/saasAuthApi"
 import { AlertCircle, CheckCircle, Mail, RefreshCw } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 type State = "verifying" | "success" | "error" | "resend"
 
 export default function VerifyEmailPage() {
+  const { t } = useTranslation(["auth", "common"])
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get("token")
@@ -45,7 +47,7 @@ export default function VerifyEmailPage() {
       .catch((err: any) => {
         if (cancelled) return
         setError(
-          err.response?.data?.message || "Verification failed. The link may have expired."
+          err.response?.data?.message || t("auth:verify.failed")
         )
         setState("error")
       })
@@ -58,7 +60,7 @@ export default function VerifyEmailPage() {
   const handleResend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!resendEmail.trim()) {
-      setResendError("Please enter your email address")
+      setResendError(t("auth:login.emailRequired"))
       return
     }
     setResendLoading(true)
@@ -67,7 +69,7 @@ export default function VerifyEmailPage() {
       await saasAuthApi.resendVerificationEmail(resendEmail)
       setResendSent(true)
     } catch {
-      setResendError("Failed to resend. Please try again.")
+      setResendError(t("auth:verify.resendFailed"))
     } finally {
       setResendLoading(false)
     }
@@ -79,8 +81,8 @@ export default function VerifyEmailPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
         <Card className="w-full max-w-md p-10 shadow-lg text-center">
           <Spinner className="size-12 mx-auto mb-4" />
-          <h1 className="text-xl font-bold">Verifying your email…</h1>
-          <p className="text-muted-foreground text-sm mt-2">Please wait a moment.</p>
+          <h1 className="text-xl font-bold">{t("auth:verify.verifying")}</h1>
+          <p className="text-muted-foreground text-sm mt-2">{t("auth:verify.wait")}</p>
         </Card>
       </div>
     )
@@ -94,18 +96,18 @@ export default function VerifyEmailPage() {
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold">Email Verified!</h1>
+          <h1 className="text-2xl font-bold">{t("auth:verify.successTitle")}</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            Your account is now active. Your 10-day free trial has started.
+            {t("auth:verify.successText")}
           </p>
           <Alert className="mt-4">
-            <AlertDescription className="justify-items-center">Redirecting to dashboard…</AlertDescription>
+            <AlertDescription className="justify-items-center">{t("auth:verify.redirecting")}</AlertDescription>
           </Alert>
           <Button
             className="mt-6 w-full"
             onClick={() => router.push("/dashboard")}
           >
-            Go to Dashboard
+            {t("auth:verify.goToDashboard")}
           </Button>
         </Card>
       </div>
@@ -120,7 +122,7 @@ export default function VerifyEmailPage() {
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8 text-red-600" />
           </div>
-          <h1 className="text-2xl font-bold">Verification Failed</h1>
+          <h1 className="text-2xl font-bold">{t("auth:verify.failedTitle")}</h1>
           <p className="text-muted-foreground mt-2 text-sm">{error}</p>
 
           <div className="mt-6 space-y-3">
@@ -130,10 +132,10 @@ export default function VerifyEmailPage() {
               onClick={() => setState("resend")}
             >
               <RefreshCw className="w-4 h-4" />
-              Resend Verification Email
+              {t("auth:verify.resend")}
             </Button>
             <Button asChild variant="ghost" className="w-full">
-              <Link href="/auth/login">Back to Login</Link>
+              <Link href="/auth/login">{t("auth:login.backToLogin")}</Link>
             </Button>
           </div>
         </Card>
@@ -149,29 +151,29 @@ export default function VerifyEmailPage() {
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Mail className="w-8 h-8 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold">Check Your Email</h1>
+          <h1 className="text-2xl font-bold">{t("auth:verify.checkTitle")}</h1>
           <p className="text-muted-foreground text-sm mt-2">
-            We sent a verification link to your email. Click the link to activate your account.
+            {t("auth:verify.checkText")}
           </p>
         </div>
 
         {resendSent ? (
           <Alert>
             <CheckCircle />
-            <AlertTitle>Verification email sent!</AlertTitle>
-            <AlertDescription>Check your inbox and spam folder.</AlertDescription>
+            <AlertTitle>{t("auth:verify.sentTitle")}</AlertTitle>
+            <AlertDescription>{t("auth:verify.sentText")}</AlertDescription>
           </Alert>
         ) : (
           <form onSubmit={handleResend} className="space-y-4">
             <p className="text-sm text-muted-foreground text-center">
-              Didn't receive it? Resend below.
+              {t("auth:verify.notReceived")}
             </p>
             <FormField htmlFor="resend-email" error={resendError || undefined}>
             <Input
               id="resend-email"
               type="email"
-              aria-label="Email address"
-              placeholder="your@email.com"
+              aria-label={t("auth:verify.emailLabel")}
+              placeholder={t("auth:verify.emailPlaceholder")}
               value={resendEmail}
               onChange={(e) => {
                 setResendEmail(e.target.value)
@@ -188,10 +190,10 @@ export default function VerifyEmailPage() {
             >
               {resendLoading ? (
                 <>
-                  <Spinner /> Sending…
+                  <Spinner /> {t("auth:verify.sending")}
                 </>
               ) : (
-                "Resend Verification Email"
+                t("auth:verify.resend")
               )}
             </Button>
           </form>
@@ -199,7 +201,7 @@ export default function VerifyEmailPage() {
 
         <div className="mt-6 text-center">
           <Button asChild variant="link" size="sm">
-            <Link href="/auth/login">Back to Login</Link>
+            <Link href="/auth/login">{t("auth:login.backToLogin")}</Link>
           </Button>
         </div>
       </Card>

@@ -10,8 +10,10 @@ import { Card } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { PageHeader } from "@/components/common/PageHeader"
 import { StatTile } from "@/components/common/StatTile"
+import { useTranslation } from "react-i18next"
 
 export default function PlatformOverview() {
+  const { t } = useTranslation(["auth", "common"])
   const [stats, setStats] = useState<PlatformStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -19,7 +21,7 @@ export default function PlatformOverview() {
   useEffect(() => {
     platformApi.getStats()
       .then(setStats)
-      .catch(() => setError("Failed to load stats"))
+      .catch(() => setError(t("auth:platform.overview.loadFailed")))
       .finally(() => setLoading(false))
   }, [])
 
@@ -38,13 +40,13 @@ export default function PlatformOverview() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <PageHeader title="Platform Overview" description="All companies and subscriptions across StockFlow." />
+      <PageHeader title={t("auth:platform.overview.title")} description={t("auth:platform.overview.description")} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatTile label="Total Companies" value={stats!.totalCompanies} icon={<Building2 />} />
-        <StatTile label="Active Companies" value={stats!.activeCompanies} hint={`${stats!.trialCompanies} on trial`} icon={<TrendingUp />} />
-        <StatTile label="Total Users" value={stats!.totalUsers} icon={<Users />} />
-        <StatTile label="Monthly Revenue" value={`$${stats!.mrr.toFixed(2)}`} hint={`${stats!.activeSubscriptions} active subs`} icon={<CreditCard />} />
+        <StatTile label={t("auth:platform.overview.totalCompanies")} value={stats!.totalCompanies} icon={<Building2 />} />
+        <StatTile label={t("auth:platform.overview.activeCompanies")} value={stats!.activeCompanies} hint={t("auth:platform.overview.onTrial", { count: stats!.trialCompanies })} icon={<TrendingUp />} />
+        <StatTile label={t("auth:platform.overview.totalUsers")} value={stats!.totalUsers} icon={<Users />} />
+        <StatTile label={t("auth:platform.overview.mrr")} value={`$${stats!.mrr.toFixed(2)}`} hint={t("auth:platform.overview.activeSubs", { count: stats!.activeSubscriptions })} icon={<CreditCard />} />
       </div>
 
       {/* Quick links */}
@@ -55,13 +57,13 @@ export default function PlatformOverview() {
             <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-blue-600" />
             </div>
-            <h3 className="font-semibold">Manage Companies</h3>
+            <h3 className="font-semibold">{t("auth:platform.overview.manageCompanies")}</h3>
           </div>
-          <p className="text-sm text-muted-foreground">View all companies, assign plans, activate or deactivate accounts.</p>
+          <p className="text-sm text-muted-foreground">{t("auth:platform.overview.manageCompaniesDesc")}</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Badge>{stats!.activeCompanies} active</Badge>
-            <Badge variant="secondary">{stats!.trialCompanies} trial</Badge>
-            <Badge variant="outline">{stats!.inactiveCompanies} inactive</Badge>
+            <Badge>{t("auth:platform.overview.activeCount", { count: stats!.activeCompanies })}</Badge>
+            <Badge variant="secondary">{t("auth:platform.overview.trialCount", { count: stats!.trialCompanies })}</Badge>
+            <Badge variant="outline">{t("auth:platform.overview.inactiveCount", { count: stats!.inactiveCompanies })}</Badge>
           </div>
           </Card>
         </Link>
@@ -72,13 +74,13 @@ export default function PlatformOverview() {
             <div className="w-9 h-9 bg-orange-50 rounded-lg flex items-center justify-center">
               <CreditCard className="w-5 h-5 text-orange-600" />
             </div>
-            <h3 className="font-semibold">Manage Plans</h3>
+            <h3 className="font-semibold">{t("auth:platform.overview.managePlans")}</h3>
           </div>
-          <p className="text-sm text-muted-foreground">Create, edit and toggle subscription plans. Changes reflect immediately on the signup page.</p>
+          <p className="text-sm text-muted-foreground">{t("auth:platform.overview.managePlansDesc")}</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Badge>{stats!.activePlans} active plans</Badge>
-            <Badge variant="outline">{stats!.totalPlans} total</Badge>
-            <Badge variant="secondary">{stats!.activeSubscriptions} paid subscriptions</Badge>
+            <Badge>{t("auth:platform.overview.activePlans", { count: stats!.activePlans })}</Badge>
+            <Badge variant="outline">{t("auth:platform.overview.totalCount", { count: stats!.totalPlans })}</Badge>
+            <Badge variant="secondary">{t("auth:platform.overview.paidSubs", { count: stats!.activeSubscriptions })}</Badge>
           </div>
           </Card>
         </Link>

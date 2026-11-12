@@ -4,20 +4,32 @@ import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 import { use } from "react"
 import { CheckCircle, Clock, Truck, Package, Scissors, AlertCircle, XCircle } from "lucide-react"
+import { Trans, useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
+import { LanguageSwitcher } from "@/components/shell/language-switcher"
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bg: string; step: number }> = {
-  pending:          { label: "Order Received",    icon: Clock,         color: "#d97706", bg: "#fef3c7", step: 1 },
-  measurement_taken:{ label: "Measurements Taken",icon: Scissors,      color: "#2563eb", bg: "#dbeafe", step: 2 },
-  assigned:         { label: "Assigned to Tailor",icon: Package,       color: "#7c3aed", bg: "#ede9fe", step: 3 },
-  cutting:          { label: "Cutting",           icon: Scissors,      color: "#0891b2", bg: "#e0f2fe", step: 4 },
-  stitching:        { label: "Stitching",         icon: Scissors,      color: "#7c3aed", bg: "#ede9fe", step: 5 },
-  trial:            { label: "Trial",             icon: Scissors,      color: "#9333ea", bg: "#f3e8ff", step: 6 },
-  ready:            { label: "Ready for Pickup",  icon: CheckCircle,   color: "#16a34a", bg: "#dcfce7", step: 7 },
-  delivered:        { label: "Delivered",         icon: Truck,         color: "#059669", bg: "#d1fae5", step: 8 },
-  cancelled:        { label: "Cancelled",         icon: XCircle,       color: "#dc2626", bg: "#fee2e2", step: 0 },
-}
+// `label` / `short` are translation keys (short = the label under each progress step)
+const STATUS_CONFIG = {
+  pending:          { label: "auth:track.status.pending",           short: "auth:track.step.pending",           icon: Clock,       color: "#d97706", bg: "#fef3c7", step: 1 },
+  measurement_taken:{ label: "auth:track.status.measurement_taken", short: "auth:track.step.measurement_taken", icon: Scissors,    color: "#2563eb", bg: "#dbeafe", step: 2 },
+  assigned:         { label: "auth:track.status.assigned",          short: "auth:track.step.assigned",          icon: Package,     color: "#7c3aed", bg: "#ede9fe", step: 3 },
+  cutting:          { label: "auth:track.status.cutting",           short: "auth:track.step.cutting",           icon: Scissors,    color: "#0891b2", bg: "#e0f2fe", step: 4 },
+  stitching:        { label: "auth:track.status.stitching",         short: "auth:track.step.stitching",         icon: Scissors,    color: "#7c3aed", bg: "#ede9fe", step: 5 },
+  trial:            { label: "auth:track.status.trial",             short: "auth:track.step.trial",             icon: Scissors,    color: "#9333ea", bg: "#f3e8ff", step: 6 },
+  ready:            { label: "auth:track.status.ready",             short: "auth:track.step.ready",             icon: CheckCircle, color: "#16a34a", bg: "#dcfce7", step: 7 },
+  delivered:        { label: "auth:track.status.delivered",         short: "auth:track.step.delivered",         icon: Truck,       color: "#059669", bg: "#d1fae5", step: 8 },
+  cancelled:        { label: "auth:track.status.cancelled",         short: null,                                icon: XCircle,     color: "#dc2626", bg: "#fee2e2", step: 0 },
+} as const
+type TrackStatus = keyof typeof STATUS_CONFIG
+const statusConfig = (s: string) => (s in STATUS_CONFIG ? STATUS_CONFIG[s as TrackStatus] : undefined)
 
-const STEPS = ["pending","measurement_taken","assigned","cutting","stitching","trial","ready","delivered"]
+const STEPS = ["pending","measurement_taken","assigned","cutting","stitching","trial","ready","delivered"] as const
+
+const PAYMENT_LABEL = {
+  paid: "common:payment.paid",
+  partial: "common:payment.partial",
+  unpaid: "common:payment.unpaid",
+} as const
 
 interface TrackingData {
   order_number: string
@@ -35,18 +47,19 @@ interface TrackingData {
 
 export default function TailorTrackPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
+  const { t, i18n } = useTranslation(["auth", "common"])
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<"auth:track.notFound" | "auth:track.loadFailed" | null>(null)
 
   useEffect(() => {
     fetch(`/api/proxy/tailor/track/${token}`)
       .then(r => r.json())
       .then(r => {
         if (r.success) setData(r.data)
-        else setError("Order not found")
+        else setError("auth:track.notFound")
       })
-      .catch(() => setError("Failed to load order"))
+      .catch(() => setError("auth:track.loadFailed"))
       .finally(() => setLoading(false))
   }, [token])
 
@@ -54,24 +67,27 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center space-y-3">
         <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-gray-500 text-sm">Loading order status…</p>
+        <p className="text-gray-500 text-sm">{t("auth:track.loading")}</p>
       </div>
     </div>
   )
 
   if (error || !data) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <div className="text-center space-y-4 max-w-sm">
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
           <AlertCircle className="w-8 h-8 text-red-500" />
         </div>
-        <h1 className="text-xl font-bold text-gray-900">Order Not Found</h1>
-        <p className="text-gray-500 text-sm">{error ?? "This tracking link is invalid or expired."}</p>
+        <h1 className="text-xl font-bold text-gray-900">{t("auth:track.notFoundTitle")}</h1>
+        <p className="text-gray-500 text-sm">{error ? t(error) : t("auth:track.invalidLink")}</p>
       </div>
     </div>
   )
 
-  const cfg = STATUS_CONFIG[data.order_status] ?? STATUS_CONFIG.pending
+  const cfg = statusConfig(data.order_status) ?? STATUS_CONFIG.pending
   const StatusIcon = cfg.icon
   const currentStep = cfg.step
   const cancelled = data.order_status === "cancelled"
@@ -82,12 +98,16 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-lg mx-auto space-y-5">
 
+        <div className="flex justify-end">
+          <LanguageSwitcher />
+        </div>
+
         {/* Header */}
         <div className="text-center">
           <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
             <Scissors className="w-6 h-6 text-purple-600" />
           </div>
-          <h1 className="text-2xl font-black text-gray-900">Order Tracking</h1>
+          <h1 className="text-2xl font-black text-gray-900">{t("auth:track.title")}</h1>
           <p className="text-gray-500 text-sm mt-1">{data.order_number}</p>
           {data.customer_name && <p className="text-gray-700 font-semibold mt-1">{data.customer_name}</p>}
         </div>
@@ -97,12 +117,17 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: cfg.bg }}>
             <StatusIcon className="w-8 h-8" style={{ color: cfg.color }} />
           </div>
-          <p className="text-xs font-700 uppercase tracking-wider text-gray-400 mb-1">Current Status</p>
-          <p className="text-2xl font-black" style={{ color: cfg.color }}>{cfg.label}</p>
+          <p className="text-xs font-700 uppercase tracking-wider text-gray-400 mb-1">{t("auth:track.currentStatus")}</p>
+          <p className="text-2xl font-black" style={{ color: cfg.color }}>{t(cfg.label)}</p>
 
           {data.delivery_date && !cancelled && (
             <p className="text-sm text-gray-500 mt-3">
-              Estimated delivery: <strong>{new Date(data.delivery_date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</strong>
+              <Trans
+                t={t}
+                i18nKey="auth:track.estimatedDelivery"
+                values={{ date: new Date(data.delivery_date).toLocaleDateString(localeTag(i18n.language), { weekday: "long", month: "long", day: "numeric" }) }}
+                components={{ b: <strong /> }}
+              />
             </p>
           )}
         </div>
@@ -110,7 +135,7 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
         {/* Progress bar */}
         {!cancelled && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">Progress</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">{t("auth:track.progress")}</p>
             <div className="relative">
               <div className="flex justify-between mb-2">
                 {STEPS.map((s, i) => {
@@ -124,7 +149,7 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
                         {done && !active ? "✓" : i + 1}
                       </div>
                       <span className={cn("text-[9px] font-semibold text-center leading-tight", done ? "text-purple-600" : "text-gray-300")}>
-                        {STATUS_CONFIG[s]?.label.split(" ")[0]}
+                        {t(STATUS_CONFIG[s].short)}
                       </span>
                     </div>
                   )
@@ -143,26 +168,26 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
 
         {/* Payment summary */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Payment</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">{t("auth:track.payment")}</p>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Total</span>
+              <span className="text-gray-500">{t("common:money.total")}</span>
               <span className="font-bold text-gray-900">{fmt(data.total_amount)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Paid</span>
+              <span className="text-gray-500">{t("common:money.paid")}</span>
               <span className="font-bold text-green-600">{fmt(data.paid_amount)}</span>
             </div>
             {data.due_amount > 0 && (
               <div className="flex justify-between text-sm border-t pt-2 mt-2">
-                <span className="text-gray-500 font-semibold">Due</span>
+                <span className="text-gray-500 font-semibold">{t("common:money.due")}</span>
                 <span className="font-black text-red-600">{fmt(data.due_amount)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Payment Status</span>
+              <span className="text-gray-500">{t("auth:track.paymentStatus")}</span>
               <span className={cn("font-bold capitalize", data.payment_status === "paid" ? "text-green-600" :
-                data.payment_status === "partial" ? "text-yellow-600" : "text-red-600")}>{data.payment_status}</span>
+                data.payment_status === "partial" ? "text-yellow-600" : "text-red-600")}>{data.payment_status in PAYMENT_LABEL ? t(PAYMENT_LABEL[data.payment_status as keyof typeof PAYMENT_LABEL]) : data.payment_status}</span>
             </div>
           </div>
         </div>
@@ -170,19 +195,19 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
         {/* Status history */}
         {data.status_logs.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">History</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">{t("auth:track.history")}</p>
             <div className="space-y-3">
               {[...data.status_logs].reverse().map((log, i) => {
-                const lcfg = STATUS_CONFIG[log.to]
+                const lcfg = statusConfig(log.to)
                 return (
                   <div key={i} className="flex gap-3 items-start">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: lcfg?.bg ?? "#f3f4f6" }}>
                       {lcfg?.icon && <lcfg.icon className="w-4 h-4" style={{ color: lcfg.color }} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{lcfg?.label ?? log.to}</p>
+                      <p className="text-sm font-semibold text-gray-900">{lcfg ? t(lcfg.label) : log.to}</p>
                       {log.note && <p className="text-xs text-gray-500 mt-0.5">{log.note}</p>}
-                      <p className="text-xs text-gray-400 mt-0.5">{new Date(log.date).toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{new Date(log.date).toLocaleString(localeTag(i18n.language))}</p>
                     </div>
                   </div>
                 )
@@ -191,7 +216,7 @@ export default function TailorTrackPage({ params }: { params: Promise<{ token: s
           </div>
         )}
 
-        <p className="text-center text-xs text-gray-400 pb-4">Powered by Tailor Shop Management</p>
+        <p className="text-center text-xs text-gray-400 pb-4">{t("auth:track.poweredBy")}</p>
       </div>
     </div>
   )

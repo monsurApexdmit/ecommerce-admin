@@ -9,6 +9,7 @@ import { Check } from "lucide-react"
 import { saasBillingApi, type Plan } from "@/lib/saasBillingApi"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 
 interface PricingCardProps {
@@ -19,6 +20,7 @@ interface PricingCardProps {
 
 export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: PricingCardProps) {
   const router = useRouter()
+  const { t } = useTranslation(["ui", "common"])
   const { formatCurrency } = useCompanySettings()
   const [loading, setLoading] = useState(false)
 
@@ -45,12 +47,12 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
     >
       {/* Popular Badge */}
       {plan.isPopular && (
-        <Badge className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">POPULAR</Badge>
+        <Badge className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">{t("ui:pricing.popular")}</Badge>
       )}
 
       {/* Current Plan Badge */}
       {isCurrentPlan && (
-        <Badge variant="secondary" className="mb-3">Current Plan</Badge>
+        <Badge variant="secondary" className="mb-3">{t("ui:pricing.current")}</Badge>
       )}
 
       {/* Plan Name */}
@@ -67,49 +69,49 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
               {formattedPrice}
             </span>
             <span className="text-muted-foreground text-sm">
-              {plan.billingPeriod === "monthly" && " / month"}
-              {plan.billingPeriod === "yearly" && " / year"}
-              {plan.billingPeriod === "custom" && " / custom"}
+              {plan.billingPeriod === "monthly" && t("ui:pricing.perMonth")}
+              {plan.billingPeriod === "yearly" && t("ui:pricing.perYear")}
+              {(plan.billingPeriod as string | undefined) === "custom" && t("ui:pricing.perCustom")}
             </span>
           </div>
         ) : (
           <div>
-            <span className="text-3xl font-bold">Custom</span>
-            <p className="text-sm text-muted-foreground">Contact us for pricing</p>
+            <span className="text-3xl font-bold">{t("ui:pricing.custom")}</span>
+            <p className="text-sm text-muted-foreground">{t("ui:pricing.contactUs")}</p>
           </div>
         )}
       </div>
 
       {/* Limits */}
       <Card className="mb-6 gap-0 bg-muted/50 p-4 shadow-none">
-        <SectionTitle as="p" className="mb-3">Limits</SectionTitle>
+        <SectionTitle as="p" className="mb-3">{t("ui:pricing.limits")}</SectionTitle>
         <div className="space-y-2 text-sm">
           {plan.maxUsers !== null && (
-            <p>👥 Up to {plan.maxUsers} users</p>
+            <p>👥 {t("ui:pricing.upToUsers", { count: plan.maxUsers })}</p>
           )}
           {plan.maxUsers === null && (
-            <p>👥 Unlimited users</p>
+            <p>👥 {t("ui:pricing.unlimitedUsers")}</p>
           )}
 
           {plan.maxBranches !== null && (
-            <p>🏪 Up to {plan.maxBranches} branch{plan.maxBranches !== 1 ? "es" : ""}</p>
+            <p>🏪 {t("ui:pricing.upToBranches", { count: plan.maxBranches })}</p>
           )}
           {plan.maxBranches === null && (
-            <p>🏪 Unlimited branches</p>
+            <p>🏪 {t("ui:pricing.unlimitedBranches")}</p>
           )}
 
           {plan.maxProducts !== null && (
-            <p>📦 Up to {plan.maxProducts} products</p>
+            <p>📦 {t("ui:pricing.upToProducts", { count: plan.maxProducts })}</p>
           )}
           {plan.maxProducts === null && (
-            <p>📦 Unlimited products</p>
+            <p>📦 {t("ui:pricing.unlimitedProducts")}</p>
           )}
         </div>
       </Card>
 
       {/* Features List */}
       <div className="mb-6 flex-grow">
-        <SectionTitle as="p" className="mb-3">Features</SectionTitle>
+        <SectionTitle as="p" className="mb-3">{t("ui:pricing.features")}</SectionTitle>
         <ul className="space-y-3">
           {plan.features.map((feature, index) => {
             const featureName = typeof feature === "string" ? feature : (feature.name || "");
@@ -134,12 +136,12 @@ export function PricingCard({ plan, isCurrentPlan = false, onSelectPlan }: Prici
         variant={plan.isPopular ? "default" : "outline"}
         className="w-full"
       >
-        {loading ? "Loading..." : isCurrentPlan ? "Current Plan" : "Select Plan"}
+        {loading ? t("common:status.loading") : isCurrentPlan ? t("ui:pricing.current") : t("ui:pricing.select")}
       </Button>
 
       {/* Money Back Guarantee */}
       <p className="text-xs text-muted-foreground text-center mt-4">
-        ✓ 30-day money-back guarantee
+        {t("ui:pricing.guarantee")}
       </p>
     </Card>
   )

@@ -2,6 +2,7 @@
 
 import { Fragment, useState, useMemo, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { Trans, useTranslation } from "react-i18next"
 import Link from "next/link"
 import {
   AlertTriangle, Banknote, Download, Eye, LayoutGrid, List, MessageSquare, MoreHorizontal, Package, PackageX, Pencil, Percent, Plus,
@@ -56,6 +57,7 @@ import { ProductFormDialog } from "./ProductFormDialog"
 import { UpgradeRequiredModal } from "@/components/UpgradeRequiredModal"
 import saasCompanyApi, { type PlanLimits } from "@/lib/saasCompanyApi"
 import { cn } from "@/lib/utils"
+import { localeTag } from "@/lib/i18n"
 import productApi, { type ProductImportResult } from "@/lib/productApi"
 
 type Tab = "all" | "ok" | "low" | "out" | "hidden"
@@ -92,6 +94,7 @@ export default function ProductsPage() {
   const mayExport = canDo("export")
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
+  const { t, i18n } = useTranslation(["products", "common"])
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
@@ -151,8 +154,8 @@ export default function ProductsPage() {
   const supplierName = (p: Product) => p.vendorName || vendors.find((v) => String(v.id) === String(p.vendorId))?.name
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(timer)
   }, [search])
 
   const listParams = (extra?: Record<string, any>) => ({
@@ -176,7 +179,7 @@ export default function ProductsPage() {
         setTotal(res.pagination?.total ?? 0)
         if (res.tabCounts) setTabCounts({ all: res.tabCounts.all, ok: res.tabCounts.ok, low: res.tabCounts.low, out: res.tabCounts.out, hidden: res.tabCounts.hidden })
       })
-      .catch((e) => { if (!cancelled && e?.response?.status !== 403) toast({ variant: "destructive", title: "Could not load products", description: e?.response?.data?.message || e?.message }) })
+      .catch((e) => { if (!cancelled && e?.response?.status !== 403) toast({ variant: "destructive", title: t("products:list.loadFailed"), description: e?.response?.data?.message || e?.message }) })
       .finally(() => { if (!cancelled) setIsLoading(false) })
     return () => { cancelled = true }
   }, [debouncedSearch, category, vendor, brand, warehouse, tab, sort, page, perPage, reloadKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -192,9 +195,9 @@ export default function ProductsPage() {
 
   const brandOptions = useMemo(() => {
     const m = new Map<string, string>()
-    allProducts.forEach((p) => { if (p.brandId) m.set(p.brandId, p.brandName || `Brand #${p.brandId}`) })
+    allProducts.forEach((p) => { if (p.brandId) m.set(p.brandId, p.brandName || t("products:list.brandFallback", { id: p.brandId })) })
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
-  }, [allProducts])
+  }, [allProducts, t])
 
   const counts = tabCounts
 
@@ -215,7 +218,7 @@ export default function ProductsPage() {
   if (blocked) return blocked
 
   const hasFilters = !!(search || category !== "all" || vendor !== "all" || brand !== "all" || warehouse !== "all" || tab !== "all")
-  const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setChecked(new Set()) }
+  const changeTab = (next: string) => { setTab(next as Tab); setPage(1); setChecked(new Set()) }
   const resetFilters = () => {
     setSearch(""); setCategory("all"); setVendor("all"); setBrand("all"); setWarehouse("all"); setTab("all"); setPage(1); setChecked(new Set())
   }
@@ -238,8 +241,8 @@ export default function ProductsPage() {
   const setPublished = async (targets: Product[], published: boolean) => {
     const results = await Promise.allSettled(targets.map((p) => updateProduct({ ...p, published })))
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${targets.length} could not be changed` })
-    else toast({ title: published ? "Shown online" : "Hidden online", description: `${targets.length} product${targets.length === 1 ? "" : "s"} updated` })
+    if (failed) toast({ variant: "destructive", title: t("products:list.bulk.someFailed"), description: t("products:list.bulk.failedOf", { failed, total: targets.length }) })
+    else toast({ title: published ? t("products:list.bulk.shownOnline") : t("products:shared.hiddenOnline"), description: t("products:list.bulk.updated", { count: targets.length }) })
     setChecked(new Set())
     setReloadKey((k) => k + 1)
   }
@@ -248,19 +251,25 @@ export default function ProductsPage() {
     const v = Number(priceValue)
     const percent = priceMode === "down" ? -v : v
     if (!Number.isFinite(v) || !(v > 0) || percent <= -100) {
-      toast({ variant: "destructive", title: "Enter a valid percentage", description: "Must be above 0, and a decrease must be less than 100%." })
+      toast({ variant: "destructive", title: t("products:price.invalidTitle"), description: t("products:price.invalidDesc") })
       return
     }
     setPriceBusy(true)
     try {
       const r = await productApi.bulkPrice(selected.map((p) => Number(p.id)), percent)
       await reload()
-      toast({ title: "Prices updated", description: `${r.count} product${r.count === 1 ? "" : "s"} repriced${r.variantsUpdated ? ` and ${r.variantsUpdated} variant${r.variantsUpdated === 1 ? "" : "s"}` : ""}, wholesale included` })
+      const repriced = t("common:count.products", { count: r.count })
+      toast({
+        title: t("products:price.doneTitle"),
+        description: r.variantsUpdated
+          ? t("products:price.doneDescVariants", { products: repriced, variants: t("products:shared.variantCount", { count: r.variantsUpdated }) })
+          : t("products:price.doneDesc", { products: repriced }),
+      })
       setPriceOpen(false)
       setPriceValue("")
       setChecked(new Set())
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not update prices", description: e?.response?.data?.message || e?.message || "Try again" })
+      toast({ variant: "destructive", title: t("products:price.failed"), description: e?.response?.data?.message || e?.message || t("common:actions.retry") })
     } finally {
       setPriceBusy(false)
     }
@@ -277,13 +286,13 @@ export default function ProductsPage() {
   const applyAdjust = async () => {
     const delta = Number(adjustQty)
     if (!Number.isInteger(delta) || delta === 0) {
-      toast({ variant: "destructive", title: "Enter a quantity", description: "Use a whole number: positive to add, negative to remove." })
+      toast({ variant: "destructive", title: t("products:adjust.qtyInvalidTitle"), description: t("products:adjust.qtyInvalidDesc") })
       return
     }
-    if (!adjustLoc) { toast({ variant: "destructive", title: "Pick a location" }); return }
+    if (!adjustLoc) { toast({ variant: "destructive", title: t("products:adjust.pickLocation") }); return }
     const single = adjustTargets.length === 1 ? adjustTargets[0] : null
     if (single && delta < 0 && !single.variants?.length && qtyAt(single, adjustLoc) + delta < 0) {
-      toast({ variant: "destructive", title: "Not enough stock", description: `${single.name} would go below zero at this location.` })
+      toast({ variant: "destructive", title: t("products:adjust.notEnoughTitle"), description: t("products:adjust.notEnoughDesc", { name: single.name }) })
       return
     }
     setAdjustBusy(true)
@@ -300,14 +309,14 @@ export default function ProductsPage() {
       await reload()
       if (r.failed.length) {
         const nameOf = (i: number) => adjustTargets[i]?.name ?? `#${r.failed[i]?.productId}`
-        toast({ variant: "destructive", title: `Adjusted ${r.adjusted}, ${r.failed.length} failed`, description: r.failed.slice(0, 3).map((f) => `${nameOf(f.index)}: ${f.reason}`).join(" · ") })
+        toast({ variant: "destructive", title: t("products:adjust.partial", { adjusted: r.adjusted, failed: r.failed.length }), description: r.failed.slice(0, 3).map((f) => `${nameOf(f.index)}: ${f.reason}`).join(" · ") })
       } else {
-        toast({ title: "Stock adjusted", description: `${r.adjusted} product${r.adjusted === 1 ? "" : "s"} ${delta > 0 ? "+" : ""}${delta}` })
+        toast({ title: t("products:adjust.doneTitle"), description: t("products:adjust.doneDesc", { products: t("common:count.products", { count: r.adjusted }), delta: `${delta > 0 ? "+" : ""}${delta}` }) })
         setAdjustTargets([])
         setChecked(new Set())
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not adjust stock", description: e?.response?.data?.message || e?.message || "Try again" })
+      toast({ variant: "destructive", title: t("products:adjust.failed"), description: e?.response?.data?.message || e?.message || t("common:actions.retry") })
     } finally {
       setAdjustBusy(false)
     }
@@ -321,8 +330,8 @@ export default function ProductsPage() {
     setDeleting(true)
     const results = await Promise.allSettled(deleteTargets.map((p) => deleteProduct(p.id)))
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some deletions failed", description: `${failed} of ${deleteTargets.length} could not be deleted` })
-    else toast({ title: "Deleted", description: `${deleteTargets.length} product${deleteTargets.length === 1 ? "" : "s"} removed` })
+    if (failed) toast({ variant: "destructive", title: t("products:remove.someFailed"), description: t("products:remove.failedOf", { failed, total: deleteTargets.length }) })
+    else toast({ title: t("common:status.deleted"), description: t("products:remove.removed", { count: deleteTargets.length }) })
     setDeleting(false)
     setDeleteTargets([])
     setChecked(new Set())
@@ -351,10 +360,11 @@ export default function ProductsPage() {
           description: p.description || "",
         })),
         "products",
+        // CSV headers stay English: Import reads them back as column keys.
         ["Name", "SKU", "Barcode", "Category", "Brand", "Supplier", "Unit", "Cost", "Price", "Offer", "Stock", "Reorder", "Status", "Published", "Description"],
       )
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Export failed", description: e?.message || "Try again" })
+      toast({ variant: "destructive", title: t("products:exportFailed"), description: e?.message || t("common:actions.retry") })
     } finally {
       setExporting(false)
     }
@@ -367,15 +377,15 @@ export default function ProductsPage() {
     const reader = new FileReader()
     reader.onload = async (ev) => {
       const data = parseCsvRows(ev.target?.result as string)
-      if (!data.length) { toast({ variant: "destructive", title: "No rows found", description: "The file is empty or has no header row." }); return }
+      if (!data.length) { toast({ variant: "destructive", title: t("products:import.noRowsTitle"), description: t("products:import.noRowsDesc") }); return }
       setImportBusy(true)
       try {
         const result = await productApi.importRows(data)
         setImportResult({ ...result, skipped: result.skipped.map((r) => ({ ...r, name: r.name ?? data[r.row - 1]?.name })) })
         await reload()
-        toast({ title: `Imported ${result.imported}, skipped ${result.skipped.length}` })
+        toast({ title: t("products:import.result", { imported: result.imported, skipped: result.skipped.length }) })
       } catch (err: any) {
-        toast({ variant: "destructive", title: "Import failed", description: err?.response?.data?.message || err?.message || "Try again" })
+        toast({ variant: "destructive", title: t("products:import.failed"), description: err?.response?.data?.message || err?.message || t("common:actions.retry") })
       } finally {
         setImportBusy(false)
       }
@@ -388,14 +398,14 @@ export default function ProductsPage() {
   const emptyState = (
     <EmptyState
       icon={Boxes}
-      title="No products found"
-      description={hasFilters ? "Nothing matches these filters." : "Add your first product to get started."}
+      title={t("products:list.empty.title")}
+      description={hasFilters ? t("products:list.empty.filtered") : t("products:list.empty.first")}
       action={(hasFilters || canWrite("Products")) ? (
         <div className="flex justify-center gap-2">
-          {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>Clear filters</Button>}
+          {hasFilters && <Button type="button" variant="outline" onClick={resetFilters}>{t("common:actions.clearFilters")}</Button>}
           {canWrite("Products") && (
             <Button type="button" onClick={handleAdd}>
-              <Plus className="size-4" aria-hidden /> Add product
+              <Plus className="size-4" aria-hidden /> {t("products:shared.addProduct")}
             </Button>
           )}
         </div>
@@ -408,28 +418,28 @@ export default function ProductsPage() {
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       {/* Header */}
       <PageHeader
-        title="Products"
+        title={t("products:list.title")}
         description={<>
-          Everything you sell — prices, margins and stock at a glance.
-          {planLimits && <span className="ml-1 tabular-nums">({planLimits.currentProducts} / {planLimits.maxProducts} used on your plan)</span>}
+          {t("products:list.description")}
+          {planLimits && <span className="ml-1 tabular-nums">{t("products:list.planUsage", { used: planLimits.currentProducts, max: planLimits.maxProducts })}</span>}
         </>}
         actions={<>
           <Button asChild variant="outline">
             <Link href="/dashboard/products/print-barcode">
-              <Printer className="size-4" aria-hidden /> Print barcodes
+              <Printer className="size-4" aria-hidden /> {t("products:shared.printBarcodes")}
             </Link>
           </Button>
           {canWrite("Products") && (
             <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload className="size-4" aria-hidden /> Import
+              <Upload className="size-4" aria-hidden /> {t("common:actions.import")}
             </Button>
           )}
           {mayExport && <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}>
-            <Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}
+            <Download className="size-4" aria-hidden /> {exporting ? t("products:list.exporting") : t("common:actions.export")}
           </Button>}
           {canWrite("Products") && (
             <Button type="button" onClick={handleAdd}>
-              <Plus className="size-4" aria-hidden /> Add product
+              <Plus className="size-4" aria-hidden /> {t("products:shared.addProduct")}
             </Button>
           )}
         </>}
@@ -442,14 +452,14 @@ export default function ProductsPage() {
         </div>
       ) : (
         <StatsCards stats={[
-          { label: "Products", value: counts.all, icon: <Package className="size-4" />, color: "blue",
-            hint: `${kpi.variants} variant${kpi.variants === 1 ? "" : "s"} · ${allCategories.length} categories` },
-          { label: "Inventory value", value: money(kpi.value), icon: <Banknote className="size-4" />, color: "green", hint: warehouse === "all" ? "At cost, all warehouses" : `At cost, ${warehouses.find((w) => String(w.id) === warehouse)?.name ?? "warehouse"}` },
-          { label: "Low stock", value: counts.low, icon: <AlertTriangle className="size-4" />, color: "yellow", hint: "At or below reorder point",
+          { label: t("products:list.title"), value: counts.all, icon: <Package className="size-4" />, color: "blue",
+            hint: `${t("products:shared.variantCount", { count: kpi.variants })} · ${t("products:list.kpi.categoryCount", { count: allCategories.length })}` },
+          { label: t("products:list.kpi.inventoryValue"), value: money(kpi.value), icon: <Banknote className="size-4" />, color: "green", hint: warehouse === "all" ? t("products:list.kpi.atCostAll") : t("products:list.kpi.atCostIn", { warehouse: warehouses.find((w) => String(w.id) === warehouse)?.name ?? t("products:list.kpi.warehouseFallback") }) },
+          { label: t("products:shared.lowStock"), value: counts.low, icon: <AlertTriangle className="size-4" />, color: "yellow", hint: t("products:list.kpi.lowStockHint"),
             onClick: () => changeTab("low"), active: tab === "low" },
-          { label: "Out of stock", value: counts.out, icon: <PackageX className="size-4" />, color: "red", hint: "Losing sales now",
+          { label: t("products:shared.outOfStock"), value: counts.out, icon: <PackageX className="size-4" />, color: "red", hint: t("products:list.kpi.outOfStockHint"),
             onClick: () => changeTab("out"), active: tab === "out" },
-          { label: "Avg margin", value: kpi.avg === null ? "—" : `${kpi.avg}%`, icon: <Percent className="size-4" />, color: "purple", hint: "Price vs cost" },
+          { label: t("products:list.kpi.avgMargin"), value: kpi.avg === null ? "—" : `${kpi.avg}%`, icon: <Percent className="size-4" />, color: "purple", hint: t("products:list.kpi.avgMarginHint") },
         ]} />
       )}
 
@@ -459,18 +469,18 @@ export default function ProductsPage() {
             value={tab}
             onChange={changeTab}
             tabs={[
-              { value: "all", label: "All", count: counts.all },
-              { value: "ok", label: "In stock", count: counts.ok },
-              { value: "low", label: "Low stock", count: counts.low },
-              { value: "out", label: "Out of stock", count: counts.out },
-              { value: "hidden", label: "Hidden online", count: counts.hidden },
+              { value: "all", label: t("common:status.all"), count: counts.all },
+              { value: "ok", label: t("products:shared.inStock"), count: counts.ok },
+              { value: "low", label: t("products:shared.lowStock"), count: counts.low },
+              { value: "out", label: t("products:shared.outOfStock"), count: counts.out },
+              { value: "hidden", label: t("products:shared.hiddenOnline"), count: counts.hidden },
             ]}
           />
         </div>
 
         <Toolbar className="p-4" actions={
-          <div role="radiogroup" aria-label="View" className="flex gap-1">
-            {([["table", "Table view", List], ["grid", "Grid view", LayoutGrid]] as const).map(([id, label, Icon]) => (
+          <div role="radiogroup" aria-label={t("products:list.view.label")} className="flex gap-1">
+            {([["table", t("products:list.view.table"), List], ["grid", t("products:list.view.grid"), LayoutGrid]] as const).map(([id, label, Icon]) => (
               <WithTooltip key={id} content={label}>
                 <Button type="button" size="icon" variant={view === id ? "default" : "outline"} role="radio" aria-checked={view === id} aria-label={label} onClick={() => setView(id)}>
                   <Icon className="size-4" aria-hidden />
@@ -481,75 +491,75 @@ export default function ProductsPage() {
         }>
           <div className="relative min-w-[240px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Label htmlFor="product-search" className="sr-only">Search products</Label>
-            <Input id="product-search" type="search" placeholder="Search name, SKU, barcode, supplier or variant SKU…" value={search}
+            <Label htmlFor="product-search" className="sr-only">{t("products:shared.searchProducts")}</Label>
+            <Input id="product-search" type="search" placeholder={t("products:list.filters.searchPlaceholder")} value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               className="pl-8" />
           </div>
           <Select value={category} onValueChange={(v) => { setCategory(v); setPage(1) }}>
-            <SelectTrigger aria-label="Category" className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:fields.category")} className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Category: All</SelectItem>
-              <SelectItem value="none">No category</SelectItem>
+              <SelectItem value="all">{t("products:list.filters.categoryAll")}</SelectItem>
+              <SelectItem value="none">{t("products:shared.noCategory")}</SelectItem>
               {allCategories.map((c) => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.parent_id !== null ? `└ ${c.category_name}` : c.category_name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={vendor} onValueChange={(v) => { setVendor(v); setPage(1) }}>
-            <SelectTrigger aria-label="Supplier" className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("products:shared.supplier")} className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Supplier: All</SelectItem>
-              <SelectItem value="none">Supplier: None</SelectItem>
+              <SelectItem value="all">{t("products:list.filters.supplierAll")}</SelectItem>
+              <SelectItem value="none">{t("products:list.filters.supplierNone")}</SelectItem>
               {vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={brand} onValueChange={(v) => { setBrand(v); setPage(1) }}>
-            <SelectTrigger aria-label="Brand" className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("products:shared.brand")} className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Brand: All</SelectItem>
-              <SelectItem value="none">No brand</SelectItem>
+              <SelectItem value="all">{t("products:list.filters.brandAll")}</SelectItem>
+              <SelectItem value="none">{t("products:shared.noBrand")}</SelectItem>
               {brandOptions.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={warehouse} onValueChange={(v) => { setWarehouse(v); setPage(1) }}>
-            <SelectTrigger aria-label="Warehouse" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:fields.warehouse")} className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Warehouse: All</SelectItem>
+              <SelectItem value="all">{t("products:list.filters.warehouseAll")}</SelectItem>
               {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1) }}>
-            <SelectTrigger aria-label="Sort" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("products:list.filters.sort")} className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="recent">Sort: Newest</SelectItem>
-              <SelectItem value="name">Sort: Name</SelectItem>
-              <SelectItem value="price-asc">Sort: Price, low to high</SelectItem>
-              <SelectItem value="price-desc">Sort: Price, high to low</SelectItem>
-              <SelectItem value="stock-asc">Sort: Stock, low to high</SelectItem>
-              <SelectItem value="stock-desc">Sort: Stock, high to low</SelectItem>
+              <SelectItem value="recent">{t("products:list.filters.sortRecent")}</SelectItem>
+              <SelectItem value="name">{t("products:list.filters.sortName")}</SelectItem>
+              <SelectItem value="price-asc">{t("products:list.filters.sortPriceAsc")}</SelectItem>
+              <SelectItem value="price-desc">{t("products:list.filters.sortPriceDesc")}</SelectItem>
+              <SelectItem value="stock-asc">{t("products:list.filters.sortStockAsc")}</SelectItem>
+              <SelectItem value="stock-desc">{t("products:list.filters.sortStockDesc")}</SelectItem>
             </SelectContent>
           </Select>
           {hasFilters && (
             <Button type="button" variant="ghost" onClick={resetFilters}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </Toolbar>
 
-        <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+        <BulkBar count={checked.size} label={t("common:table.selected", { count: checked.size })} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
             {canWrite("Products") && (
               <>
-                <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>Show online</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>Hide online</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, true)}>{t("products:list.bulk.showOnline")}</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPublished(selected, false)}>{t("products:list.bulk.hideOnline")}</Button>
               </>
             )}
-            {canWrite("Products") && <Button type="button" variant="outline" size="sm" onClick={() => setPriceOpen(true)}>Update price</Button>}
-            {canWrite("Products") && <Button type="button" variant="outline" size="sm" onClick={() => openAdjust(selected)}>Adjust stock</Button>}
-            <Button type="button" variant="outline" size="sm" onClick={() => printBarcodes(selected)}>Print barcodes</Button>
-            {mayExport && <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>}
+            {canWrite("Products") && <Button type="button" variant="outline" size="sm" onClick={() => setPriceOpen(true)}>{t("products:list.bulk.updatePrice")}</Button>}
+            {canWrite("Products") && <Button type="button" variant="outline" size="sm" onClick={() => openAdjust(selected)}>{t("products:shared.adjustStock")}</Button>}
+            <Button type="button" variant="outline" size="sm" onClick={() => printBarcodes(selected)}>{t("products:shared.printBarcodes")}</Button>
+            {mayExport && <Button type="button" variant="outline" size="sm" onClick={handleExport}>{t("products:list.bulk.exportSelected")}</Button>}
             {canDelete("Products") && (
-              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>{t("common:actions.delete")}</Button>
             )}
         </BulkBar>
 
@@ -568,8 +578,8 @@ export default function ProductsPage() {
               return (
                 <Card key={p.id} className={cn("gap-2.5 p-3", ck && "border-primary")}>
                   <div className="flex items-start justify-between gap-2">
-                    <Checkbox checked={ck} onCheckedChange={() => toggleOne(p.id)} aria-label={`Select ${p.name}`} />
-                    <Switch checked={p.published} aria-label={`Show ${p.name} online`} disabled={!canWrite("Products")}
+                    <Checkbox checked={ck} onCheckedChange={() => toggleOne(p.id)} aria-label={t("products:list.row.select", { name: p.name })} />
+                    <Switch checked={p.published} aria-label={t("products:list.row.showOnline", { name: p.name })} disabled={!canWrite("Products")}
                       onCheckedChange={() => setPublished([p], !p.published)} />
                   </div>
                   <Button type="button" variant="ghost" onClick={() => setViewing(p)} className="h-auto flex-col items-stretch gap-2 whitespace-normal p-0 text-left font-normal">
@@ -578,22 +588,22 @@ export default function ProductsPage() {
                       onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg" }} />
                     <span className="flex items-center gap-1.5 font-semibold">
                       <span className="truncate">{p.name}</span>
-                      {p.isBundle && <Badge variant="secondary">Bundle</Badge>}
+                      {p.isBundle && <Badge variant="secondary">{t("products:shared.bundle")}</Badge>}
                     </span>
-                    <span className="text-xs text-muted-foreground">{p.sku || "No SKU"} · {p.category || "—"}{p.brandName ? ` · ${p.brandName}` : ""}</span>
+                    <span className="text-xs text-muted-foreground">{p.sku || t("products:list.row.noSku")} · {p.category || "—"}{p.brandName ? ` · ${p.brandName}` : ""}</span>
                   </Button>
                   <div className="mt-auto flex items-end justify-between">
                     <span className="font-bold tabular-nums">{money(offer ?? p.salePrice)}</span>
                     <StatusBadge status={stockStatus(st)} className="tabular-nums"
-                      label={st === "out" ? "Out of stock" : `${gStock}${p.unitName ? ` ${p.unitName}` : ""}${st === "low" ? " · Low" : " in stock"}`} />
+                      label={st === "out" ? t("products:shared.outOfStock") : t(st === "low" ? "products:list.row.qtyLow" : "products:list.row.qtyInStock", { qty: `${gStock}${p.unitName ? ` ${p.unitName}` : ""}` })} />
                   </div>
-                  {seeCost && gMargin !== null && <div className="text-xs text-muted-foreground tabular-nums">Margin {gMargin}%</div>}
+                  {seeCost && gMargin !== null && <div className="text-xs text-muted-foreground tabular-nums">{t("products:list.row.marginValue", { value: gMargin })}</div>}
                   <div className="flex gap-2">
                     {canWrite("Products") && (
-                      <Button type="button" variant="outline" onClick={() => openForm(p)} className="flex-1">Edit</Button>
+                      <Button type="button" variant="outline" onClick={() => openForm(p)} className="flex-1">{t("common:actions.edit")}</Button>
                     )}
                     {canDelete("Products") && (
-                      <WithTooltip content={`Delete ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${p.name}`} onClick={() => setDeleteTargets([p])}><Trash2 className="size-4" /></Button></WithTooltip>
+                      <WithTooltip content={t("products:list.row.deleteName", { name: p.name })}><Button type="button" variant="outline" size="icon" aria-label={t("products:list.row.deleteName", { name: p.name })} onClick={() => setDeleteTargets([p])}><Trash2 className="size-4" /></Button></WithTooltip>
                     )}
                   </div>
                 </Card>
@@ -605,15 +615,15 @@ export default function ProductsPage() {
           <Table className="min-w-[980px]">
             <TableHeader>
               <TableRow>
-                <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all on this page" /></TableHead>
-                <TableHead scope="col">Product</TableHead>
-                <TableHead scope="col">Category</TableHead>
-                {seeCost && <TableHead scope="col" className="text-right">Cost</TableHead>}
-                <TableHead scope="col" className="text-right">Price</TableHead>
-                {seeCost && <TableHead scope="col">Margin</TableHead>}
-                <TableHead scope="col">Stock</TableHead>
-                <TableHead scope="col">Online</TableHead>
-                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+                <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("products:list.table.selectAllPage")} /></TableHead>
+                <TableHead scope="col">{t("common:fields.product")}</TableHead>
+                <TableHead scope="col">{t("common:fields.category")}</TableHead>
+                {seeCost && <TableHead scope="col" className="text-right">{t("common:money.cost")}</TableHead>}
+                <TableHead scope="col" className="text-right">{t("common:money.price")}</TableHead>
+                {seeCost && <TableHead scope="col">{t("products:shared.margin")}</TableHead>}
+                <TableHead scope="col">{t("common:fields.stock")}</TableHead>
+                <TableHead scope="col">{t("products:list.table.online")}</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -635,7 +645,7 @@ export default function ProductsPage() {
                   return (
                     <TableRow key={p.id} data-state={ck ? "selected" : undefined}>
                       <TableCell className="pl-4">
-                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(p.id)} aria-label={`Select ${p.name}`} />
+                        <Checkbox checked={ck} onCheckedChange={() => toggleOne(p.id)} aria-label={t("products:list.row.select", { name: p.name })} />
                       </TableCell>
                       <TableCell>
                         <Button type="button" variant="ghost" onClick={() => setViewing(p)} className="h-auto justify-start gap-2.5 p-0 text-left font-normal">
@@ -644,13 +654,13 @@ export default function ProductsPage() {
                           <span className="flex min-w-0 flex-col">
                             <span className="flex items-center gap-1.5 font-semibold">
                               <span className="max-w-[220px] truncate">{p.name}</span>
-                              {p.isBestSeller && <Badge variant="secondary">Best seller</Badge>}
-                              {p.isHotDeal && <Badge variant="destructive">Hot deal</Badge>}
+                              {p.isBestSeller && <Badge variant="secondary">{t("products:shared.bestSeller")}</Badge>}
+                              {p.isHotDeal && <Badge variant="destructive">{t("products:shared.hotDeal")}</Badge>}
                               {p.tag && <Badge variant="outline">{p.tag}</Badge>}
-                              {p.isBundle && <Badge variant="secondary">Bundle</Badge>}
+                              {p.isBundle && <Badge variant="secondary">{t("products:shared.bundle")}</Badge>}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {p.sku || "No SKU"}{p.variants && p.variants.length > 0 ? ` · ${p.variants.length} variant${p.variants.length === 1 ? "" : "s"}` : ""}
+                              {p.sku || t("products:list.row.noSku")}{p.variants && p.variants.length > 0 ? ` · ${t("products:shared.variantCount", { count: p.variants.length })}` : ""}
                             </span>
                           </span>
                         </Button>
@@ -669,7 +679,7 @@ export default function ProductsPage() {
                           <div className="text-xs font-normal text-muted-foreground">
                             <span className="line-through">{money(p.salePrice)}</span>{" "}
                             <span className="font-semibold text-foreground">
-                              {p.offerType === "percentage" ? `${p.offerPrice}% off` : `${money(p.offerPrice!)} off`}
+                              {t("products:list.row.off", { value: p.offerType === "percentage" ? `${p.offerPrice}%` : money(p.offerPrice!) })}
                             </span>
                           </div>
                         )}
@@ -684,43 +694,43 @@ export default function ProductsPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5 tabular-nums">
                           <span className={cn("font-bold", st === "out" && "text-destructive")}>
-                            {st === "out" ? "Out of stock" : `${rowStock}${unit}`}
+                            {st === "out" ? t("products:shared.outOfStock") : `${rowStock}${unit}`}
                           </span>
-                          {st === "low" && <StatusBadge status="low stock" label="Low" />}
+                          {st === "low" && <StatusBadge status="low stock" label={t("products:list.row.low")} />}
                         </div>
                         {rop > 0 && <Progress aria-hidden className="mt-1 h-1.5 w-24"
                           value={Math.min(100, Math.round((Math.max(0, rowStock) / (rop * 4)) * 100))} />}
-                        <div className="mt-1 text-xs text-muted-foreground tabular-nums">{rop > 0 ? `Reorder at ${rop}${unit}` : "No reorder alert"}</div>
+                        <div className="mt-1 text-xs text-muted-foreground tabular-nums">{rop > 0 ? t("products:list.row.reorderAt", { qty: `${rop}${unit}` }) : t("products:list.row.noReorder")}</div>
                       </TableCell>
                       <TableCell>
-                        <Switch checked={p.published} aria-label={`Show ${p.name} online`}
+                        <Switch checked={p.published} aria-label={t("products:list.row.showOnline", { name: p.name })}
                           disabled={!canWrite("Products")}
                           onCheckedChange={() => setPublished([p], !p.published)} />
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <WithTooltip content={`View ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${p.name}`} onClick={() => setViewing(p)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("products:list.row.viewName", { name: p.name })}><Button type="button" variant="outline" size="icon" aria-label={t("products:list.row.viewName", { name: p.name })} onClick={() => setViewing(p)}><Eye className="size-4" /></Button></WithTooltip>
                           {canWrite("Products") && (
-                            <WithTooltip content={`Edit ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openForm(p)}><Pencil className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("products:list.row.editName", { name: p.name })}><Button type="button" variant="outline" size="icon" aria-label={t("products:list.row.editName", { name: p.name })} onClick={() => openForm(p)}><Pencil className="size-4" /></Button></WithTooltip>
                           )}
                           <DropdownMenu>
-                            <WithTooltip content={`More actions for ${p.name}`}><DropdownMenuTrigger asChild>
-                              <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${p.name}`}><MoreHorizontal className="size-4" /></Button>
+                            <WithTooltip content={t("products:list.row.moreFor", { name: p.name })}><DropdownMenuTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("products:list.row.moreFor", { name: p.name })}><MoreHorizontal className="size-4" /></Button>
                             </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setViewing(p)}>View details</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setViewing(p)}>{t("products:list.row.viewDetails")}</DropdownMenuItem>
                               <DropdownMenuItem asChild>
-                                <Link href={`/dashboard/products/${p.id}/reviews`}><MessageSquare className="size-4" /> Reviews</Link>
+                                <Link href={`/dashboard/products/${p.id}/reviews`}><MessageSquare className="size-4" /> {t("products:list.row.reviews")}</Link>
                               </DropdownMenuItem>
                               {canWrite("Products") && (
-                                <DropdownMenuItem onClick={() => openAdjust([p])}><Package className="size-4" /> Adjust stock</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openAdjust([p])}><Package className="size-4" /> {t("products:shared.adjustStock")}</DropdownMenuItem>
                               )}
-                              <DropdownMenuItem onClick={() => printBarcodes([p])}><Printer className="size-4" /> Print barcode</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => printBarcodes([p])}><Printer className="size-4" /> {t("products:shared.printBarcode")}</DropdownMenuItem>
                               {canDelete("Products") && (
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([p])}>
-                                    <Trash2 className="size-4" /> Delete product
+                                    <Trash2 className="size-4" /> {t("products:shared.deleteProduct")}
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -742,7 +752,7 @@ export default function ProductsPage() {
           <Separator />
           <div className="p-4 pt-3">
             <p className="mb-2 text-xs text-muted-foreground tabular-nums">
-              Showing {rows.length} of {filtered.length} products · Inventory value {money(kpi.value)} at cost
+              {t("products:list.footer", { shown: rows.length, total: filtered.length, value: money(kpi.value) })}
             </p>
             <PaginationControl
               currentPage={safePage}
@@ -763,22 +773,22 @@ export default function ProductsPage() {
       <Dialog open={priceOpen} onOpenChange={(o) => !o && setPriceOpen(false)}>
         <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">Update price</DialogTitle>
-            <DialogDescription>Reprices {selected.length} selected product{selected.length === 1 ? "" : "s"}, including variants and wholesale prices.</DialogDescription>
+            <DialogTitle className="font-dash-display text-xl font-bold">{t("products:price.title")}</DialogTitle>
+            <DialogDescription>{t("products:price.description", { count: selected.length })}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
-            <div role="radiogroup" aria-label="Change type" className="grid grid-cols-2 gap-2">
-              {([["up", "Increase %"], ["down", "Decrease %"]] as const).map(([id, label]) => (
+            <div role="radiogroup" aria-label={t("products:price.changeType")} className="grid grid-cols-2 gap-2">
+              {([["up", t("products:price.increase")], ["down", t("products:price.decrease")]] as const).map(([id, label]) => (
                 <Button key={id} type="button" variant={priceMode === id ? "default" : "outline"} role="radio" aria-checked={priceMode === id} onClick={() => setPriceMode(id)}>{label}</Button>
               ))}
             </div>
-            <FormField label="Percentage" htmlFor="bulk-price-pct">
-              <Input id="bulk-price-pct" type="number" min={0} step="any" value={priceValue} onChange={(e) => setPriceValue(e.target.value)} placeholder="e.g. 10" />
+            <FormField label={t("products:price.percentage")} htmlFor="bulk-price-pct">
+              <Input id="bulk-price-pct" type="number" min={0} step="any" value={priceValue} onChange={(e) => setPriceValue(e.target.value)} placeholder={t("products:price.placeholder")} />
             </FormField>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPriceOpen(false)}>Cancel</Button>
-            <Button type="button" disabled={priceBusy} onClick={applyBulkPrice}>{priceBusy ? "Updating…" : "Apply"}</Button>
+            <Button type="button" variant="outline" onClick={() => setPriceOpen(false)}>{t("common:actions.cancel")}</Button>
+            <Button type="button" disabled={priceBusy} onClick={applyBulkPrice}>{priceBusy ? t("products:price.updating") : t("common:actions.apply")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -790,40 +800,40 @@ export default function ProductsPage() {
             const offer = offerFinalOf(viewing)
             const st = stockState(viewing, warehouse)
             const vStock = stockAt(viewing, warehouse)
-            const whLabel = warehouse === "all" ? "all locations" : warehouses.find((w) => String(w.id) === warehouse)?.name
+            const whLabel = warehouse === "all" ? t("products:details.allLocations") : warehouses.find((w) => String(w.id) === warehouse)?.name
             const m = marginOf(viewing)
             const sell = offer ?? viewing.salePrice
             const cost = Number(viewing.costPrice) || 0
             const sections: { title: string; rows: [string, string | null][] }[] = [
               {
-                title: "Details",
+                title: t("products:details.sectionDetails"),
                 rows: [
-                  ["Category", viewing.category || null],
-                  ["Brand", viewing.brandName || null],
-                  ["Supplier", supplierName(viewing) || null],
-                  ["Unit", viewing.unitName || null],
-                  ["Location", viewing.locationName || warehouses.find((w) => String(w.id) === viewing.locationId)?.name || null],
+                  [t("common:fields.category"), viewing.category || null],
+                  [t("products:shared.brand"), viewing.brandName || null],
+                  [t("products:shared.supplier"), supplierName(viewing) || null],
+                  [t("products:shared.unit"), viewing.unitName || null],
+                  [t("common:fields.location"), viewing.locationName || warehouses.find((w) => String(w.id) === viewing.locationId)?.name || null],
                 ],
               },
               {
-                title: "Codes & tracking",
+                title: t("products:details.sectionCodes"),
                 rows: [
-                  ["SKU", viewing.sku || null],
-                  ["Barcode", viewing.barcode || null],
-                  ["Barcode type", viewing.barcodeType || null],
-                  ["Tracking", viewing.trackingType === "serial" ? "Serial numbers" : viewing.trackingType === "batch" ? "Batches" : "Quantity only"],
-                  ["Reorder alert", reorderOf(viewing) > 0 ? `At ${reorderOf(viewing)}` : "Off"],
+                  [t("common:fields.sku"), viewing.sku || null],
+                  [t("common:fields.barcode"), viewing.barcode || null],
+                  [t("products:shared.barcodeType"), viewing.barcodeType || null],
+                  [t("products:details.tracking"), viewing.trackingType === "serial" ? t("products:details.trackingSerial") : viewing.trackingType === "batch" ? t("products:details.trackingBatch") : t("products:shared.quantityOnly")],
+                  [t("products:details.reorderAlert"), reorderOf(viewing) > 0 ? t("products:details.reorderAt", { qty: reorderOf(viewing) }) : t("products:details.off")],
                 ],
               },
             ]
             const extras: [string, string][] = [
-              ...(offer !== null ? [["Regular sale price", money(viewing.salePrice)] as [string, string]] : []),
-              ...(viewing.offerEndsAt ? [["Offer ends", new Date(viewing.offerEndsAt).toLocaleDateString()] as [string, string]] : []),
-              ...(viewing.wholesalePrice ? [["Wholesale", `${money(viewing.wholesalePrice)}${viewing.minWholesaleQty ? ` · min ${viewing.minWholesaleQty}` : ""}`] as [string, string]] : []),
-              ...(viewing.isBundle && viewing.bundlePriceOverride ? [["Bundle price", money(viewing.bundlePriceOverride)] as [string, string]] : []),
-              ...(viewing.receiptNumber ? [["Receipt / batch no.", viewing.receiptNumber] as [string, string]] : []),
+              ...(offer !== null ? [[t("products:details.regularSalePrice"), money(viewing.salePrice)] as [string, string]] : []),
+              ...(viewing.offerEndsAt ? [[t("products:shared.offerEnds"), new Date(viewing.offerEndsAt).toLocaleDateString(localeTag(i18n.language))] as [string, string]] : []),
+              ...(viewing.wholesalePrice ? [[t("products:details.wholesale"), viewing.minWholesaleQty ? t("products:details.wholesaleMin", { price: money(viewing.wholesalePrice), qty: viewing.minWholesaleQty }) : money(viewing.wholesalePrice)] as [string, string]] : []),
+              ...(viewing.isBundle && viewing.bundlePriceOverride ? [[t("products:details.bundlePrice"), money(viewing.bundlePriceOverride)] as [string, string]] : []),
+              ...(viewing.receiptNumber ? [[t("products:shared.receiptNo"), viewing.receiptNumber] as [string, string]] : []),
             ]
-            if (extras.length > 0) sections.push({ title: "Pricing & batch", rows: extras })
+            if (extras.length > 0) sections.push({ title: t("products:details.sectionPricing"), rows: extras })
             const tile = "gap-1 p-3.5 shadow-none"
             const tileValue = "block truncate text-lg"
             return (
@@ -834,35 +844,37 @@ export default function ProductsPage() {
                       fallback={<Package className="size-7 text-muted-foreground" aria-hidden />} className="size-20 shrink-0" />
                     <div className="min-w-0 text-left">
                       <DialogTitle className="font-dash-display text-xl font-bold">{viewing.name}</DialogTitle>
-                      <DialogDescription className={viewing.description ? "line-clamp-2" : "sr-only"}>{viewing.description || "Product details"}</DialogDescription>
+                      <DialogDescription className={viewing.description ? "line-clamp-2" : "sr-only"}>{viewing.description || t("products:details.productDetails")}</DialogDescription>
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        <StatusBadge status={stockStatus(st)} label={st === "ok" ? "In stock" : st === "low" ? "Low stock" : "Out of stock"} />
-                        <Badge variant="outline">{viewing.published ? "Online" : "Hidden online"}</Badge>
-                        {viewing.isBestSeller && <Badge variant="secondary">Best seller</Badge>}
-                        {viewing.isHotDeal && <Badge variant="destructive">Hot deal</Badge>}
+                        <StatusBadge status={stockStatus(st)} label={st === "ok" ? t("products:shared.inStock") : st === "low" ? t("products:shared.lowStock") : t("products:shared.outOfStock")} />
+                        <Badge variant="outline">{viewing.published ? t("products:shared.online") : t("products:shared.hiddenOnline")}</Badge>
+                        {viewing.isBestSeller && <Badge variant="secondary">{t("products:shared.bestSeller")}</Badge>}
+                        {viewing.isHotDeal && <Badge variant="destructive">{t("products:shared.hotDeal")}</Badge>}
                         {viewing.tag && <Badge variant="outline">{viewing.tag}</Badge>}
-                        {viewing.isFeatured && <Badge>Featured</Badge>}
+                        {viewing.isFeatured && <Badge>{t("products:shared.featured")}</Badge>}
                       </div>
                     </div>
                   </div>
                 </DialogHeader>
                 <div className={cn("grid grid-cols-2 gap-3", seeCost && "sm:grid-cols-4")}>
-                  <StatTile className={tile} label={offer !== null ? "Offer price" : "Selling price"} icon={<Banknote aria-hidden />}
+                  <StatTile className={tile} label={offer !== null ? t("products:details.offerPrice") : t("products:shared.sellingPrice")} icon={<Banknote aria-hidden />}
                     value={<span className={tileValue}>{money(sell)}</span>}
-                    hint={viewing.price > sell ? <>List <s className="tabular-nums">{money(viewing.price)}</s></> : "Same as list price"} />
-                  <StatTile label="In stock" icon={<Boxes aria-hidden />}
+                    hint={viewing.price > sell
+                      ? <Trans t={t} i18nKey="products:details.listPrice" values={{ price: money(viewing.price) }} components={{ s: <s className="tabular-nums" /> }} />
+                      : t("products:details.sameAsList")} />
+                  <StatTile label={t("products:shared.inStock")} icon={<Boxes aria-hidden />}
                     className={cn(tile, st === "out" && "border-dash-danger-soft bg-dash-danger-soft", st === "low" && "border-dash-warn-soft bg-dash-warn-soft")}
                     value={<span className={tileValue}>{vStock}{viewing.unitName ? ` ${viewing.unitName}` : ""}</span>}
                     hint={<span className="block truncate capitalize">{whLabel}</span>} />
                   {seeCost && (
-                    <StatTile className={tile} label="Cost" icon={<Package aria-hidden />}
-                      value={<span className={tileValue}>{cost > 0 ? money(cost) : "Not set"}</span>}
-                      hint="Per unit" />
+                    <StatTile className={tile} label={t("common:money.cost")} icon={<Package aria-hidden />}
+                      value={<span className={tileValue}>{cost > 0 ? money(cost) : t("products:shared.notSet")}</span>}
+                      hint={t("products:details.perUnit")} />
                   )}
                   {seeCost && (
-                    <StatTile className={tile} label="Margin" icon={<Percent aria-hidden />}
+                    <StatTile className={tile} label={t("products:shared.margin")} icon={<Percent aria-hidden />}
                       value={<span className={tileValue}>{m === null ? "—" : `${m}%`}</span>}
-                      hint={m === null ? "Add a cost to see it" : `${money(viewing.salePrice - cost)} per unit`} />
+                      hint={m === null ? t("products:details.addCostHint") : t("products:details.perUnitAmount", { amount: money(viewing.salePrice - cost) })} />
                   )}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -873,7 +885,7 @@ export default function ProductsPage() {
                         <InfoList className="gap-0 divide-y divide-dash-border-soft">
                           {s.rows.map(([k, v]) => (
                             <InfoRow key={k} className="px-3.5 py-2.5" label={k}
-                              value={v ? <span className="break-all tabular-nums">{v}</span> : <span className="font-normal text-muted-foreground">Not set</span>} />
+                              value={v ? <span className="break-all tabular-nums">{v}</span> : <span className="font-normal text-muted-foreground">{t("products:shared.notSet")}</span>} />
                           ))}
                         </InfoList>
                       </Card>
@@ -891,7 +903,7 @@ export default function ProductsPage() {
                 )}
                 {viewing.isBundle && (viewing.bundleItems?.length ?? 0) > 0 && (
                   <div>
-                    <SectionTitle className="mb-2">Bundle contents</SectionTitle>
+                    <SectionTitle className="mb-2">{t("products:details.bundleContents")}</SectionTitle>
                     <Card className="gap-0 py-0">
                       <ItemGroup>
                         {viewing.bundleItems!.map((bi, i) => (
@@ -909,15 +921,15 @@ export default function ProductsPage() {
                 )}
                 {viewing.variants && viewing.variants.length > 0 && (
                   <div>
-                    <SectionTitle className="mb-2">Variants ({viewing.variants.length})</SectionTitle>
+                    <SectionTitle className="mb-2">{t("products:details.variantsCount", { n: viewing.variants.length })}</SectionTitle>
                     <Card className="gap-0 overflow-x-auto py-0">
                       <Table className="min-w-[460px]">
                         <TableHeader>
                           <TableRow>
-                            <TableHead scope="col">Variant</TableHead>
-                            <TableHead scope="col">SKU</TableHead>
-                            <TableHead scope="col" className="text-right">Price</TableHead>
-                            <TableHead scope="col" className="text-right">Stock</TableHead>
+                            <TableHead scope="col">{t("common:fields.variant")}</TableHead>
+                            <TableHead scope="col">{t("common:fields.sku")}</TableHead>
+                            <TableHead scope="col" className="text-right">{t("common:money.price")}</TableHead>
+                            <TableHead scope="col" className="text-right">{t("common:fields.stock")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -935,13 +947,13 @@ export default function ProductsPage() {
                   </div>
                 )}
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setViewing(null)}>Close</Button>
+                  <Button type="button" variant="outline" onClick={() => setViewing(null)}>{t("common:actions.close")}</Button>
                   <Button type="button" variant="outline" onClick={() => printBarcodes([viewing])}>
-                    <Printer className="size-4" aria-hidden /> Print barcode
+                    <Printer className="size-4" aria-hidden /> {t("products:shared.printBarcode")}
                   </Button>
                   {canWrite("Products") && (
                     <Button type="button" onClick={() => { const p = viewing; setViewing(null); openForm(p) }}>
-                      <Pencil className="size-4" aria-hidden /> Edit product
+                      <Pencil className="size-4" aria-hidden /> {t("products:shared.editProduct")}
                     </Button>
                   )}
                 </DialogFooter>
@@ -955,23 +967,20 @@ export default function ProductsPage() {
       <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) setImportResult(null) }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">Import products</DialogTitle>
-            <DialogDescription>
-              Upload a CSV with a header row: name, sku, barcode, category, brand, supplier, unit, cost, price, stock, reorder, status, published (Yes/No), description.
-              Category, brand, supplier and unit are matched by name. Opening stock goes to the default warehouse. Invalid rows are skipped and listed.
-            </DialogDescription>
+            <DialogTitle className="font-dash-display text-xl font-bold">{t("products:import.title")}</DialogTitle>
+            <DialogDescription>{t("products:import.description")}</DialogDescription>
           </DialogHeader>
-          <Input ref={fileRef} type="file" accept=".csv" onChange={handleImport} disabled={importBusy} aria-label="CSV file" className="w-full" />
-          {importBusy && <p className="text-sm text-muted-foreground">Importing…</p>}
+          <Input ref={fileRef} type="file" accept=".csv" onChange={handleImport} disabled={importBusy} aria-label={t("products:import.csvFile")} className="w-full" />
+          {importBusy && <p className="text-sm text-muted-foreground">{t("products:import.importing")}</p>}
           {importResult && (
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-semibold">Imported {importResult.imported}, skipped {importResult.skipped.length}</p>
+              <p className="text-sm font-semibold">{t("products:import.result", { imported: importResult.imported, skipped: importResult.skipped.length })}</p>
               {(importResult.warnings?.length ?? 0) > 0 && (
                 <Alert>
                   <AlertTriangle />
                   <AlertDescription>
                     <ul className="max-h-32 w-full space-y-1 overflow-y-auto text-xs">
-                      {importResult.warnings!.map((w, i) => <li key={i}>Row {w.row}: {w.message}</li>)}
+                      {importResult.warnings!.map((w, i) => <li key={i}>{t("products:import.rowMessage", { row: w.row, message: w.message })}</li>)}
                     </ul>
                   </AlertDescription>
                 </Alert>
@@ -984,7 +993,7 @@ export default function ProductsPage() {
                         {i > 0 && <ItemSeparator />}
                         <Item role="listitem" size="sm">
                           <ItemContent className="gap-0.5">
-                            <ItemTitle>Row {r.row}{r.name ? ` · ${r.name}` : ""}</ItemTitle>
+                            <ItemTitle>{t("products:import.row", { row: r.row })}{r.name ? ` · ${r.name}` : ""}</ItemTitle>
                             <ItemDescription className="text-xs">{r.reason}</ItemDescription>
                           </ItemContent>
                         </Item>
@@ -996,7 +1005,7 @@ export default function ProductsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>{t("common:actions.close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1005,40 +1014,41 @@ export default function ProductsPage() {
       <Dialog open={adjustTargets.length > 0} onOpenChange={(o) => !o && !adjustBusy && setAdjustTargets([])}>
         <DialogContent className="border-dash-border bg-dash-card font-dash-body text-dash-ink sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-dash-display text-xl font-bold">Adjust stock</DialogTitle>
+            <DialogTitle className="font-dash-display text-xl font-bold">{t("products:shared.adjustStock")}</DialogTitle>
             <DialogDescription>
-              {adjustTargets.length === 1 ? adjustTargets[0].name : `${adjustTargets.length} selected products`}: add or remove the same quantity at one location.
+              {t("products:adjust.description", { target: adjustTargets.length === 1 ? adjustTargets[0].name : t("products:adjust.selected", { count: adjustTargets.length }) })}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
-            <FormField label="Location" htmlFor="adjust-loc">
+            <FormField label={t("common:fields.location")} htmlFor="adjust-loc">
               <Select value={adjustLoc} onValueChange={setAdjustLoc}>
-                <SelectTrigger id="adjust-loc" aria-label="Location" className="w-full"><SelectValue placeholder="Select location" /></SelectTrigger>
+                <SelectTrigger id="adjust-loc" aria-label={t("common:fields.location")} className="w-full"><SelectValue placeholder={t("products:adjust.selectLocation")} /></SelectTrigger>
                 <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
               </Select>
             </FormField>
-            <FormField label="Quantity change" htmlFor="adjust-qty">
-              <Input id="adjust-qty" type="number" step={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} placeholder="e.g. 5 to add, -3 to remove" />
+            <FormField label={t("products:adjust.qtyChange")} htmlFor="adjust-qty">
+              <Input id="adjust-qty" type="number" step={1} value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} placeholder={t("products:adjust.qtyPlaceholder")} />
             </FormField>
             {adjustTargets.length === 1 && adjustTargets[0].variants && adjustTargets[0].variants.length > 0 && (
-              <FormField label="Variant" htmlFor="adjust-variant">
+              <FormField label={t("common:fields.variant")} htmlFor="adjust-variant">
                 <Select value={adjustVariant} onValueChange={setAdjustVariant}>
-                  <SelectTrigger id="adjust-variant" aria-label="Variant" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="adjust-variant" aria-label={t("common:fields.variant")} className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>{adjustTargets[0].variants.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
                 </Select>
               </FormField>
             )}
             {adjustTargets.length === 1 && adjustLoc && !adjustTargets[0].variants?.length && (
               <p className="text-xs text-muted-foreground tabular-nums">
-                Now {qtyAt(adjustTargets[0], adjustLoc)}
-                {Number.isInteger(Number(adjustQty)) && adjustQty !== "" ? ` → ${qtyAt(adjustTargets[0], adjustLoc) + Number(adjustQty)}` : ""}
+                {Number.isInteger(Number(adjustQty)) && adjustQty !== ""
+                  ? t("products:adjust.nowTo", { qty: qtyAt(adjustTargets[0], adjustLoc), next: qtyAt(adjustTargets[0], adjustLoc) + Number(adjustQty) })
+                  : t("products:adjust.now", { qty: qtyAt(adjustTargets[0], adjustLoc) })}
               </p>
             )}
-            {adjustTargets.length > 1 && <p className="text-xs text-muted-foreground">Bundles are skipped, and products with variants must be adjusted one at a time.</p>}
+            {adjustTargets.length > 1 && <p className="text-xs text-muted-foreground">{t("products:adjust.bulkNote")}</p>}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={adjustBusy} onClick={() => setAdjustTargets([])}>Cancel</Button>
-            <Button type="button" disabled={adjustBusy} onClick={applyAdjust}>{adjustBusy ? "Saving…" : "Apply"}</Button>
+            <Button type="button" variant="outline" disabled={adjustBusy} onClick={() => setAdjustTargets([])}>{t("common:actions.cancel")}</Button>
+            <Button type="button" disabled={adjustBusy} onClick={applyAdjust}>{adjustBusy ? t("common:actions.saving") : t("common:actions.apply")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1047,13 +1057,13 @@ export default function ProductsPage() {
       <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && !deleting && setDeleteTargets([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].name : `${deleteTargets.length} products`}?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete the selected product{deleteTargets.length === 1 ? "" : "s"}. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTargets.length === 1 ? deleteTargets[0].name : t("common:count.products", { count: deleteTargets.length }) })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("products:remove.description", { count: deleteTargets.length })}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmDelete() }} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("products:remove.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1062,8 +1072,8 @@ export default function ProductsPage() {
       <UpgradeRequiredModal
         open={upgradeOpen}
         onOpenChange={setUpgradeOpen}
-        title="Product Limit Reached"
-        description={`Your current plan allows up to ${company?.maxProducts} products. Please upgrade to add more.`}
+        title={t("products:list.upgrade.title")}
+        description={t("products:list.upgrade.description", { max: company?.maxProducts })}
         limitType="products"
         currentLimit={company?.maxProducts}
       />

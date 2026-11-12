@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,7 +35,9 @@ import { useToast } from "@/hooks/use-toast"
 import { CustomerCombobox } from "@/components/pos/customer-combobox"
 import { cn } from "@/lib/utils"
 import { WithTooltip } from "@/components/common/WithTooltip"
-import { AD_SOURCE_META, MANUAL_SOURCE_OPTIONS } from "@/components/sales/ad-source"
+import { AD_SOURCE_META, MANUAL_SOURCE_OPTIONS, adSourceText } from "@/components/sales/ad-source"
+import { localeTag } from "@/lib/i18n"
+import { ORDERS_NS, methodLabel, orderStatusLabel } from "@/components/sales/i18n"
 
 interface Row { productId: string; productName: string; quantity: number; price: number; discount: number; /** price follows the quantity (wholesale tiers) until edited by hand */ auto?: boolean }
 const emptyRow = (): Row => ({ productId: "", productName: "", quantity: 1, price: 0, discount: 0 })
@@ -47,19 +50,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_RE = /^\+?[0-9][0-9\s-]{6,17}$/
 const digits = (v: string) => v.replace(/\D/g, "")
 
-/** Values accepted by the sells API (COD = collected on delivery). */
-const METHODS: { value: PayMethod; label: string }[] = [
-  { value: "Cash", label: "Cash" },
-  { value: "Card", label: "Card" },
-  { value: "bKash", label: "bKash" },
-  { value: "Nagad", label: "Nagad" },
-  { value: "Bank", label: "Bank" },
-  { value: "Online", label: "Online" },
-  { value: "COD", label: "COD" },
+/** Values accepted by the sells API (COD = collected on delivery); shown via `methodLabel`. */
+const METHODS: { value: PayMethod }[] = [
+  { value: "Cash" },
+  { value: "Card" },
+  { value: "bKash" },
+  { value: "Nagad" },
+  { value: "Bank" },
+  { value: "Online" },
+  { value: "COD" },
 ]
 
 const STORE_PICKUP = "pickup"
+/** Courier values are sent to the API as-is; only "Own delivery" gets a translated label. */
 const COURIERS = ["Own delivery", "Pathao", "Steadfast", "RedX", "Paperfly"]
+const SALE_STATUSES: SaleStatus[] = ["Pending", "Processing", "Packed", "Shipped", "Delivered"]
 const emptyShip = { name: "", phone: "", line1: "", city: "", state: "", zip: "", country: "" }
 
 export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId }: {
@@ -74,6 +79,7 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
   const { warehouses, defaultWarehouse } = useWarehouse()
   const { taxRate, formatCurrency, formatTaxLabel, settings } = useCompanySettings()
   const { toast } = useToast()
+  const { t, i18n } = useTranslation(ORDERS_NS)
 
   const [customerId, setCustomerId] = useState("")
   const [customerName, setCustomerName] = useState("Walk-in Customer")
@@ -214,7 +220,7 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
         const trimmed = next.filter((_, idx) => idx !== i)
         return trimmed.length > 0 ? trimmed : [emptyRow()]
       })
-      toast({ title: "Already in this sale", description: `${p?.name ?? "Product"} quantity increased` })
+      toast({ title: t("orders:newSale.toast.alreadyInSale"), description: t("orders:newSale.toast.qtyIncreased", { name: p?.name ?? t("common:fields.product") }) })
       return
     }
     setRow(i, { productId: pid, productName: p?.name ?? "", price: unitFor(pid, rows[i]?.quantity ?? 1).price, discount: 0, auto: true })
@@ -241,13 +247,13 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
   const quickAddCustomer = async () => {
     setCustErr("")
     if (!newCust.name.trim() || !newCust.phone.trim()) {
-      setCustErr("Name and phone are required.")
+      setCustErr(t("orders:newSale.err.nameAndPhone"))
       return
     }
-    if (!PHONE_RE.test(newCust.phone.trim())) { setCustErr("Enter a valid phone number."); return }
-    if (newCust.email.trim() && !EMAIL_RE.test(newCust.email.trim())) { setCustErr("Enter a valid email address."); return }
+    if (!PHONE_RE.test(newCust.phone.trim())) { setCustErr(t("orders:newSale.err.invalidPhone")); return }
+    if (newCust.email.trim() && !EMAIL_RE.test(newCust.email.trim())) { setCustErr(t("orders:newSale.err.invalidEmail")); return }
     const dup = customers.find((c) => digits(c.phone || "") !== "" && digits(c.phone || "") === digits(newCust.phone))
-    if (dup) { setCustErr(`${dup.name} already uses this phone number.`); return }
+    if (dup) { setCustErr(t("orders:newSale.err.phoneTaken", { name: dup.name })); return }
     setAddingCust(true)
     try {
       const res = await customerApi.create({
@@ -262,12 +268,12 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
       setCustomerId(String(res.data.id))
       setCustomerName(res.data.name || newCust.name.trim())
       setShip((sh) => ({ ...sh, name: sh.name || newCust.name.trim(), phone: sh.phone || newCust.phone.trim() }))
-      toast({ title: "Customer added", description: newCust.name })
+      toast({ title: t("orders:newSale.toast.customerAdded"), description: newCust.name })
       setNewCust({ name: "", phone: "", email: "" })
       setCustErr("")
       setAddCustOpen(false)
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed", description: err?.message || "Could not add customer" })
+      toast({ variant: "destructive", title: t("orders:toast.failed"), description: err?.message || t("orders:newSale.toast.couldNotAddCustomer") })
     } finally {
       setAddingCust(false)
     }
@@ -282,29 +288,29 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
 
   // Validation (discount messages show live, the rest after the first save attempt)
   const discountErr =
-    discType === "percent" && discRaw > 100 ? "Percent discount cannot exceed 100%."
-    : discType === "flat" && discRaw > subtotal + 0.005 ? "Discount cannot be more than the subtotal." : ""
+    discType === "percent" && discRaw > 100 ? t("orders:newSale.err.percentMax")
+    : discType === "flat" && discRaw > subtotal + 0.005 ? t("orders:newSale.err.discountMax") : ""
   const lineErr = (r: Row) =>
     !r.productId ? ""
-    : !(r.price > 0) ? "Unit price is required."
-    : r.discount < 0 || r.discount > r.price * r.quantity + 0.005 ? "Line discount must be between 0 and the line total." : ""
-  const chargeErr = needsAddress && shipOverride !== null && (Number(shipOverride) < 0 || shipOverride.trim() === "") ? "Delivery charge must be 0 or more." : ""
-  const addressErr = needsAddress && !ship.line1.trim() ? "Delivery address is required." : ""
-  const phoneErr = needsAddress && ship.phone.trim() && !PHONE_RE.test(ship.phone.trim()) ? "Enter a valid receiver phone number." : ""
-  const codErr = isCod && walkIn ? "Cash on delivery needs a customer. Pick one above." : ""
+    : !(r.price > 0) ? t("orders:newSale.err.unitPriceRequired")
+    : r.discount < 0 || r.discount > r.price * r.quantity + 0.005 ? t("orders:newSale.err.lineDiscountRange") : ""
+  const chargeErr = needsAddress && shipOverride !== null && (Number(shipOverride) < 0 || shipOverride.trim() === "") ? t("orders:newSale.err.chargeMin") : ""
+  const addressErr = needsAddress && !ship.line1.trim() ? t("orders:newSale.err.addressRequired") : ""
+  const phoneErr = needsAddress && ship.phone.trim() && !PHONE_RE.test(ship.phone.trim()) ? t("orders:newSale.err.receiverPhoneInvalid") : ""
+  const codErr = isCod && walkIn ? t("orders:newSale.err.codNeedsCustomer") : ""
   const partialErr =
-    effectivePaidMode === "partial" && !(paidNow > 0 && paidNow < total) ? "Partial amount must be more than 0 and less than the total." : ""
+    effectivePaidMode === "partial" && !(paidNow > 0 && paidNow < total) ? t("orders:newSale.err.partialRange") : ""
 
   const submit = async () => {
     setTried(true)
     const items = rows.filter((r) => r.productId && r.quantity > 0)
-    if (items.length === 0) { toast({ variant: "destructive", title: "Error", description: "Add at least one product" }); return }
+    if (items.length === 0) { toast({ variant: "destructive", title: t("orders:toast.error"), description: t("orders:newSale.toast.addOneProduct") }); return }
     const firstErr = discountErr || rows.map(lineErr).find(Boolean) || chargeErr || addressErr || phoneErr || codErr || partialErr
-    if (firstErr) { toast({ variant: "destructive", title: "Check the form", description: firstErr }); return }
+    if (firstErr) { toast({ variant: "destructive", title: t("orders:newSale.toast.checkForm"), description: firstErr }); return }
     const seen = new Set<string>()
     const dup = items.find((r) => (seen.has(r.productId) ? true : (seen.add(r.productId), false)))
-    if (dup) { toast({ variant: "destructive", title: "Product listed twice", description: `${dup.productName || "A product"} is on more than one line. Merge them into one.` }); return }
-    if (overStock) { toast({ variant: "destructive", title: "Not enough stock", description: "Reduce the quantity of the highlighted product" }); return }
+    if (dup) { toast({ variant: "destructive", title: t("orders:newSale.toast.productTwice"), description: t("orders:newSale.toast.productTwiceDesc", { name: dup.productName || t("orders:newSale.toast.aProduct") }) }); return }
+    if (overStock) { toast({ variant: "destructive", title: t("orders:newSale.toast.notEnoughStock"), description: t("orders:newSale.toast.reduceQty") }); return }
     setSaving(true)
     try {
       const notes = note.trim()
@@ -347,22 +353,26 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
           discount: r.discount > 0 ? r.discount : undefined,
         })),
       })
-      toast({ title: "Sale created", description: `${formatCurrency(total)} · ${items.length} item(s)` })
+      toast({ title: t("orders:newSale.toast.saleCreated"), description: t("orders:newSale.toast.saleCreatedDesc", { total: formatCurrency(total), count: items.length }) })
       if (printAfter && res?.data) {
-        printSaleInvoice(res.data as SellResponse, { formatCurrency, taxId: settings?.taxId })
+        printSaleInvoice(res.data as SellResponse, { formatCurrency, taxId: settings?.taxId }, i18n.language)
       }
       reset()
       onOpenChange(false)
       onCreated()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed", description: err?.response?.data?.message || "Could not create sale" })
+      toast({ variant: "destructive", title: t("orders:toast.failed"), description: err?.response?.data?.message || t("orders:newSale.toast.couldNotCreate") })
     } finally {
       setSaving(false)
     }
   }
 
-  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-  const paidOptions: [PaidMode, string][] = [["full", "Paid in full"], ["partial", "Partial"], ["none", "Unpaid"]]
+  const today = new Date().toLocaleDateString(localeTag(i18n.language), { day: "numeric", month: "short", year: "numeric" })
+  const paidOptions: [PaidMode, string][] = [["full", t("orders:newSale.paidFull")], ["partial", t("orders:labels.partial")], ["none", t("common:payment.unpaid")]]
+  const stockText = (n: number, prefix: "in" | "only") =>
+    prefix === "only"
+      ? locationName ? t("orders:newSale.onlyInStockAt", { count: n, location: locationName }) : t("orders:newSale.onlyInStock", { count: n })
+      : locationName ? t("orders:newSale.inStockAt", { count: n, location: locationName }) : t("orders:newSale.inStock", { count: n })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -371,7 +381,7 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
         className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[1080px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
       >
         <DialogHeader className="px-6 py-4 text-left">
-          <DialogTitle>New sale</DialogTitle>
+          <DialogTitle>{t("orders:newSale.title")}</DialogTitle>
           <DialogDescription>{today}</DialogDescription>
         </DialogHeader>
         <Separator />
@@ -381,13 +391,13 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
           <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-[22px] px-6 py-5">
             {/* 1 · Customer */}
             <fieldset className="flex flex-col gap-2.5">
-              <SectionTitle as="legend" className="mb-2.5">1 · Customer</SectionTitle>
+              <SectionTitle as="legend" className="mb-2.5">{t("orders:newSale.section.customer")}</SectionTitle>
               <div className="flex gap-2">
                 <div className="min-w-0 flex-1">
                   <CustomerCombobox value={customerId} onValueChange={onCustomerChange} />
                 </div>
                 <Button type="button" variant="outline" className="shrink-0" onClick={() => setAddCustOpen(true)}>
-                  + New customer
+                  {t("orders:newSale.newCustomer")}
                 </Button>
               </div>
               {customerId && (() => {
@@ -397,16 +407,16 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                   <p className="text-xs text-muted-foreground">
                     {[
                       c.phone,
-                      c.totalOrders !== undefined ? `${c.totalOrders} past orders` : "",
-                      `Due ${formatCurrency(Number(c.dueAmount) || 0)}`,
-                      limit > 0 ? `Credit limit ${formatCurrency(limit)}` : "",
+                      c.totalOrders !== undefined ? t("orders:newSale.pastOrders", { count: c.totalOrders }) : "",
+                      t("orders:newSale.dueAmount", { amount: formatCurrency(Number(c.dueAmount) || 0) }),
+                      limit > 0 ? t("orders:newSale.creditLimit", { amount: formatCurrency(limit) }) : "",
                     ].filter(Boolean).join(" · ")}
                   </p>
                 ) : null
               })()}
-              {!customerId && <p className="text-xs text-muted-foreground">Walk-in sales must be paid in full.</p>}
-              <FormField label="Order came from" htmlFor="ns-ad-source" className="mt-1"
-                description="For orders taken from Facebook, WhatsApp or other chats. Shows on the order and in ad reports.">
+              {!customerId && <p className="text-xs text-muted-foreground">{t("orders:newSale.walkInFull")}</p>}
+              <FormField label={t("orders:newSale.orderCameFrom")} htmlFor="ns-ad-source" className="mt-1"
+                description={t("orders:newSale.orderCameFromHint")}>
                 <Select value={adSource} onValueChange={setAdSource}>
                   <SelectTrigger id="ns-ad-source" className="w-full sm:w-[240px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -414,7 +424,7 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                       const Icon = AD_SOURCE_META[o.value]?.icon
                       return (
                         <SelectItem key={o.value} value={o.value}>
-                          {Icon && <Icon className="size-4" aria-hidden />}{o.label}
+                          {Icon && <Icon className="size-4" aria-hidden />}{adSourceText(t, o.value)}
                         </SelectItem>
                       )
                     })}
@@ -425,12 +435,12 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
 
             {/* 2 · Products */}
             <fieldset className="flex flex-col gap-2">
-              <SectionTitle as="legend" className="mb-2.5">2 · Products</SectionTitle>
-              <FormField label="Stock location" htmlFor="ns-location" orientation="horizontal" className="w-fit">
+              <SectionTitle as="legend" className="mb-2.5">{t("orders:newSale.section.products")}</SectionTitle>
+              <FormField label={t("orders:newSale.stockLocation")} htmlFor="ns-location" orientation="horizontal" className="w-fit">
                 <Select value={locationId || (warehouses.length === 0 ? "__none" : undefined)} onValueChange={(v) => setLocationId(v === "__none" ? "" : v)}>
-                  <SelectTrigger id="ns-location" aria-label="Stock location" className="min-w-[180px]"><SelectValue placeholder="Select location" /></SelectTrigger>
+                  <SelectTrigger id="ns-location" aria-label={t("orders:newSale.stockLocation")} className="min-w-[180px]"><SelectValue placeholder={t("orders:newSale.selectLocation")} /></SelectTrigger>
                   <SelectContent>
-                    {warehouses.length === 0 && <SelectItem value="__none">Default</SelectItem>}
+                    {warehouses.length === 0 && <SelectItem value="__none">{t("orders:newSale.defaultLocation")}</SelectItem>}
                     {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -438,7 +448,7 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
               <div className="overflow-x-auto">
                 <div className="flex min-w-[640px] flex-col gap-2">
                   <div className="grid grid-cols-[minmax(0,1fr)_120px_100px_90px_100px_40px] gap-2 px-0.5 text-xs font-medium text-muted-foreground">
-                    <span>Product</span><span>Qty</span><span className="text-right">Unit price</span><span className="text-right">Discount</span><span className="text-right">Line total</span><span />
+                    <span>{t("common:fields.product")}</span><span>{t("common:fields.qty")}</span><span className="text-right">{t("orders:newSale.col.unitPrice")}</span><span className="text-right">{t("common:money.discount")}</span><span className="text-right">{t("orders:newSale.col.lineTotal")}</span><span />
                   </div>
                   {rows.map((r, i) => {
                     const stock = r.productId ? stockOf(r.productId) : null
@@ -450,41 +460,41 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                           <SearchableSelect
                             value={r.productId}
                             onChange={(v) => pickProduct(i, v)}
-                            placeholder="Select product…"
-                            searchPlaceholder="Search product or SKU…"
+                            placeholder={t("orders:newSale.selectProduct")}
+                            searchPlaceholder={t("orders:newSale.searchProduct")}
                             options={products.map((p) => {
                               const q = stockOf(String(p.id)) ?? 0
                               return {
                                 value: String(p.id),
                                 disabled: q <= 0,
-                                label: `${p.name}${p.sku ? ` · ${p.sku}` : ""} — ${q <= 0 ? `out of stock${locationName ? ` at ${locationName}` : ""}` : `${q} in stock${locationName ? ` at ${locationName}` : ""}`}${rows.some((x, xi) => xi !== i && x.productId === String(p.id)) ? " (already added)" : ""}`,
+                                label: `${p.name}${p.sku ? ` · ${p.sku}` : ""} — ${q <= 0 ? (locationName ? t("orders:newSale.outOfStockAt", { location: locationName }) : t("orders:newSale.outOfStock")) : stockText(q, "in")}${rows.some((x, xi) => xi !== i && x.productId === String(p.id)) ? ` ${t("orders:newSale.alreadyAdded")}` : ""}`,
                               }
                             })}
                           />
                           <span className={cn("text-xs", over ? "text-destructive" : "text-muted-foreground")}>
-                            {r.auto && r.productId && unitFor(r.productId, r.quantity).wholesale ? "Wholesale price applied · " : ""}{stock === null ? "Choose a product" : over ? `Only ${stock} in stock${locationName ? ` at ${locationName}` : ""}` : `${stock} in stock${locationName ? ` at ${locationName}` : ""}`}
+                            {r.auto && r.productId && unitFor(r.productId, r.quantity).wholesale ? `${t("orders:newSale.wholesaleApplied")} · ` : ""}{stock === null ? t("orders:newSale.chooseProduct") : over ? stockText(stock, "only") : stockText(stock, "in")}
                           </span>
                           {lErr && <span className="text-xs text-destructive">{lErr}</span>}
                         </div>
                         <ButtonGroup className="w-full">
-                          <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity"
+                          <WithTooltip content={t("orders:newSale.decreaseQty")}><Button type="button" variant="outline" size="icon" aria-label={t("orders:newSale.decreaseQty")}
                             onClick={() => setQty(i, Math.max(1, r.quantity - 1))}>−</Button></WithTooltip>
                           <ButtonGroupText className="min-w-0 flex-1 justify-center px-1 tabular-nums">{r.quantity}</ButtonGroupText>
-                          <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity"
+                          <WithTooltip content={t("orders:newSale.increaseQty")}><Button type="button" variant="outline" size="icon" aria-label={t("orders:newSale.increaseQty")}
                             onClick={() => setQty(i, r.quantity + 1)}>+</Button></WithTooltip>
                         </ButtonGroup>
                         <Input
-                          type="number" min={0} step="0.01" aria-label="Unit price" value={r.price}
+                          type="number" min={0} step="0.01" aria-label={t("orders:newSale.col.unitPrice")} value={r.price}
                           onChange={(e) => setRow(i, { price: Number(e.target.value) || 0, auto: false })}
                           className="text-right tabular-nums"
                         />
                         <Input
-                          type="number" min={0} step="0.01" aria-label="Line discount" value={r.discount || ""} placeholder="0"
+                          type="number" min={0} step="0.01" aria-label={t("orders:newSale.lineDiscount")} value={r.discount || ""} placeholder="0"
                           onChange={(e) => setRow(i, { discount: Math.max(0, Number(e.target.value) || 0) })}
                           className="text-right tabular-nums"
                         />
                         <span className="text-right text-sm font-semibold tabular-nums">{formatCurrency(Math.max(0, r.price * r.quantity - r.discount))}</span>
-                        <WithTooltip content="Remove line"><Button type="button" variant="ghost" size="icon" aria-label="Remove line" disabled={rows.length === 1}
+                        <WithTooltip content={t("orders:newSale.removeLine")}><Button type="button" variant="ghost" size="icon" aria-label={t("orders:newSale.removeLine")} disabled={rows.length === 1}
                           onClick={() => setRows((p) => p.filter((_, idx) => idx !== i))}>
                           <Trash2 className="size-4" />
                         </Button></WithTooltip>
@@ -494,20 +504,20 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                 </div>
               </div>
               <Button type="button" variant="outline" className="self-start" onClick={() => setRows((p) => [...p, emptyRow()])}>
-                + Add product
+                {t("orders:newSale.addProduct")}
               </Button>
             </fieldset>
 
             {/* 3 · Delivery */}
             <fieldset className="flex flex-col gap-3">
-              <SectionTitle as="legend" className="mb-2.5">3 · Delivery</SectionTitle>
+              <SectionTitle as="legend" className="mb-2.5">{t("orders:newSale.section.delivery")}</SectionTitle>
               <ChoiceCardGroup
                 value={delivery}
                 onValueChange={(v) => { setDelivery(v); setShipOverride(null) }}
-                aria-label="Delivery type"
+                aria-label={t("orders:newSale.deliveryType")}
                 className="grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
               >
-                {[{ id: STORE_PICKUP, label: "Store pickup", sub: "No delivery charge" },
+                {[{ id: STORE_PICKUP, label: t("orders:newSale.storePickup"), sub: t("orders:newSale.noDeliveryCharge") },
                   ...shippingMethods.map((m) => ({
                     id: String(m.id), label: m.name,
                     sub: `${formatCurrency(Number(m.price) || 0)}${m.estimatedDays ? ` · ${m.estimatedDays}` : ""}`,
@@ -517,37 +527,37 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
               </ChoiceCardGroup>
               {needsAddress && (
                 <div className="grid grid-cols-2 gap-2.5">
-                  <FormField label="Receiver name" htmlFor="ns-ship-name">
+                  <FormField label={t("orders:newSale.receiverName")} htmlFor="ns-ship-name">
                     <Input id="ns-ship-name" value={ship.name} onChange={(e) => setShip({ ...ship, name: e.target.value })} />
                   </FormField>
-                  <FormField label="Phone" htmlFor="ns-ship-phone" error={(tried || ship.phone.trim() !== "") && phoneErr ? phoneErr : undefined}>
+                  <FormField label={t("common:fields.phone")} htmlFor="ns-ship-phone" error={(tried || ship.phone.trim() !== "") && phoneErr ? phoneErr : undefined}>
                     <Input id="ns-ship-phone" type="tel" value={ship.phone} onChange={(e) => setShip({ ...ship, phone: e.target.value })} />
                   </FormField>
-                  <FormField label="Address" htmlFor="ns-ship-line1" className="col-span-2" error={tried && addressErr ? addressErr : undefined}>
-                    <Input id="ns-ship-line1" placeholder="House, road, area" value={ship.line1} onChange={(e) => setShip({ ...ship, line1: e.target.value })} />
+                  <FormField label={t("common:fields.address")} htmlFor="ns-ship-line1" className="col-span-2" error={tried && addressErr ? addressErr : undefined}>
+                    <Input id="ns-ship-line1" placeholder={t("orders:newSale.addressPlaceholder")} value={ship.line1} onChange={(e) => setShip({ ...ship, line1: e.target.value })} />
                   </FormField>
-                  <FormField label="City / District" htmlFor="ns-ship-city">
-                    <Input id="ns-ship-city" placeholder="e.g. Dhaka" value={ship.city} onChange={(e) => setShip({ ...ship, city: e.target.value })} />
+                  <FormField label={t("orders:newSale.city")} htmlFor="ns-ship-city">
+                    <Input id="ns-ship-city" placeholder={t("orders:newSale.cityPlaceholder")} value={ship.city} onChange={(e) => setShip({ ...ship, city: e.target.value })} />
                   </FormField>
-                  <FormField label="State / Area" htmlFor="ns-ship-state">
-                    <Input id="ns-ship-state" placeholder="e.g. Mirpur" value={ship.state} onChange={(e) => setShip({ ...ship, state: e.target.value })} />
+                  <FormField label={t("orders:newSale.state")} htmlFor="ns-ship-state">
+                    <Input id="ns-ship-state" placeholder={t("orders:newSale.statePlaceholder")} value={ship.state} onChange={(e) => setShip({ ...ship, state: e.target.value })} />
                   </FormField>
-                  <FormField label="Postal code" htmlFor="ns-ship-zip">
+                  <FormField label={t("orders:newSale.postalCode")} htmlFor="ns-ship-zip">
                     <Input id="ns-ship-zip" value={ship.zip} onChange={(e) => setShip({ ...ship, zip: e.target.value })} />
                   </FormField>
-                  <FormField label="Country" htmlFor="ns-ship-country">
+                  <FormField label={t("orders:newSale.country")} htmlFor="ns-ship-country">
                     <Input id="ns-ship-country" value={ship.country} onChange={(e) => setShip({ ...ship, country: e.target.value })} />
                   </FormField>
-                  <FormField label="Courier" htmlFor="ns-ship-courier">
+                  <FormField label={t("orders:newSale.courier")} htmlFor="ns-ship-courier">
                     <Select value={courier} onValueChange={(v) => setCourier(v)}>
                       <SelectTrigger id="ns-ship-courier" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {COURIERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {COURIERS.map((c) => <SelectItem key={c} value={c}>{c === "Own delivery" ? t("orders:labels.ownDelivery") : c}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label="Delivery note" htmlFor="ns-ship-note" className="col-span-2">
-                    <Input id="ns-ship-note" placeholder="e.g. Call before delivery" value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
+                  <FormField label={t("orders:newSale.deliveryNote")} htmlFor="ns-ship-note" className="col-span-2">
+                    <Input id="ns-ship-note" placeholder={t("orders:newSale.deliveryNotePlaceholder")} value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} />
                   </FormField>
                 </div>
               )}
@@ -555,21 +565,21 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
           </div>
 
           {/* Right column: summary & payment */}
-          <aside aria-label="Summary and payment" className="flex min-w-0 flex-[1_1_340px] flex-col gap-[18px] border-l bg-muted/40 px-6 py-5">
+          <aside aria-label={t("orders:newSale.summaryAndPayment")} className="flex min-w-0 flex-[1_1_340px] flex-col gap-[18px] border-l bg-muted/40 px-6 py-5">
             <div className="flex flex-col gap-2 text-sm">
-              <SectionTitle className="mb-1">4 · Summary</SectionTitle>
+              <SectionTitle className="mb-1">{t("orders:newSale.section.summary")}</SectionTitle>
               <InfoList>
-                <InfoRow label={`Subtotal · ${itemCount} items`} value={<span className="tabular-nums">{formatCurrency(subtotal)}</span>} />
+                <InfoRow label={t("orders:newSale.subtotalItems", { count: itemCount })} value={<span className="tabular-nums">{formatCurrency(subtotal)}</span>} />
                 <InfoRow
                   className="items-center"
-                  label={<Label htmlFor="ns-disc" className="font-normal text-muted-foreground">Discount</Label>}
+                  label={<Label htmlFor="ns-disc" className="font-normal text-muted-foreground">{t("common:money.discount")}</Label>}
                   value={
                     <span className="flex flex-col items-end gap-1">
                       <span className="flex items-center gap-2">
                         <Select value={discType} onValueChange={(v) => setDiscType(v as "flat" | "percent")}>
-                          <SelectTrigger aria-label="Discount type"><SelectValue /></SelectTrigger>
+                          <SelectTrigger aria-label={t("orders:newSale.discountType")}><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="flat">Flat</SelectItem><SelectItem value="percent">Percent %</SelectItem>
+                            <SelectItem value="flat">{t("orders:newSale.flat")}</SelectItem><SelectItem value="percent">{t("orders:newSale.percent")}</SelectItem>
                           </SelectContent>
                         </Select>
                         <Input id="ns-disc" type="number" min={0} step="0.01" value={discount} placeholder="0"
@@ -581,10 +591,10 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                     </span>
                   }
                 />
-                <InfoRow label={`VAT (${taxRate}%) · after discount`} value={<span className="tabular-nums">{formatCurrency(tax)}</span>} />
+                <InfoRow label={t("orders:newSale.vat", { rate: taxRate })} value={<span className="tabular-nums">{formatCurrency(tax)}</span>} />
                 <InfoRow
                   className="items-center"
-                  label={<Label htmlFor="ns-ship" className="font-normal text-muted-foreground">Delivery charge</Label>}
+                  label={<Label htmlFor="ns-ship" className="font-normal text-muted-foreground">{t("orders:newSale.deliveryCharge")}</Label>}
                   value={
                     <span className="flex flex-col items-end gap-1">
                       <Input id="ns-ship" type="number" min={0} step="0.01" value={needsAddress && shipOverride !== null ? shipOverride : String(zoneCost)} disabled={!needsAddress}
@@ -598,27 +608,27 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                 <Separator className="my-1" />
                 <InfoRow
                   className="items-baseline [&>dt]:font-semibold [&>dt]:text-foreground"
-                  label="Total"
+                  label={t("common:money.total")}
                   value={<span className="text-3xl font-semibold tracking-tight tabular-nums">{formatCurrency(total)}</span>}
                 />
               </InfoList>
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <SectionTitle>5 · Payment</SectionTitle>
-              <div role="radiogroup" aria-label="Payment method" className="grid grid-cols-3 gap-1.5">
+              <SectionTitle>{t("orders:newSale.section.payment")}</SectionTitle>
+              <div role="radiogroup" aria-label={t("common:payment.method")} className="grid grid-cols-3 gap-1.5">
                 {methodList.map((m) => {
                   const on = method === m.value
                   return (
                     <Button key={m.value} type="button" role="radio" aria-checked={on} variant={on ? "default" : "outline"}
                       onClick={() => { setMethod(m.value); if (m.value === "COD") setPaidMode("none") }}>
-                      {m.label}
+                      {methodLabel(t, m.value)}
                     </Button>
                   )
                 })}
               </div>
               <SegmentedControl
-                aria-label="Amount paid"
+                aria-label={t("orders:newSale.amountPaid")}
                 className="w-full"
                 value={effectivePaidMode}
                 onValueChange={(v) => setPaidMode(v as PaidMode)}
@@ -628,12 +638,12 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                   disabled: isCod ? id !== "none" : walkIn ? id !== "full" : false,
                 }))}
               />
-              {isCod && <p className="text-xs text-muted-foreground">Cash on delivery: the customer pays the courier on delivery, so the sale is saved as unpaid and the full amount is collected then.</p>}
+              {isCod && <p className="text-xs text-muted-foreground">{t("orders:newSale.codHint")}</p>}
               {codErr && <p className="text-xs text-destructive">{codErr}</p>}
-              {!isCod && walkIn && <p className="text-xs text-muted-foreground">Walk-in sales must be paid in full. Pick a customer to allow partial or unpaid sales.</p>}
+              {!isCod && walkIn && <p className="text-xs text-muted-foreground">{t("orders:newSale.walkInHint")}</p>}
               {effectivePaidMode === "partial" && (
                 <FormField
-                  label="Amount received" htmlFor="ns-partial" orientation="horizontal"
+                  label={t("orders:newSale.amountReceived")} htmlFor="ns-partial" orientation="horizontal"
                   error={(tried || partialAmount !== "") && partialErr ? partialErr : undefined}
                 >
                   <Input id="ns-partial" type="number" min={0} step="0.01" value={partialAmount} onChange={(e) => setPartialAmount(e.target.value)}
@@ -641,47 +651,43 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
                 </FormField>
               )}
               {TX_METHODS.includes(method) && (
-                <FormField label="Transaction ID" htmlFor="ns-txid">
-                  <Input id="ns-txid" placeholder="e.g. 9JK4XY2LQ8" value={txId} onChange={(e) => setTxId(e.target.value)} />
+                <FormField label={t("orders:newSale.transactionId")} htmlFor="ns-txid">
+                  <Input id="ns-txid" placeholder={t("orders:newSale.transactionIdPlaceholder")} value={txId} onChange={(e) => setTxId(e.target.value)} />
                 </FormField>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <StatTile label="Paid now" value={formatCurrency(paidNow)} className="gap-1 p-3" />
-                <StatTile label="Due" value={formatCurrency(dueNow)} className={cn("gap-1 p-3", dueNow > 0 && "border-destructive/50 [&_p]:text-destructive")} />
+                <StatTile label={t("orders:newSale.paidNow")} value={formatCurrency(paidNow)} className="gap-1 p-3" />
+                <StatTile label={t("common:money.due")} value={formatCurrency(dueNow)} className={cn("gap-1 p-3", dueNow > 0 && "border-destructive/50 [&_p]:text-destructive")} />
               </div>
             </div>
 
-            <FormField label="Order status" htmlFor="ns-status">
+            <FormField label={t("orders:newSale.orderStatus")} htmlFor="ns-status">
               <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                 <SelectTrigger id="ns-status" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Processing">Processing</SelectItem>
-                  <SelectItem value="Packed">Packed</SelectItem>
-                  <SelectItem value="Shipped">Shipped</SelectItem>
-                  <SelectItem value="Delivered">Delivered</SelectItem>
+                  {SALE_STATUSES.map((st) => <SelectItem key={st} value={st}>{orderStatusLabel(t, st)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Internal note" htmlFor="ns-note">
-              <Textarea id="ns-note" rows={2} placeholder="Only visible to staff" value={note} onChange={(e) => setNote(e.target.value)} />
+            <FormField label={t("orders:newSale.internalNote")} htmlFor="ns-note">
+              <Textarea id="ns-note" rows={2} placeholder={t("orders:newSale.internalNotePlaceholder")} value={note} onChange={(e) => setNote(e.target.value)} />
             </FormField>
             <Field orientation="horizontal">
               <Checkbox id="ns-print-after" checked={printAfter} onCheckedChange={(v) => setPrintAfter(v === true)} />
-              <FieldLabel htmlFor="ns-print-after" className="font-normal">Print invoice after saving</FieldLabel>
+              <FieldLabel htmlFor="ns-print-after" className="font-normal">{t("orders:newSale.printAfter")}</FieldLabel>
             </Field>
           </aside>
         </div>
 
         <Separator />
         <DialogFooter className="flex flex-row flex-wrap items-center gap-2.5 px-6 py-4 sm:justify-between">
-          <span className="text-sm text-muted-foreground">{locationName ? `Stock will be deducted from ${locationName}` : "Stock is deducted when the sale is saved"}</span>
+          <span className="text-sm text-muted-foreground">{locationName ? t("orders:newSale.deductFrom", { location: locationName }) : t("orders:newSale.deductOnSave")}</span>
           <div className="ml-auto flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="lg" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common:actions.cancel")}
             </Button>
             <Button type="button" size="lg" onClick={submit} disabled={saving || itemCount === 0 || overStock}>
-              {saving ? "Creating…" : `Create sale · ${formatCurrency(total)}`}
+              {saving ? t("orders:newSale.creating") : t("orders:newSale.createSale", { total: formatCurrency(total) })}
             </Button>
           </div>
         </DialogFooter>
@@ -690,23 +696,23 @@ export function NewSaleModal({ open, onOpenChange, onCreated, initialCustomerId 
       {/* Quick add-customer */}
       <Dialog open={addCustOpen} onOpenChange={setAddCustOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Add Customer</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("orders:newSale.addCustomer")}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-1">
-            <FormField label="Full Name *" htmlFor="ns-cust-name">
-              <Input id="ns-cust-name" value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder="John Doe" />
+            <FormField label={t("orders:newSale.fullNameRequired")} htmlFor="ns-cust-name">
+              <Input id="ns-cust-name" value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} placeholder={t("orders:newSale.namePlaceholder")} />
             </FormField>
-            <FormField label="Phone *" htmlFor="ns-cust-phone">
+            <FormField label={t("orders:newSale.phoneRequired")} htmlFor="ns-cust-phone">
               <Input id="ns-cust-phone" value={newCust.phone} onChange={(e) => { setCustErr(""); setNewCust({ ...newCust, phone: e.target.value }) }} placeholder="01XXXXXXXXX" />
             </FormField>
-            <FormField label="Email" htmlFor="ns-cust-email">
+            <FormField label={t("common:fields.email")} htmlFor="ns-cust-email">
               <Input id="ns-cust-email" type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} placeholder="john@example.com" />
             </FormField>
             {custErr && <p className="text-xs text-destructive">{custErr}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddCustOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddCustOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button onClick={quickAddCustomer} disabled={addingCust}>
-              {addingCust ? "Adding…" : "Add Customer"}
+              {addingCust ? t("orders:newSale.adding") : t("orders:newSale.addCustomer")}
             </Button>
           </DialogFooter>
         </DialogContent>

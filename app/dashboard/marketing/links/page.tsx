@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import {
   Banknote, Copy, Eye, Link2, Megaphone, MoreHorizontal, MousePointerClick, Percent, Plus, QrCode, Search, ShoppingCart, X,
 } from "lucide-react"
@@ -31,7 +32,10 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 import { AD_SOURCE_META, AdSourceBadge } from "@/components/sales/ad-source"
 import { LinkDialog } from "@/components/marketing/link-dialog"
 import { LinkDetailSheet } from "@/components/marketing/link-detail-sheet"
-import { PERIODS, TARGET_LABEL, channelLabel, pct, shareUrl } from "@/components/marketing/link-ui"
+import { TARGET_LABEL, channelLabel, pct, periodOptions, shareUrl } from "@/components/marketing/link-ui"
+import { MARKETING_NS } from "@/components/marketing/i18n"
+import { ORDERS_NS } from "@/components/sales/i18n"
+import { localeTag } from "@/lib/i18n"
 import {
   LINK_CHANNELS, campaignLinkApi, type CampaignLink, type LinkPeriod, type LinksSummary,
 } from "@/lib/campaignLinkApi"
@@ -41,9 +45,12 @@ import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 
-const fmtDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—")
+const fmtDate = (iso: string, tag: string) => (iso ? new Date(iso).toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" }) : "—")
 
 export default function AdOrderLinksPage() {
+  const { t, i18n } = useTranslation(MARKETING_NS)
+  const { t: tOrders } = useTranslation(ORDERS_NS)
+  const tag = localeTag(i18n.language)
   const { formatCurrency } = useCompanySettings()
   const { hasPermission } = useSaasAuth()
   const { toast } = useToast()
@@ -98,7 +105,7 @@ export default function AdOrderLinksPage() {
       .catch((err) => {
         if (id !== latest.current) return
         setLinks([])
-        toast({ variant: "destructive", title: "Could not load links", description: apiErrorMessage(err) })
+        toast({ variant: "destructive", title: t("commerce:marketing.toast.loadFailed"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
       })
       .finally(() => { if (id === latest.current) setLoading(false) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,8 +113,8 @@ export default function AdOrderLinksPage() {
 
   useEffect(() => { loadSummary() }, [loadSummary])
   useEffect(() => {
-    const t = setTimeout(loadLinks, search ? 250 : 0)
-    return () => clearTimeout(t)
+    const timer = setTimeout(loadLinks, search ? 250 : 0)
+    return () => clearTimeout(timer)
   }, [loadLinks, search])
 
   const blocked = useModuleGuard("Marketing")
@@ -122,9 +129,9 @@ export default function AdOrderLinksPage() {
   const copyLink = async (l: CampaignLink) => {
     try {
       await navigator.clipboard.writeText(shareUrl(l))
-      toast({ title: "Link copied", description: shareUrl(l) })
+      toast({ title: t("commerce:marketing.toast.copied"), description: shareUrl(l) })
     } catch {
-      toast({ variant: "destructive", title: "Could not copy", description: "Your browser blocked the clipboard." })
+      toast({ variant: "destructive", title: t("commerce:marketing.toast.copyFailed"), description: t("commerce:marketing.toast.clipboardBlocked") })
     }
   }
 
@@ -133,11 +140,11 @@ export default function AdOrderLinksPage() {
     setLinks((prev) => prev.map((x) => (x.id === l.id ? { ...x, isActive } : x)))
     try {
       await campaignLinkApi.setActive(l.id, isActive)
-      toast({ title: isActive ? "Link turned on" : "Link turned off", description: isActive ? l.name : "Shoppers who open it go to your home page." })
+      toast({ title: isActive ? t("commerce:marketing.toast.turnedOn") : t("commerce:marketing.toast.turnedOff"), description: isActive ? l.name : t("commerce:marketing.toast.offDesc") })
       loadSummary()
     } catch (err) {
       setLinks((prev) => prev.map((x) => (x.id === l.id ? l : x)))
-      toast({ variant: "destructive", title: "Could not update", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("commerce:marketing.toast.updateFailed"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     } finally {
       setBusyId(null)
     }
@@ -148,11 +155,11 @@ export default function AdOrderLinksPage() {
     setDeleting(true)
     try {
       await campaignLinkApi.delete(deleteTarget.id)
-      toast({ title: "Link deleted", description: "Orders keep their source and campaign." })
+      toast({ title: t("commerce:marketing.toast.deleted"), description: t("commerce:marketing.toast.deletedDesc") })
       if (detailId === deleteTarget.id) setDetailId(null)
       refresh()
     } catch (err) {
-      toast({ variant: "destructive", title: "Could not delete", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("commerce:marketing.toast.deleteFailed"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
@@ -175,22 +182,22 @@ export default function AdOrderLinksPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Ad order links"
-        description="Make a trackable link for each Facebook, Instagram, WhatsApp or TikTok post and ad, and see which one brings orders."
+        title={t("commerce:marketing.page.title")}
+        description={t("commerce:marketing.page.description")}
         actions={canWrite && (
           <Button type="button" onClick={() => setDialog({ link: null })}>
-            <Plus className="size-4" aria-hidden /> New link
+            <Plus className="size-4" aria-hidden /> {t("commerce:marketing.page.newLink")}
           </Button>
         )}
       />
 
       <Toolbar actions={
-        <SegmentedControl aria-label="Period" value={period} onValueChange={(v) => { setPeriod(v as LinkPeriod); setPage(1) }} options={PERIODS} />
+        <SegmentedControl aria-label={t("commerce:marketing.page.period")} value={period} onValueChange={(v) => { setPeriod(v as LinkPeriod); setPage(1) }} options={periodOptions(t)} />
       }>
         <p className="text-sm text-muted-foreground">
           {summary?.period.from && summary.period.key !== "all"
-            ? `${fmtDate(summary.period.from)} – ${fmtDate(summary.period.to)}`
-            : "All time"}
+            ? `${fmtDate(summary.period.from, tag)} – ${fmtDate(summary.period.to, tag)}`
+            : t("common:time.allTime")}
         </p>
       </Toolbar>
 
@@ -199,22 +206,22 @@ export default function AdOrderLinksPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Link clicks" value={(totals?.clicks ?? 0).toLocaleString()} icon={<MousePointerClick />}
-            hint={totals ? `${totals.activeLinks} of ${totals.links} link${totals.links === 1 ? "" : "s"} active` : undefined} />
-          <StatTile label="Orders from ads & social" value={(totals?.orders ?? 0).toLocaleString()} icon={<ShoppingCart />}
-            hint="Incl. orders tagged by UTM or referrer" />
-          <StatTile label="Revenue" value={formatCurrency(totals?.revenue ?? 0)} icon={<Banknote />} hint="Cancelled orders excluded" />
-          <StatTile label="Conversion" value={pct(totals?.conversionRate ?? 0)} icon={<Percent />} hint="Orders ÷ link clicks" />
+          <StatTile label={t("commerce:marketing.kpi.clicks")} value={(totals?.clicks ?? 0).toLocaleString()} icon={<MousePointerClick />}
+            hint={totals ? t("commerce:marketing.kpi.activeOf", { active: totals.activeLinks, count: totals.links }) : undefined} />
+          <StatTile label={t("commerce:marketing.kpi.orders")} value={(totals?.orders ?? 0).toLocaleString()} icon={<ShoppingCart />}
+            hint={t("commerce:marketing.kpi.ordersHint")} />
+          <StatTile label={t("commerce:marketing.kpi.revenue")} value={formatCurrency(totals?.revenue ?? 0)} icon={<Banknote />} hint={t("commerce:marketing.kpi.revenueHint")} />
+          <StatTile label={t("commerce:marketing.kpi.conversion")} value={pct(totals?.conversionRate ?? 0)} icon={<Percent />} hint={t("commerce:marketing.kpi.conversionHint")} />
         </div>
       )}
 
       {/* By channel + top links */}
       <div className="grid gap-5 lg:grid-cols-[3fr_2fr]">
-        <SectionCard title="By channel" description="Clicks on your links and every order tagged with that source.">
+        <SectionCard title={t("commerce:marketing.byChannel.title")} description={t("commerce:marketing.byChannel.description")}>
           {summaryLoading && !summary ? (
             <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10" />)}</div>
           ) : !summary?.byChannel.length ? (
-            <EmptyState icon={Megaphone} title="No clicks or ad orders yet" description="Share an order link in a post or ad, and results show up here." className="p-4" />
+            <EmptyState icon={Megaphone} title={t("commerce:marketing.byChannel.emptyTitle")} description={t("commerce:marketing.byChannel.emptyDesc")} className="p-4" />
           ) : (
             <ul className="flex flex-col gap-4">
               {summary.byChannel.map((c) => {
@@ -225,9 +232,9 @@ export default function AdOrderLinksPage() {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                       <span className="flex items-center gap-2 font-medium">
                         <span className={`grid size-6 place-items-center rounded-md ${meta?.className ?? "bg-muted"}`}><Icon className="size-3.5" aria-hidden /></span>
-                        {c.label || channelLabel(c.channel)}
+                        {meta || c.channel === "direct" || !c.label ? channelLabel(tOrders, c.channel) : c.label}
                       </span>
-                      <span className="text-muted-foreground tabular-nums">{c.clicks.toLocaleString()} clicks · {c.orders} orders · {pct(c.conversionRate)}</span>
+                      <span className="text-muted-foreground tabular-nums">{t("commerce:marketing.chart.clicks", { count: c.clicks })} · {t("common:count.orders", { count: c.orders })} · {pct(c.conversionRate)}</span>
                       <span className="ml-auto font-semibold tabular-nums">{formatCurrency(c.revenue)}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -240,24 +247,24 @@ export default function AdOrderLinksPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Top links" description="By orders in this period.">
+        <SectionCard title={t("commerce:marketing.topLinks.title")} description={t("commerce:marketing.topLinks.description")}>
           {summaryLoading && !summary ? (
             <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-10" />)}</div>
           ) : !summary?.topLinks.length ? (
-            <p className="py-4 text-sm text-muted-foreground">No link has orders in this period yet.</p>
+            <p className="py-4 text-sm text-muted-foreground">{t("commerce:marketing.topLinks.empty")}</p>
           ) : (
             <ol className="flex flex-col divide-y">
-              {summary.topLinks.map((t, i) => (
-                <li key={t.id}>
-                  <Button type="button" variant="ghost" className="h-auto w-full justify-start gap-3 px-1 py-2.5 text-left" onClick={() => setDetailId(t.id)}>
+              {summary.topLinks.map((top, i) => (
+                <li key={top.id}>
+                  <Button type="button" variant="ghost" className="h-auto w-full justify-start gap-3 px-1 py-2.5 text-left" onClick={() => setDetailId(top.id)}>
                     <span className="w-4 text-xs text-muted-foreground tabular-nums">{i + 1}</span>
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate font-medium">{t.name}</span>
-                      <span className="text-xs font-normal text-muted-foreground">{channelLabel(t.channel)} · {t.clicks} clicks · {pct(t.conversionRate)}</span>
+                      <span className="truncate font-medium">{top.name}</span>
+                      <span className="text-xs font-normal text-muted-foreground">{channelLabel(tOrders, top.channel)} · {t("commerce:marketing.chart.clicks", { count: top.clicks })} · {pct(top.conversionRate)}</span>
                     </span>
                     <span className="flex flex-col items-end">
-                      <span className="font-semibold tabular-nums">{t.orders} order{t.orders === 1 ? "" : "s"}</span>
-                      <span className="text-xs font-normal text-muted-foreground tabular-nums">{formatCurrency(t.revenue)}</span>
+                      <span className="font-semibold tabular-nums">{t("common:count.orders", { count: top.orders })}</span>
+                      <span className="text-xs font-normal text-muted-foreground tabular-nums">{formatCurrency(top.revenue)}</span>
                     </span>
                   </Button>
                 </li>
@@ -272,28 +279,28 @@ export default function AdOrderLinksPage() {
         <Toolbar className="p-4">
           <div className="relative min-w-[240px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Label htmlFor="links-search" className="sr-only">Search links</Label>
-            <Input id="links-search" type="search" placeholder="Search name or code…" className="pl-8" value={search}
+            <Label htmlFor="links-search" className="sr-only">{t("commerce:marketing.table.searchLabel")}</Label>
+            <Input id="links-search" type="search" placeholder={t("commerce:marketing.table.searchPlaceholder")} className="pl-8" value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }} />
           </div>
           <Select value={channel} onValueChange={(v) => { setChannel(v); setPage(1) }}>
-            <SelectTrigger aria-label="Channel" className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("commerce:marketing.table.channel")} className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Channel: All</SelectItem>
-              {LINK_CHANNELS.map((c) => <SelectItem key={c} value={c}>{channelLabel(c)}</SelectItem>)}
+              <SelectItem value="all">{t("commerce:marketing.table.channelAll")}</SelectItem>
+              {LINK_CHANNELS.map((c) => <SelectItem key={c} value={c}>{channelLabel(tOrders, c)}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1) }}>
-            <SelectTrigger aria-label="Status" className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:fields.status")} className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Status: All</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="all">{t("commerce:marketing.table.statusAll")}</SelectItem>
+              <SelectItem value="active">{t("common:status.active")}</SelectItem>
+              <SelectItem value="inactive">{t("common:status.inactive")}</SelectItem>
             </SelectContent>
           </Select>
           {filtering && (
             <Button type="button" variant="ghost" onClick={() => { setSearch(""); setChannel("all"); setStatus("all"); setPage(1) }}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </Toolbar>
@@ -302,16 +309,16 @@ export default function AdOrderLinksPage() {
           <Table className="min-w-[980px]">
             <TableHeader>
               <TableRow>
-                <TableHead scope="col" className="pl-4">Link</TableHead>
-                <TableHead scope="col">Channel</TableHead>
-                <TableHead scope="col">Opens</TableHead>
-                <TableHead scope="col" className="text-right">Clicks</TableHead>
-                <TableHead scope="col" className="text-right">Orders</TableHead>
-                <TableHead scope="col" className="text-right">Revenue</TableHead>
-                <TableHead scope="col" className="text-right">Conv.</TableHead>
-                <TableHead scope="col">Active</TableHead>
-                <TableHead scope="col">Created</TableHead>
-                <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+                <TableHead scope="col" className="pl-4">{t("commerce:marketing.table.colLink")}</TableHead>
+                <TableHead scope="col">{t("commerce:marketing.table.channel")}</TableHead>
+                <TableHead scope="col">{t("commerce:marketing.table.colOpens")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("commerce:marketing.chart.legendClicks")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("commerce:marketing.chart.legendOrders")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("commerce:marketing.kpi.revenue")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("commerce:marketing.table.colConv")}</TableHead>
+                <TableHead scope="col">{t("common:status.active")}</TableHead>
+                <TableHead scope="col">{t("common:fields.createdAt")}</TableHead>
+                <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -324,12 +331,12 @@ export default function AdOrderLinksPage() {
                   <TableCell colSpan={10} className="whitespace-normal">
                     <EmptyState
                       icon={Link2}
-                      title={filtering ? "No links match" : "No order links yet"}
+                      title={filtering ? t("commerce:marketing.table.emptyFiltered") : t("commerce:marketing.table.emptyTitle")}
                       description={filtering
-                        ? "Try clearing the filters."
-                        : "Create a link for your next Facebook post or ad. Shoppers who tap it can order in one page, and the order is tagged with the post."}
+                        ? t("commerce:coupons.list.emptyFiltered")
+                        : t("commerce:marketing.table.emptyDesc")}
                       action={!filtering && canWrite && (
-                        <Button type="button" onClick={() => setDialog({ link: null })}><Plus className="size-4" aria-hidden /> New link</Button>
+                        <Button type="button" onClick={() => setDialog({ link: null })}><Plus className="size-4" aria-hidden /> {t("commerce:marketing.page.newLink")}</Button>
                       )}
                       className="p-4 md:p-6"
                     />
@@ -346,46 +353,46 @@ export default function AdOrderLinksPage() {
                     </TableCell>
                     <TableCell><AdSourceBadge source={l.channel} /></TableCell>
                     <TableCell className="max-w-[200px]">
-                      <div className="text-sm">{TARGET_LABEL[l.targetType]}</div>
+                      <div className="text-sm">{t(TARGET_LABEL[l.targetType])}</div>
                       {l.target && <div className="truncate text-xs text-muted-foreground">{l.target.name}</div>}
-                      {!l.target && l.targetType !== "store" && <Badge variant="destructive" className="mt-0.5">Target missing</Badge>}
+                      {!l.target && l.targetType !== "store" && <Badge variant="destructive" className="mt-0.5">{t("commerce:marketing.table.targetMissing")}</Badge>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{l.stats.clicks.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums">{l.stats.orders.toLocaleString()}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatCurrency(l.stats.revenue)}</TableCell>
                     <TableCell className="text-right tabular-nums">{pct(l.stats.conversionRate)}</TableCell>
                     <TableCell>
-                      <Switch checked={l.isActive} disabled={!canWrite || busyId === l.id} aria-label={`${l.isActive ? "Turn off" : "Turn on"} ${l.name}`}
+                      <Switch checked={l.isActive} disabled={!canWrite || busyId === l.id} aria-label={l.isActive ? t("commerce:marketing.table.turnOff", { name: l.name }) : t("commerce:marketing.table.turnOn", { name: l.name })}
                         onCheckedChange={(v) => toggleActive(l, v)} />
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm">
-                      {fmtDate(l.createdAt)}
+                      {fmtDate(l.createdAt, tag)}
                       {l.createdByName && <div className="text-xs text-muted-foreground">{l.createdByName}</div>}
                     </TableCell>
                     <TableCell className="pr-4">
                       <div className="flex justify-end gap-1">
-                        <WithTooltip content="Copy link">
-                          <Button type="button" variant="outline" size="icon" aria-label={`Copy link for ${l.name}`} onClick={() => copyLink(l)}><Copy className="size-4" /></Button>
+                        <WithTooltip content={t("commerce:marketing.table.copyLink")}>
+                          <Button type="button" variant="outline" size="icon" aria-label={t("commerce:marketing.table.copyLinkFor", { name: l.name })} onClick={() => copyLink(l)}><Copy className="size-4" /></Button>
                         </WithTooltip>
-                        <WithTooltip content="Share: links, QR code and caption">
-                          <Button type="button" variant="outline" size="icon" aria-label={`Share ${l.name}`} onClick={() => setDialog({ link: l, shareOnly: true })}><QrCode className="size-4" /></Button>
+                        <WithTooltip content={t("commerce:marketing.table.shareTip")}>
+                          <Button type="button" variant="outline" size="icon" aria-label={t("commerce:marketing.table.shareName", { name: l.name })} onClick={() => setDialog({ link: l, shareOnly: true })}><QrCode className="size-4" /></Button>
                         </WithTooltip>
-                        <WithTooltip content="Performance and orders">
-                          <Button type="button" variant="outline" size="icon" aria-label={`View ${l.name}`} onClick={() => setDetailId(l.id)}><Eye className="size-4" /></Button>
+                        <WithTooltip content={t("commerce:marketing.table.viewTip")}>
+                          <Button type="button" variant="outline" size="icon" aria-label={t("commerce:marketing.table.viewName", { name: l.name })} onClick={() => setDetailId(l.id)}><Eye className="size-4" /></Button>
                         </WithTooltip>
                         {(canWrite || canDelete) && (
                           <DropdownMenu>
-                            <WithTooltip content={`More actions for ${l.name}`}>
+                            <WithTooltip content={t("commerce:marketing.table.moreFor", { name: l.name })}>
                               <DropdownMenuTrigger asChild>
-                                <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${l.name}`}><MoreHorizontal className="size-4" /></Button>
+                                <Button type="button" variant="outline" size="icon" aria-label={t("commerce:marketing.table.moreFor", { name: l.name })}><MoreHorizontal className="size-4" /></Button>
                               </DropdownMenuTrigger>
                             </WithTooltip>
                             <DropdownMenuContent align="end">
-                              {canWrite && <DropdownMenuItem onClick={() => setDialog({ link: l })}>Edit link</DropdownMenuItem>}
+                              {canWrite && <DropdownMenuItem onClick={() => setDialog({ link: l })}>{t("commerce:marketing.table.editLink")}</DropdownMenuItem>}
                               {canDelete && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(l)}>Delete link</DropdownMenuItem>
+                                  <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(l)}>{t("commerce:marketing.table.deleteLink")}</DropdownMenuItem>
                                 </>
                               )}
                             </DropdownMenuContent>
@@ -438,15 +445,15 @@ export default function AdOrderLinksPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{deleteTarget?.name}”?</AlertDialogTitle>
+            <AlertDialogTitle>{t("commerce:marketing.remove.title", { name: deleteTarget?.name ?? "" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              The link stops working (shoppers who open it land on your home page). Orders already placed keep their source and campaign.
+              {t("commerce:marketing.remove.description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete link"}
+              {deleting ? t("commerce:marketing.remove.deleting") : t("commerce:marketing.table.deleteLink")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

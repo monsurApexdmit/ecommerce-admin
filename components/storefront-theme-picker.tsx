@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { STORE_THEMES, STORE_THEME_FONTS_HREF, type StoreThemeId, type StoreThemePreview } from "@/lib/storeThemes"
@@ -22,6 +23,7 @@ interface Props {
   /** Accent colour hex, or "" for the template's own */
   accent: string
   onAccent: (hex: string) => void
+  /** [hex, label] — the label is already translated */
   accents: [string, string][]
   /** Company settings brand colours, or null when none are saved */
   brand: BrandColors | null
@@ -31,6 +33,7 @@ const hsl = (v: string) => `hsl(${v})`
 
 /** Gallery of storefront templates, each with a miniature of its real layout, plus colour and accent choice. */
 export function StorefrontThemePicker({ theme, onTheme, colorSource, onColorSource, accent, onAccent, accents, brand }: Props) {
+  const { t: tr } = useTranslation(["store", "common"])
   useEffect(() => {
     if (document.getElementById("store-theme-preview-fonts")) return
     const link = document.createElement("link")
@@ -44,7 +47,7 @@ export function StorefrontThemePicker({ theme, onTheme, colorSource, onColorSour
 
   return (
     <div className="flex flex-col gap-5">
-      <div role="radiogroup" aria-label="Store template" className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
+      <div role="radiogroup" aria-label={tr("store:template.group")} className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
         {STORE_THEMES.map((t) => {
           const selected = t.id === theme
           return (
@@ -64,9 +67,9 @@ export function StorefrontThemePicker({ theme, onTheme, colorSource, onColorSour
               </span>
               <span className="flex flex-1 items-start justify-between gap-2 p-3">
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{t.name}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{t.description}</span>
-                  <span className="mt-1.5 block text-[11px] font-medium text-foreground/70">Best for: {t.bestFor}</span>
+                  <span className="block text-sm font-semibold">{tr(t.nameKey)}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{tr(t.descriptionKey)}</span>
+                  <span className="mt-1.5 block text-[11px] font-medium text-foreground/70">{tr("store:template.bestFor", { text: tr(t.bestForKey) })}</span>
                   <span className="mt-0.5 block text-[11px] text-muted-foreground/80">{t.fonts}</span>
                 </span>
                 <span
@@ -85,10 +88,10 @@ export function StorefrontThemePicker({ theme, onTheme, colorSource, onColorSour
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-medium">Colours</p>
-        <div role="group" aria-label="Colours" className="flex flex-wrap gap-2">
+        <p className="text-sm font-medium">{tr("store:template.colours")}</p>
+        <div role="group" aria-label={tr("store:template.colours")} className="flex flex-wrap gap-2">
           <Button type="button" size="sm" aria-pressed={!usingBrand} variant={!usingBrand ? "default" : "outline"} onClick={() => onColorSource("theme")}>
-            Template colours
+            {tr("store:template.templateColours")}
           </Button>
           <Button type="button" size="sm" aria-pressed={usingBrand} variant={usingBrand ? "default" : "outline"} disabled={!brand} onClick={() => onColorSource("brand")}>
             {brand && (
@@ -98,24 +101,24 @@ export function StorefrontThemePicker({ theme, onTheme, colorSource, onColorSour
                 ))}
               </span>
             )}
-            My brand colours
+            {tr("store:template.brandColours")}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
           {!brand
-            ? "Set brand colours in Company settings to use them instead of the template's."
+            ? tr("store:template.hintNoBrand")
             : usingBrand
-              ? "Your Company settings brand colours replace the template's colours. The layout and fonts stay."
-              : "The template's own colours, in light and dark mode."}
+              ? tr("store:template.hintBrand")
+              : tr("store:template.hintTheme")}
         </p>
       </div>
 
       {!usingBrand && (
         <div className="flex flex-col gap-1.5">
-          <p className="text-sm font-medium">Accent</p>
-          <div role="group" aria-label="Accent colour" className="flex flex-wrap gap-2">
+          <p className="text-sm font-medium">{tr("store:template.accent")}</p>
+          <div role="group" aria-label={tr("store:template.accentGroup")} className="flex flex-wrap gap-2">
             <Button type="button" size="sm" aria-pressed={!accent} variant={!accent ? "default" : "outline"} onClick={() => onAccent("")}>
-              Template&apos;s own
+              {tr("store:template.templatesOwn")}
             </Button>
             {accents.map(([color, label]) => (
               <Button key={color} type="button" size="sm" aria-pressed={accent === color} variant={accent === color ? "default" : "outline"} onClick={() => onAccent(color)}>
@@ -124,7 +127,7 @@ export function StorefrontThemePicker({ theme, onTheme, colorSource, onColorSour
               </Button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">Used for sale tags, badges and the main buttons.</p>
+          <p className="text-xs text-muted-foreground">{tr("store:template.accentHint")}</p>
         </div>
       )}
     </div>
@@ -141,59 +144,65 @@ function Preview({ t, accent }: { t: StoreThemePreview; accent: string | null })
   switch (t.id) {
     case "market":
       return (
-        <span className="flex h-full flex-col text-[7px]">
-          <span className="flex items-center gap-1.5 px-2 py-1.5" style={{ background: hsl(t.ink), color: hsl(t.inkFg) }}>
-            <span style={{ ...display, fontWeight: 800 }} className="text-[9px]">Aura</span>
-            <span className="h-3 flex-1 rounded-sm" style={{ background: hsl(t.card) }} />
-            <span className="rounded-sm px-1 py-0.5" style={{ background: hl, color: hlFg }}>Cart 2</span>
+        <span className="flex h-full flex-col text-[7px]" style={{ background: hsl(t.bg) }}>
+          <span className="block h-1.5" style={{ background: hsl(t.primary) }} />
+          <span className="flex items-center gap-1.5 px-2 py-1.5" style={{ background: hsl(t.card) }}>
+            <b style={{ ...display, color: hsl(t.fg) }} className="text-[9px]">Aura<span style={{ color: hsl(t.primary) }}>Tech</span></b>
+            <span className="flex h-3.5 flex-1 items-center justify-end overflow-hidden" style={{ border: `1px solid ${hsl(t.border)}`, borderRadius: t.pill }}>
+              <span className="flex h-full w-4 items-center justify-center text-[6px]" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>⌕</span>
+            </span>
+            <span className="size-3 rounded" style={{ background: hsl(t.primary) }} />
           </span>
-          <span className="grid flex-1 grid-cols-[52px_1fr] gap-1.5 p-1.5">
-            <span className="flex flex-col gap-1 rounded-sm p-1" style={{ background: hsl(t.card) }}>
-              {["Phones", "Fashion", "Home", "Beauty", "Toys"].map((c) => (
-                <span key={c} className="flex items-center justify-between" style={{ color: hsl(t.muted) }}>{c}<span>›</span></span>
-              ))}
+          <span className="flex gap-1.5 px-2 pb-1 text-[5px]" style={{ background: hsl(t.card), borderBottom: `1px solid ${hsl(t.border)}`, color: hsl(t.muted) }}>
+            <span>Laptops</span><span>Audio</span><span>Gaming</span><span style={{ color: "hsl(0 80% 55%)" }}>Deals</span>
+          </span>
+          <span className="mx-2 mt-1.5 grid grid-cols-[1fr_44px] items-center gap-1.5 rounded-md p-1.5" style={{ background: hsl(t.tiles[0]) }}>
+            <span className="flex flex-col gap-0.5">
+              <b style={{ ...display, color: hsl(t.fg) }} className="text-[10px] leading-tight">Play without limits</b>
+              <span className="self-start rounded px-1 text-[5px]" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>Shop now →</span>
             </span>
-            <span className="flex flex-col gap-1.5">
-              <span className="flex h-12 flex-col justify-center rounded-sm px-2" style={{ background: hsl(t.ink), color: hsl(t.inkFg) }}>
-                <span style={{ ...display, fontWeight: 800 }} className="text-[10px]">Mega Sale</span>
-                <span className="opacity-70">Up to 60% off</span>
+            <span className="h-8 rounded" style={{ background: `linear-gradient(135deg, hsl(${t.ink}), hsl(${t.primary}))` }} />
+          </span>
+          <span className="mt-1.5 grid grid-cols-4 gap-1 px-2">
+            {[0, 1, 2, 3].map((i) => (
+              <span key={i} className="relative flex flex-col gap-[2px] rounded p-[3px]" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}` }}>
+                <span className="block h-5 rounded-sm" style={{ background: hsl(t.tiles[(i + 1) % 4]) }} />
+                {i % 2 === 0 && <span className="absolute left-1 top-1 rounded-sm px-0.5 text-[4px] text-white" style={{ background: "hsl(0 80% 55%)" }}>-10%</span>}
+                <span className="text-[5px]" style={{ color: "hsl(38 92% 50%)" }}>★★★★★</span>
+                <b style={{ color: hsl(t.fg) }}>${[899, 129, 99, 494][i]}</b>
               </span>
-              <span className="flex items-center gap-1">
-                <span style={{ ...display, fontWeight: 800, color: hl }} className="text-[8px]">Flash Sale</span>
-                {["02", "14", "37"].map((n) => <span key={n} className="rounded-sm px-0.5" style={{ background: hsl(t.ink), color: hsl(t.inkFg) }}>{n}</span>)}
-              </span>
-              <span className="grid grid-cols-4 gap-1">
-                {t.tiles.map((tile, i) => (
-                  <span key={i} className="flex flex-col gap-0.5 rounded-sm p-0.5" style={{ background: hsl(t.card) }}>
-                    <span className="block aspect-square rounded-sm" style={{ background: hsl(tile) }} />
-                    <span style={{ color: hl, fontWeight: 700 }}>৳{[450, 1290, 99, 760][i]}</span>
-                  </span>
-                ))}
-              </span>
-            </span>
+            ))}
           </span>
         </span>
       )
 
     case "luxe":
       return (
-        <span className="flex h-full flex-col">
-          <span className="relative flex flex-1 flex-col justify-end p-3" style={{ background: `linear-gradient(160deg, hsl(${t.tiles[0]}), hsl(${t.tiles[1]}) 60%, hsl(${t.fg} / 0.55))` }}>
-            <span className="absolute inset-x-0 top-2 flex items-center justify-between px-3 text-[7px] uppercase tracking-[0.2em] text-white">
-              <span>☰</span>
-              <span style={display} className="text-[10px] tracking-[0.3em]">AURA</span>
-              <span>Bag (0)</span>
-            </span>
-            <span style={display} className="text-[22px] leading-none text-white">
-              New <em>Season</em>
-            </span>
-            <span className="mt-1 text-[7px] uppercase tracking-[0.2em] text-white underline underline-offset-2">Discover →</span>
+        <span className="flex h-full flex-col text-[7px]" style={{ background: hsl(t.bg) }}>
+          <span className="flex items-center justify-between px-2 py-1" style={{ background: hsl(t.card) }}>
+            <b style={display} className="text-[9px]">⌂ Aura Homes</b>
+            <span className="px-1.5 py-[1px] text-[5px] font-semibold" style={{ background: hsl(t.primary), color: hsl(t.primaryFg), borderRadius: t.pill }}>Browse</span>
           </span>
-          <span className="grid grid-cols-3 gap-1 p-1.5">
-            {t.tiles.slice(1).map((tile, i) => (
-              <span key={i} className="flex flex-col gap-0.5">
-                <span className="block h-7" style={{ background: hsl(tile) }} />
-                <span className="text-[6px] uppercase tracking-[0.15em]">Silk dress</span>
+          <span className="relative flex h-[58px] flex-col justify-center px-2.5" style={{ background: `linear-gradient(120deg, hsl(${t.ink}), hsl(${t.ink} / 0.75)), linear-gradient(hsl(${t.tiles[0]}), hsl(${t.tiles[0]}))`, color: hsl(t.inkFg) }}>
+            <span className="self-start rounded-full px-1 text-[4px] font-semibold" style={{ background: hsl(t.highlight), color: hsl(t.highlightFg) }}>FIND YOUR HOME</span>
+            <span style={display} className="mt-0.5 text-[11px] leading-tight">Find a place you<br />will love</span>
+            <span className="mt-1 flex h-2.5 w-3/4 items-center justify-end rounded-sm pr-0.5" style={{ background: hsl(t.card) }}>
+              <span className="h-1.5 w-3 rounded-sm" style={{ background: hsl(t.primary) }} />
+            </span>
+          </span>
+          <span className="-mt-1.5 grid grid-cols-4 gap-1 px-2">
+            {["36+", "8", "120+", "14+"].map((v) => (
+              <span key={v} className="rounded-sm px-1 py-0.5 text-[6px] font-semibold" style={{ ...display, background: hsl(t.card), border: `1px solid ${hsl(t.border)}` }}>{v}</span>
+            ))}
+          </span>
+          <span className="mt-1.5 grid grid-cols-3 gap-1 px-2">
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="flex flex-col overflow-hidden rounded-sm" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}` }}>
+                <span className="relative block h-6" style={{ background: hsl(t.tiles[(i + 1) % 4]) }}>
+                  <b className="absolute bottom-0.5 left-0.5 text-[6px]" style={{ color: hsl(t.fg) }}>{["$1.18M", "$18.9k", "$4.8k"][i]}</b>
+                </span>
+                <span className="px-0.5 text-[4px] font-semibold" style={{ color: hsl(t.primary) }}>HOUSE</span>
+                <span className="px-0.5 pb-0.5 text-[4px]" style={{ color: hsl(t.muted) }}>🛏 4 · 🛁 3 · 310 m²</span>
               </span>
             ))}
           </span>
@@ -202,51 +211,71 @@ function Preview({ t, accent }: { t: StoreThemePreview; accent: string | null })
 
     case "single":
       return (
-        <span className="flex h-full flex-col">
-          <span className="flex items-center justify-between px-2.5 py-1.5 text-[7px]" style={{ borderBottom: `1px solid ${hsl(t.border)}` }}>
-            <span style={{ ...display, fontWeight: 800 }} className="text-[9px]">Aura</span>
-            <span className="px-2 py-0.5 font-semibold" style={{ background: hl, color: hlFg, borderRadius: t.pill }}>Order now</span>
-          </span>
-          <span className="grid flex-1 grid-cols-[1.1fr_1fr] items-center gap-2 px-2.5">
-            <span className="flex flex-col gap-1">
-              <span className="self-start px-1.5 text-[6px] font-semibold" style={{ background: hsl(t.tiles[1]), borderRadius: t.pill }}>Best seller</span>
-              <span style={{ ...display, fontWeight: 800 }} className="text-[12px] leading-tight">Glow Serum</span>
-              <span className="flex items-baseline gap-1 text-[8px]">
-                <b style={display}>৳890</b>
-                <s style={{ color: hsl(t.muted) }}>৳1200</s>
-              </span>
-              <span className="text-[7px]" style={{ color: hl }}>★★★★★ 214</span>
-              <span className="mt-0.5 py-1 text-center text-[7px] font-semibold" style={{ background: hl, color: hlFg, borderRadius: t.pill }}>Order now — COD</span>
+        <span className="flex h-full flex-col text-[7px]" style={{ background: hsl(t.bg) }}>
+          <span className="block h-1.5" style={{ background: hsl(t.primary) }} />
+          <span className="flex items-center gap-1.5 px-2 py-1">
+            <b style={display} className="text-[10px]">
+              {"KIDDO".split("").map((c, i) => <span key={i} style={{ color: [hsl(t.primary), hl, "hsl(40 95% 50%)", "hsl(158 55% 40%)", hsl(t.primary)][i] }}>{c}</span>)}
+            </b>
+            <span className="flex h-3.5 flex-1 items-center justify-end rounded-full pr-0.5" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}` }}>
+              <span className="size-2.5 rounded-full" style={{ background: hsl(t.primary) }} />
             </span>
-            <span className="flex aspect-square items-center justify-center text-2xl" style={{ background: hsl(t.tiles[0]), borderRadius: t.radius }}>🧴</span>
           </span>
-          <span className="flex items-center justify-between px-2.5 py-1 text-[7px]" style={{ background: hsl(t.ink), color: hsl(t.inkFg) }}>
-            <span>Offer ends in 05:42:10</span>
-            <span>Only 7 left</span>
+          <span className="mx-2 grid grid-cols-[1fr_40px] items-center gap-1.5 rounded-lg p-1.5" style={{ background: "hsl(343 80% 92%)", borderTop: "2px dotted hsl(343 80% 85%)", borderBottom: "2px dotted hsl(343 80% 85%)" }}>
+            <span className="flex flex-col gap-0.5">
+              <b style={{ ...display, color: hsl(t.fg) }} className="text-[10px] leading-tight">Play that <span style={{ color: hl }}>grows</span></b>
+              <span className="self-start rounded-full px-1.5 text-[5px] font-semibold" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>Shop toys →</span>
+            </span>
+            <span className="relative h-8 rounded-md" style={{ background: hsl(t.tiles[1]) }}>
+              <span className="absolute -right-1 -top-1 size-3 rounded-full" style={{ background: hsl(t.primary) }} />
+            </span>
+          </span>
+          <span className="mt-1.5 flex justify-between px-2">
+            {[0, 1, 2, 3, 0, 1].map((k, i) => <span key={i} className="size-4 rounded-full" style={{ background: hsl(t.tiles[k]) }} />)}
+          </span>
+          <span className="mt-1.5 grid grid-cols-4 gap-1 px-2">
+            {[0, 1, 2, 3].map((i) => (
+              <span key={i} className="flex flex-col gap-[2px] p-[3px]" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}`, borderRadius: `calc(${t.radius} * 0.5)` }}>
+                <span className="block h-5 rounded" style={{ background: hsl(t.tiles[(i + 2) % 4]) }} />
+                <b style={{ color: hsl(t.fg) }}>${[29, 24, 17, 44][i]}</b>
+              </span>
+            ))}
           </span>
         </span>
       )
 
     case "fresh":
       return (
-        <span className="flex h-full flex-col text-[7px]">
-          <span className="px-2 py-0.5 text-[6px]" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>Delivery in 24 hours</span>
-          <span className="flex items-center gap-1.5 px-2 py-1.5">
-            <span style={{ ...display, fontWeight: 800, color: hsl(t.primary) }} className="text-[10px]">Aura</span>
-            <span className="h-3.5 flex-1" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}`, borderRadius: t.pill }} />
-            <span className="px-1.5 py-0.5 font-bold" style={{ background: hl, color: hlFg, borderRadius: t.pill }}>🛒 ৳540</span>
+        <span className="flex h-full flex-col text-[7px]" style={{ background: hsl(t.bg) }}>
+          <span className="block h-1.5" style={{ background: hsl(t.primary) }} />
+          <span className="flex items-center gap-1.5 px-2 py-1">
+            <b style={display} className="text-[9px]"><span style={{ color: hsl(t.fg) }}>Aura</span> <span style={{ color: hsl(t.primary) }}>Mart</span></b>
+            <span className="flex h-3.5 flex-1 items-center justify-end overflow-hidden" style={{ border: `1px solid ${hsl(t.border)}`, borderRadius: t.pill }}>
+              <span className="h-full w-4" style={{ background: hsl(t.primary) }} />
+            </span>
           </span>
-          <span className="flex justify-between px-2">
-            {["🥦", "🍎", "🥛", "🍞", "🧴"].map((e, i) => (
-              <span key={e} className="flex size-7 items-center justify-center rounded-full text-[11px]" style={{ background: hsl(t.tiles[i % 4]) }}>{e}</span>
-            ))}
+          <span className="flex gap-1.5 px-2 pb-1 text-[5px]" style={{ borderBottom: `1px solid ${hsl(t.border)}` }}>
+            <span className="rounded px-1" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>All categories</span>
+            <span>Bakery</span><span>Dairy</span><span style={{ color: hl }}>Weekly deals</span>
           </span>
-          <span className="mt-1.5 grid grid-cols-3 gap-1 px-2">
-            {["🥕", "🍌", "🥚"].map((e, i) => (
-              <span key={e} className="relative flex flex-col gap-0.5 p-1" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}`, borderRadius: `calc(${t.radius} * 0.6)` }}>
-                <span className="flex h-7 items-center justify-center text-[12px]" style={{ background: hsl(t.tiles[(i + 1) % 4]), borderRadius: `calc(${t.radius} * 0.4)` }}>{e}</span>
-                <b style={{ color: hsl(t.primary) }}>৳{[60, 45, 140][i]}</b>
-                <span className="absolute bottom-1 right-1 flex size-3.5 items-center justify-center rounded-full font-bold" style={{ background: hsl(t.primary), color: hsl(t.primaryFg) }}>+</span>
+          <span className="mt-1.5 grid grid-cols-[1fr_36px] gap-1 px-2">
+            <span className="flex h-12 flex-col justify-center rounded-md px-1.5" style={{ background: `linear-gradient(90deg, hsl(${t.ink}), hsl(${t.ink} / 0.6))`, color: hsl(t.inkFg) }}>
+              <b style={display} className="text-[9px] leading-tight">Baked this morning</b>
+              <span className="mt-0.5 self-start rounded px-1 text-[5px]" style={{ background: hl, color: hlFg }}>Shop →</span>
+            </span>
+            <span className="flex flex-col gap-1">
+              <span className="flex-1 rounded" style={{ background: hsl(t.tiles[0]) }} />
+              <span className="flex-1 rounded" style={{ background: hsl(t.tiles[1]) }} />
+            </span>
+          </span>
+          <span className="mt-1.5 grid grid-cols-4 gap-1 px-2">
+            {[0, 1, 2, 3].map((i) => (
+              <span key={i} className="flex flex-col gap-[2px] rounded p-[3px]" style={{ background: hsl(t.card), border: `1px solid ${hsl(t.border)}` }}>
+                <span className="block h-5 rounded-sm" style={{ background: hsl(t.tiles[(i + 2) % 4]) }} />
+                <span className="flex items-center justify-between">
+                  <b style={{ color: i % 2 ? hl : hsl(t.fg) }}>${[9.5, 5.5, 1.9, 4.9][i]}</b>
+                  <span className="rounded-sm px-0.5 text-[5px] font-semibold" style={{ border: `1px solid ${hsl(t.primary)}`, color: hsl(t.primary) }}>+ Add</span>
+                </span>
               </span>
             ))}
           </span>

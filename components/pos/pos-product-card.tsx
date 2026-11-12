@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Package } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { Product } from "@/contexts/product-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { cn } from "@/lib/utils"
@@ -50,21 +51,29 @@ export function cardPrice(product: Product): { price: number; from: boolean } {
     return { price: min, from: Math.max(...prices) - min > 0.005 }
 }
 
-export function stockPill(available: number, lowAt = 5): { text: string; short: string; variant: "destructive" | "secondary" | "outline"; tone: string } {
-    if (available <= 0) return { text: "Out of stock", short: "Out", variant: "destructive", tone: "text-destructive" }
-    if (available <= lowAt) return { text: `Only ${available} left`, short: `${available} left`, variant: "secondary", tone: "text-foreground" }
-    return { text: `${available} in stock`, short: `${available} left`, variant: "outline", tone: "text-muted-foreground" }
+/** Stock badge; `text` / `short` are translation keys, called with `{ count }`. */
+export function stockPill(available: number, lowAt = 5): {
+    text: "pos:stock.out" | "pos:stock.low" | "pos:stock.inStock"
+    short: "pos:stock.outShort" | "pos:stock.left"
+    count: number
+    variant: "destructive" | "secondary" | "outline"
+    tone: string
+} {
+    if (available <= 0) return { text: "pos:stock.out", short: "pos:stock.outShort", count: available, variant: "destructive", tone: "text-destructive" }
+    if (available <= lowAt) return { text: "pos:stock.low", short: "pos:stock.left", count: available, variant: "secondary", tone: "text-foreground" }
+    return { text: "pos:stock.inStock", short: "pos:stock.left", count: available, variant: "outline", tone: "text-muted-foreground" }
 }
 
 export function PosProductCard({ product, available, inCartQty, tint, onAddToCart, compact, lowAt }: PosProductCardProps) {
+    const { t } = useTranslation(["pos"])
     const { formatCurrency } = useCompanySettings()
     const [imgFailed, setImgFailed] = useState(false)
     const out = available <= 0
     const pill = stockPill(available, lowAt)
     const cp = cardPrice(product)
-    const price = `${cp.from ? "From " : ""}${formatCurrency(cp.price)}`
+    const price = cp.from ? t("pos:products.fromPrice", { price: formatCurrency(cp.price) }) : formatCurrency(cp.price)
     const original = product.salePrice || product.price || 0
-    const offerNote = !(product.variants?.length) && cp.price < original - 0.005 ? `Offer · was ${formatCurrency(original)}` : ""
+    const offerNote = !(product.variants?.length) && cp.price < original - 0.005 ? t("pos:card.offerWas", { price: formatCurrency(original) }) : ""
     const hasImage = !!product.image && product.image !== "/placeholder.svg" && !imgFailed
 
     return (
@@ -73,7 +82,7 @@ export function PosProductCard({ product, available, inCartQty, tint, onAddToCar
             variant={inCartQty > 0 ? "secondary" : "outline"}
             onClick={() => !out && onAddToCart(product)}
             disabled={out}
-            aria-label={`Add ${product.name}, ${price}`}
+            aria-label={t("pos:card.addLabel", { name: product.name, price })}
             className={cn(
                 "relative h-auto w-full min-w-0 flex-col items-stretch overflow-hidden whitespace-normal text-left",
                 compact ? "min-h-[88px] justify-between gap-1.5" : "justify-start gap-2.5",
@@ -84,7 +93,7 @@ export function PosProductCard({ product, available, inCartQty, tint, onAddToCar
                     <span className="pr-6 text-sm font-semibold leading-snug">{product.name}</span>
                     <span className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                         <span className="whitespace-nowrap font-bold tabular-nums">{price}</span>
-                        <span className={cn("whitespace-nowrap text-xs font-semibold", pill.tone)}>{pill.short}</span>
+                        <span className={cn("whitespace-nowrap text-xs font-semibold", pill.tone)}>{t(pill.short, { count: pill.count })}</span>
                     </span>
                 </>
             ) : (
@@ -110,11 +119,11 @@ export function PosProductCard({ product, available, inCartQty, tint, onAddToCar
                     </span>
                     <span className="mt-auto flex min-w-0 flex-col items-start gap-1.5">
                         <span className="flex min-w-0 max-w-full items-baseline gap-1 whitespace-nowrap">
-                            {cp.from && <span className="text-xs font-medium text-muted-foreground">From</span>}
+                            {cp.from && <span className="text-xs font-medium text-muted-foreground">{t("pos:products.from")}</span>}
                             <span className="truncate text-lg font-bold tabular-nums">{formatCurrency(cp.price)}</span>
                         </span>
                         {offerNote && <span className="text-xs font-semibold text-muted-foreground">{offerNote}</span>}
-                        <Badge variant={pill.variant} className="max-w-full">{pill.text}</Badge>
+                        <Badge variant={pill.variant} className="max-w-full"><span className="truncate">{t(pill.text, { count: pill.count })}</span></Badge>
                     </span>
                 </>
             )}

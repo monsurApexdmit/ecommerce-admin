@@ -193,6 +193,30 @@ export interface PaymentMethodConfig {
   fields?: { account?: string; accountName?: string; bankName?: string };
 }
 
+/**
+ * Content blocks for the storefront templates (Online store > Template content). Each block is null until
+ * saved once; the template then shows its own default. Which template uses which: lib/storeThemes.ts TEMPLATE_BLOCKS.
+ */
+export interface TemplatePromoTile {
+  id: string;
+  tag: string;
+  title: string;
+  text: string;
+  cta: string;
+  link: string;
+  imagePath: string | null;
+}
+
+export interface TemplateContent {
+  announcement?: { enabled: boolean; text: string; code: string; link: string } | null;
+  headerNote?: { enabled: boolean; label: string; text: string } | null;
+  promoTiles?: { enabled: boolean; items: TemplatePromoTile[] } | null;
+  stats?: { enabled: boolean; items: { value: string; label: string }[] } | null;
+  testimonials?: { enabled: boolean; title: string; items: { name: string; text: string; rating: number; note: string }[] } | null;
+  newsletter?: { enabled: boolean; title: string; text: string } | null;
+  cta?: { enabled: boolean; tag: string; title: string; text: string; cta: string; link: string; cta2: string; link2: string; imagePath: string | null } | null;
+}
+
 export interface BusinessSettings {
   id?: number;
   businessName: string;
@@ -207,6 +231,7 @@ export interface BusinessSettings {
   onlineStore?: OnlineStoreSettings;
   promoBanner?: PromoBannerSettings;
   homepageSections?: HomepageSections;
+  templateContent?: TemplateContent;
   socialLinks?: {
     facebook?: string;
     instagram?: string;
@@ -223,6 +248,8 @@ export interface OnlineStoreSettings {
   themePreset?: string;
   /** "theme" = theme colours; "brand" = Company settings brand colours (default) */
   colorSource?: "theme" | "brand";
+  /** Default storefront language; shoppers can switch */
+  language?: "en" | "bn";
   published?: boolean;
   apiUrl?: string;
   companyId?: string;

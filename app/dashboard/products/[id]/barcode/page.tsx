@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { Trans, useTranslation } from 'react-i18next'
 import { productApi } from '@/lib/productApi'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
@@ -40,6 +41,7 @@ export default function ProductBarcodePage() {
   const router = useRouter()
   const { toast } = useToast()
   const { formatCurrency } = useCompanySettings()
+  const { t } = useTranslation(['products', 'common'])
   const barcodeRef = useRef<SVGSVGElement>(null)
 
   const productId = parseInt(params.id as string)
@@ -57,8 +59,8 @@ export default function ProductBarcodePage() {
       } catch (error) {
         console.error('Error loading product:', error)
         toast({
-          title: 'Error',
-          description: 'Failed to load product details',
+          title: t('products:barcode.error'),
+          description: t('products:barcode.loadFailed'),
           variant: 'destructive',
         })
       } finally {
@@ -67,7 +69,7 @@ export default function ProductBarcodePage() {
     }
 
     loadProduct()
-  }, [productId, toast])
+  }, [productId, toast]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate barcode when product loads
   useEffect(() => {
@@ -94,8 +96,8 @@ export default function ProductBarcodePage() {
     const barcodeCodeToUse = product?.barcode_code || product?.barcode
     if (!barcodeRef.current || !barcodeCodeToUse) {
       toast({
-        title: 'Error',
-        description: 'Barcode not available',
+        title: t('products:barcode.error'),
+        description: t('products:barcode.notAvailable'),
         variant: 'destructive',
       })
       return
@@ -117,14 +119,14 @@ export default function ProductBarcodePage() {
       document.body.removeChild(link)
 
       toast({
-        title: 'Success',
-        description: 'Barcode downloaded successfully',
+        title: t('products:barcode.success'),
+        description: t('products:barcode.downloaded'),
       })
     } catch (error) {
       console.error('Download error:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to download barcode',
+        title: t('products:barcode.error'),
+        description: t('products:barcode.downloadFailed'),
         variant: 'destructive',
       })
     } finally {
@@ -139,7 +141,7 @@ export default function ProductBarcodePage() {
     if (!printWindow) return
 
     const svgData = new XMLSerializer().serializeToString(barcodeRef.current)
-    const barcodeCode = product?.barcode_code || product?.barcode || 'N/A'
+    const barcodeCode = product?.barcode_code || product?.barcode || t('products:barcode.na')
     // Try multiple field names for price: sale_price, salePrice, price
     const priceValue = product?.sale_price ?? product?.salePrice ?? product?.price ?? 0
     const price = typeof priceValue === 'number' ? priceValue.toFixed(2) : '0.00'
@@ -148,7 +150,7 @@ export default function ProductBarcodePage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Barcode - ${product?.name}</title>
+          <title>${t('products:barcode.windowTitle', { name: product?.name })}</title>
           <style>
             * {
               margin: 0;
@@ -249,8 +251,8 @@ export default function ProductBarcodePage() {
         <body>
           <div class="barcode-label">
             <!-- Product Info -->
-            <div class="product-name">${product?.name || 'Product'}</div>
-            <div class="product-sku">SKU: ${product?.sku || 'N/A'}</div>
+            <div class="product-name">${product?.name || t('products:barcode.productFallback')}</div>
+            <div class="product-sku">${t('common:fields.sku')}: ${product?.sku || t('products:barcode.na')}</div>
 
             <!-- Barcode Image -->
             <div class="barcode-section">
@@ -265,7 +267,7 @@ export default function ProductBarcodePage() {
 
             <!-- Price - PROMINENT -->
             <div class="price-section">
-              <div class="price-label">PRICE</div>
+              <div class="price-label">${t('products:barcode.priceLabel')}</div>
               <div class="price-value">${formatCurrency(Number(price))}</div>
             </div>
           </div>
@@ -288,8 +290,8 @@ export default function ProductBarcodePage() {
 
     navigator.clipboard.writeText(barcodeCodeToCopy).then(() => {
       toast({
-        title: 'Success',
-        description: 'Barcode copied to clipboard',
+        title: t('products:barcode.success'),
+        description: t('products:shared.barcodeCopied'),
       })
     })
   }
@@ -299,7 +301,7 @@ export default function ProductBarcodePage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4 text-center">
           <Spinner className="size-8" />
-          <p className="text-muted-foreground">Loading barcode...</p>
+          <p className="text-muted-foreground">{t("products:barcode.loading")}</p>
         </div>
       </div>
     )
@@ -308,7 +310,7 @@ export default function ProductBarcodePage() {
   if (!product) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <EmptyState title="Product not found" action={<Button onClick={() => router.back()}>Go Back</Button>} />
+        <EmptyState title={t("products:barcode.notFound")} action={<Button onClick={() => router.back()}>{t("common:actions.back")}</Button>} />
       </div>
     )
   }
@@ -327,9 +329,9 @@ export default function ProductBarcodePage() {
             className="mb-4"
           >
             <ArrowLeft className="size-4" />
-            Back to Products
+            {t("products:shared.backToProducts")}
           </Button>
-          <PageHeader title="Product Barcode" description={product.name} />
+          <PageHeader title={t("products:barcode.title")} description={product.name} />
         </div>
 
         {/* Main Card */}
@@ -337,28 +339,28 @@ export default function ProductBarcodePage() {
           {/* Product Info Section */}
           <CardContent className="p-8">
             <InfoList className="grid-cols-2 gap-4 md:grid-cols-4">
-              <InfoRow layout="stacked" label="SKU" value={product.sku || 'N/A'} />
-              <InfoRow layout="stacked" label="Format" value="Code 128" />
-              <InfoRow layout="stacked" label="Stock" value={`${product.stock} units`} />
-              <InfoRow layout="stacked" label="Price" value={formatCurrency(product.sale_price ?? product.salePrice ?? product.price ?? 0)} />
+              <InfoRow layout="stacked" label={t('common:fields.sku')} value={product.sku || t('products:barcode.na')} />
+              <InfoRow layout="stacked" label={t("products:barcode.format")} value="Code 128" />
+              <InfoRow layout="stacked" label={t("common:fields.stock")} value={t("products:barcode.units", { count: product.stock ?? 0 })} />
+              <InfoRow layout="stacked" label={t("common:money.price")} value={formatCurrency(product.sale_price ?? product.salePrice ?? product.price ?? 0)} />
             </InfoList>
           </CardContent>
           <Separator />
 
           {/* Barcode Number Section */}
           <CardContent className="space-y-4 p-8">
-            <SectionTitle>Barcode Code</SectionTitle>
+            <SectionTitle>{t("products:barcode.code")}</SectionTitle>
             <div className="flex items-center gap-2">
               <Card className="flex-1 bg-muted p-4">
                 <p className="text-2xl font-mono font-bold tracking-wider text-center break-all">
                   {barcodeCode}
                 </p>
               </Card>
-              <WithTooltip content="Copy barcode">
+              <WithTooltip content={t("products:shared.copyBarcode")}>
                 <Button
                   variant="outline"
                   size="icon-lg"
-                  aria-label="Copy barcode"
+                  aria-label={t("products:shared.copyBarcode")}
                   onClick={handleCopyBarcode}
                 >
                   <Copy className="size-4" />
@@ -370,13 +372,13 @@ export default function ProductBarcodePage() {
 
           {/* Barcode Display Section */}
           <CardContent className="space-y-4 p-8">
-            <SectionTitle>Barcode Display</SectionTitle>
+            <SectionTitle>{t("products:barcode.display")}</SectionTitle>
             {product.barcode_code || product.barcode ? (
               <Card className="min-h-64 items-center justify-center border-dashed bg-white p-8">
                 <svg ref={barcodeRef} className="max-w-full h-auto" />
               </Card>
             ) : (
-              <EmptyState bordered className="min-h-64" title="No barcode available" description="Barcode will be generated when product is created" />
+              <EmptyState bordered className="min-h-64" title={t("products:barcode.none")} description={t("products:barcode.noneDesc")} />
             )}
           </CardContent>
           <Separator />
@@ -389,7 +391,7 @@ export default function ProductBarcodePage() {
               disabled={!product.barcode_code && !product.barcode}
             >
               <Printer className="size-4" />
-              Print Barcode
+              {t("products:barcode.print")}
             </Button>
             <Button
               onClick={handleDownload}
@@ -400,12 +402,12 @@ export default function ProductBarcodePage() {
               {downloading ? (
                 <>
                   <Spinner />
-                  Downloading...
+                  {t("products:barcode.downloading")}
                 </>
               ) : (
                 <>
                   <Download className="size-4" />
-                  Download SVG
+                  {t("products:barcode.downloadSvg")}
                 </>
               )}
             </Button>
@@ -415,14 +417,12 @@ export default function ProductBarcodePage() {
         {/* Info Banner */}
         <Alert>
           <Info />
-          <AlertTitle>Barcode Information</AlertTitle>
+          <AlertTitle>{t("products:barcode.infoTitle")}</AlertTitle>
           <AlertDescription>
             <ul className="space-y-2">
-              <li>✓ <strong>Code 128:</strong> Industry-standard barcode format used worldwide</li>
-              <li>✓ <strong>Scannable:</strong> Works with any standard barcode scanner</li>
-              <li>✓ <strong>Print:</strong> Generate professional barcode labels ready for printing</li>
-              <li>✓ <strong>Download:</strong> Save as SVG for digital use, email, or reprinting</li>
-              <li>✓ <strong>Copy:</strong> Use the copy button to share barcode code with systems</li>
+              {(["products:barcode.info1", "products:barcode.info2", "products:barcode.info3", "products:barcode.info4", "products:barcode.info5"] as const).map((k) => (
+                <li key={k}><Trans t={t} i18nKey={k} components={{ b: <strong /> }} /></li>
+              ))}
             </ul>
           </AlertDescription>
         </Alert>

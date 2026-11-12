@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslation } from "react-i18next"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -8,13 +9,14 @@ import { CardTitle, DashCard, SectionError, SectionSkeleton } from "./section"
 import { useDashboardSection } from "./use-dashboard-section"
 
 const SEGMENTS = [
-  { key: "healthy", label: "Healthy", color: "var(--dash-success)" },
-  { key: "low", label: "Low stock", color: "var(--dash-warn)" },
-  { key: "out", label: "Out of stock", color: "var(--dash-danger)" },
-  { key: "overstock", label: "Overstock", color: "var(--dash-neutral)" },
+  { key: "healthy", label: "dashboard:stock.healthy", color: "var(--dash-success)" },
+  { key: "low", label: "dashboard:stock.low", color: "var(--dash-warn)" },
+  { key: "out", label: "dashboard:stock.out", color: "var(--dash-danger)" },
+  { key: "overstock", label: "dashboard:stock.overstock", color: "var(--dash-neutral)" },
 ] as const
 
 export function StockHealth() {
+  const { t } = useTranslation(["dashboard", "common"])
   const { formatCurrency: fullMoney } = useCompanySettings()
   const formatCurrency = (n: number) => wholeMoney(fullMoney, n)
   const { data, loading, error, retry } = useDashboardSection("stock-health")
@@ -26,16 +28,16 @@ export function StockHealth() {
 
     const total = Object.values(data.segments).reduce((a, b) => a + b, 0) || 1
     const metrics = [
-      { label: "Inventory turnover", value: data.turnover !== null ? `${data.turnover}×` : "—", hint: data.turnover !== null ? "per year" : "needs sales with cost data" },
-      { label: "Days of inventory", value: data.daysOfInventory !== null ? `${data.daysOfInventory} days` : "—", hint: "target under 90" },
-      { label: "Sell-through", value: data.sellThroughPct !== null ? `${data.sellThroughPct}%` : "—", hint: "last 30 days" },
-      { label: "Dead stock", value: formatCurrency(data.deadStock.value), hint: `${data.deadStock.skus} SKUs, no sale in 90 days` },
+      { label: t("dashboard:stock.turnover"), value: data.turnover !== null ? `${data.turnover}×` : "—", hint: data.turnover !== null ? t("dashboard:stock.perYear") : t("dashboard:stock.needsCost") },
+      { label: t("dashboard:stock.daysOfInventory"), value: data.daysOfInventory !== null ? t("dashboard:counts.days", { count: data.daysOfInventory }) : "—", hint: t("dashboard:stock.target") },
+      { label: t("dashboard:stock.sellThrough"), value: data.sellThroughPct !== null ? `${data.sellThroughPct}%` : "—", hint: t("dashboard:stock.last30") },
+      { label: t("dashboard:stock.deadStock"), value: formatCurrency(data.deadStock.value), hint: t("dashboard:stock.deadStockHint", { skus: data.deadStock.skus }) },
     ]
 
     return (
       <>
         <div className="flex h-3.5 gap-0.5 overflow-hidden rounded-full" role="img"
-          aria-label={SEGMENTS.map((s) => `${s.label} ${data.segments[s.key]}`).join(", ")}>
+          aria-label={SEGMENTS.map((s) => `${t(s.label)} ${data.segments[s.key]}`).join(", ")}>
           {SEGMENTS.map((s) => (
             <div key={s.key} style={{ width: `${(data.segments[s.key] / total) * 100}%`, background: s.color }} />
           ))}
@@ -45,7 +47,7 @@ export function StockHealth() {
             <Card key={s.key} className="gap-1 p-3 shadow-none">
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="size-2 rounded-sm" style={{ background: s.color }} aria-hidden />
-                {s.label}
+                {t(s.label)}
               </span>
               <span className="text-xl font-semibold tabular-nums">{data.segments[s.key]}</span>
             </Card>
@@ -61,7 +63,7 @@ export function StockHealth() {
             </div>
           ))}
         </dl>
-        <p className="text-[11px] text-muted-foreground">Overstock: {data.overstockRule.toLowerCase()}.</p>
+        <p className="text-[11px] text-muted-foreground">{t("dashboard:stock.overstockRule", { rule: data.overstockRule.toLowerCase() })}</p>
       </>
     )
   }
@@ -69,8 +71,8 @@ export function StockHealth() {
   return (
     <DashCard className="flex flex-[1_1_320px] flex-col gap-[18px]">
       <CardTitle
-        title="Stock health"
-        subtitle={data ? `${data.skus} SKUs · ${data.units.toLocaleString()} units on hand` : undefined}
+        title={t("dashboard:stock.title")}
+        subtitle={data ? t("dashboard:stock.subtitle", { skus: data.skus, units: data.units.toLocaleString() }) : undefined}
       />
       {body()}
     </DashCard>

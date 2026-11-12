@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Trans, useTranslation } from "react-i18next"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
@@ -17,6 +18,7 @@ interface DiscountModalProps {
 }
 
 export function DiscountModal({ open, onOpenChange, onApplyDiscount, currentSubtotal }: DiscountModalProps) {
+    const { t } = useTranslation(["pos", "common"])
     const [value, setValue] = useState("")
     const [type, setType] = useState<'fixed' | 'percentage'>('fixed')
     const { formatCurrency } = useCompanySettings()
@@ -48,21 +50,21 @@ export function DiscountModal({ open, onOpenChange, onApplyDiscount, currentSubt
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[400px]">
                 <DialogHeader>
-                    <DialogTitle>Add Discount</DialogTitle>
+                    <DialogTitle>{t("pos:discountModal.title")}</DialogTitle>
                 </DialogHeader>
 
                 <div className="py-4 space-y-4">
                     <Tabs defaultValue="fixed" value={type} onValueChange={(v) => setType(v as any)} className="w-full">
                         <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="fixed">Fixed Amount</TabsTrigger>
-                            <TabsTrigger value="percentage">Percentage</TabsTrigger>
+                            <TabsTrigger value="fixed">{t("pos:discountModal.fixed")}</TabsTrigger>
+                            <TabsTrigger value="percentage">{t("pos:discountModal.percentage")}</TabsTrigger>
                         </TabsList>
                     </Tabs>
 
                     <FormField
-                        label="Discount Value"
+                        label={t("pos:discountModal.value")}
                         htmlFor="pos-discount-value"
-                        description={value ? <span className="block text-right">Discount: <span className="font-medium text-foreground">-{formatCurrency(calculatedDiscount())}</span></span> : undefined}
+                        description={value ? <span className="block text-right"><Trans t={t} i18nKey="pos:discountModal.preview" values={{ amount: formatCurrency(calculatedDiscount()) }} components={{ b: <span className="font-medium text-foreground" /> }} /></span> : undefined}
                     >
                         <InputGroup>
                             <InputGroupAddon>
@@ -81,8 +83,8 @@ export function DiscountModal({ open, onOpenChange, onApplyDiscount, currentSubt
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleApply}>Apply Discount</Button>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common:actions.cancel")}</Button>
+                    <Button onClick={handleApply}>{t("pos:discountModal.apply")}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

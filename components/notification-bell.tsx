@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { Bell, Trash2, ExternalLink } from "lucide-react"
 import { useNotifications } from "@/contexts/notification-context"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,17 @@ import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/common/EmptyState"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
+const TYPE_KEYS = {
+  order: "ui:notifications.types.order",
+  stock_alert: "ui:notifications.types.stock_alert",
+  payment: "ui:notifications.types.payment",
+  system: "ui:notifications.types.system",
+  support: "ui:notifications.types.support",
+  review: "ui:notifications.types.review",
+} as const
+
 export function NotificationBell() {
+  const { t } = useTranslation(["ui", "common"])
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
@@ -29,23 +40,17 @@ export function NotificationBell() {
     support: 'secondary',
     review: 'secondary',
   }
-  const typeLabels: Record<string, string> = {
-    order: 'New Order',
-    stock_alert: 'Stock Alert',
-    payment: 'Payment',
-    system: 'System',
-    support: 'Support',
-    review: 'Product Review',
-  }
+  const typeLabel = (type: string) =>
+    Object.prototype.hasOwnProperty.call(TYPE_KEYS, type) ? t(TYPE_KEYS[type as keyof typeof TYPE_KEYS]) : type
 
   function getRelativeTime(dateStr: string) {
     const diff = Date.now() - new Date(dateStr).getTime()
     const mins = Math.floor(diff / 60000)
-    if (mins < 1) return "Just now"
-    if (mins < 60) return `${mins}m ago`
+    if (mins < 1) return t("common:ago.justNow")
+    if (mins < 60) return t("ui:notifications.minutesShort", { count: mins })
     const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    return `${Math.floor(hrs / 24)}d ago`
+    if (hrs < 24) return t("ui:notifications.hoursShort", { count: hrs })
+    return t("ui:notifications.daysShort", { count: Math.floor(hrs / 24) })
   }
 
   useEffect(() => {
@@ -71,12 +76,12 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={ref}>
-      <WithTooltip content={`Notifications, ${unreadCount} unread`}><Button
+      <WithTooltip content={t("ui:notifications.unreadLabel", { count: unreadCount })}><Button
         type="button"
         variant="outline"
         size="icon"
         onClick={() => setOpen((v) => !v)}
-        aria-label={`Notifications, ${unreadCount} unread`}
+        aria-label={t("ui:notifications.unreadLabel", { count: unreadCount })}
         aria-expanded={open}
         className="relative"
       >
@@ -91,24 +96,24 @@ export function NotificationBell() {
       {open && (
         <Card
           role="dialog"
-          aria-label="Notifications"
+          aria-label={t("ui:notifications.title")}
           className="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-1.5rem))] gap-0 overflow-hidden py-0 shadow-xl"
         >
           <div className="flex items-center justify-between px-4 py-3">
-            <strong className="text-sm">Notifications</strong>
+            <strong className="text-sm">{t("ui:notifications.title")}</strong>
             <span className="flex items-center gap-3">
               {unreadCount > 0 && (
                 <Button type="button" variant="link" size="sm" onClick={() => void markAllAsRead()}>
-                  Mark all read
+                  {t("ui:notifications.markAllRead")}
                 </Button>
               )}
-              <span className="text-xs text-muted-foreground">{unreadCount ? `${unreadCount} unread` : "All caught up"}</span>
+              <span className="text-xs text-muted-foreground">{unreadCount ? t("ui:notifications.unread", { count: unreadCount }) : t("ui:notifications.allCaughtUp")}</span>
             </span>
           </div>
           <Separator />
           <div className="max-h-96 divide-y divide-border overflow-y-auto">
             {recent.length === 0 ? (
-              <EmptyState icon={Bell} title="No notifications" className="p-6 md:p-6" />
+              <EmptyState icon={Bell} title={t("ui:notifications.empty")} className="p-6 md:p-6" />
             ) : recent.map((n) => (
               <div
                 key={n.id}
@@ -125,7 +130,7 @@ export function NotificationBell() {
                     <p className="line-clamp-2 text-sm leading-snug">{n.message}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <Badge variant={typeVariant[n.type] ?? "outline"}>
-                        {typeLabels[n.type] ?? n.type}
+                        {typeLabel(n.type)}
                       </Badge>
                       <span className="text-xs text-muted-foreground">{getRelativeTime(n.createdAt)}</span>
                       {n.actionUrl && (
@@ -134,11 +139,11 @@ export function NotificationBell() {
                     </div>
                   </div>
                 </Button>
-                <WithTooltip content="Delete notification"><Button
+                <WithTooltip content={t("ui:notifications.delete")}><Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Delete notification"
+                  aria-label={t("ui:notifications.delete")}
                   onClick={(e) => { e.stopPropagation(); void deleteNotification(n.id) }}
                   className="shrink-0"
                 >
@@ -150,7 +155,7 @@ export function NotificationBell() {
           <Separator />
           <Button asChild variant="ghost" className="h-auto w-full rounded-none p-3">
             <Link href="/dashboard/notifications" onClick={() => setOpen(false)}>
-              Show all notifications
+              {t("ui:notifications.showAll")}
             </Link>
           </Button>
         </Card>

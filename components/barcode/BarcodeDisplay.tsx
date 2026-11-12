@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -45,15 +46,16 @@ export default function BarcodeDisplay({
   barcodeImagePath,
   onRegenerate,
 }: BarcodeDisplayProps) {
+  const { t } = useTranslation(["ui", "common"])
   const [regenerating, setRegenerating] = useState(false)
 
   const handleCopyBarcode = () => {
     navigator.clipboard.writeText(barcodeNumber)
-    toast.success("Barcode copied to clipboard")
+    toast.success(t("ui:barcode.copied"))
   }
 
   const handleRegenerateBarcode = async () => {
-    if (!confirm("Are you sure you want to regenerate the barcode? This cannot be undone.")) {
+    if (!confirm(t("ui:barcode.confirmRegenerate"))) {
       return
     }
 
@@ -63,13 +65,13 @@ export default function BarcodeDisplay({
       const response = await barcodeApi.regenerateProductBarcode(productId)
 
       if (response.success) {
-        toast.success("Barcode regenerated successfully")
+        toast.success(t("ui:barcode.regenerated"))
         if (onRegenerate) {
           onRegenerate()
         }
       }
     } catch (err: any) {
-      const message = err.response?.data?.message || "Failed to regenerate barcode"
+      const message = err.response?.data?.message || t("ui:barcode.regenerateFailed")
       toast.error(message)
     } finally {
       setRegenerating(false)
@@ -78,7 +80,7 @@ export default function BarcodeDisplay({
 
   const handleDownloadBarcode = async () => {
     if (!barcodeImagePath) {
-      toast.error("Barcode image not available")
+      toast.error(t("ui:barcode.imageMissing"))
       return
     }
 
@@ -91,44 +93,44 @@ export default function BarcodeDisplay({
       link.click()
       document.body.removeChild(link)
 
-      toast.success("Barcode image downloaded")
+      toast.success(t("ui:barcode.downloaded"))
     } catch (err) {
-      toast.error("Failed to download barcode image")
+      toast.error(t("ui:barcode.downloadFailed"))
     }
   }
 
   return (
     <SectionCard
-      title="Product Barcode"
+      title={t("ui:barcode.title")}
       actions={<>
-        <WithTooltip content="Copy barcode number">
+        <WithTooltip content={t("ui:barcode.copyNumber")}>
           <Button size="sm" variant="outline" onClick={handleCopyBarcode}>
             <Copy className="size-4" />
-            Copy
+            {t("common:actions.copy")}
           </Button>
         </WithTooltip>
 
         {barcodeImagePath && (
-          <WithTooltip content="Download barcode image">
+          <WithTooltip content={t("ui:barcode.downloadImage")}>
             <Button size="sm" variant="outline" onClick={handleDownloadBarcode}>
               <Download className="size-4" />
-              Download
+              {t("common:actions.download")}
             </Button>
           </WithTooltip>
         )}
 
-        <WithTooltip content="Regenerate new barcode">
+        <WithTooltip content={t("ui:barcode.regenerateHint")}>
           <span tabIndex={regenerating ? 0 : undefined}>
             <Button size="sm" variant="outline" onClick={handleRegenerateBarcode} disabled={regenerating}>
               {regenerating ? (
                 <>
                   <Spinner />
-                  Regenerating...
+                  {t("ui:barcode.regenerating")}
                 </>
               ) : (
                 <>
                   <RefreshCw className="size-4" />
-                  Regenerate
+                  {t("ui:barcode.regenerate")}
                 </>
               )}
             </Button>
@@ -142,19 +144,19 @@ export default function BarcodeDisplay({
         <Card className="items-center bg-white p-4">
           <img
             src={barcodeImagePath}
-            alt={`Barcode for ${barcodeNumber}`}
+            alt={t("ui:barcode.imageAlt", { code: barcodeNumber })}
             className="max-h-32 w-auto"
           />
         </Card>
       ) : (
-        <EmptyState bordered title="Barcode image not available" className="p-4 md:p-6" />
+        <EmptyState bordered title={t("ui:barcode.imageMissing")} className="p-4 md:p-6" />
       )}
 
       {/* Barcode Number */}
-      <FormField label="Barcode Number" htmlFor={`barcode-number-${productId}`}>
+      <FormField label={t("ui:barcode.number")} htmlFor={`barcode-number-${productId}`}>
         <div className="flex items-center gap-2">
           <Input id={`barcode-number-${productId}`} readOnly value={barcodeNumber} className="flex-1 font-mono" />
-          <WithTooltip content="Copy barcode number"><Button size="icon" variant="ghost" aria-label="Copy barcode number" onClick={handleCopyBarcode}>
+          <WithTooltip content={t("ui:barcode.copyNumber")}><Button size="icon" variant="ghost" aria-label={t("ui:barcode.copyNumber")} onClick={handleCopyBarcode}>
             <Copy className="size-4" />
           </Button></WithTooltip>
         </div>
@@ -164,8 +166,7 @@ export default function BarcodeDisplay({
       <Alert>
         <Info />
         <AlertDescription>
-          This barcode uniquely identifies the product. Scan or enter it
-          to retrieve product details during checkout or inventory operations.
+          {t("ui:barcode.info")}
         </AlertDescription>
       </Alert>
     </SectionCard>

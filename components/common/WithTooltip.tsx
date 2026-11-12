@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Info } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -35,10 +36,11 @@ interface TooltipIconProps {
 }
 
 /** Small ghost icon button (Info icon by default) that shows a tooltip — for inline help next to labels. */
-export function TooltipIcon({ content, label = "More info", icon, side, className }: TooltipIconProps) {
+export function TooltipIcon({ content, label, icon, side, className }: TooltipIconProps) {
+  const { t } = useTranslation(["ui", "common"])
   return (
     <WithTooltip content={content} side={side}>
-      <Button type="button" variant="ghost" size="icon" aria-label={label} className={className ?? "size-6"}>
+      <Button type="button" variant="ghost" size="icon" aria-label={label ?? t("ui:tooltip.moreInfo")} className={className ?? "size-6"}>
         {icon ?? <Info />}
       </Button>
     </WithTooltip>

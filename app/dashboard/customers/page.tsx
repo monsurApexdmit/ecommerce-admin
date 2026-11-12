@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
-  AlertTriangle, Download, MoreHorizontal, Phone, Plus, RotateCcw, Search, Upload, Users, X, Banknote, Clock,
+  AlertTriangle, Download, MoreHorizontal, Phone, Plus, RotateCcw, Search, Upload, Users, X, Banknote, Clock, Pencil, Trash2,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -48,16 +48,19 @@ import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { localeTag } from "@/lib/i18n"
+import { useTranslation } from "react-i18next"
 
 type Tab = "all" | "inactive" | "loyal" | "risk" | "due" | "never" | "dup"
 type Stats = Awaited<ReturnType<typeof customerApi.getStats>>
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline"
 
-const GROUP_STYLE: Record<string, { label: string; variant: BadgeVariant }> = {
-  retail: { label: "Retail", variant: "outline" },
-  wholesale: { label: "Wholesale", variant: "secondary" },
-  vip: { label: "VIP", variant: "default" },
+// Group codes are data; built-in ones get a translated label, owner-made codes show as-is
+const GROUP_STYLE: Record<string, { label: "customers:shared.groups.retail" | "customers:shared.groups.wholesale" | "customers:shared.groups.vip"; variant: BadgeVariant }> = {
+  retail: { label: "customers:shared.groups.retail", variant: "outline" },
+  wholesale: { label: "customers:shared.groups.wholesale", variant: "secondary" },
+  vip: { label: "customers:shared.groups.vip", variant: "default" },
 }
 
 const groupOf = (c: CustomerResponse) => c.customerGroup ?? c.customerType ?? "retail"
@@ -66,16 +69,42 @@ const hasSms = (c: CustomerResponse) =>
 
 const daysSince = (iso?: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null)
 
-function segmentOf(c: CustomerResponse): { text: string; variant: BadgeVariant } {
+const SEGMENT_KEYS = {
+  noOrders: "customers:customers.segment.noOrders",
+  atRisk: "customers:customers.segment.atRisk",
+  loyal: "customers:customers.segment.loyal",
+  active: "customers:customers.segment.active",
+} as const
+
+function segmentOf(c: CustomerResponse): { text: (typeof SEGMENT_KEYS)[keyof typeof SEGMENT_KEYS]; variant: BadgeVariant } {
   const orders = c.totalOrders ?? 0
   const days = daysSince(c.lastOrderAt)
-  if (orders === 0) return { text: "No orders yet", variant: "outline" }
-  if (days !== null && days > 30) return { text: "At risk · 30+ days", variant: "destructive" }
-  if (orders >= 5) return { text: "Loyal", variant: "default" }
-  return { text: "Active", variant: "secondary" }
+  if (orders === 0) return { text: SEGMENT_KEYS.noOrders, variant: "outline" }
+  if (days !== null && days > 30) return { text: SEGMENT_KEYS.atRisk, variant: "destructive" }
+  if (orders >= 5) return { text: SEGMENT_KEYS.loyal, variant: "default" }
+  return { text: SEGMENT_KEYS.active, variant: "secondary" }
 }
 
+// Order statuses on the recent-orders list are codes; map the common ones, fall back to the raw value
+const ORDER_STATUS_KEYS = {
+  pending: "common:orderStatus.pending",
+  processing: "common:orderStatus.processing",
+  confirmed: "common:orderStatus.confirmed",
+  shipped: "common:orderStatus.shipped",
+  delivered: "common:orderStatus.delivered",
+  completed: "common:orderStatus.completed",
+  cancelled: "common:orderStatus.cancelled",
+  canceled: "common:orderStatus.cancelled",
+  returned: "common:orderStatus.returned",
+  refunded: "common:orderStatus.refunded",
+  onhold: "common:orderStatus.onHold",
+} as const
+const orderStatusKey = (s: string) =>
+  (ORDER_STATUS_KEYS as Record<string, (typeof ORDER_STATUS_KEYS)[keyof typeof ORDER_STATUS_KEYS] | undefined>)[s.toLowerCase().replace(/[\s_-]+/g, "")]
+
 export default function CustomersPage() {
+  const { t, i18n } = useTranslation(["customers", "common"])
+  const locale = localeTag(i18n.language)
   const { formatCurrency } = useCompanySettings()
   const { deleteCustomer, refreshCustomers } = useCustomer()
   const { toast } = useToast()
@@ -103,7 +132,8 @@ export default function CustomersPage() {
   const [mergeOpen, setMergeOpen] = useState(false)
   const [mergeGroups, setMergeGroups] = useState<DuplicateGroup[]>([])
   const [mergeLoading, setMergeLoading] = useState(false)
-  const [mergeTitle, setMergeTitle] = useState("Review & merge duplicates")
+  // null = the default "Review & merge duplicates" title; a number = merging that many selected customers
+  const [mergeCount, setMergeCount] = useState<number | null>(null)
   const [tagOpen, setTagOpen] = useState(false)
   const [tagDraft, setTagDraft] = useState("")
 
@@ -193,8 +223,8 @@ export default function CustomersPage() {
   const setActive = async (targets: CustomerResponse[], status: "active" | "inactive") => {
     const results = await Promise.allSettled(targets.map((c) => customerApi.setStatus(c.id, status)))
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${targets.length} could not be changed` })
-    else toast({ title: status === "active" ? "Marked active" : "Marked inactive", description: `${targets.length} customer${targets.length === 1 ? "" : "s"} updated` })
+    if (failed) toast({ variant: "destructive", title: t("customers:customers.toast.someUpdatesFailed"), description: t("customers:customers.toast.updateFailedDesc", { failed, total: targets.length }) })
+    else toast({ title: status === "active" ? t("customers:customers.toast.markedActive") : t("customers:customers.toast.markedInactive"), description: t("customers:customers.toast.updated", { count: targets.length }) })
     setChecked(new Set())
     refresh()
   }
@@ -205,18 +235,21 @@ export default function CustomersPage() {
     const failed = results.filter((r) => r.status === "rejected").length
     const firstErr = results.find((r): r is PromiseRejectedResult => r.status === "rejected")
     const reason = firstErr ? (firstErr.reason?.message || "") : ""
-    if (failed) toast({ variant: "destructive", title: "Some deletions failed", description: deleteTargets.length === 1 && reason ? reason : `${failed} of ${deleteTargets.length} could not be deleted${reason ? `: ${reason}` : ""}` })
-    else toast({ title: "Deleted", description: `${deleteTargets.length} customer${deleteTargets.length === 1 ? "" : "s"} removed` })
+    if (failed) toast({ variant: "destructive", title: t("customers:customers.toast.someDeletesFailed"), description: deleteTargets.length === 1 && reason ? reason
+      : reason ? t("customers:customers.toast.deleteFailedDescReason", { failed, total: deleteTargets.length, reason })
+      : t("customers:customers.toast.deleteFailedDesc", { failed, total: deleteTargets.length }) })
+    else toast({ title: t("common:status.deleted"), description: t("customers:customers.toast.deletedDesc", { count: deleteTargets.length }) })
     setDeleting(false)
     setDeleteTargets([])
     setChecked(new Set())
     refresh()
   }
 
+  // CSV headers stay in English: the Import dialog reads these same column names back (see handleImport / parseCSVRows)
   const EXPORT_HEADERS = ["ID", "Name", "Type", "Company", "Phone", "Email", "Group", "Status", "Address", "City/District", "Area", "Postcode", "Country", "Credit limit", "Store credit", "Tags", "Orders", "Spent", "Due", "Last order", "Since"]
 
   const exportRows = (rows: CustomerResponse[]) => {
-    if (!rows.length) { toast({ variant: "destructive", title: "Nothing to export" }); return }
+    if (!rows.length) { toast({ variant: "destructive", title: t("common:extra.nothingToExport") }); return }
     const fmt = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : "")
     downloadCSV("customers.csv", toCSV(EXPORT_HEADERS, rows.map((c) => [
       c.id, c.name, c.type ?? "individual", c.businessName ?? "", c.phone ?? "", c.email ?? "", groupOf(c), c.status ?? "active",
@@ -224,7 +257,7 @@ export default function CustomersPage() {
       Number(c.creditLimit) || 0, Number(c.storeCredit) || 0, (c.tags ?? []).join("; "),
       c.totalOrders ?? 0, Number(c.totalSpent) || 0, Number(c.dueAmount) || 0, fmt(c.lastOrderAt), fmt(c.createdAt),
     ])))
-    toast({ title: "Exported", description: `${rows.length} customer${rows.length === 1 ? "" : "s"}` })
+    toast({ title: t("customers:customers.toast.exported"), description: t("customers:customers.toast.exportedDesc", { count: rows.length }) })
   }
 
   /** Exports the selected rows, or every row matching the current filters across all pages */
@@ -233,18 +266,18 @@ export default function CustomersPage() {
     try {
       exportRows(await customerApi.getAllFiltered(filterParams()))
     } catch {
-      toast({ variant: "destructive", title: "Export failed", description: "Could not load the customers" })
+      toast({ variant: "destructive", title: t("customers:customers.toast.exportFailed"), description: t("customers:customers.toast.exportFailedDesc") })
     }
   }
 
   const copyNumbers = async (numbers: string[]) => {
-    if (!numbers.length) { toast({ variant: "destructive", title: "No numbers to copy", description: "No matching customers agreed to SMS offers." }); return }
+    if (!numbers.length) { toast({ variant: "destructive", title: t("customers:customers.toast.noNumbers"), description: t("customers:customers.toast.noNumbersDesc") }); return }
     const text = numbers.join(", ")
     try {
       await navigator.clipboard.writeText(text)
-      toast({ title: "Copied", description: `${numbers.length} number${numbers.length === 1 ? "" : "s"} copied for your SMS tool` })
+      toast({ title: t("common:actions.copied"), description: t("customers:customers.toast.copiedNumbers", { count: numbers.length }) })
     } catch {
-      toast({ variant: "destructive", title: "Could not copy", description: "Clipboard is not available in this browser" })
+      toast({ variant: "destructive", title: t("customers:customers.toast.copyFailed"), description: t("customers:customers.toast.clipboardUnavailable") })
     }
   }
 
@@ -258,7 +291,7 @@ export default function CustomersPage() {
       })
       await copyNumbers(numbers)
     } catch {
-      toast({ variant: "destructive", title: "Could not load numbers" })
+      toast({ variant: "destructive", title: t("customers:customers.toast.numbersFailed") })
     }
   }
   const copySmsSelected = () => copyNumbers(selected.filter(hasSms).map((c) => c.phone))
@@ -268,21 +301,21 @@ export default function CustomersPage() {
     if (!tag) return
     try {
       const r = await customerApi.bulkTag(selected.map((c) => c.id), tag)
-      toast({ title: "Tag added", description: `"${tag}" added to ${r.updated} customer${r.updated === 1 ? "" : "s"}` })
+      toast({ title: t("customers:customers.toast.tagAdded"), description: t("customers:customers.toast.tagAddedDesc", { tag, count: r.updated }) })
       setTagOpen(false); setTagDraft(""); setChecked(new Set()); refresh()
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not add tag", description: e?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("customers:customers.toast.tagFailed"), description: e?.response?.data?.message || t("common:extra.tryAgain") })
     }
   }
 
   const openDuplicates = async () => {
-    setMergeTitle("Review & merge duplicates")
+    setMergeCount(null)
     setMergeOpen(true); setMergeLoading(true)
     try { setMergeGroups(await customerApi.getDuplicates()) } catch { setMergeGroups([]) } finally { setMergeLoading(false) }
   }
   const openMergeSelected = () => {
-    if (selected.length < 2) { toast({ variant: "destructive", title: "Select at least two customers to merge" }); return }
-    setMergeTitle(`Merge ${selected.length} selected customers`)
+    if (selected.length < 2) { toast({ variant: "destructive", title: t("customers:customers.toast.mergeMin") }); return }
+    setMergeCount(selected.length)
     setMergeGroups([{ key: "selected", reason: "phone", customers: selected }])
     setMergeLoading(false)
     setMergeOpen(true)
@@ -311,11 +344,11 @@ export default function CustomersPage() {
       const preSkipped = payload.length - valid.length
       try {
         const res = await customerApi.importRows(valid)
-        toast({ title: `Imported ${res.imported}, skipped ${res.skipped + preSkipped}`, description: res.skippedRows?.[0] ? `e.g. row ${res.skippedRows[0].row}: ${res.skippedRows[0].reason}` : undefined })
+        toast({ title: t("customers:import.result", { imported: res.imported, skipped: res.skipped + preSkipped }), description: res.skippedRows?.[0] ? t("customers:import.example", { row: res.skippedRows[0].row, reason: res.skippedRows[0].reason }) : undefined })
         setImportOpen(false)
         refresh()
       } catch (err: any) {
-        toast({ variant: "destructive", title: "Import failed", description: err?.response?.data?.message || "Please check the file and try again" })
+        toast({ variant: "destructive", title: t("customers:import.failed"), description: err?.response?.data?.message || t("customers:import.failedDesc") })
       }
     }
     reader.readAsText(file)
@@ -329,22 +362,22 @@ export default function CustomersPage() {
     <div className="flex flex-col gap-5">
       {/* Header */}
       <PageHeader
-        title="Customers"
-        description="Who buys from you, how often, and who still owes you money."
+        title={t("customers:customers.title")}
+        description={t("customers:customers.description")}
         actions={<>
           <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload className="size-4" aria-hidden /> Import
+            <Upload className="size-4" aria-hidden /> {t("common:actions.import")}
           </Button>
           {mayExport && <Button type="button" variant="outline" onClick={() => handleExport()}>
-            <Download className="size-4" aria-hidden /> Export
+            <Download className="size-4" aria-hidden /> {t("common:actions.export")}
           </Button>}
-          <WithTooltip content="Copies the phone numbers of customers who agreed to SMS offers">
+          <WithTooltip content={t("customers:customers.copySmsTooltip")}>
             <Button type="button" variant="outline" onClick={copySmsAll}>
-              Copy SMS numbers
+              {t("customers:customers.copySms")}
             </Button>
           </WithTooltip>
           <Button type="button" onClick={() => openForm(null)}>
-            <Plus className="size-4" aria-hidden /> Add customer
+            <Plus className="size-4" aria-hidden /> {t("customers:customers.addCustomer")}
           </Button>
         </>}
       />
@@ -353,14 +386,14 @@ export default function CustomersPage() {
       {stats && stats.duplicates > 0 && !hideDupBanner && (
         <Alert>
           <Users aria-hidden />
-          <AlertTitle>{stats.duplicates} customers share a phone number.</AlertTitle>
+          <AlertTitle>{t("customers:customers.dup.title", { count: stats.duplicates })}</AlertTitle>
           <AlertDescription>
-            <p>Merge them so order history and dues stay in one place.</p>
+            <p>{t("customers:customers.dup.body")}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Button type="button" size="sm" onClick={openDuplicates}>
-                Review &amp; merge
+                {t("customers:customers.dup.review")}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setHideDupBanner(true)}>Dismiss</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setHideDupBanner(true)}>{t("customers:customers.dup.dismiss")}</Button>
             </div>
           </AlertDescription>
         </Alert>
@@ -373,13 +406,13 @@ export default function CustomersPage() {
         </div>
       ) : (
         <StatsCards stats={[
-          { label: "Total customers", value: stats.total, icon: <Users className="size-4" />, color: "blue", hint: `${stats.addedThisMonth} added this month · ${stats.inactive} inactive` },
-          { label: "Repeat buyers", value: `${stats.repeatRatePct}%`, icon: <RotateCcw className="size-4" />, color: "green",
-            hint: `${stats.repeatBuyers} of ${stats.withOrders} bought 2+ times` },
-          { label: "Customers owe you", value: formatCurrency(stats.totalDue), icon: <Clock className="size-4" />, color: "red",
-            hint: `${stats.owing} customer${stats.owing === 1 ? "" : "s"} with dues`, onClick: () => changeTab("due"), active: tab === "due" },
-          { label: "Avg lifetime value", value: formatCurrency(stats.avgLifetimeValue), icon: <Banknote className="size-4" />, color: "yellow", hint: "Customers with orders" },
-          { label: "At risk", value: stats.atRisk, icon: <AlertTriangle className="size-4" />, color: "yellow", hint: "No order in 30+ days",
+          { label: t("customers:customers.kpi.total"), value: stats.total, icon: <Users className="size-4" />, color: "blue", hint: t("customers:customers.kpi.totalHint", { added: stats.addedThisMonth, inactive: stats.inactive }) },
+          { label: t("customers:customers.kpi.repeat"), value: `${stats.repeatRatePct}%`, icon: <RotateCcw className="size-4" />, color: "green",
+            hint: t("customers:customers.kpi.repeatHint", { repeat: stats.repeatBuyers, withOrders: stats.withOrders }) },
+          { label: t("customers:customers.kpi.owe"), value: formatCurrency(stats.totalDue), icon: <Clock className="size-4" />, color: "red",
+            hint: t("customers:customers.kpi.oweHint", { count: stats.owing }), onClick: () => changeTab("due"), active: tab === "due" },
+          { label: t("customers:customers.kpi.avgLtv"), value: formatCurrency(stats.avgLifetimeValue), icon: <Banknote className="size-4" />, color: "yellow", hint: t("customers:customers.kpi.avgLtvHint") },
+          { label: t("customers:customers.kpi.atRisk"), value: stats.atRisk, icon: <AlertTriangle className="size-4" />, color: "yellow", hint: t("customers:customers.kpi.atRiskHint"),
             onClick: () => changeTab("risk"), active: tab === "risk" },
         ]} />
       )}
@@ -392,81 +425,81 @@ export default function CustomersPage() {
               value={tab}
               onChange={changeTab}
               tabs={[
-                { value: "all", label: "All", count: stats?.total },
-                { value: "inactive", label: "Inactive", count: stats?.inactive },
-                { value: "loyal", label: "Loyal", count: stats?.loyal },
-                { value: "risk", label: "At risk", count: stats?.atRisk },
-                { value: "due", label: "Owe money", count: stats?.owing },
-                { value: "never", label: "No orders", count: stats?.never },
-                { value: "dup", label: "Duplicates", count: stats?.duplicates },
+                { value: "all", label: t("common:status.all"), count: stats?.total },
+                { value: "inactive", label: t("customers:customers.tabs.inactive"), count: stats?.inactive },
+                { value: "loyal", label: t("customers:customers.tabs.loyal"), count: stats?.loyal },
+                { value: "risk", label: t("customers:customers.tabs.risk"), count: stats?.atRisk },
+                { value: "due", label: t("customers:customers.tabs.due"), count: stats?.owing },
+                { value: "never", label: t("customers:customers.tabs.never"), count: stats?.never },
+                { value: "dup", label: t("customers:customers.tabs.dup"), count: stats?.duplicates },
               ]}
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 p-4">
             <div className="relative min-w-[240px] flex-1">
-              <Label htmlFor="customer-search" className="sr-only">Search customers</Label>
+              <Label htmlFor="customer-search" className="sr-only">{t("customers:customers.searchLabel")}</Label>
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input id="customer-search" type="search" placeholder="Search name, phone or email…" value={search}
+              <Input id="customer-search" type="search" placeholder={t("customers:customers.searchPlaceholder")} value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                 className="pl-8" />
             </div>
             <Select value={groupFilter} onValueChange={(v) => { setGroupFilter(v); setPage(1) }}>
-              <SelectTrigger aria-label="Customer group" className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("customers:customers.filter.group")} className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Group: All</SelectItem>
-                <SelectItem value="retail">Retail</SelectItem>
-                <SelectItem value="wholesale">Wholesale</SelectItem>
-                <SelectItem value="vip">VIP</SelectItem>
+                <SelectItem value="all">{t("customers:customers.filter.groupAll")}</SelectItem>
+                <SelectItem value="retail">{t("customers:shared.groups.retail")}</SelectItem>
+                <SelectItem value="wholesale">{t("customers:shared.groups.wholesale")}</SelectItem>
+                <SelectItem value="vip">{t("customers:shared.groups.vip")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1) }}>
-              <SelectTrigger aria-label="Customer type" className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("customers:customers.filter.type")} className="w-[140px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Type: All</SelectItem>
-                <SelectItem value="individual">Individual</SelectItem>
-                <SelectItem value="business">Business</SelectItem>
+                <SelectItem value="all">{t("customers:customers.filter.typeAll")}</SelectItem>
+                <SelectItem value="individual">{t("customers:shared.types.individual")}</SelectItem>
+                <SelectItem value="business">{t("customers:shared.types.business")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1) }}>
-              <SelectTrigger aria-label="Sort" className="w-[170px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("customers:customers.filter.sort")} className="w-[170px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="recent">Sort: Recent</SelectItem>
-                <SelectItem value="name">Sort: Name</SelectItem>
-                <SelectItem value="spent">Sort: Most spent</SelectItem>
-                <SelectItem value="orders">Sort: Most orders</SelectItem>
-                <SelectItem value="due">Sort: Highest due</SelectItem>
+                <SelectItem value="recent">{t("customers:customers.filter.sortRecent")}</SelectItem>
+                <SelectItem value="name">{t("customers:customers.filter.sortName")}</SelectItem>
+                <SelectItem value="spent">{t("customers:customers.filter.sortSpent")}</SelectItem>
+                <SelectItem value="orders">{t("customers:customers.filter.sortOrders")}</SelectItem>
+                <SelectItem value="due">{t("customers:customers.filter.sortDue")}</SelectItem>
               </SelectContent>
             </Select>
             {hasFilters && (
               <Button type="button" variant="ghost" onClick={resetFilters}>
-                <X className="size-4" aria-hidden /> Clear
+                <X className="size-4" aria-hidden /> {t("common:actions.clear")}
               </Button>
             )}
           </div>
 
-          <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
-              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "active")}>Mark active</Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "inactive")}>Mark inactive</Button>
-              <Button type="button" variant="outline" size="sm" onClick={openMergeSelected}>Merge</Button>
-              <Button type="button" variant="outline" size="sm" onClick={copySmsSelected}>Copy SMS numbers</Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setTagOpen(true)}>Add tag</Button>
-              {mayExport && <Button type="button" variant="outline" size="sm" onClick={() => handleExport(true)}>Export selected</Button>}
-              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+          <BulkBar count={checked.size} label={t("common:table.selected", { count: checked.size })} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "active")}>{t("customers:customers.bulk.markActive")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, "inactive")}>{t("customers:customers.bulk.markInactive")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={openMergeSelected}>{t("customers:customers.bulk.merge")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={copySmsSelected}>{t("customers:customers.copySms")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setTagOpen(true)}>{t("customers:customers.bulk.addTag")}</Button>
+              {mayExport && <Button type="button" variant="outline" size="sm" onClick={() => handleExport(true)}>{t("customers:customers.exportSelected")}</Button>}
+              <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>{t("common:actions.delete")}</Button>
           </BulkBar>
 
           <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col" className="w-5"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all" /></TableHead>
-                  <TableHead scope="col">Customer</TableHead>
-                  <TableHead scope="col">Contact</TableHead>
-                  <TableHead scope="col">Group</TableHead>
-                  <TableHead scope="col" className="text-right">Orders</TableHead>
-                  <TableHead scope="col" className="text-right">Spent</TableHead>
-                  <TableHead scope="col" className="text-right">Due</TableHead>
-                  <TableHead scope="col">Last order</TableHead>
-                  <TableHead scope="col" className="text-right">Actions</TableHead>
+                  <TableHead scope="col" className="w-5"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("common:actions.selectAll")} /></TableHead>
+                  <TableHead scope="col">{t("common:fields.customer")}</TableHead>
+                  <TableHead scope="col">{t("customers:customers.cols.contact")}</TableHead>
+                  <TableHead scope="col">{t("customers:customers.cols.group")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("customers:customers.cols.orders")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("customers:customers.cols.spent")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("common:money.due")}</TableHead>
+                  <TableHead scope="col">{t("customers:customers.cols.lastOrder")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("common:fields.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -477,22 +510,23 @@ export default function CustomersPage() {
                     <TableCell colSpan={9} className="whitespace-normal">
                       <EmptyState
                         icon={Users}
-                        title="No customers found"
-                        description={hasFilters ? "Try clearing the filters." : "Add your first customer to get started."}
+                        title={t("customers:customers.empty.title")}
+                        description={hasFilters ? t("customers:shared.tryClearing") : t("customers:customers.empty.first")}
                         className="p-4 md:p-6"
                       />
                     </TableCell>
                   </TableRow>
                 ) : (
                   customers.map((c) => {
-                    const grp = GROUP_STYLE[groupOf(c)] ?? GROUP_STYLE.retail
+                    const grp = GROUP_STYLE[groupOf(c)]
                     const seg = segmentOf(c)
                     const due = Number(c.dueAmount) || 0
                     const ck = checked.has(c.id)
+                    const sinceDate = new Date(c.createdAt).toLocaleDateString(locale, { month: "short", year: "numeric" })
                     return (
                       <TableRow key={c.id} data-state={ck || c.id === openId ? "selected" : undefined}>
                         <TableCell>
-                          <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.name}`} />
+                          <Checkbox checked={ck} onCheckedChange={() => toggleOne(c.id)} aria-label={t("common:extra.selectRow", { name: c.name })} />
                         </TableCell>
                         <TableCell>
                           <Button type="button" variant="ghost" onClick={() => setOpenId(c.id)} className="h-auto justify-start gap-2.5 text-left">
@@ -500,10 +534,12 @@ export default function CustomersPage() {
                             <span className="flex flex-col">
                               <span className="flex items-center gap-1.5 font-semibold">
                                 {c.name}
-                                {c.status === "inactive" && <Badge variant="outline">Inactive</Badge>}
-                                {c.duplicatePhone && <Badge variant="secondary">Duplicate?</Badge>}
+                                {c.status === "inactive" && <Badge variant="outline">{t("common:status.inactive")}</Badge>}
+                                {c.duplicatePhone && <Badge variant="secondary">{t("customers:customers.row.duplicate")}</Badge>}
                               </span>
-                              <span className="text-xs text-muted-foreground">{c.type === "business" ? `${c.businessName || "Business"} · ` : ""}Since {new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</span>
+                              <span className="text-xs text-muted-foreground">{c.type === "business"
+                                ? t("customers:customers.row.businessSince", { business: c.businessName || t("customers:shared.types.business"), date: sinceDate })
+                                : t("customers:customers.row.since", { date: sinceDate })}</span>
                             </span>
                           </Button>
                         </TableCell>
@@ -512,8 +548,8 @@ export default function CustomersPage() {
                           <div className="text-xs text-muted-foreground">{c.email || "—"}</div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={grp.variant}>{grp.label}</Badge>
-                          {c.type === "business" && <Badge variant="outline" className="ml-1">Business</Badge>}
+                          <Badge variant={grp?.variant ?? "outline"}>{grp ? t(grp.label) : groupOf(c)}</Badge>
+                          {c.type === "business" && <Badge variant="outline" className="ml-1">{t("customers:shared.types.business")}</Badge>}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{c.totalOrders ?? 0}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatCurrency(Number(c.totalSpent) || 0)}</TableCell>
@@ -521,29 +557,29 @@ export default function CustomersPage() {
                           {due > 0 ? formatCurrency(due) : "—"}
                         </TableCell>
                         <TableCell>
-                          <div>{c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</div>
-                          <Badge variant={seg.variant} className="mt-0.5">{seg.text}</Badge>
+                          <div>{c.lastOrderAt ? new Date(c.lastOrderAt).toLocaleDateString(locale, { month: "short", day: "numeric" }) : "—"}</div>
+                          <Badge variant={seg.variant} className="mt-0.5">{t(seg.text)}</Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
                             {c.phone ? (
-                              <WithTooltip content={`Call ${c.name}`}><Button asChild variant="outline" size="icon"><a href={`tel:${c.phone}`} aria-label={`Call ${c.name}`}><Phone className="size-4" /></a></Button></WithTooltip>
+                              <WithTooltip content={t("customers:customers.row.call", { name: c.name })}><Button asChild variant="outline" size="icon"><a href={`tel:${c.phone}`} aria-label={t("customers:customers.row.call", { name: c.name })}><Phone className="size-4" /></a></Button></WithTooltip>
                             ) : (
                               <Button type="button" variant="outline" size="icon" disabled aria-hidden tabIndex={-1}><Phone className="size-4" /></Button>
                             )}
-                            <WithTooltip content={`New sale for ${c.name}`}><Button asChild variant="outline" size="icon"><Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={`New sale for ${c.name}`}><Plus className="size-4" /></Link></Button></WithTooltip>
+                            <WithTooltip content={t("customers:customers.row.newSale", { name: c.name })}><Button asChild variant="outline" size="icon"><Link href={`/dashboard/sales?new=1&customer=${c.id}`} aria-label={t("customers:customers.row.newSale", { name: c.name })}><Plus className="size-4" /></Link></Button></WithTooltip>
                             <DropdownMenu>
-                              <WithTooltip content={`More actions for ${c.name}`}><DropdownMenuTrigger asChild>
-                                <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.name}`}><MoreHorizontal className="size-4" /></Button>
+                              <WithTooltip content={t("customers:customers.row.more", { name: c.name })}><DropdownMenuTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" aria-label={t("customers:customers.row.more", { name: c.name })}><MoreHorizontal className="size-4" /></Button>
                               </DropdownMenuTrigger></WithTooltip>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openForm(c)}>Edit customer</DropdownMenuItem>
-                                <DropdownMenuItem asChild><Link href={`/dashboard/orders?customer=${encodeURIComponent(c.name)}`}>View orders</Link></DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openForm(c)}>{t("customers:customers.row.edit")}</DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href={`/dashboard/orders?customer=${encodeURIComponent(c.name)}`}>{t("customers:customers.row.viewOrders")}</Link></DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => setActive([c], c.status === "active" ? "inactive" : "active")}>
-                                  {c.status === "active" ? "Mark inactive" : "Mark active"}
+                                  {c.status === "active" ? t("customers:customers.bulk.markInactive") : t("customers:customers.bulk.markActive")}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>Delete customer</DropdownMenuItem>
+                                <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>{t("customers:customers.row.delete")}</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -573,29 +609,35 @@ export default function CustomersPage() {
         </Card>
 
         {/* Detail panel */}
-        <aside aria-label="Customer details" className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
+        <aside aria-label={t("customers:detail.aria")} className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-0 lg:max-w-[400px]">
           <Card className="gap-0 py-0">
           {!open ? (
-            <EmptyState title={loading ? "Loading…" : "Select a customer to see their profile."} className="p-6 md:p-6" />
+            <EmptyState title={loading ? t("common:status.loading") : t("customers:detail.select")} className="p-6 md:p-6" />
           ) : (() => {
             const v: CustomerResponse = detail && detail.id === open.id ? { ...open, ...detail } : open
             const due = Number(v.dueAmount) || 0
-            const grp = GROUP_STYLE[groupOf(v)] ?? GROUP_STYLE.retail
+            const grp = GROUP_STYLE[groupOf(v)]
+            const grpLabel = grp ? t(grp.label) : groupOf(v)
+            const sinceDate = new Date(v.createdAt).toLocaleDateString(locale, { month: "short", year: "numeric" })
             const addr = [v.address, v.area || v.state, v.district || v.city, v.zipCode, v.country].filter(Boolean).join(", ")
             const limit = Number(v.creditLimit) || 0
             const used = Number(v.creditUsed ?? due) || 0
             const pct = Math.round(v.creditUsedPercent ?? (limit > 0 ? (used / limit) * 100 : 0))
             const recent = v.recentOrders ?? []
-            const rows: [string, string][] = [
-              ["Phone", v.phone || "—"],
-              ["Email", v.email || "—"],
-              ...(v.type === "business" ? [["Business", v.businessName || "—"], ["Licence / BIN", v.licenceBin || "—"]] as [string, string][] : []),
-              ["Birthday", v.birthday ? new Date(v.birthday).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"],
-              ["SMS offers", v.smsOptIn === false ? "Opted out" : "Opted in"],
-              ["Address", addr || "—"],
-              ["Store credit", formatCurrency(Number(v.storeCredit) || 0)],
+            // [stable key, translated label, value]
+            const rows: [string, string, string][] = [
+              ["phone", t("common:fields.phone"), v.phone || "—"],
+              ["email", t("common:fields.email"), v.email || "—"],
+              ...(v.type === "business" ? [["business", t("customers:detail.business"), v.businessName || "—"], ["licence", t("customers:detail.licence"), v.licenceBin || "—"]] as [string, string, string][] : []),
+              ["birthday", t("customers:detail.birthday"), v.birthday ? new Date(v.birthday).toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" }) : "—"],
+              ["sms", t("customers:detail.sms"), v.smsOptIn === false ? t("customers:detail.optedOut") : t("customers:detail.optedIn")],
+              ["address", t("common:fields.address"), addr || "—"],
+              ["storeCredit", t("customers:detail.storeCredit"), formatCurrency(Number(v.storeCredit) || 0)],
             ]
-            const miniTile = "gap-1 p-2.5 [&_.text-2xl]:text-lg"
+            const spentText = formatCurrency(Number(v.totalSpent) || 0).replace(/\.00$/, "")
+            const dueText = formatCurrency(due).replace(/\.00$/, "")
+            // Narrow panel: amounts shrink and truncate instead of spilling over the tile edge (full value in title)
+            const miniTile = "min-w-0 gap-1 p-2.5 [&_.text-2xl]:truncate [&_.text-2xl]:text-base"
             return (
               <>
                 <div className="flex flex-col gap-3.5 p-[18px]">
@@ -604,56 +646,74 @@ export default function CustomersPage() {
                     <div className="min-w-0">
                       <h2 className="flex items-center gap-2 truncate text-lg font-semibold">
                         {v.name}
-                        {v.status === "inactive" && <Badge variant="outline">Inactive</Badge>}
+                        {v.status === "inactive" && <Badge variant="outline">{t("common:status.inactive")}</Badge>}
                       </h2>
                       <span className="text-sm text-muted-foreground">
-                        {grp.label}{v.type === "business" ? " · Business" : ""} · since {new Date(v.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                        {v.type === "business"
+                          ? t("customers:detail.subtitleBusiness", { group: grpLabel, date: sinceDate })
+                          : t("customers:detail.subtitle", { group: grpLabel, date: sinceDate })}
                       </span>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <StatTile label="Orders" value={v.totalOrders ?? 0} className={miniTile} />
-                    <StatTile label="Spent" value={formatCurrency(Number(v.totalSpent) || 0).replace(/\.00$/, "")} className={miniTile} />
-                    <StatTile label="Due" value={formatCurrency(due).replace(/\.00$/, "")} className={cn(miniTile, due > 0 && "border-destructive/50 text-destructive")} />
+                  {/* Orders is a short count; give the money tiles the room */}
+                  <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,1.2fr)] gap-2">
+                    <StatTile label={t("customers:detail.orders")} value={v.totalOrders ?? 0} className={miniTile} />
+                    <StatTile label={t("customers:detail.spent")} value={spentText} title={spentText} className={miniTile} />
+                    <StatTile label={t("common:money.due")} value={dueText} title={dueText} className={cn(miniTile, due > 0 && "border-destructive/50 text-destructive")} />
                   </div>
                   {limit > 0 && (
                     <div>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-muted-foreground">Credit limit {formatCurrency(limit)}</span>
-                        <span className={cn("font-semibold", pct >= 80 && "text-destructive")}>Credit used ({pct}%)</span>
+                      <div className="mb-1 flex justify-between gap-2 text-xs">
+                        <span className="min-w-0 truncate text-muted-foreground">{t("customers:detail.creditLimit", { amount: formatCurrency(limit) })}</span>
+                        <span className={cn("shrink-0 font-semibold", pct >= 80 && "text-destructive")}>{t("customers:detail.creditUsed", { pct })}</span>
                       </div>
                       <Progress
                         value={Math.min(pct, 100)}
-                        aria-label="Credit used"
+                        aria-label={t("customers:detail.creditUsedLabel")}
                         className={cn(pct >= 80 && "[&>[data-slot=progress-indicator]]:bg-destructive")}
                       />
                     </div>
                   )}
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button asChild><Link href={`/dashboard/sales?new=1&customer=${v.id}`}>New sale</Link></Button>
-                    <WithTooltip content={due <= 0 ? "Nothing due" : undefined}>
-                      <span tabIndex={due <= 0 ? 0 : undefined} className="grid">
-                        <Button type="button" variant="outline" disabled={due <= 0} onClick={() => setPayOpen((o) => !o)} aria-expanded={payOpen}>Get payment</Button>
+                  {/* Main actions get half the panel each; housekeeping actions sit below with Delete as an icon */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button asChild className="w-full min-w-0">
+                      <Link href={`/dashboard/sales?new=1&customer=${v.id}`}>
+                        <Plus className="size-4 shrink-0" aria-hidden />
+                        <span className="truncate">{t("customers:detail.newSale")}</span>
+                      </Link>
+                    </Button>
+                    <WithTooltip content={due <= 0 ? t("customers:detail.nothingDue") : undefined}>
+                      <span tabIndex={due <= 0 ? 0 : undefined} className="grid min-w-0">
+                        <Button type="button" variant="outline" className="w-full min-w-0" disabled={due <= 0} onClick={() => setPayOpen((o) => !o)} aria-expanded={payOpen}>
+                          <span className="truncate">{t("customers:detail.getPayment")}</span>
+                        </Button>
                       </span>
                     </WithTooltip>
-                    <Button type="button" variant="outline" onClick={() => openForm(v)}>Edit</Button>
                   </div>
                   {payOpen && due > 0 && (
                     <GetPaymentForm customerId={v.id} due={due} onCancel={() => setPayOpen(false)} onPaid={() => { setPayOpen(false); refresh() }} />
                   )}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button type="button" variant="outline" onClick={() => setActive([v], v.status === "inactive" ? "active" : "inactive")}>
-                      {v.status === "inactive" ? "Mark active" : "Mark inactive"}
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+                    <Button type="button" variant="outline" className="w-full min-w-0" onClick={() => openForm(v)}>
+                      <Pencil className="size-4 shrink-0" aria-hidden />
+                      <span className="truncate">{t("common:actions.edit")}</span>
                     </Button>
-                    <Button type="button" variant="destructive" onClick={() => setDeleteTargets([v])}>Delete</Button>
+                    <Button type="button" variant="outline" className="w-full min-w-0" onClick={() => setActive([v], v.status === "inactive" ? "active" : "inactive")}>
+                      <span className="truncate">{v.status === "inactive" ? t("customers:customers.bulk.markActive") : t("customers:customers.bulk.markInactive")}</span>
+                    </Button>
+                    <WithTooltip content={t("common:actions.delete")}>
+                      <Button type="button" variant="outline" size="icon" aria-label={`${t("common:actions.delete")} ${v.name}`} onClick={() => setDeleteTargets([v])} className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white">
+                        <Trash2 className="size-4" aria-hidden />
+                      </Button>
+                    </WithTooltip>
                   </div>
                 </div>
 
                 <Separator />
                 <div className="p-[18px]">
-                  <SectionTitle className="mb-2.5">Contact</SectionTitle>
+                  <SectionTitle className="mb-2.5">{t("customers:detail.contact")}</SectionTitle>
                   <InfoList className="gap-3">
-                    {rows.map(([k, val]) => <InfoRow key={k} label={k} value={val} />)}
+                    {rows.map(([k, label, val]) => <InfoRow key={k} label={label} value={val} />)}
                   </InfoList>
                   {(v.tags?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1.5 py-1.5">
@@ -665,11 +725,11 @@ export default function CustomersPage() {
 
                 <Separator />
                 <div className="p-[18px]">
-                  <SectionTitle className="mb-2.5">Recent orders</SectionTitle>
+                  <SectionTitle className="mb-2.5">{t("customers:detail.recentOrders")}</SectionTitle>
                   {detailLoading && !detail ? (
                     <Skeleton className="h-12" />
                   ) : recent.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No orders yet.</p>
+                    <p className="text-sm text-muted-foreground">{t("customers:detail.noOrders")}</p>
                   ) : (
                     <ItemGroup>
                       {recent.slice(0, 5).map((o, i) => (
@@ -678,11 +738,11 @@ export default function CustomersPage() {
                           <Item size="sm" className="px-0">
                             <ItemContent>
                               <ItemTitle>#{o.invoiceNo}</ItemTitle>
-                              <ItemDescription>{new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</ItemDescription>
+                              <ItemDescription>{new Date(o.date).toLocaleDateString(locale, { month: "short", day: "numeric" })}</ItemDescription>
                             </ItemContent>
                             <ItemActions className="flex-col items-end gap-1">
                               <span className="text-sm font-semibold tabular-nums">{formatCurrency(Number(o.amount))}</span>
-                              <StatusBadge status={o.status} />
+                              <StatusBadge status={o.status} label={(() => { const k = orderStatusKey(o.status); return k ? t(k) : o.status })()} />
                             </ItemActions>
                           </Item>
                         </div>
@@ -691,7 +751,7 @@ export default function CustomersPage() {
                   )}
                   {recent.length > 0 && (
                     <Button asChild variant="link" className="mt-2 h-auto p-0">
-                      <Link href={`/dashboard/orders?customer=${encodeURIComponent(v.name)}`}>View all orders →</Link>
+                      <Link href={`/dashboard/orders?customer=${encodeURIComponent(v.name)}`}>{t("customers:detail.viewAllOrders")}</Link>
                     </Button>
                   )}
                 </div>
@@ -710,20 +770,21 @@ export default function CustomersPage() {
         onOpenExisting={(phone) => { setSearch(phone); setTab("all"); setPage(1) }}
       />
 
-      <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} groups={mergeGroups} loading={mergeLoading} title={mergeTitle}
+      <MergeDialog open={mergeOpen} onOpenChange={setMergeOpen} groups={mergeGroups} loading={mergeLoading}
+        title={mergeCount === null ? undefined : t("customers:merge.titleSelected", { count: mergeCount })}
         onMerged={() => { setChecked(new Set()); refresh() }} />
 
       <Dialog open={tagOpen} onOpenChange={setTagOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Add tag</DialogTitle>
-            <DialogDescription>Adds a tag to {selected.length} selected customer{selected.length === 1 ? "" : "s"}.</DialogDescription>
+            <DialogTitle>{t("customers:customers.tag.title")}</DialogTitle>
+            <DialogDescription>{t("customers:customers.tag.description", { count: selected.length })}</DialogDescription>
           </DialogHeader>
-          <Input autoFocus aria-label="Tag" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder="e.g. Eid campaign"
+          <Input autoFocus aria-label={t("customers:customers.tag.label")} value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} placeholder={t("customers:customers.tag.placeholder")}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyTag() } }} />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setTagOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={applyTag} disabled={!tagDraft.trim()}>Add tag</Button>
+            <Button type="button" variant="outline" onClick={() => setTagOpen(false)}>{t("common:actions.cancel")}</Button>
+            <Button type="button" onClick={applyTag} disabled={!tagDraft.trim()}>{t("customers:customers.tag.title")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -732,12 +793,12 @@ export default function CustomersPage() {
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Import customers</DialogTitle>
-            <DialogDescription>Upload a CSV with columns: name, phone (required), email, type (individual or business), business name, group (retail, wholesale or VIP), credit limit, opening balance, birthday, tags, address, district, area, country. Rows without a name or phone, and duplicate phone numbers, are skipped.</DialogDescription>
+            <DialogTitle>{t("customers:import.title")}</DialogTitle>
+            <DialogDescription>{t("customers:import.description")}</DialogDescription>
           </DialogHeader>
-          <Input ref={fileRef} type="file" accept=".csv" aria-label="CSV file" onChange={handleImport} />
+          <Input ref={fileRef} type="file" accept=".csv" aria-label={t("customers:import.file")} onChange={handleImport} />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Close</Button>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>{t("common:actions.close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -746,13 +807,13 @@ export default function CustomersPage() {
       <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].name : `${deleteTargets.length} customers`}?</AlertDialogTitle>
-            <AlertDialogDescription>Their past orders stay in your records. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTargets.length === 1 ? deleteTargets[0].name : t("customers:customers.delete.many", { count: deleteTargets.length }) })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("customers:customers.delete.description")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("customers:customers.delete.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

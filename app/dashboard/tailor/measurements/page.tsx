@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { Printer, Search, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -24,11 +25,15 @@ import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { tailorWorkshopApi, type MeasurementCustomer, type MeasurementSet, type Pagination } from "@/lib/tailorApi"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { cn } from "@/lib/utils"
+import { localeTag } from "@/lib/i18n"
+import { TAILOR_NS, fitLabel, garmentLabel, measFieldLabel, type TailorT } from "@/components/tailor/i18n"
 
+/** Garment id → the product type stored by the API (English, data). Shown via garmentLabel(). */
 const NM: Record<string, string> = {
   shirt: "Shirt", panjabi: "Panjabi", pant: "Pant", blouse: "Blouse", salwar: "Salwar Kameez", coat: "Coat",
   pajama: "Pajama", jama: "Jama", kurta: "Kurta", other: "Other",
 }
+/** Built-in measurement fields per garment (English source; stored under key(label), shown via measFieldLabel()). */
 const F: Record<string, string[]> = {
   blouse: ["Bust", "Waist", "Length", "Shoulder", "Sleeve", "Arm hole", "Front neck", "Back neck"],
   salwar: ["Bust", "Waist", "Hip", "Length", "Sleeve", "Salwar length", "Bottom", "Shoulder"],
@@ -42,7 +47,6 @@ const F: Record<string, string[]> = {
   other: ["Chest", "Waist", "Hip", "Shoulder", "Sleeve", "Length", "Neck", "Inseam", "Bottom length"],
 }
 const key = (l: string) => l.toLowerCase().replace(/\s+/g, "_")
-const humanKey = (k: string) => { const t = k.replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1) }
 /** Map a stored product type (e.g. "Pants", "Shalwar Kameez") to a garment id. */
 const garmentId = (t: string) => {
   const s = t.trim().toLowerCase()
@@ -54,7 +58,7 @@ const garmentId = (t: string) => {
 }
 
 const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
-const fmtD = (d?: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "never")
+const fmtD = (d: string | null | undefined, lng: string, never: string) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString(localeTag(lng), { month: "short", day: "numeric", year: "numeric" }) : never)
 const esc = (t: unknown) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
 interface Draft {
@@ -67,10 +71,12 @@ const draftOf = (m: MeasurementSet): Draft => ({
   fit: m.fitPreference || "Regular", notes: m.notes, unit: m.unit, measuredAt: m.measuredAt || todayIso(),
   custom: Object.entries(m.customFields).map(([k, v]) => ({ k, v: String(v) })),
 })
-const setLabel = (m: MeasurementSet) => (NM[garmentId(m.productType)] === m.productType || garmentId(m.productType) !== "other" ? NM[garmentId(m.productType)] : m.productType) + (m.label ? ` · ${m.label}` : "")
+const setLabel = (t: TailorT, m: MeasurementSet) => (NM[garmentId(m.productType)] === m.productType || garmentId(m.productType) !== "other" ? garmentLabel(t, garmentId(m.productType)) : m.productType) + (m.label ? ` · ${m.label}` : "")
 
 export default function MeasurementsPage() {
   const { canRead, canWrite } = useSaasAuth()
+  const { t, i18n } = useTranslation(TAILOR_NS)
+  const lng = i18n.language
 
   const [customers, setCustomers] = useState<MeasurementCustomer[]>([])
   const [pagination, setPagination] = useState<Pagination | null>(null)
@@ -101,11 +107,11 @@ export default function MeasurementsPage() {
       setCustomers(r.rows); setPagination(r.pagination)
       setSelCust((cur) => cur ? (r.rows.find((c) => c.id === cur.id) ?? cur) : (r.rows[0] ?? null))
     } catch {
-      toast.error("Failed to load customers")
+      toast.error(t("tailor:measure.failedCustomers"))
     } finally {
       setLoading(false)
     }
-  }, [qD, page, perPage])
+  }, [qD, page, perPage, t])
   useEffect(() => { loadCustomers() }, [loadCustomers])
 
   const loadSets = useCallback(async (customerId: number, select?: number | "new") => {
@@ -115,11 +121,11 @@ export default function MeasurementsPage() {
       setSets(s)
       setSelM((cur) => select ?? (cur !== "new" && s.some((x) => x.id === cur) ? cur : (s[0]?.id ?? "new")))
     } catch {
-      toast.error("Failed to load measurements"); setSets([])
+      toast.error(t("tailor:measure.failedMeasurements")); setSets([])
     } finally {
       setSetsLoading(false)
     }
-  }, [])
+  }, [t])
   useEffect(() => { if (selCust) { setShowHist(false); loadSets(selCust.id) } else setSets([]) }, [selCust?.id, loadSets]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rec = selM === "new" ? null : sets.find((s) => s.id === selM) ?? null
@@ -131,8 +137,8 @@ export default function MeasurementsPage() {
   }, [selM, sets, setsLoading]) // eslint-disable-line react-hooks/exhaustive-deps
   const patch = (p: Partial<Draft>) => { setDraft((d) => ({ ...d, ...p })); setErr("") }
 
-  const baseDefs = (F[draft.garment] ?? []).map((l) => ({ l, k: key(l) }))
-  const extraDefs = Object.keys(draft.values).filter((k) => !baseDefs.some((d) => d.k === k)).map((k) => ({ l: humanKey(k), k }))
+  const baseDefs = (F[draft.garment] ?? []).map((l) => ({ l: measFieldLabel(t, key(l)), k: key(l) }))
+  const extraDefs = Object.keys(draft.values).filter((k) => !baseDefs.some((d) => d.k === k)).map((k) => ({ l: measFieldLabel(t, k), k }))
   const fieldDefs = [...baseDefs, ...extraDefs]
   const prevVals = rec && rec.history.length ? rec.history[rec.history.length - 1].values : null
   const today = todayIso()
@@ -143,20 +149,20 @@ export default function MeasurementsPage() {
     return out
   }
   const validate = () => {
-    if (!selCust) return "Select a customer first."
-    if (!draft.garment) return "Choose a garment type."
+    if (!selCust) return t("tailor:measure.selectCustomerFirst")
+    if (!draft.garment) return t("tailor:measure.chooseGarment")
     const lim = draft.unit === "cm" ? 500 : 200
     for (const { l, k } of fieldDefs) {
       const v = draft.values[k]
-      if (v !== undefined && v !== "" && !(Number(v) > 0 && Number(v) < lim)) return `${l} must be a number between 0 and ${lim} ${draft.unit}.`
+      if (v !== undefined && v !== "" && !(Number(v) > 0 && Number(v) < lim)) return t("tailor:measure.fieldRange", { field: l, max: lim, unit: draft.unit })
     }
     const cu = draft.custom.filter((c) => c.k.trim() || c.v.trim())
-    for (const c of cu) { if (!c.k.trim()) return "Give every extra measurement a name."; if (!c.v.trim()) return `Enter a value for "${c.k.trim()}".` }
+    for (const c of cu) { if (!c.k.trim()) return t("tailor:measure.nameExtra"); if (!c.v.trim()) return t("tailor:measure.valueFor", { name: c.k.trim() }) }
     const names = cu.map((c) => c.k.trim().toLowerCase())
-    if (new Set(names).size !== names.length) return "Extra measurement names must be unique."
-    if (!Object.keys(cleanValues()).length && !cu.length) return "Enter at least one measurement."
-    if (!draft.measuredAt) return "Pick the measurement date."
-    if (draft.measuredAt > today) return "Measurement date cannot be in the future."
+    if (new Set(names).size !== names.length) return t("tailor:measure.uniqueNames")
+    if (!Object.keys(cleanValues()).length && !cu.length) return t("tailor:measure.atLeastOne")
+    if (!draft.measuredAt) return t("tailor:measure.pickDate")
+    if (draft.measuredAt > today) return t("tailor:measure.dateFuture")
     return ""
   }
 
@@ -172,62 +178,62 @@ export default function MeasurementsPage() {
     setSaving(true); setErr("")
     try {
       const saved = await tailorWorkshopApi.saveMeasurement(rec?.id ?? null, payload(draft, selCust.id, cleanValues()))
-      toast.success(rec ? "Measurements updated" : "Measurements saved")
+      toast.success(rec ? t("tailor:measure.updated") : t("tailor:measure.saved"))
       await loadSets(selCust.id, saved.id); loadCustomers()
     } catch (er: any) {
-      setErr(er?.response?.data?.message || "Could not save the measurements.")
+      setErr(er?.response?.data?.message || t("tailor:measure.couldNotSave"))
     } finally {
       setSaving(false)
     }
   }
 
   const duplicate = async () => {
-    if (!rec || !selCust) { setErr("Save the measurements before duplicating."); return }
+    if (!rec || !selCust) { setErr(t("tailor:measure.saveBeforeDuplicate")); return }
     try {
       const copy = await tailorWorkshopApi.saveMeasurement(null, payload({ ...draftOf(rec), label: rec.label ? `${rec.label} (copy)` : "Copy", measuredAt: today }, selCust.id, { ...rec.values }))
-      toast.success("Duplicated. Edit the label or values and save.")
+      toast.success(t("tailor:measure.duplicated"))
       await loadSets(selCust.id, copy.id); loadCustomers()
-    } catch (er: any) { toast.error(er?.response?.data?.message || "Could not duplicate") }
+    } catch (er: any) { toast.error(er?.response?.data?.message || t("tailor:measure.couldNotDuplicate")) }
   }
 
   const remove = async () => {
     if (!rec) { setSelM(sets[0]?.id ?? "new"); setDraft(newDraft()); return }
     const used = rec.usedByOrders ?? 0
     const msg = used > 0
-      ? `This set is used by ${used} tailor order${used === 1 ? "" : "s"}; ${used === 1 ? "that order keeps" : "those orders keep"} their copy.\n\nDelete "${setLabel(rec)}" for ${selCust?.name ?? ""}?`
-      : `Delete "${setLabel(rec)}" for ${selCust?.name ?? ""}? Orders keep their own copy.`
+      ? t("tailor:measure.deleteUsed", { count: used, name: setLabel(t, rec), customer: selCust?.name ?? "" })
+      : t("tailor:measure.deleteConfirm", { name: setLabel(t, rec), customer: selCust?.name ?? "" })
     if (!window.confirm(msg)) return
     try {
       await tailorWorkshopApi.deleteMeasurement(rec.id)
-      toast.success("Measurements deleted")
+      toast.success(t("tailor:measure.deleted"))
       if (selCust) { await loadSets(selCust.id, "new"); loadCustomers() }
-    } catch (er: any) { toast.error(er?.response?.data?.message || "Could not delete") }
+    } catch (er: any) { toast.error(er?.response?.data?.message || t("tailor:shared.couldNotDelete")) }
   }
 
   const startNew = () => {
-    if (!selCust) { toast.error("Add or select a customer first"); return }
+    if (!selCust) { toast.error(t("tailor:measure.addSelectFirst")); return }
     setSelM("new"); setDraft(newDraft()); setErr(""); setShowHist(false)
   }
 
   const addCustomer = async () => {
-    if (!addName.trim() || !addPhone.trim()) { toast.error("Enter the customer name and phone"); return }
+    if (!addName.trim() || !addPhone.trim()) { toast.error(t("tailor:measure.enterNamePhone")); return }
     try {
       const c = await tailorWorkshopApi.addCustomer({ name: addName.trim(), phone: addPhone.trim() })
-      toast.success("Customer saved")
+      toast.success(t("tailor:measure.customerSaved"))
       setAddOpen(false); setAddName(""); setAddPhone(""); setQ("")
       setSelCust({ id: c.id, name: c.name, phone: c.phone, address: null, garments: [], setsCount: 0, lastMeasuredAt: null })
       loadCustomers()
-    } catch (er: any) { toast.error(er?.response?.data?.message || "Could not add the customer") }
+    } catch (er: any) { toast.error(er?.response?.data?.message || t("tailor:measure.couldNotAddCustomer")) }
   }
 
   const printCard = () => {
-    if (!selCust) { toast.error("Select a customer first"); return }
+    if (!selCust) { toast.error(t("tailor:measure.selectCustomerToast")); return }
     const list = rec ? [rec] : sets
-    if (!list.length) { toast.error("No saved measurements to print"); return }
-    const body = list.map((m) => `<h2>${esc(setLabel(m))}</h2><table>${Object.entries(m.values).map(([k, v]) => `<tr><td>${esc(k.replace(/_/g, " "))}</td><td>${esc(v)} ${esc(m.unit)}</td></tr>`).join("")}${Object.entries(m.customFields).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table><p>Measured: ${esc(fmtD(m.measuredAt))} &middot; Fit: ${esc(m.fitPreference)}${m.notes ? ` &middot; ${esc(m.notes)}` : ""}</p>`).join("")
+    if (!list.length) { toast.error(t("tailor:measure.noSavedToPrint")); return }
+    const body = list.map((m) => `<h2>${esc(setLabel(t, m))}</h2><table>${Object.entries(m.values).map(([k, v]) => `<tr><td>${esc(measFieldLabel(t, k))}</td><td>${esc(v)} ${esc(m.unit)}</td></tr>`).join("")}${Object.entries(m.customFields).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table><p>${esc(t("tailor:measure.printMeasured", { date: fmtD(m.measuredAt, lng, t("tailor:measure.never")), fit: fitLabel(t, m.fitPreference) }))}${m.notes ? ` &middot; ${esc(m.notes)}` : ""}</p>`).join("")
     const w = window.open("", "_blank")
-    if (!w) { toast.error("Allow pop-ups to print the card"); return }
-    w.document.write(`<!doctype html><title>Measurement card</title><style>body{font-family:sans-serif;padding:24px;color:#0E1525}h1{margin:0}h2{margin:18px 0 6px;font-size:16px}table{border-collapse:collapse;min-width:260px}td{border:1px solid #D5DAE5;padding:6px 12px;text-transform:capitalize}</style><h1>${esc(selCust.name)}</h1><div>${esc(selCust.phone)}</div>${body}`)
+    if (!w) { toast.error(t("tailor:measure.allowPopupsCard")); return }
+    w.document.write(`<!doctype html><html lang="${esc(lng)}"><meta charset="utf-8"><title>${esc(t("tailor:measure.printTitle"))}</title><style>body{font-family:sans-serif;padding:24px;color:#0E1525}h1{margin:0}h2{margin:18px 0 6px;font-size:16px}table{border-collapse:collapse;min-width:260px}td{border:1px solid #D5DAE5;padding:6px 12px;text-transform:capitalize}</style><h1>${esc(selCust.name)}</h1><div>${esc(selCust.phone)}</div>${body}`)
     w.document.close(); w.focus(); w.print()
   }
 
@@ -239,35 +245,35 @@ export default function MeasurementsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Measurements"
-        description="Saved body measurements per customer and garment — no more paper slips."
-        actions={writable ? <Button type="button" onClick={startNew}>+ New customer measurement</Button> : undefined}
+        title={t("tailor:measure.title")}
+        description={t("tailor:measure.description")}
+        actions={writable ? <Button type="button" onClick={startNew}>{t("tailor:measure.newCustomerMeasurement")}</Button> : undefined}
       />
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <Card className="w-full shrink-0 gap-2.5 p-4 xl:w-[340px]">
           <InputGroup>
             <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-            <InputGroupInput type="search" aria-label="Search" placeholder="Name or phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <InputGroupInput type="search" aria-label={t("common:actions.search")} placeholder={t("tailor:measure.searchPlaceholder")} value={q} onChange={(e) => setQ(e.target.value)} />
           </InputGroup>
           {canWrite("TailorOrders") && (
             addOpen ? (
               <Card className="gap-2 p-3 shadow-none">
-                <Input aria-label="Customer name" placeholder="Customer name" value={addName} onChange={(e) => setAddName(e.target.value)} />
-                <Input aria-label="Phone" type="tel" placeholder="Phone" value={addPhone} onChange={(e) => setAddPhone(e.target.value)} />
-                <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setAddOpen(false)} className="flex-1">Cancel</Button>
-                  <Button type="button" onClick={addCustomer} className="flex-1">Save</Button></div>
+                <Input aria-label={t("tailor:measure.customerName")} placeholder={t("tailor:measure.customerName")} value={addName} onChange={(e) => setAddName(e.target.value)} />
+                <Input aria-label={t("common:fields.phone")} type="tel" placeholder={t("common:fields.phone")} value={addPhone} onChange={(e) => setAddPhone(e.target.value)} />
+                <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setAddOpen(false)} className="flex-1">{t("common:actions.cancel")}</Button>
+                  <Button type="button" onClick={addCustomer} className="flex-1">{t("common:actions.save")}</Button></div>
               </Card>
             ) : (
               <>
-              <Button type="button" variant="link" onClick={() => setAddOpen(true)} className="self-start"><UserPlus className="size-4" aria-hidden /> Add customer</Button>
-              <Link href="/dashboard/customers?add=1" className="self-start text-xs font-medium text-muted-foreground underline-offset-4 hover:text-primary hover:underline">Open the full customer form</Link>
+              <Button type="button" variant="link" onClick={() => setAddOpen(true)} className="self-start"><UserPlus className="size-4" aria-hidden /> {t("tailor:measure.addCustomer")}</Button>
+              <Link href="/dashboard/customers?add=1" className="self-start text-xs font-medium text-muted-foreground underline-offset-4 hover:text-primary hover:underline">{t("tailor:measure.openFullForm")}</Link>
               </>
             )
           )}
           {loading ? [1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />) :
             customers.length === 0 ? (
-              <EmptyState bordered className="p-5 md:p-5" title="No customers" description={qD ? "No customers match your search." : "No customers yet. Add a customer to save measurements."} />
+              <EmptyState bordered className="p-5 md:p-5" title={t("tailor:measure.noCustomers")} description={qD ? t("tailor:measure.noMatch") : t("tailor:measure.noCustomersYet")} />
             ) : customers.map((c) => {
               const on = selCust?.id === c.id
               return (
@@ -275,7 +281,7 @@ export default function MeasurementsPage() {
                   variant={on ? "secondary" : "ghost"} className="h-auto w-full justify-start gap-3 text-left whitespace-normal">
                   <UserAvatar name={c.name} className="size-10" />
                   <span className="flex min-w-0 flex-col"><span className="truncate font-medium">{c.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">{c.phone || "—"} · {c.garments.length ? c.garments.join(", ") : "No measurements yet"}</span></span>
+                    <span className="truncate text-xs text-muted-foreground">{c.phone || "—"} · {c.garments.length ? c.garments.map((g) => garmentLabel(t, g)).join(", ") : t("tailor:measure.noMeasurementsYet")}</span></span>
                 </Button>
               )
             })}
@@ -288,39 +294,39 @@ export default function MeasurementsPage() {
         <SectionCard
           className="w-full min-w-0 flex-1"
           contentClassName="flex flex-col gap-4"
-          title={<span className="text-xl">{selCust?.name ?? "No customer selected"}</span>}
-          description={`${selCust?.phone || "—"} · last measured ${fmtD(lastAt)}`}
+          title={<span className="text-xl">{selCust?.name ?? t("tailor:measure.noCustomerSelected")}</span>}
+          description={t("tailor:measure.lastMeasured", { phone: selCust?.phone || "—", date: fmtD(lastAt, lng, t("tailor:measure.never")) })}
           actions={<>
-            <Button type="button" variant="outline" onClick={printCard}><Printer className="size-4" aria-hidden /> Print card</Button>
+            <Button type="button" variant="outline" onClick={printCard}><Printer className="size-4" aria-hidden /> {t("tailor:measure.printCard")}</Button>
             {selCust && canRead("TailorOrders") && (
-              <Button asChild variant="outline"><Link href={`/dashboard/tailor/orders/new?customerId=${selCust.id}`}>New order with these</Link></Button>
+              <Button asChild variant="outline"><Link href={`/dashboard/tailor/orders/new?customerId=${selCust.id}`}>{t("tailor:measure.newOrderWith")}</Link></Button>
             )}
           </>}
         >
           {!selCust ? (
-            <EmptyState bordered title="No customer selected" description="Select or add a customer to see their measurements." />
+            <EmptyState bordered title={t("tailor:measure.noCustomerSelected")} description={t("tailor:measure.selectOrAdd")} />
           ) : (
             <>
-              <div role="tablist" aria-label="Garment" className="flex flex-wrap gap-2">
+              <div role="tablist" aria-label={t("tailor:measure.garmentAria")} className="flex flex-wrap gap-2">
                 {sets.map((m) => {
                   const on = m.id === selM
                   return <Button key={m.id} type="button" role="tab" aria-selected={on} onClick={() => { setSelM(m.id); setShowHist(false) }}
-                    variant={on ? "default" : "outline"}>{setLabel(m)}</Button>
+                    variant={on ? "default" : "outline"}>{setLabel(t, m)}</Button>
                 })}
                 {writable && <Button type="button" role="tab" aria-selected={selM === "new"} onClick={startNew}
-                  variant={selM === "new" ? "default" : "outline"}>{selM === "new" ? "New garment" : "+ Add garment"}</Button>}
+                  variant={selM === "new" ? "default" : "outline"}>{selM === "new" ? t("tailor:measure.newGarment") : t("tailor:measure.addGarment")}</Button>}
               </div>
               {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
 
               {setsLoading ? <Skeleton className="h-64" /> : (
                 <fieldset disabled={!writable} className="flex flex-col gap-4 border-0 p-0">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FormField label="Garment type" htmlFor="meas-garment">
+                    <FormField label={t("tailor:measure.garmentType")} htmlFor="meas-garment">
                       <Select value={draft.garment} onValueChange={(v) => patch({ garment: v })}>
                         <SelectTrigger id="meas-garment" className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Object.entries(NM).map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{Object.keys(NM).map((id) => <SelectItem key={id} value={id}>{garmentLabel(t, id)}</SelectItem>)}</SelectContent>
                       </Select></FormField>
-                    <FormField label="Label" htmlFor="meas-label"><Input id="meas-label" value={draft.label} onChange={(e) => patch({ label: e.target.value })} placeholder="e.g. Eid 2026" /></FormField>
+                    <FormField label={t("tailor:measure.label")} htmlFor="meas-label"><Input id="meas-label" value={draft.label} onChange={(e) => patch({ label: e.target.value })} placeholder={t("tailor:measure.labelPlaceholder")} /></FormField>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -329,7 +335,7 @@ export default function MeasurementsPage() {
                       let diff = "", warn = false
                       if (prevVals && prevVals[k] != null && cur !== "" && Number.isFinite(Number(cur))) {
                         const dv = Math.round((Number(cur) - Number(prevVals[k])) * 100) / 100
-                        diff = dv === 0 ? "Same as before" : `${dv > 0 ? "+" : "−"}${Math.abs(dv)} since last`; warn = dv !== 0
+                        diff = dv === 0 ? t("tailor:measure.sameAsBefore") : t("tailor:measure.sinceLast", { diff: `${dv > 0 ? "+" : "−"}${Math.abs(dv)}` }); warn = dv !== 0
                       }
                       return (
                         <FormField key={k} className="min-w-0 gap-1.5" label={l} htmlFor={`meas-${k}`}>
@@ -344,42 +350,42 @@ export default function MeasurementsPage() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between"><span className="text-sm font-medium">Extra measurements <span className="font-normal text-muted-foreground">(anything not listed above)</span></span>
-                      <Button type="button" variant="link" size="sm" onClick={() => patch({ custom: [...draft.custom, { k: "", v: "" }] })}>+ Add</Button></div>
+                    <div className="flex items-center justify-between"><span className="text-sm font-medium">{t("tailor:measure.extraMeasurements")} <span className="font-normal text-muted-foreground">{t("tailor:measure.extraHint")}</span></span>
+                      <Button type="button" variant="link" size="sm" onClick={() => patch({ custom: [...draft.custom, { k: "", v: "" }] })}>{t("tailor:measure.addExtra")}</Button></div>
                     {draft.custom.map((c, i) => (
                       <div key={i} className="flex gap-2">
-                        <Input aria-label="Measurement name" placeholder="e.g. Back length" value={c.k} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, k: e.target.value } : x) })} />
-                        <Input aria-label="Measurement value" placeholder="Value" value={c.v} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, v: e.target.value } : x) })} />
-                        <Button type="button" variant="outline" aria-label="Remove" onClick={() => patch({ custom: draft.custom.filter((_, j) => j !== i) })}>Remove</Button>
+                        <Input aria-label={t("tailor:measure.measName")} placeholder={t("tailor:measure.measNamePlaceholder")} value={c.k} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, k: e.target.value } : x) })} />
+                        <Input aria-label={t("tailor:measure.measValue")} placeholder={t("tailor:measure.value")} value={c.v} onChange={(e) => patch({ custom: draft.custom.map((x, j) => j === i ? { ...x, v: e.target.value } : x) })} />
+                        <Button type="button" variant="outline" aria-label={t("common:actions.remove")} onClick={() => patch({ custom: draft.custom.filter((_, j) => j !== i) })}>{t("common:actions.remove")}</Button>
                       </div>
                     ))}
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FormField label="Measured on" htmlFor="meas-date"><Input id="meas-date" type="date" max={today} value={draft.measuredAt} onChange={(e) => patch({ measuredAt: e.target.value })} /></FormField>
-                    <FormField label="Unit" htmlFor="meas-unit">
+                    <FormField label={t("tailor:measure.measuredOn")} htmlFor="meas-date"><Input id="meas-date" type="date" max={today} value={draft.measuredAt} onChange={(e) => patch({ measuredAt: e.target.value })} /></FormField>
+                    <FormField label={t("common:extra.unit")} htmlFor="meas-unit">
                       <Select value={draft.unit} onValueChange={(v) => patch({ unit: v as "in" | "cm" })}>
                         <SelectTrigger id="meas-unit" className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="in">Inches (in)</SelectItem><SelectItem value="cm">Centimetres (cm)</SelectItem></SelectContent>
+                        <SelectContent><SelectItem value="in">{t("tailor:measure.inches")}</SelectItem><SelectItem value="cm">{t("tailor:measure.centimetres")}</SelectItem></SelectContent>
                       </Select></FormField>
-                    <FormField label="Fit preference" htmlFor="meas-fit">
+                    <FormField label={t("tailor:measure.fitPreference")} htmlFor="meas-fit">
                       <Select value={draft.fit} onValueChange={(v) => patch({ fit: v })}>
                         <SelectTrigger id="meas-fit" className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="Regular">Regular</SelectItem><SelectItem value="Slim">Slim</SelectItem><SelectItem value="Loose">Loose</SelectItem></SelectContent>
+                        <SelectContent>{["Regular", "Slim", "Loose", ...(["Regular", "Slim", "Loose"].includes(draft.fit) ? [] : [draft.fit])].map((f) => <SelectItem key={f} value={f}>{fitLabel(t, f)}</SelectItem>)}</SelectContent>
                       </Select></FormField>
-                    <FormField label="Note" htmlFor="meas-note"><Input id="meas-note" placeholder="e.g. Prefers longer sleeves" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} /></FormField>
+                    <FormField label={t("common:fields.note")} htmlFor="meas-note"><Input id="meas-note" placeholder={t("tailor:measure.notePlaceholder")} value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} /></FormField>
                   </div>
                 </fieldset>
               )}
 
               {showHist && rec && (
                 <Card className="gap-2 p-3.5 shadow-none">
-                  <SectionTitle>Version history</SectionTitle>
-                  {rec.history.length === 0 ? <span className="text-sm text-muted-foreground">No earlier versions yet.</span> :
+                  <SectionTitle>{t("tailor:measure.versionHistory")}</SectionTitle>
+                  {rec.history.length === 0 ? <span className="text-sm text-muted-foreground">{t("tailor:measure.noEarlier")}</span> :
                     rec.history.slice().reverse().map((h, i) => (
                       <div key={i} className="flex flex-wrap justify-between gap-3 text-sm">
-                        <span className="font-medium">{fmtD(h.at)}</span>
-                        <span className="text-muted-foreground">{Object.entries(h.values).slice(0, 4).map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`).join(", ")}{Object.keys(h.values).length > 4 ? "…" : ""}</span>
+                        <span className="font-medium">{fmtD(h.at, lng, t("tailor:measure.never"))}</span>
+                        <span className="text-muted-foreground">{Object.entries(h.values).slice(0, 4).map(([k, v]) => `${measFieldLabel(t, k)} ${v}`).join(", ")}{Object.keys(h.values).length > 4 ? "…" : ""}</span>
                       </div>
                     ))}
                 </Card>
@@ -387,13 +393,13 @@ export default function MeasurementsPage() {
 
               <Separator />
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">Grey text shows change since last version · history keeps every version</span>
+                <span className="text-xs text-muted-foreground">{t("tailor:measure.footerHint")}</span>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={() => setShowHist((s) => !s)} disabled={!rec}>{showHist ? "Hide history" : "View history"}</Button>
+                  <Button type="button" variant="outline" onClick={() => setShowHist((s) => !s)} disabled={!rec}>{showHist ? t("tailor:measure.hideHistory") : t("tailor:measure.viewHistory")}</Button>
                   {writable && <>
-                    <Button type="button" variant="outline" onClick={duplicate}>Duplicate</Button>
-                    <Button type="button" variant="destructive" onClick={remove}>Delete</Button>
-                    <Button type="button" onClick={save} disabled={saving}>{saving ? "Saving…" : rec ? "Save measurements" : "Add measurements"}</Button>
+                    <Button type="button" variant="outline" onClick={duplicate}>{t("common:actions.duplicate")}</Button>
+                    <Button type="button" variant="destructive" onClick={remove}>{t("common:actions.delete")}</Button>
+                    <Button type="button" onClick={save} disabled={saving}>{saving ? t("common:actions.saving") : rec ? t("tailor:measure.saveMeasurements") : t("tailor:measure.addMeasurements")}</Button>
                   </>}
                 </div>
               </div>

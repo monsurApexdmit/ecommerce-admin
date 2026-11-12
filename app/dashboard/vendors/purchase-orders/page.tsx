@@ -2,6 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Banknote, Download, Eye, Package, Plus, Printer, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -38,10 +40,21 @@ import { useWarehouse } from "@/contexts/warehouse-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { localeTag } from "@/lib/i18n"
 
 type Tab = "all" | "draft" | "ordered" | "partial" | "received" | "cancelled"
 
-const STATUS_LABEL: Record<string, string> = { draft: "Draft", sent: "Ordered", partial: "Partly received", received: "Received", cancelled: "Cancelled" }
+const NS = ["inventory", "common"] as const
+type K = ParseKeys<typeof NS>
+
+/** PO status code → label key (codes stay as data). */
+const STATUS_LABEL: Record<string, K> = {
+  draft: "inventory:purchases.status.draft",
+  sent: "inventory:purchases.status.sent",
+  partial: "inventory:purchases.status.partial",
+  received: "inventory:purchases.status.received",
+  cancelled: "inventory:purchases.status.cancelled",
+}
 const STATUS_VARIANT: Record<string, StatusVariant> = {
   draft: "outline",
   sent: "secondary",
@@ -57,16 +70,16 @@ const PAY_VARIANT: Record<string, StatusVariant> = {
   partially_paid: "secondary",
   pending: "destructive",
 }
-const PAY_LABEL: Record<string, string> = { paid: "Paid", partially_paid: "Partial", pending: "Unpaid" }
-const PAY_METHODS = [
-  { value: "cash", label: "Cash" }, { value: "bank", label: "Bank transfer" }, { value: "bkash", label: "bKash" },
-  { value: "nagad", label: "Nagad" }, { value: "cheque", label: "Cheque" }, { value: "card", label: "Card" }, { value: "other", label: "Other" },
+const PAY_LABEL: Record<string, K> = { paid: "common:payment.paid", partially_paid: "common:extra.partialShort", pending: "common:payment.unpaid" }
+const PAY_METHODS: { value: string; label: K }[] = [
+  { value: "cash", label: "common:payment.cash" }, { value: "bank", label: "inventory:suppliers.payMethod.bankTransfer" }, { value: "bkash", label: "inventory:suppliers.payMethod.bkash" },
+  { value: "nagad", label: "inventory:suppliers.payMethod.nagad" }, { value: "cheque", label: "inventory:purchases.cheque" }, { value: "card", label: "common:payment.card" }, { value: "other", label: "common:extra.other" },
 ]
+const PAY_METHOD_KEY: Record<string, K> = Object.fromEntries(PAY_METHODS.map((m) => [m.value, m.label]))
 
 const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 const today = () => isoLocal(new Date())
 const addDays = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return isoLocal(d) }
-const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 const r2 = (v: number) => Math.round(v * 100) / 100
 
 
@@ -85,6 +98,12 @@ interface Line {
 }
 
 export default function PurchaseOrdersPage() {
+  const { t, i18n } = useTranslation(NS)
+  const tag = localeTag(i18n.language)
+  const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" }) : "—")
+  const statusLabel = (s: string) => (STATUS_LABEL[s] ? t(STATUS_LABEL[s]) : s)
+  const payLabel = (s: string) => (PAY_LABEL[s] ? t(PAY_LABEL[s]) : s)
+  const methodLabel = (m?: string | null) => (m && PAY_METHOD_KEY[m] ? t(PAY_METHOD_KEY[m]) : m ?? "")
   const { formatCurrency } = useCompanySettings()
   const { warehouses, defaultWarehouse } = useWarehouse()
   const searchParams = useSearchParams()
@@ -155,7 +174,7 @@ export default function PurchaseOrdersPage() {
       setDueTotal(typeof d?.due_total === "number" ? d.due_total : null)
     } catch {
       setPos([])
-      toast.error("Failed to load purchase orders")
+      toast.error(t("inventory:purchases.toast.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -261,21 +280,21 @@ export default function PurchaseOrdersPage() {
   const missingLow = lowProducts.filter((p) => !lines.some((l) => l.productId === Number(p.id))).length
 
   const submit = async (status: "draft" | "sent" | "received") => {
-    if (!supId) { setFormError("Choose a supplier."); return }
-    if (lines.length === 0) { setFormError("Add at least one item."); return }
-    if (lines.some((l) => l.qty < 1)) { setFormError("Every item needs a quantity of at least 1."); return }
-    if (lines.some((l) => !(l.cost >= 0))) { setFormError("Unit cost cannot be negative."); return }
-    if (status === "received" && !locId) { setFormError("Choose where to receive the stock."); return }
-    if (supplier && supplier.status && supplier.status !== "Active") { setFormError(`${supplier.name} is ${supplier.status.toLowerCase()}. Reactivate the supplier before ordering.`); return }
-    if (expDate && expDate < today()) { setFormError("Expected delivery cannot be in the past."); return }
-    if (discVal !== "" && !(dv >= 0)) { setFormError("Discount cannot be negative."); return }
-    if (discType === "percent" && dv > 100) { setFormError("Discount cannot be more than 100%."); return }
-    if (discType === "flat" && dv > subtotal + 0.005) { setFormError("Discount is more than the subtotal."); return }
-    if (taxRate !== "" && !(Number(taxRate) >= 0 && Number(taxRate) <= 100)) { setFormError("Tax rate must be between 0 and 100%."); return }
-    if (shipCost !== "" && !(Number(shipCost) >= 0)) { setFormError("Shipping cost cannot be negative."); return }
-    if (paidMode === "partial" && !(Number(partial) > 0)) { setFormError("Enter the advance amount you are paying now."); return }
-    if (paidMode === "partial" && Number(partial) > grand + 0.005) { setFormError("Advance is more than the PO total."); return }
-    if (paidNow > 0 && payDate && payDate > today()) { setFormError("Payment date cannot be in the future."); return }
+    if (!supId) { setFormError(t("inventory:purchases.validation.supplier")); return }
+    if (lines.length === 0) { setFormError(t("inventory:purchases.validation.items")); return }
+    if (lines.some((l) => l.qty < 1)) { setFormError(t("inventory:purchases.validation.qty")); return }
+    if (lines.some((l) => !(l.cost >= 0))) { setFormError(t("inventory:purchases.validation.cost")); return }
+    if (status === "received" && !locId) { setFormError(t("inventory:purchases.validation.location")); return }
+    if (supplier && supplier.status && supplier.status !== "Active") { setFormError(t("inventory:purchases.validation.supplierInactive", { name: supplier.name, status: supplier.status === "Blocked" ? t("inventory:suppliers.status.blocked") : supplier.status === "Inactive" ? t("common:status.inactive") : supplier.status })); return }
+    if (expDate && expDate < today()) { setFormError(t("inventory:purchases.validation.expectedPast")); return }
+    if (discVal !== "" && !(dv >= 0)) { setFormError(t("inventory:purchases.validation.discountNegative")); return }
+    if (discType === "percent" && dv > 100) { setFormError(t("inventory:purchases.validation.discountPercent")); return }
+    if (discType === "flat" && dv > subtotal + 0.005) { setFormError(t("inventory:purchases.validation.discountTooHigh")); return }
+    if (taxRate !== "" && !(Number(taxRate) >= 0 && Number(taxRate) <= 100)) { setFormError(t("inventory:purchases.validation.taxRate")); return }
+    if (shipCost !== "" && !(Number(shipCost) >= 0)) { setFormError(t("inventory:purchases.validation.shipping")); return }
+    if (paidMode === "partial" && !(Number(partial) > 0)) { setFormError(t("inventory:purchases.validation.advance")); return }
+    if (paidMode === "partial" && Number(partial) > grand + 0.005) { setFormError(t("inventory:purchases.validation.advanceTooHigh")); return }
+    if (paidNow > 0 && payDate && payDate > today()) { setFormError(t("inventory:purchases.validation.payDateFuture")); return }
     setSaving(true); setFormError("")
     try {
       await purchaseOrderApi.create({
@@ -296,12 +315,12 @@ export default function PurchaseOrdersPage() {
           unitCost: l.cost,
         })),
       })
-      toast.success(status === "draft" ? "Draft saved" : status === "received" ? "Purchase order created and stock received" : "Purchase order sent")
+      toast.success(status === "draft" ? t("inventory:purchases.toast.draftSaved") : status === "received" ? t("inventory:purchases.toast.createdReceived") : t("inventory:purchases.toast.sent"))
       setFormOpen(false)
       resetForm()
       refresh()
     } catch (e: any) {
-      setFormError(e?.response?.data?.message ?? "Could not save the purchase order.")
+      setFormError(e?.response?.data?.message ?? t("inventory:purchases.toast.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -331,7 +350,7 @@ export default function PurchaseOrdersPage() {
       if (closeAfter) setView(null)
       else if (view) await reloadView(view.id)
     } catch (e: any) {
-      setDErr(e?.response?.data?.message ?? "That did not work.")
+      setDErr(e?.response?.data?.message ?? t("inventory:purchases.toast.failed"))
     } finally {
       setBusy(false)
     }
@@ -342,12 +361,12 @@ export default function PurchaseOrdersPage() {
     const items = view.items
       .map((i) => ({ itemId: i.id, quantityReceiving: Math.min(Number(rcvQty[i.id]) || 0, i.quantityOrdered - i.quantityReceived) }))
       .filter((i) => i.quantityReceiving > 0)
-    if (items.length === 0) { setDErr("Enter a quantity to receive."); return }
-    if (!rcvLoc) { setDErr("Choose where to receive the stock."); return }
+    if (items.length === 0) { setDErr(t("inventory:purchases.validation.receiveQty")); return }
+    if (!rcvLoc) { setDErr(t("inventory:purchases.validation.location")); return }
     const units = items.reduce((a, i) => a + i.quantityReceiving, 0)
-    const where = warehouses.find((w) => String(w.id) === rcvLoc)?.name ?? "the selected location"
-    if (!window.confirm(`Receive ${units} unit${units === 1 ? "" : "s"} of ${view.poNumber} into ${where}?`)) return
-    act(() => purchaseOrderApi.receive(view.id, { locationId: Number(rcvLoc), items }), "Stock received and inventory updated")
+    const where = warehouses.find((w) => String(w.id) === rcvLoc)?.name ?? t("inventory:purchases.selectedLocation")
+    if (!window.confirm(t("inventory:purchases.confirmReceive", { count: units, po: view.poNumber, where }))) return
+    act(() => purchaseOrderApi.receive(view.id, { locationId: Number(rcvLoc), items }), t("inventory:purchases.toast.receivedUpdated"))
   }
 
   // Row shortcut: receive everything still outstanding at the PO's location
@@ -355,21 +374,21 @@ export default function PurchaseOrdersPage() {
     const items = p.items.map((i) => ({ itemId: i.id, quantityReceiving: i.quantityOrdered - i.quantityReceived })).filter((i) => i.quantityReceiving > 0)
     if (items.length === 0) return
     const locationId = p.locationId ?? defaultWarehouse?.id
-    if (!locationId) { toast.error("Choose a receiving location first (open the order)."); return }
+    if (!locationId) { toast.error(t("inventory:purchases.toast.chooseLocationFirst")); return }
     const units = items.reduce((a, i) => a + i.quantityReceiving, 0)
-    const where = p.locationName ?? warehouses.find((w) => w.id === locationId)?.name ?? "the default location"
-    if (!window.confirm(`Receive ${units} unit${units === 1 ? "" : "s"} of ${p.poNumber} into ${where}?`)) return
-    await act2(p, () => purchaseOrderApi.receive(p.id, { locationId, items }), "Stock received")
+    const where = p.locationName ?? warehouses.find((w) => w.id === locationId)?.name ?? t("inventory:purchases.defaultLocation")
+    if (!window.confirm(t("inventory:purchases.confirmReceive", { count: units, po: p.poNumber, where }))) return
+    await act2(p, () => purchaseOrderApi.receive(p.id, { locationId, items }), t("inventory:purchases.toast.received"))
   }
 
   const recordPay = () => {
     if (!view) return
     const amount = Number(dPayAmt)
-    if (!(amount > 0)) { setDErr("Enter a payment amount."); return }
-    if (amount > view.dueAmount + 0.005) { setDErr("The amount is more than what is due."); return }
+    if (!(amount > 0)) { setDErr(t("inventory:purchases.validation.payAmount")); return }
+    if (amount > view.dueAmount + 0.005) { setDErr(t("inventory:purchases.validation.payTooMuch")); return }
     act(
       () => purchaseOrderApi.recordPayment(view.id, { amount, paymentMethod: dPayMethod, paymentDate: dPayDate, reference: dPayRef || undefined }),
-      "Payment recorded",
+      t("inventory:suppliers.pay.recorded"),
     )
   }
 
@@ -380,15 +399,16 @@ export default function PurchaseOrdersPage() {
     const phone = vendors.find((v) => v.id === po.vendorId)?.phone
     const rows = po.items.map((i) =>
       `<tr><td>${esc(i.productName)}${i.variantName ? ` · ${esc(i.variantName)}` : ""}</td><td class="r">${i.quantityOrdered}</td><td class="r">${formatCurrency(i.unitCost)}</td><td class="r">${formatCurrency(i.subtotal)}</td></tr>`).join("")
-    w.document.write(`<!doctype html><title>${esc(po.poNumber)}</title><style>
+    const L = (k: K, o?: Record<string, unknown>) => esc(String(t(k, o as any)))
+    w.document.write(`<!doctype html><html lang="${i18n.language === "bn" ? "bn" : "en"}"><title>${esc(po.poNumber)}</title><style>
       body{font:14px system-ui;margin:32px;color:#0E1525}h1{margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:18px}
       th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left}.r{text-align:right}.m{color:#5B6478}.t{margin-top:16px;text-align:right}
-    </style><h1>Purchase order ${esc(po.poNumber)}</h1>
-    <div class="m">Date ${fmtDate(po.createdAt)} · Status ${esc(STATUS_LABEL[po.status] ?? po.status)} · Payment ${esc(PAY_LABEL[po.paymentStatus] ?? po.paymentStatus)}</div>
-    <div class="m">${esc(po.vendorName)}${phone ? ` · ${esc(phone)}` : ""} · Deliver to ${esc(po.locationName ?? "—")} · Expected ${fmtDate(po.expectedDate)}</div>
-    <table><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Total</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="t">Subtotal ${formatCurrency(po.subtotal ?? po.totalAmount)}<br>${po.discountAmount ? `Discount −${formatCurrency(po.discountAmount)}<br>` : ""}${po.taxAmount ? `Tax +${formatCurrency(po.taxAmount)}<br>` : ""}${po.shippingCost ? `Shipping +${formatCurrency(po.shippingCost)}<br>` : ""}<strong>Total ${formatCurrency(po.totalAmount)}</strong><br>Paid ${formatCurrency(po.paidAmount)}<br><strong>Due ${formatCurrency(po.dueAmount)}</strong></div>
-    ${po.notes ? `<p class="m">Note: ${esc(po.notes)}</p>` : ""}`)
+    </style><h1>${L("inventory:purchases.print.title", { po: po.poNumber })}</h1>
+    <div class="m">${L("inventory:purchases.print.meta", { date: fmtDate(po.createdAt), status: statusLabel(po.status), payment: payLabel(po.paymentStatus) })}</div>
+    <div class="m">${esc(po.vendorName)}${phone ? ` · ${esc(phone)}` : ""} · ${L("inventory:purchases.print.deliverTo", { location: po.locationName ?? "—", date: fmtDate(po.expectedDate) })}</div>
+    <table><thead><tr><th>${L("common:fields.product")}</th><th class="r">${L("common:fields.qty")}</th><th class="r">${L("inventory:purchases.unitCost")}</th><th class="r">${L("common:money.total")}</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="t">${L("common:money.subtotal")} ${formatCurrency(po.subtotal ?? po.totalAmount)}<br>${po.discountAmount ? `${L("common:money.discount")} −${formatCurrency(po.discountAmount)}<br>` : ""}${po.taxAmount ? `${L("common:money.tax")} +${formatCurrency(po.taxAmount)}<br>` : ""}${po.shippingCost ? `${L("common:money.shipping")} +${formatCurrency(po.shippingCost)}<br>` : ""}<strong>${L("common:money.total")} ${formatCurrency(po.totalAmount)}</strong><br>${L("common:money.paid")} ${formatCurrency(po.paidAmount)}<br><strong>${L("common:money.due")} ${formatCurrency(po.dueAmount)}</strong></div>
+    ${po.notes ? `<p class="m">${L("inventory:purchases.print.note", { note: po.notes })}</p>` : ""}`)
     w.document.close(); w.focus(); w.print()
   }
 
@@ -408,10 +428,10 @@ export default function PurchaseOrdersPage() {
         all.push(...(d?.data ?? []))
         if (pg >= (d?.last_page ?? 1)) break
       }
-      if (all.length === 0) { toast.error("Nothing to export."); return }
+      if (all.length === 0) { toast.error(t("common:extra.nothingToExport")); return }
       exportToCSV(
         all.map((p) => ({
-          po: p.poNumber, supplier: p.vendorName, location: p.locationName ?? "", status: STATUS_LABEL[p.status] ?? p.status,
+          po: p.poNumber, supplier: p.vendorName, location: p.locationName ?? "", status: statusLabel(p.status),
           created: p.createdAt ? p.createdAt.slice(0, 10) : "", expected: p.expectedDate ?? "", items: String(p.items.length),
           units: String(p.unitsOrdered ?? p.items.reduce((a, i) => a + i.quantityOrdered, 0)),
           received_units: String(p.unitsReceived ?? p.items.reduce((a, i) => a + i.quantityReceived, 0)),
@@ -422,7 +442,7 @@ export default function PurchaseOrdersPage() {
         ["PO", "Supplier", "Location", "Status", "Created", "Expected", "Items", "Units", "Received units", "Subtotal", "Discount", "Tax", "Shipping", "Total", "Paid", "Due", "Note"],
       )
     } catch {
-      toast.error("Could not export purchase orders.")
+      toast.error(t("inventory:purchases.toast.exportFailed"))
     } finally {
       setExporting(false)
     }
@@ -432,17 +452,17 @@ export default function PurchaseOrdersPage() {
 
   const by = stats?.byStatus
   const pipe: { key: Exclude<Tab, "all">; label: string }[] = [
-    { key: "draft", label: "Draft" }, { key: "ordered", label: "Ordered" }, { key: "partial", label: "Partly received" },
-    { key: "received", label: "Received" }, { key: "cancelled", label: "Cancelled" },
+    { key: "draft", label: t("inventory:purchases.status.draft") }, { key: "ordered", label: t("inventory:purchases.status.sent") }, { key: "partial", label: t("inventory:purchases.status.partial") },
+    { key: "received", label: t("inventory:purchases.status.received") }, { key: "cancelled", label: t("inventory:purchases.status.cancelled") },
   ]
-  const changeTab = (t: string) => { setTab(t as Tab); setPage(1) }
+  const changeTab = (v: string) => { setTab(v as Tab); setPage(1) }
   const hasFilters = !!(search || fSup !== "all" || fPay !== "all" || fLoc !== "all" || tab !== "all")
   const filteredDue = dueTotal ?? pos.reduce((a, p) => a + (p.status === "cancelled" ? 0 : p.dueAmount || 0), 0)
 
   const expNote = (p: PurchaseOrder) => {
     if (!p.expectedDate || p.status === "received" || p.status === "cancelled") return ""
     const days = Math.ceil((new Date(p.expectedDate).getTime() - Date.now()) / 864e5)
-    return days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} late` : days === 0 ? "due today" : `in ${days} day${days === 1 ? "" : "s"}`
+    return days < 0 ? t("inventory:purchases.daysLate", { count: Math.abs(days) }) : days === 0 ? t("inventory:purchases.dueToday") : t("inventory:purchases.inDays", { count: days })
   }
 
   const canReceive = (p: PurchaseOrder) => p.status === "sent" || p.status === "partial"
@@ -451,11 +471,11 @@ export default function PurchaseOrdersPage() {
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       {/* Header */}
       <PageHeader
-        title="Purchase orders"
-        description="Order stock from suppliers, receive it into inventory, and track what you owe."
+        title={t("inventory:purchases.title")}
+        description={t("inventory:purchases.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}</Button>
-          <Button type="button" onClick={openForm}><Plus className="size-4" aria-hidden /> New purchase order</Button>
+          <Button type="button" variant="outline" onClick={handleExport} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? t("inventory:purchases.exporting") : t("common:actions.export")}</Button>
+          <Button type="button" onClick={openForm}><Plus className="size-4" aria-hidden /> {t("inventory:suppliers.newPo")}</Button>
         </>}
       />
 
@@ -465,18 +485,18 @@ export default function PurchaseOrdersPage() {
           <Package aria-hidden />
           <AlertDescription className="flex flex-wrap items-center gap-3.5 text-foreground">
             <span className="min-w-[260px] flex-1">
-              <strong>{stats.reorderCount} product{stats.reorderCount === 1 ? " is" : "s are"} at or below their reorder point.</strong>{" "}
-              Review suggested quantities and create the order in one go.
+              <strong>{t("inventory:purchases.reorder.title", { count: stats.reorderCount })}</strong>{" "}
+              {t("inventory:purchases.reorder.body")}
             </span>
             <Button type="button" onClick={() => { openForm(); setLines(lowProducts.map((p) => mkLine(p, suggestQty(p)))) }}>
-              Create from suggestions
+              {t("inventory:purchases.reorder.action")}
             </Button>
           </AlertDescription>
         </Alert>
       )}
 
       {/* Pipeline */}
-      <section aria-label="Pipeline" className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <section aria-label={t("inventory:purchases.pipeline")} className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {pipe.map((p) => (
           <StatTile
             key={p.key}
@@ -497,7 +517,7 @@ export default function PurchaseOrdersPage() {
             value={tab}
             onChange={changeTab}
             tabs={[
-              { value: "all", label: "All", count: stats?.total },
+              { value: "all", label: t("common:status.all"), count: stats?.total },
               ...pipe.map((p) => ({ value: p.key, label: p.label, count: by ? by[p.key as keyof typeof by].count : undefined })),
             ]}
           />
@@ -506,37 +526,37 @@ export default function PurchaseOrdersPage() {
         <Toolbar className="gap-2.5 p-4">
           <Label className="relative min-w-[260px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <span className="sr-only">Search purchase orders</span>
-            <Input type="search" placeholder="Search PO number, supplier or product…" value={search}
+            <span className="sr-only">{t("inventory:purchases.searchLabel")}</span>
+            <Input type="search" placeholder={t("inventory:purchases.searchPlaceholder")} value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               className="pl-9" />
           </Label>
           <Select value={fSup} onValueChange={(v) => { setFSup(v); setPage(1) }}>
-            <SelectTrigger aria-label="Supplier" className="w-[170px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:extra.supplier")} className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Supplier: All</SelectItem>
+              <SelectItem value="all">{t("inventory:purchases.filter.supplierAll")}</SelectItem>
               {vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={fPay} onValueChange={(v) => { setFPay(v); setPage(1) }}>
-            <SelectTrigger aria-label="Payment" className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("inventory:purchases.payment")} className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Payment: All</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="partial">Partial</SelectItem>
-              <SelectItem value="unpaid">Unpaid</SelectItem>
+              <SelectItem value="all">{t("inventory:purchases.filter.paymentAll")}</SelectItem>
+              <SelectItem value="paid">{t("common:payment.paid")}</SelectItem>
+              <SelectItem value="partial">{t("common:extra.partialShort")}</SelectItem>
+              <SelectItem value="unpaid">{t("common:payment.unpaid")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={fLoc} onValueChange={(v) => { setFLoc(v); setPage(1) }}>
-            <SelectTrigger aria-label="Location" className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label={t("common:fields.location")} className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Location: All</SelectItem>
+              <SelectItem value="all">{t("inventory:purchases.filter.locationAll")}</SelectItem>
               {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
             </SelectContent>
           </Select>
           {hasFilters && (
             <Button type="button" variant="ghost" onClick={() => { setSearch(""); setFSup("all"); setFPay("all"); setFLoc("all"); setTab("all"); setPage(1) }}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </Toolbar>
@@ -545,16 +565,16 @@ export default function PurchaseOrdersPage() {
           <Table className="min-w-[1080px]">
             <TableHeader>
               <TableRow>
-                <TableHead scope="col">Purchase order</TableHead>
-                <TableHead scope="col">Supplier</TableHead>
-                <TableHead scope="col">Items</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col">Received</TableHead>
-                <TableHead scope="col">Expected</TableHead>
-                <TableHead scope="col" className="text-right">Total</TableHead>
-                <TableHead scope="col" className="text-right">Paid</TableHead>
-                <TableHead scope="col">Payment</TableHead>
-                <TableHead scope="col" className="text-right">Next step</TableHead>
+                <TableHead scope="col">{t("inventory:purchases.col.po")}</TableHead>
+                <TableHead scope="col">{t("common:extra.supplier")}</TableHead>
+                <TableHead scope="col">{t("inventory:purchases.col.items")}</TableHead>
+                <TableHead scope="col">{t("common:fields.status")}</TableHead>
+                <TableHead scope="col">{t("inventory:purchases.status.received")}</TableHead>
+                <TableHead scope="col">{t("inventory:purchases.col.expected")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("common:money.total")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("common:money.paid")}</TableHead>
+                <TableHead scope="col">{t("inventory:purchases.payment")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("inventory:purchases.col.nextStep")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -563,7 +583,7 @@ export default function PurchaseOrdersPage() {
               ) : pos.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10}>
-                    <EmptyState icon={Package} title="No purchase orders found" description={hasFilters ? "Try clearing the filters." : "Create your first purchase order with New purchase order."} className="p-4 md:p-6" />
+                    <EmptyState icon={Package} title={t("inventory:purchases.empty.title")} description={hasFilters ? t("inventory:purchases.empty.filtered") : t("inventory:purchases.empty.first")} className="p-4 md:p-6" />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -576,19 +596,19 @@ export default function PurchaseOrdersPage() {
                     <TableRow key={p.id}>
                       <TableCell>
                         <Button type="button" variant="link" onClick={() => openView(p)} className="h-auto p-0">{p.poNumber}</Button>
-                        <div className="text-xs text-muted-foreground">Created {fmtDate(p.createdAt)} · {p.locationName ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground">{t("inventory:purchases.createdOn", { date: fmtDate(p.createdAt) })} · {p.locationName ?? "—"}</div>
                       </TableCell>
                       <TableCell className="font-medium">{p.vendorName}</TableCell>
                       <TableCell>
-                        <div className="max-w-[200px] truncate">{p.itemsSummary || `${p.items.length} item${p.items.length === 1 ? "" : "s"}`}</div>
-                        <div className="text-xs text-muted-foreground">{ordered} units</div>
+                        <div className="max-w-[200px] truncate">{p.itemsSummary || t("common:count.items", { count: p.items.length })}</div>
+                        <div className="text-xs text-muted-foreground">{t("inventory:purchases.units", { count: ordered })}</div>
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={p.status} variant={STATUS_VARIANT[p.status]} label={STATUS_LABEL[p.status] ?? p.status} />
+                        <StatusBadge status={p.status} variant={STATUS_VARIANT[p.status]} label={statusLabel(p.status)} />
                       </TableCell>
                       <TableCell>
                         <div className="text-sm tabular-nums">{received} / {ordered}</div>
-                        <Progress value={pct} aria-label={`${pct}% received`} className="mt-1 h-1.5 w-[110px]" />
+                        <Progress value={pct} aria-label={t("inventory:purchases.pctReceived", { pct })} className="mt-1 h-1.5 w-[110px]" />
                       </TableCell>
                       <TableCell>
                         <div>{fmtDate(p.expectedDate)}</div>
@@ -596,25 +616,25 @@ export default function PurchaseOrdersPage() {
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">
                         {formatCurrency(p.totalAmount)}
-                        {p.dueAmount > 0 && p.status !== "cancelled" && <div className="text-xs font-medium text-destructive">Due {formatCurrency(p.dueAmount)}</div>}
+                        {p.dueAmount > 0 && p.status !== "cancelled" && <div className="text-xs font-medium text-destructive">{t("inventory:purchases.dueAmount", { amount: formatCurrency(p.dueAmount) })}</div>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatCurrency(p.paidAmount)}</TableCell>
                       <TableCell>
-                        <StatusBadge status={p.paymentStatus} variant={PAY_VARIANT[p.paymentStatus] ?? PAY_VARIANT.pending} label={PAY_LABEL[p.paymentStatus] ?? p.paymentStatus} />
+                        <StatusBadge status={p.paymentStatus} variant={PAY_VARIANT[p.paymentStatus] ?? PAY_VARIANT.pending} label={payLabel(p.paymentStatus)} />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
                           {p.status === "draft" && (
                             <Button type="button" variant="link" size="sm" className="mr-1"
-                              onClick={() => act2(p, () => purchaseOrderApi.updateStatus(p.id, "sent"), "Marked as ordered")}>Mark ordered</Button>
+                              onClick={() => act2(p, () => purchaseOrderApi.updateStatus(p.id, "sent"), t("inventory:purchases.toast.markedOrdered"))}>{t("inventory:purchases.markOrdered")}</Button>
                           )}
                           {canReceive(p) && (
-                            <Button type="button" variant="link" size="sm" className="mr-1" onClick={() => (p.status === "partial" ? receiveRest(p) : openView(p))}>{p.status === "partial" ? "Receive rest" : "Receive stock"}</Button>
+                            <Button type="button" variant="link" size="sm" className="mr-1" onClick={() => (p.status === "partial" ? receiveRest(p) : openView(p))}>{p.status === "partial" ? t("inventory:purchases.receiveRest") : t("inventory:purchases.receiveStock")}</Button>
                           )}
-                          <WithTooltip content={`View ${p.poNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${p.poNumber}`} onClick={() => openView(p)}><Eye className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content={`Print ${p.poNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Print ${p.poNumber}`} onClick={() => printPo(p)}><Printer className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("inventory:purchases.viewPo", { po: p.poNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:purchases.viewPo", { po: p.poNumber })} onClick={() => openView(p)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("inventory:purchases.printPo", { po: p.poNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:purchases.printPo", { po: p.poNumber })} onClick={() => printPo(p)}><Printer className="size-4" /></Button></WithTooltip>
                           {p.dueAmount > 0 && p.status !== "cancelled" && (
-                            <WithTooltip content={`Record payment for ${p.poNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Record payment for ${p.poNumber}`} onClick={() => openView(p)}><Banknote className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("inventory:purchases.payPo", { po: p.poNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:purchases.payPo", { po: p.poNumber })} onClick={() => openView(p)}><Banknote className="size-4" /></Button></WithTooltip>
                           )}
                         </div>
                       </TableCell>
@@ -643,8 +663,8 @@ export default function PurchaseOrdersPage() {
         )}
         <Separator />
         <div className="px-4 py-3 text-xs text-muted-foreground tabular-nums">
-          Showing {total} purchase order{total === 1 ? "" : "s"}
-          {` · ${formatCurrency(filteredDue)} still to pay`}
+          {t("inventory:purchases.showing", { count: total })}
+          {" · "}{t("inventory:purchases.stillToPay", { amount: formatCurrency(filteredDue) })}
         </div>
       </Card>
 
@@ -652,70 +672,70 @@ export default function PurchaseOrdersPage() {
       <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false) }}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[1040px]">
           <DialogHeader>
-            <DialogTitle>New purchase order</DialogTitle>
-            <DialogDescription>Number assigned when saved · {fmtDate(today())}</DialogDescription>
+            <DialogTitle>{t("inventory:suppliers.newPo")}</DialogTitle>
+            <DialogDescription>{t("inventory:purchases.form.numberAssigned", { date: fmtDate(today()) })}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="flex min-w-0 flex-col gap-5">
               <fieldset className="flex flex-col gap-3">
-                <SectionTitle as="legend" className="mb-2">1 · Supplier &amp; delivery</SectionTitle>
+                <SectionTitle as="legend" className="mb-2">{t("inventory:purchases.form.step1")}</SectionTitle>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <FormField label="Supplier *" htmlFor="po-supplier">
+                  <FormField label={t("inventory:purchases.form.supplier")} htmlFor="po-supplier">
                     <Select value={supId || "__none"} onValueChange={(v) => { setSupId(v === "__none" ? "" : v); setExpTouched(false) }}>
                       <SelectTrigger id="po-supplier" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">Select supplier</SelectItem>
+                        <SelectItem value="__none">{t("inventory:purchases.form.selectSupplier")}</SelectItem>
                         {vendors.filter((v) => v.status === "Active" || String(v.id) === supId).map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label="Receive at" htmlFor="po-location">
+                  <FormField label={t("inventory:purchases.form.receiveAt")} htmlFor="po-location">
                     <Select value={locId || "__none"} onValueChange={(v) => setLocId(v === "__none" ? "" : v)}>
                       <SelectTrigger id="po-location" className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">Select location</SelectItem>
+                        <SelectItem value="__none">{t("inventory:purchases.form.selectLocation")}</SelectItem>
                         {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label="Expected delivery" htmlFor="po-expected" description={expTouched ? undefined : `Based on ${supplier?.leadTimeDays && supplier.leadTimeDays > 0 ? `${supplier.leadTimeDays}-day lead time` : "a 7-day default"}`}>
+                  <FormField label={t("inventory:purchases.form.expected")} htmlFor="po-expected" description={expTouched ? undefined : supplier?.leadTimeDays && supplier.leadTimeDays > 0 ? t("inventory:purchases.form.basedOnLead", { count: supplier.leadTimeDays }) : t("inventory:purchases.form.basedOnDefault")}>
                     <Input id="po-expected" type="date" min={today()} value={expDate} onChange={(e) => { setExpDate(e.target.value); setExpTouched(true) }} />
                   </FormField>
                 </div>
                 {supplier && (
                   <Item variant="muted" size="sm" className="gap-x-6 gap-y-1">
-                    <span><span className="text-muted-foreground">Terms</span> <strong>{supplier.paymentTerms || "Not set"}</strong></span>
-                    <span><span className="text-muted-foreground">Lead time</span> <strong>{supplier.leadTimeDays ? `${supplier.leadTimeDays} days` : "—"}</strong></span>
-                    <span><span className="text-muted-foreground">You already owe</span> <strong>{formatCurrency(supplier.owed)}</strong></span>
-                    <span><span className="text-muted-foreground">Phone</span> <strong>{supplier.phone || "—"}</strong></span>
+                    <span><span className="text-muted-foreground">{t("inventory:suppliers.col.terms")}</span> <strong>{supplier.paymentTerms || t("common:extra.notSet")}</strong></span>
+                    <span><span className="text-muted-foreground">{t("inventory:purchases.form.leadTime")}</span> <strong>{supplier.leadTimeDays ? t("inventory:suppliers.days", { count: supplier.leadTimeDays }) : "—"}</strong></span>
+                    <span><span className="text-muted-foreground">{t("inventory:purchases.form.alreadyOwe")}</span> <strong>{formatCurrency(supplier.owed)}</strong></span>
+                    <span><span className="text-muted-foreground">{t("common:fields.phone")}</span> <strong>{supplier.phone || "—"}</strong></span>
                   </Item>
                 )}
               </fieldset>
 
               <fieldset className="flex flex-col gap-3">
-                <SectionTitle as="legend" className="mb-2">2 · Items</SectionTitle>
+                <SectionTitle as="legend" className="mb-2">{t("inventory:purchases.form.step2")}</SectionTitle>
                 {missingLow > 0 && (
-                  <div><Button type="button" variant="outline" size="sm" onClick={addLow}>+ Add {missingLow} low-stock item{missingLow === 1 ? "" : "s"}</Button></div>
+                  <div><Button type="button" variant="outline" size="sm" onClick={addLow}>{t("inventory:purchases.form.addLow", { count: missingLow })}</Button></div>
                 )}
                 <Card className="gap-0 overflow-hidden py-0">
                   <div className="hidden grid-cols-[1fr_70px_130px_110px_100px_32px] gap-2 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
-                    <span>Product</span><span>In stock</span><span>Qty</span><span>Unit cost</span><span className="text-right">Line total</span><span />
+                    <span>{t("common:fields.product")}</span><span>{t("common:extra.inStock")}</span><span>{t("common:fields.qty")}</span><span>{t("inventory:purchases.unitCost")}</span><span className="text-right">{t("inventory:purchases.form.lineTotal")}</span><span />
                   </div>
                   {lines.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">No items yet — search a product below to add it.</div>
+                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">{t("inventory:purchases.form.noItems")}</div>
                   ) : lines.map((l) => (
                     <Fragment key={l.key}>
                       <Separator />
                       <div className="grid grid-cols-2 items-center gap-2 px-3 py-2.5 sm:grid-cols-[1fr_70px_130px_110px_100px_32px]">
                         <div className="col-span-2 min-w-0 sm:col-span-1">
                           <div className="truncate text-sm font-medium">{l.name}</div>
-                          <div className="text-xs text-muted-foreground">{l.sku || "—"} · last cost {formatCurrency(l.lastCost)}</div>
+                          <div className="text-xs text-muted-foreground">{l.sku || "—"} · {t("inventory:purchases.form.lastCost", { amount: formatCurrency(l.lastCost) })}</div>
                           {l.variants.length > 0 && (
                             <Select value={l.variantId || "__any"} onValueChange={(v) => patchLine(l.key, { variantId: v === "__any" ? "" : v })}>
-                              <SelectTrigger aria-label="Variant" size="sm" className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectTrigger aria-label={t("common:fields.variant")} size="sm" className="mt-1"><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="__any">Any variant</SelectItem>
+                                <SelectItem value="__any">{t("inventory:purchases.form.anyVariant")}</SelectItem>
                                 {l.variants.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
@@ -723,22 +743,22 @@ export default function PurchaseOrdersPage() {
                         </div>
                         <span className="text-sm tabular-nums">{l.stock}</span>
                         <ButtonGroup>
-                          <WithTooltip content="Decrease"><Button type="button" variant="outline" size="icon" aria-label="Decrease" onClick={() => patchLine(l.key, { qty: Math.max(1, l.qty - 1) })}>−</Button></WithTooltip>
-                          <Input type="number" min={1} aria-label="Quantity" value={l.qty} onChange={(e) => patchLine(l.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                          <WithTooltip content={t("inventory:purchases.form.decrease")}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:purchases.form.decrease")} onClick={() => patchLine(l.key, { qty: Math.max(1, l.qty - 1) })}>−</Button></WithTooltip>
+                          <Input type="number" min={1} aria-label={t("common:fields.quantity")} value={l.qty} onChange={(e) => patchLine(l.key, { qty: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
                             className="w-[52px] text-center tabular-nums" />
-                          <WithTooltip content="Increase"><Button type="button" variant="outline" size="icon" aria-label="Increase" onClick={() => patchLine(l.key, { qty: l.qty + 1 })}>+</Button></WithTooltip>
+                          <WithTooltip content={t("inventory:purchases.form.increase")}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:purchases.form.increase")} onClick={() => patchLine(l.key, { qty: l.qty + 1 })}>+</Button></WithTooltip>
                         </ButtonGroup>
-                        <Input type="number" min={0} step="0.01" aria-label="Unit cost" value={l.cost} onChange={(e) => patchLine(l.key, { cost: Number(e.target.value) || 0 })}
+                        <Input type="number" min={0} step="0.01" aria-label={t("inventory:purchases.unitCost")} value={l.cost} onChange={(e) => patchLine(l.key, { cost: Number(e.target.value) || 0 })}
                           className="w-full tabular-nums" />
                         <span className="text-right text-sm font-semibold tabular-nums">{formatCurrency(l.qty * l.cost)}</span>
-                        <WithTooltip content="Remove line"><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove line" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button></WithTooltip>
+                        <WithTooltip content={t("inventory:purchases.form.removeLine")}><Button type="button" variant="ghost" size="icon-sm" aria-label={t("inventory:purchases.form.removeLine")} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button></WithTooltip>
                       </div>
                     </Fragment>
                   ))}
                 </Card>
                 <Label className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden /><span className="sr-only">Search product</span>
-                  <Input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder="Search product to add…"
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden /><span className="sr-only">{t("inventory:purchases.form.searchProduct")}</span>
+                  <Input type="search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder={t("inventory:purchases.form.searchProductPh")}
                     className="pl-9" />
                 </Label>
                 {results.length > 0 && (
@@ -748,7 +768,7 @@ export default function PurchaseOrdersPage() {
                         {i > 0 && <Separator />}
                         <Button type="button" variant="ghost" onClick={() => addProduct(p)} className="h-auto w-full justify-between gap-3 whitespace-normal rounded-none text-left">
                           <span className="text-sm font-medium">{p.name} <span className="text-xs font-normal text-muted-foreground">{p.sku}</span></span>
-                          <span className="text-xs font-normal text-muted-foreground">{p.stock} in stock · cost {formatCurrency(Number(p.costPrice ?? p.cost_price ?? 0))}</span>
+                          <span className="text-xs font-normal text-muted-foreground">{t("inventory:purchases.form.stockCost", { count: Number(p.stock) || 0, cost: formatCurrency(Number(p.costPrice ?? p.cost_price ?? 0)) })}</span>
                         </Button>
                       </Fragment>
                     ))}
@@ -756,49 +776,49 @@ export default function PurchaseOrdersPage() {
                 )}
               </fieldset>
 
-              <FormField label="Note to supplier" htmlFor="po-note">
-                <Textarea id="po-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Deliver before 12 pm, pack in cartons of 12" />
+              <FormField label={t("inventory:purchases.form.noteToSupplier")} htmlFor="po-note">
+                <Textarea id="po-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("inventory:purchases.form.notePh")} />
               </FormField>
             </div>
 
-            <aside aria-label="Totals and payment" className="lg:self-start">
+            <aside aria-label={t("inventory:purchases.form.totalsAndPayment")} className="lg:self-start">
               <Card className="gap-3 p-4">
-                <SectionTitle>3 · Totals</SectionTitle>
+                <SectionTitle>{t("inventory:purchases.form.step3")}</SectionTitle>
                 <div className="flex flex-col gap-2 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal · {units} unit{units === 1 ? "" : "s"}</span><span className="font-medium tabular-nums">{formatCurrency(subtotal)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{t("inventory:purchases.form.subtotalUnits", { count: units })}</span><span className="font-medium tabular-nums">{formatCurrency(subtotal)}</span></div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Discount</span>
+                    <span className="text-muted-foreground">{t("common:money.discount")}</span>
                     <ButtonGroup>
                       <Select value={discType} onValueChange={(v) => setDiscType(v as "flat" | "percent")}>
-                        <SelectTrigger aria-label="Discount type" size="sm"><SelectValue /></SelectTrigger>
+                        <SelectTrigger aria-label={t("inventory:purchases.form.discountType")} size="sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="flat">Flat</SelectItem><SelectItem value="percent">%</SelectItem>
+                          <SelectItem value="flat">{t("inventory:purchases.form.flat")}</SelectItem><SelectItem value="percent">%</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Input type="number" min={0} step="any" aria-label="Discount" value={discVal} onChange={(e) => setDiscVal(e.target.value)} placeholder="0" className="h-8 w-20 text-right tabular-nums" />
+                      <Input type="number" min={0} step="any" aria-label={t("common:money.discount")} value={discVal} onChange={(e) => setDiscVal(e.target.value)} placeholder="0" className="h-8 w-20 text-right tabular-nums" />
                     </ButtonGroup>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Tax / VAT (%)</span>
-                    <Input type="number" min={0} max={100} step="any" aria-label="Tax rate" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} placeholder="0" className="w-24 text-right tabular-nums" />
+                    <span className="text-muted-foreground">{t("inventory:purchases.form.taxVat")}</span>
+                    <Input type="number" min={0} max={100} step="any" aria-label={t("inventory:purchases.form.taxRate")} value={taxRate} onChange={(e) => setTaxRate(e.target.value)} placeholder="0" className="w-24 text-right tabular-nums" />
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Shipping / freight</span>
-                    <Input type="number" min={0} step="any" aria-label="Shipping cost" value={shipCost} onChange={(e) => setShipCost(e.target.value)} placeholder="0" className="w-24 text-right tabular-nums" />
+                    <span className="text-muted-foreground">{t("inventory:purchases.form.shippingFreight")}</span>
+                    <Input type="number" min={0} step="any" aria-label={t("inventory:purchases.form.shippingCost")} value={shipCost} onChange={(e) => setShipCost(e.target.value)} placeholder="0" className="w-24 text-right tabular-nums" />
                   </div>
                   {(discount > 0 || tax > 0 || shipping > 0) && (
-                    <div className="text-xs text-muted-foreground">{[discount > 0 && `−${formatCurrency(discount)} discount`, tax > 0 && `+${formatCurrency(tax)} tax`, shipping > 0 && `+${formatCurrency(shipping)} shipping`].filter(Boolean).join(" · ")}</div>
+                    <div className="text-xs text-muted-foreground">{[discount > 0 && t("inventory:purchases.form.adjDiscount", { amount: formatCurrency(discount) }), tax > 0 && t("inventory:purchases.form.adjTax", { amount: formatCurrency(tax) }), shipping > 0 && t("inventory:purchases.form.adjShipping", { amount: formatCurrency(shipping) })].filter(Boolean).join(" · ")}</div>
                   )}
                   <Separator />
                   <div className="flex items-baseline justify-between">
-                    <span className="font-semibold">Total</span>
+                    <span className="font-semibold">{t("common:money.total")}</span>
                     <span className="text-2xl font-semibold tabular-nums">{formatCurrency(grand)}</span>
                   </div>
                 </div>
 
-                <SectionTitle className="mt-1">4 · Payment to supplier</SectionTitle>
-                <div role="radiogroup" aria-label="Amount paid" className="grid grid-cols-3 gap-1.5">
-                  {([["none", "Pay later"], ["full", "Pay in full"], ["partial", "Advance"]] as const).map(([id, label]) => (
+                <SectionTitle className="mt-1">{t("inventory:purchases.form.step4")}</SectionTitle>
+                <div role="radiogroup" aria-label={t("inventory:purchases.form.amountPaid")} className="grid grid-cols-3 gap-1.5">
+                  {([["none", t("inventory:purchases.form.payLater")], ["full", t("inventory:purchases.form.payFull")], ["partial", t("inventory:purchases.form.advance")]] as const).map(([id, label]) => (
                     <Button key={id} type="button" role="radio" aria-checked={paidMode === id} onClick={() => setPaidMode(id)}
                       variant={paidMode === id ? "default" : "outline"} size="sm">
                       {label}
@@ -806,21 +826,21 @@ export default function PurchaseOrdersPage() {
                   ))}
                 </div>
                 {paidMode === "partial" && (
-                  <FormField label="Advance paid now" htmlFor="po-advance"><Input id="po-advance" type="number" min={0} max={grand || undefined} value={partial} onChange={(e) => setPartial(e.target.value)} /></FormField>
+                  <FormField label={t("inventory:purchases.form.advancePaid")} htmlFor="po-advance"><Input id="po-advance" type="number" min={0} max={grand || undefined} value={partial} onChange={(e) => setPartial(e.target.value)} /></FormField>
                 )}
                 {paidNow > 0 && (
                   <div className="flex flex-col gap-2.5">
-                    <FormField label="Method" htmlFor="po-pay-method"><Select value={method} onValueChange={(v) => setMethod(v)}><SelectTrigger id="po-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></FormField>
-                    <FormField label="Payment date" htmlFor="po-pay-date"><Input id="po-pay-date" type="date" max={today()} value={payDate} onChange={(e) => setPayDate(e.target.value)} /></FormField>
-                    <FormField label="Reference" htmlFor="po-pay-ref"><Input id="po-pay-ref" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Cheque / transaction no. (optional)" /></FormField>
+                    <FormField label={t("inventory:suppliers.pay.method")} htmlFor="po-pay-method"><Select value={method} onValueChange={(v) => setMethod(v)}><SelectTrigger id="po-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{t(m.label)}</SelectItem>)}</SelectContent></Select></FormField>
+                    <FormField label={t("inventory:purchases.form.payDate")} htmlFor="po-pay-date"><Input id="po-pay-date" type="date" max={today()} value={payDate} onChange={(e) => setPayDate(e.target.value)} /></FormField>
+                    <FormField label={t("common:extra.reference")} htmlFor="po-pay-ref"><Input id="po-pay-ref" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder={t("inventory:purchases.form.refPh")} /></FormField>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <Item variant="outline" size="sm" className="px-3 py-2">
-                    <ItemContent className="gap-0"><ItemDescription className="text-xs">Paid now</ItemDescription><ItemTitle className="tabular-nums">{formatCurrency(paidNow)}</ItemTitle></ItemContent>
+                    <ItemContent className="gap-0"><ItemDescription className="text-xs">{t("inventory:purchases.form.paidNow")}</ItemDescription><ItemTitle className="tabular-nums">{formatCurrency(paidNow)}</ItemTitle></ItemContent>
                   </Item>
                   <Item variant="outline" size="sm" className="px-3 py-2">
-                    <ItemContent className="gap-0"><ItemDescription className="text-xs">Due {supplier?.paymentTerms ? `(${supplier.paymentTerms})` : "later"}</ItemDescription><ItemTitle className="tabular-nums">{formatCurrency(dueNow)}</ItemTitle></ItemContent>
+                    <ItemContent className="gap-0"><ItemDescription className="text-xs">{supplier?.paymentTerms ? t("inventory:purchases.form.dueTerms", { terms: supplier.paymentTerms }) : t("inventory:purchases.form.dueLater")}</ItemDescription><ItemTitle className="tabular-nums">{formatCurrency(dueNow)}</ItemTitle></ItemContent>
                   </Item>
                 </div>
               </Card>
@@ -828,13 +848,13 @@ export default function PurchaseOrdersPage() {
           </div>
 
           <DialogFooter className="flex-wrap items-center sm:justify-start">
-            <span className="text-xs text-muted-foreground">Stock is added only when you receive the goods.</span>
+            <span className="text-xs text-muted-foreground">{t("inventory:purchases.form.stockNote")}</span>
             {formError && <span role="alert" className="text-sm font-medium text-destructive">{formError}</span>}
             <div className="flex flex-wrap gap-2 sm:ml-auto">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
-              <Button type="button" variant="outline" disabled={saving} onClick={() => submit("draft")}>Save draft</Button>
-              <Button type="button" variant="outline" disabled={saving} onClick={() => submit("received")}>Create &amp; receive now</Button>
-              <Button type="button" disabled={saving} onClick={() => submit("sent")}>{saving ? "Saving…" : "Create & send to supplier"}</Button>
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("common:actions.cancel")}</Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => submit("draft")}>{t("inventory:purchases.form.saveDraft")}</Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => submit("received")}>{t("inventory:purchases.form.createReceive")}</Button>
+              <Button type="button" disabled={saving} onClick={() => submit("sent")}>{saving ? t("common:actions.saving") : t("inventory:purchases.form.createSend")}</Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -852,9 +872,9 @@ export default function PurchaseOrdersPage() {
                 <DialogHeader className="flex-row flex-wrap items-center gap-3">
                   <div className="min-w-0 flex-1 space-y-2">
                     <DialogTitle>{view.poNumber}</DialogTitle>
-                    <DialogDescription>{view.vendorName} · {view.locationName ?? "—"} · Created {fmtDate(view.createdAt)}</DialogDescription>
+                    <DialogDescription>{view.vendorName} · {view.locationName ?? "—"} · {t("inventory:purchases.createdOn", { date: fmtDate(view.createdAt) })}</DialogDescription>
                   </div>
-                  <StatusBadge status={view.status} variant={STATUS_VARIANT[view.status]} label={STATUS_LABEL[view.status] ?? view.status} />
+                  <StatusBadge status={view.status} variant={STATUS_VARIANT[view.status]} label={statusLabel(view.status)} />
                 </DialogHeader>
 
                 <div className="flex flex-col gap-4">
@@ -862,12 +882,12 @@ export default function PurchaseOrdersPage() {
                     <Table className="min-w-[520px]">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead className="text-center">Ordered</TableHead>
-                          <TableHead className="text-center">Received</TableHead>
-                          <TableHead className="text-center">{canReceive(view) ? "Receive now" : ""}</TableHead>
-                          <TableHead className="text-right">Unit cost</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead>{t("common:fields.product")}</TableHead>
+                          <TableHead className="text-center">{t("inventory:purchases.status.sent")}</TableHead>
+                          <TableHead className="text-center">{t("inventory:purchases.status.received")}</TableHead>
+                          <TableHead className="text-center">{canReceive(view) ? t("inventory:purchases.detail.receiveNow") : ""}</TableHead>
+                          <TableHead className="text-right">{t("inventory:purchases.unitCost")}</TableHead>
+                          <TableHead className="text-right">{t("common:money.total")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -880,7 +900,7 @@ export default function PurchaseOrdersPage() {
                               <TableCell className="text-center tabular-nums">{i.quantityReceived}</TableCell>
                               <TableCell className="text-center">
                                 {canReceive(view) && remain > 0 ? (
-                                  <Input type="number" min={0} max={remain} aria-label={`Receive ${i.productName}`} value={rcvQty[i.id] ?? ""}
+                                  <Input type="number" min={0} max={remain} aria-label={t("inventory:purchases.detail.receiveItem", { name: i.productName })} value={rcvQty[i.id] ?? ""}
                                     onChange={(e) => setRcvQty((q) => ({ ...q, [i.id]: e.target.value }))}
                                     className="mx-auto w-16 text-center tabular-nums" />
                                 ) : <span className="text-muted-foreground">—</span>}
@@ -896,18 +916,18 @@ export default function PurchaseOrdersPage() {
 
                   {hasAdj && (
                     <Item variant="muted" size="sm" className="gap-x-6 gap-y-1">
-                      <span><span className="text-muted-foreground">Subtotal</span> <strong>{formatCurrency(view.subtotal ?? 0)}</strong></span>
-                      {(view.discountAmount ?? 0) > 0 && <span><span className="text-muted-foreground">Discount</span> <strong>−{formatCurrency(view.discountAmount ?? 0)}</strong></span>}
-                      {(view.taxAmount ?? 0) > 0 && <span><span className="text-muted-foreground">Tax {view.taxRate}%</span> <strong>+{formatCurrency(view.taxAmount ?? 0)}</strong></span>}
-                      {(view.shippingCost ?? 0) > 0 && <span><span className="text-muted-foreground">Shipping</span> <strong>+{formatCurrency(view.shippingCost ?? 0)}</strong></span>}
+                      <span><span className="text-muted-foreground">{t("common:money.subtotal")}</span> <strong>{formatCurrency(view.subtotal ?? 0)}</strong></span>
+                      {(view.discountAmount ?? 0) > 0 && <span><span className="text-muted-foreground">{t("common:money.discount")}</span> <strong>−{formatCurrency(view.discountAmount ?? 0)}</strong></span>}
+                      {(view.taxAmount ?? 0) > 0 && <span><span className="text-muted-foreground">{t("inventory:purchases.detail.taxRate", { rate: view.taxRate })}</span> <strong>+{formatCurrency(view.taxAmount ?? 0)}</strong></span>}
+                      {(view.shippingCost ?? 0) > 0 && <span><span className="text-muted-foreground">{t("common:money.shipping")}</span> <strong>+{formatCurrency(view.shippingCost ?? 0)}</strong></span>}
                     </Item>
                   )}
 
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      ["Total", view.totalAmount, ""],
-                      ["Paid", view.paidAmount, "text-emerald-600"],
-                      ["Due", view.dueAmount, view.dueAmount > 0 ? "text-destructive" : ""],
+                      [t("common:money.total"), view.totalAmount, ""],
+                      [t("common:money.paid"), view.paidAmount, "text-emerald-600"],
+                      [t("common:money.due"), view.dueAmount, view.dueAmount > 0 ? "text-destructive" : ""],
                     ] as [string, number, string][]).map(([l, v, tone]) => (
                       <Item key={l} variant="muted" size="sm" className="px-3 py-2">
                         <ItemContent className="gap-0">
@@ -919,14 +939,14 @@ export default function PurchaseOrdersPage() {
                   </div>
 
                   <InfoList>
-                    <InfoRow label="Expected" value={<>{fmtDate(view.expectedDate)}{expNote(view) ? ` (${expNote(view)})` : ""}</>} />
-                    <InfoRow label="Payment" value={PAY_LABEL[view.paymentStatus] ?? view.paymentStatus} />
+                    <InfoRow label={t("inventory:purchases.col.expected")} value={<>{fmtDate(view.expectedDate)}{expNote(view) ? ` (${expNote(view)})` : ""}</>} />
+                    <InfoRow label={t("inventory:purchases.payment")} value={payLabel(view.paymentStatus)} />
                   </InfoList>
-                  {view.notes && <Item variant="muted" size="sm">Note: {view.notes}</Item>}
+                  {view.notes && <Item variant="muted" size="sm">{t("inventory:purchases.print.note", { note: view.notes })}</Item>}
 
                   {(view.receipts?.length ?? 0) > 0 && (
                     <div>
-                      <SectionTitle className="mb-1.5">Receiving history</SectionTitle>
+                      <SectionTitle className="mb-1.5">{t("inventory:purchases.detail.receivingHistory")}</SectionTitle>
                       <ItemGroup>
                         {view.receipts!.map((g, i) => (
                           <Fragment key={g.id}>
@@ -943,13 +963,13 @@ export default function PurchaseOrdersPage() {
 
                   {view.payments.length > 0 && (
                     <div>
-                      <SectionTitle className="mb-1.5">Payments</SectionTitle>
+                      <SectionTitle className="mb-1.5">{t("inventory:purchases.detail.payments")}</SectionTitle>
                       <ItemGroup>
                         {view.payments.map((y, i) => (
                           <Fragment key={y.id}>
                             {i > 0 && <ItemSeparator />}
                             <Item size="sm" className="justify-between px-0">
-                              <span>{fmtDate(y.date ?? y.paymentDate)} · {y.method ?? y.paymentMethod}{y.reference && <span className="ml-1 text-muted-foreground">{y.reference}</span>}</span>
+                              <span>{fmtDate(y.date ?? y.paymentDate)} · {methodLabel(y.method ?? y.paymentMethod)}{y.reference && <span className="ml-1 text-muted-foreground">{y.reference}</span>}</span>
                               <span className="font-semibold tabular-nums">{formatCurrency(y.amount)}</span>
                             </Item>
                           </Fragment>
@@ -960,20 +980,20 @@ export default function PurchaseOrdersPage() {
 
                   {canPay && (
                     <Card className="grid gap-2.5 p-3.5 sm:grid-cols-2">
-                      <FormField label="Payment amount" htmlFor="po-d-amount"><Input id="po-d-amount" type="number" min={0} value={dPayAmt} onChange={(e) => setDPayAmt(e.target.value)} placeholder="0.00" /></FormField>
-                      <FormField label="Method" htmlFor="po-d-method"><Select value={dPayMethod} onValueChange={(v) => setDPayMethod(v)}><SelectTrigger id="po-d-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent></Select></FormField>
-                      <FormField label="Date" htmlFor="po-d-date"><Input id="po-d-date" type="date" max={today()} value={dPayDate} onChange={(e) => setDPayDate(e.target.value)} /></FormField>
-                      <FormField label="Reference" htmlFor="po-d-ref"><Input id="po-d-ref" value={dPayRef} onChange={(e) => setDPayRef(e.target.value)} placeholder="Cheque / txn no." /></FormField>
-                      <div className="sm:col-span-2"><Button type="button" disabled={busy} onClick={recordPay}>Record payment</Button></div>
+                      <FormField label={t("inventory:purchases.detail.payAmount")} htmlFor="po-d-amount"><Input id="po-d-amount" type="number" min={0} value={dPayAmt} onChange={(e) => setDPayAmt(e.target.value)} placeholder="0.00" /></FormField>
+                      <FormField label={t("inventory:suppliers.pay.method")} htmlFor="po-d-method"><Select value={dPayMethod} onValueChange={(v) => setDPayMethod(v)}><SelectTrigger id="po-d-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{t(m.label)}</SelectItem>)}</SelectContent></Select></FormField>
+                      <FormField label={t("common:fields.date")} htmlFor="po-d-date"><Input id="po-d-date" type="date" max={today()} value={dPayDate} onChange={(e) => setDPayDate(e.target.value)} /></FormField>
+                      <FormField label={t("common:extra.reference")} htmlFor="po-d-ref"><Input id="po-d-ref" value={dPayRef} onChange={(e) => setDPayRef(e.target.value)} placeholder={t("inventory:purchases.detail.refPh")} /></FormField>
+                      <div className="sm:col-span-2"><Button type="button" disabled={busy} onClick={recordPay}>{t("inventory:purchases.detail.recordPayment")}</Button></div>
                     </Card>
                   )}
 
                   {canReceive(view) && (
-                    <FormField label="Receive at" htmlFor="po-receive-at" className="sm:max-w-xs">
+                    <FormField label={t("inventory:purchases.form.receiveAt")} htmlFor="po-receive-at" className="sm:max-w-xs">
                       <Select value={rcvLoc || "__none"} onValueChange={(v) => setRcvLoc(v === "__none" ? "" : v)}>
                         <SelectTrigger id="po-receive-at" className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none">Select location</SelectItem>
+                          <SelectItem value="__none">{t("inventory:purchases.form.selectLocation")}</SelectItem>
                           {warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -985,28 +1005,28 @@ export default function PurchaseOrdersPage() {
 
                 <DialogFooter className="flex-wrap">
                   {view.status === "draft" && (
-                    <Button type="button" disabled={busy} onClick={() => act(() => purchaseOrderApi.updateStatus(view.id, "sent"), "Marked as ordered")}>Mark ordered</Button>
+                    <Button type="button" disabled={busy} onClick={() => act(() => purchaseOrderApi.updateStatus(view.id, "sent"), t("inventory:purchases.toast.markedOrdered"))}>{t("inventory:purchases.markOrdered")}</Button>
                   )}
                   {canReceive(view) && (
                     <Button type="button" disabled={busy} onClick={receiveNow}>
-                      {view.status === "partial" ? "Receive remaining" : "Receive stock"}
+                      {view.status === "partial" ? t("inventory:purchases.detail.receiveRemaining") : t("inventory:purchases.receiveStock")}
                     </Button>
                   )}
-                  <Button type="button" variant="outline" onClick={() => printPo(view)}><Printer className="size-4" aria-hidden /> Print</Button>
+                  <Button type="button" variant="outline" onClick={() => printPo(view)}><Printer className="size-4" aria-hidden /> {t("common:actions.print")}</Button>
                   {(view.status === "draft" || view.status === "sent" || view.status === "partial") && (
                     <Button type="button" variant="destructive" disabled={busy}
                       onClick={() => {
-                        if (receivedUnits > 0) { setDErr(`Stock has already been received against ${view.poNumber}. Use a supplier return instead of cancelling.`); return }
-                        if (window.confirm(`Cancel ${view.poNumber}? This cannot be undone.`)) act(() => purchaseOrderApi.updateStatus(view.id, "cancelled"), "Purchase order cancelled")
-                      }}>Cancel PO</Button>
+                        if (receivedUnits > 0) { setDErr(t("inventory:purchases.detail.cannotCancel", { po: view.poNumber })); return }
+                        if (window.confirm(t("inventory:purchases.detail.confirmCancel", { po: view.poNumber }))) act(() => purchaseOrderApi.updateStatus(view.id, "cancelled"), t("inventory:purchases.toast.cancelled"))
+                      }}>{t("inventory:purchases.detail.cancelPo")}</Button>
                   )}
                   {(view.status === "draft" || view.status === "cancelled") && (
                     <Button type="button" variant="destructive" disabled={busy}
                       onClick={() => {
-                        if (receivedUnits > 0) { setDErr(`Stock has been received against ${view.poNumber}, so it cannot be deleted.`); return }
-                        if (view.payments.length > 0) { setDErr(`${view.poNumber} has payments recorded and cannot be deleted.`); return }
-                        if (window.confirm(`Delete ${view.poNumber} permanently?`)) act(() => purchaseOrderApi.delete(view.id), "Purchase order deleted", true)
-                      }}>Delete</Button>
+                        if (receivedUnits > 0) { setDErr(t("inventory:purchases.detail.cannotDeleteReceived", { po: view.poNumber })); return }
+                        if (view.payments.length > 0) { setDErr(t("inventory:purchases.detail.cannotDeletePaid", { po: view.poNumber })); return }
+                        if (window.confirm(t("inventory:purchases.detail.confirmDelete", { po: view.poNumber }))) act(() => purchaseOrderApi.delete(view.id), t("inventory:purchases.toast.deleted"), true)
+                      }}>{t("common:actions.delete")}</Button>
                   )}
                 </DialogFooter>
               </>
@@ -1024,7 +1044,7 @@ export default function PurchaseOrdersPage() {
       toast.success(`${po.poNumber}: ${ok}`)
       refresh()
     } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? "That did not work.")
+      toast.error(e?.response?.data?.message ?? t("inventory:purchases.toast.failed"))
     }
   }
 }

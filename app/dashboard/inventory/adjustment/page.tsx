@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,15 +31,40 @@ import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
 import { StatTile } from "@/components/common/StatTile"
 import { EmptyState } from "@/components/common/EmptyState"
 
-const TYPES: { id: AdjustmentType; label: string; sub: string }[] = [
-  { id: "increase", label: "+ Increase", sub: "Add units" },
-  { id: "decrease", label: "− Decrease", sub: "Remove units" },
-  { id: "set", label: "= Set to", sub: "After a count" },
+const NS = ["inventory", "common"] as const
+type K = ParseKeys<typeof NS>
+
+const TYPES: { id: AdjustmentType; label: K; sub: K }[] = [
+  { id: "increase", label: "inventory:stock.adjust.type.increase", sub: "inventory:stock.adjust.type.increaseSub" },
+  { id: "decrease", label: "inventory:stock.adjust.type.decrease", sub: "inventory:stock.adjust.type.decreaseSub" },
+  { id: "set", label: "inventory:stock.adjust.type.set", sub: "inventory:stock.adjust.type.setSub" },
 ]
+// Reason values are saved on the adjustment as-is; only the shown label is translated
 const REASONS: Record<AdjustmentType, string[]> = {
   increase: ["Recount", "Received without PO", "Customer return", "Found", "Other"],
   decrease: ["Recount", "Damaged", "Expired", "Theft / loss", "Gift / sample", "Own use", "Other"],
   set: ["Recount", "Opening stock", "Other"],
+}
+const REASON_KEY: Record<string, K> = {
+  Recount: "inventory:stock.reason.recount",
+  "Received without PO": "inventory:stock.reason.receivedNoPo",
+  "Customer return": "inventory:stock.reason.customerReturn",
+  Found: "inventory:stock.reason.found",
+  Damaged: "inventory:stock.reason.damaged",
+  Expired: "inventory:stock.reason.expired",
+  "Theft / loss": "inventory:stock.reason.theftLoss",
+  "Gift / sample": "inventory:stock.reason.giftSample",
+  "Own use": "inventory:stock.reason.ownUse",
+  "Opening stock": "inventory:stock.reason.openingStock",
+  Correction: "inventory:stock.reason.correction",
+  Lost: "inventory:stock.reason.lost",
+  "Stock count": "inventory:stock.reason.stockCount",
+  Other: "common:extra.other",
+}
+const TYPE_KEY: Record<string, K> = {
+  increase: "inventory:stock.adjust.type.increaseShort",
+  decrease: "inventory:stock.adjust.type.decreaseShort",
+  set: "inventory:stock.adjust.type.setShort",
 }
 const BIG_CHANGE = 10
 
@@ -46,6 +74,9 @@ const deltaVariant = (n: number) => (n > 0 ? "default" : n < 0 ? "destructive" :
 interface Sku { key: string; productId: number; variantId: number | null; label: string; cost: number; byLoc: Record<number, number> }
 
 export default function AdjustmentPage() {
+  const { t, i18n } = useTranslation(NS)
+  const tag = localeTag(i18n.language)
+  const reasonLabel = (r?: string | null) => (r && REASON_KEY[r] ? t(REASON_KEY[r]) : r ?? "")
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const blocked = useModuleGuard("Inventory")
@@ -120,32 +151,32 @@ export default function AdjustmentPage() {
   const bigChange = Math.abs(diff) >= BIG_CHANGE
   const valueImpact = diff * (sku?.cost ?? 0)
 
-  const pickType = (t: AdjustmentType) => {
-    setType(t)
-    setReason((r) => (REASONS[t].includes(r) ? r : REASONS[t][0]))
+  const pickType = (next: AdjustmentType) => {
+    setType(next)
+    setReason((r) => (REASONS[next].includes(r) ? r : REASONS[next][0]))
     setErr("")
   }
 
   const startCount = () => { setType("set"); setReason("Recount"); setQty(before); setErr("") }
 
   const apply = async () => {
-    if (!sku) { setErr("Choose a product."); return }
-    if (!loc) { setErr("Choose a warehouse."); return }
-    if (type !== "set" && qty <= 0) { setErr("Enter a quantity greater than 0."); return }
-    if (type === "decrease" && qty > before) { setErr(`Only ${before} in stock at ${locName}.`); return }
-    if (diff === 0) { setErr("No quantity changed."); return }
-    if (reason === "Other" && !note.trim()) { setErr("Add a note explaining the reason."); return }
+    if (!sku) { setErr(t("inventory:stock.adjust.validation.product")); return }
+    if (!loc) { setErr(t("inventory:stock.adjust.validation.warehouse")); return }
+    if (type !== "set" && qty <= 0) { setErr(t("inventory:stock.adjust.validation.qty")); return }
+    if (type === "decrease" && qty > before) { setErr(t("inventory:stock.adjust.validation.onlyInStock", { count: before, location: locName })); return }
+    if (diff === 0) { setErr(t("inventory:stock.adjust.validation.noChange")); return }
+    if (reason === "Other" && !note.trim()) { setErr(t("inventory:stock.adjust.validation.note")); return }
     setBusy(true); setErr("")
     try {
       await adjustmentApi.create({
         productId: sku.productId, variantId: sku.variantId, locationId: Number(loc),
         type, quantity: qty, reason, note: note.trim() || undefined,
       })
-      toast({ title: "Adjustment applied", description: `${sku.label}: ${before} → ${after}` })
+      toast({ title: t("inventory:stock.adjust.toast.applied"), description: `${sku.label}: ${before} → ${after}` })
       setQty(1); setNote("")
       await Promise.all([loadForm(), loadLog()])
     } catch (e: any) {
-      setErr(e?.response?.data?.message || "Could not apply the adjustment.")
+      setErr(e?.response?.data?.message || t("inventory:stock.adjust.toast.failed"))
     } finally {
       setBusy(false)
     }
@@ -156,15 +187,15 @@ export default function AdjustmentPage() {
     exportToCSV(
       log.map((g) => ({
         no: g.number, date: g.createdAt ?? "", product: g.productName + (g.variantName ? ` · ${g.variantName}` : ""), warehouse: g.locationName ?? "",
-        type: g.type, change: g.delta, before: g.before, after: g.after, reason: g.reason, note: g.note ?? "", by: g.createdBy ?? "",
+        type: TYPE_KEY[g.type] ? t(TYPE_KEY[g.type]) : g.type, change: g.delta, before: g.before, after: g.after, reason: reasonLabel(g.reason), note: g.note ?? "", by: g.createdBy ?? "",
       })),
       "stock-adjustments", ["no", "date", "product", "warehouse", "type", "change", "before", "after", "reason", "note", "by"],
     )
   }
 
   const productOptions = useMemo(
-    () => skus.map((s) => ({ key: s.key, label: `${s.label} — ${s.byLoc[Number(loc)] ?? 0} in stock` })),
-    [skus, loc],
+    () => skus.map((s) => ({ key: s.key, label: `${s.label} — ${t("inventory:suppliers.profile.inStock", { count: s.byLoc[Number(loc)] ?? 0 })}` })),
+    [skus, loc, t],
   )
 
   if (blocked) return blocked
@@ -172,22 +203,22 @@ export default function AdjustmentPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Stock adjustment"
-        description="Fix stock counts with a reason, so every change can be explained later."
-        actions={<Button type="button" variant="outline" onClick={startCount}>Start full stock count</Button>}
+        title={t("inventory:stock.adjust.title")}
+        description={t("inventory:stock.adjust.description")}
+        actions={<Button type="button" variant="outline" onClick={startCount}>{t("inventory:stock.adjust.startCount")}</Button>}
       />
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <SectionCard
           className="w-full shrink-0 xl:w-[460px]"
-          title="New adjustment"
-          description="Correct stock after a count, damage or loss. Every change is logged."
+          title={t("inventory:stock.adjust.newTitle")}
+          description={t("inventory:stock.adjust.newDescription")}
         >
           {loadingForm ? (
             <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12" />)}</div>
           ) : (
             <div className="flex flex-col gap-4">
-              <FormField label="Warehouse" htmlFor="adj-warehouse">
+              <FormField label={t("common:fields.warehouse")} htmlFor="adj-warehouse">
                 <Select value={loc || undefined} onValueChange={(v) => { setLoc(v); setErr("") }}>
                   <SelectTrigger id="adj-warehouse" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -195,65 +226,65 @@ export default function AdjustmentPage() {
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Product" htmlFor="adj-product">
+              <FormField label={t("common:fields.product")} htmlFor="adj-product">
                 <Select value={skuKey || "__none"} onValueChange={(v) => { setSkuKey(v === "__none" ? "" : v); setErr("") }}>
                   <SelectTrigger id="adj-product" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none">Select a product</SelectItem>
+                    <SelectItem value="__none">{t("inventory:stock.adjust.selectProduct")}</SelectItem>
                     {productOptions.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
 
               <div className="flex flex-col gap-1.5">
-                <p className="text-sm font-medium">Change type</p>
-                <ChoiceCardGroup value={type} onValueChange={(v) => pickType(v as AdjustmentType)} aria-label="Adjustment type" className="grid-cols-3">
-                  {TYPES.map((t) => (
-                    <ChoiceCard key={t.id} value={t.id} title={t.label} description={t.sub} className="items-center text-center" />
+                <p className="text-sm font-medium">{t("inventory:stock.adjust.changeType")}</p>
+                <ChoiceCardGroup value={type} onValueChange={(v) => pickType(v as AdjustmentType)} aria-label={t("inventory:stock.adjust.typeLabel")} className="grid-cols-3">
+                  {TYPES.map((o) => (
+                    <ChoiceCard key={o.id} value={o.id} title={t(o.label)} description={t(o.sub)} className="items-center text-center" />
                   ))}
                 </ChoiceCardGroup>
               </div>
 
               <div className="grid grid-cols-[1fr_auto] items-end gap-3">
-                <FormField label={type === "set" ? "Counted quantity" : "Quantity"} htmlFor="adj-qty">
+                <FormField label={type === "set" ? t("inventory:stock.adjust.countedQty") : t("common:fields.quantity")} htmlFor="adj-qty">
                   <Input id="adj-qty" type="number" min={0} className="w-full" value={qty} onChange={(e) => { setQty(Math.max(0, Math.floor(Number(e.target.value)) || 0)); setErr("") }} />
                 </FormField>
                 <Card className="flex-row items-center gap-2 px-3 py-2 text-sm shadow-none">
-                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">Now</span><strong className="tabular-nums">{before}</strong></span>
+                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">{t("inventory:stock.adjust.now")}</span><strong className="tabular-nums">{before}</strong></span>
                   <span aria-hidden>→</span>
-                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">After</span><strong className="tabular-nums">{after}</strong></span>
+                  <span className="flex flex-col"><span className="text-xs text-muted-foreground">{t("inventory:stock.adjust.after")}</span><strong className="tabular-nums">{after}</strong></span>
                   <Badge variant={deltaVariant(diff)} className="tabular-nums">{sign(diff)}</Badge>
                 </Card>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <p className="text-sm font-medium">Reason</p>
+                <p className="text-sm font-medium">{t("common:extra.reason")}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {REASONS[type].map((r) => (
                     <Button key={r} type="button" size="sm" aria-pressed={reason === r} onClick={() => setReason(r)}
                       variant={reason === r ? "default" : "outline"}>
-                      {r}
+                      {reasonLabel(r)}
                     </Button>
                   ))}
                 </div>
               </div>
 
-              <FormField label="Note" htmlFor="adj-note">
-                <Textarea id="adj-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. 2 pieces torn during unpacking" />
+              <FormField label={t("common:fields.note")} htmlFor="adj-note">
+                <Textarea id="adj-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("inventory:stock.adjust.notePh")} />
               </FormField>
 
               {bigChange && (
                 <Alert>
-                  <AlertDescription>This is a large change ({sign(diff)}). It will be flagged for owner review.</AlertDescription>
+                  <AlertDescription>{t("inventory:stock.adjust.bigChange", { change: sign(diff) })}</AlertDescription>
                 </Alert>
               )}
               {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
 
               <Separator />
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Value impact <strong className="text-foreground tabular-nums">{valueImpact < 0 ? "−" : "+"}{formatCurrency(Math.abs(valueImpact))}</strong></span>
+                <span className="text-sm text-muted-foreground">{t("inventory:stock.adjust.valueImpact")} <strong className="text-foreground tabular-nums">{valueImpact < 0 ? "−" : "+"}{formatCurrency(Math.abs(valueImpact))}</strong></span>
                 <Button type="button" disabled={busy} onClick={apply}>
-                  {busy ? "Applying…" : "Apply adjustment"}
+                  {busy ? t("inventory:stock.adjust.applying") : t("inventory:stock.adjust.apply")}
                 </Button>
               </div>
             </div>
@@ -262,28 +293,28 @@ export default function AdjustmentPage() {
 
         <SectionCard
           className="w-full min-w-0 flex-1"
-          title="Audit trail"
+          title={t("inventory:stock.adjust.auditTrail")}
           actions={<>
               <Select value={reasonFilter} onValueChange={(v) => { setReasonFilter(v); setPage(1) }}>
-                <SelectTrigger aria-label="Filter by reason" className="w-[170px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("inventory:stock.adjust.filterReason")} className="w-[170px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Reason: All</SelectItem>
-                  {reasonOpts.filter(Boolean).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  <SelectItem value="all">{t("inventory:returns.reasonAll")}</SelectItem>
+                  {reasonOpts.filter(Boolean).map((r) => <SelectItem key={r} value={r}>{reasonLabel(r)}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+              <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
           </>}
         >
           <div className="mb-4 grid grid-cols-3 gap-2">
-            <StatTile label="Added (30d)" value={`+${stats.added30d}`} />
-            <StatTile label="Removed (30d)" value={stats.removed30d ? `−${stats.removed30d}` : "0"} />
-            <StatTile label="Shrinkage value" value={formatCurrency(stats.shrinkageValue30d)} />
+            <StatTile label={t("inventory:stock.adjust.added30")} value={`+${stats.added30d}`} />
+            <StatTile label={t("inventory:stock.adjust.removed30")} value={stats.removed30d ? `−${stats.removed30d}` : "0"} />
+            <StatTile label={t("inventory:stock.adjust.shrinkage")} value={formatCurrency(stats.shrinkageValue30d)} />
           </div>
 
           {logLoading ? (
             <div className="space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>
           ) : log.length === 0 ? (
-            <EmptyState title="No adjustments yet." />
+            <EmptyState title={t("inventory:stock.adjust.empty")} />
           ) : (
             <div className="flex flex-col">
               {log.map((g, i) => (
@@ -297,12 +328,12 @@ export default function AdjustmentPage() {
                       <ItemTitle className="block w-full truncate">
                         <span className="mr-2 text-xs font-bold text-muted-foreground">{g.number}</span>
                         {g.productName}{g.variantName ? ` · ${g.variantName}` : ""}
-                        {g.flagged && <Badge variant="secondary" className="ml-2">Flagged</Badge>}
+                        {g.flagged && <Badge variant="secondary" className="ml-2">{t("inventory:stock.adjust.flagged")}</Badge>}
                       </ItemTitle>
-                      <ItemDescription className="truncate">{g.locationName ?? "—"} · {g.reason}{g.note ? ` (${g.note})` : ""}{g.before !== null && g.after !== null ? ` · ${g.before} → ${g.after}` : ""}</ItemDescription>
+                      <ItemDescription className="truncate">{g.locationName ?? "—"} · {reasonLabel(g.reason)}{g.note ? ` (${g.note})` : ""}{g.before !== null && g.after !== null ? ` · ${g.before} → ${g.after}` : ""}</ItemDescription>
                     </ItemContent>
                     <ItemActions className="flex-col items-end gap-0 text-right">
-                      <div className="text-sm">{g.createdAt ? new Date(g.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}{g.createdAt ? ` · ${new Date(g.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</div>
+                      <div className="text-sm">{g.createdAt ? new Date(g.createdAt).toLocaleDateString(tag, { month: "short", day: "numeric" }) : "—"}{g.createdAt ? ` · ${new Date(g.createdAt).toLocaleTimeString(tag, { hour: "numeric", minute: "2-digit" })}` : ""}</div>
                       <div className="text-xs text-muted-foreground">{g.createdBy ?? "—"}</div>
                     </ItemActions>
                   </Item>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
+import { useTranslation } from "react-i18next"
 import { Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/common/WithTooltip"
@@ -14,6 +15,7 @@ import { ACCENT_STORAGE_KEY } from "@/components/accent-picker"
  */
 export function ThemeAccentControls() {
   const { resolvedTheme, setTheme } = useTheme()
+  const { t } = useTranslation(["ui", "common"])
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -29,13 +31,13 @@ export function ThemeAccentControls() {
   const isDark = resolvedTheme === "dark"
 
   return (
-    <WithTooltip content={isDark ? "Switch to light mode" : "Switch to dark mode"}>
+    <WithTooltip content={isDark ? t("ui:theme.toLight") : t("ui:theme.toDark")}>
       <Button
         type="button"
         variant="ghost"
         size="icon"
         onClick={() => setTheme(isDark ? "light" : "dark")}
-        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        aria-label={isDark ? t("ui:theme.toLight") : t("ui:theme.toDark")}
       >
         {isDark ? <Sun className="size-[18px] text-amber-400" /> : <Moon className="size-[18px]" />}
       </Button>

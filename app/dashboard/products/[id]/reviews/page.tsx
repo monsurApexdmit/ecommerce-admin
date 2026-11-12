@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { ArrowLeft, MessageSquare, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,11 +26,12 @@ import productApi, {
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { localeTag } from "@/lib/i18n"
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, lang: string) {
   if (!value) return "-"
 
-  return new Date(value).toLocaleString()
+  return new Date(value).toLocaleString(localeTag(lang))
 }
 
 function RatingStars({ value }: { value: number }) {
@@ -50,6 +52,7 @@ export default function ProductReviewsPage() {
   const params = useParams<{ id: string }>()
   const productId = Number(params.id)
   const { toast } = useToast()
+  const { t, i18n } = useTranslation(["products", "common"])
 
   const [product, setProduct] = useState<ProductResponse | null>(null)
   const [summary, setSummary] = useState<ProductReviewSummaryResponse | null>(null)
@@ -62,12 +65,12 @@ export default function ProductReviewsPage() {
 
   const reviewCountLabel = useMemo(() => {
     const count = summary?.review_count ?? reviews.length
-    return `${count} review${count === 1 ? "" : "s"}`
-  }, [reviews.length, summary?.review_count])
+    return t("products:reviews.count", { count })
+  }, [reviews.length, summary?.review_count, t])
 
   useEffect(() => {
     if (!Number.isFinite(productId) || productId <= 0) {
-      setError("Invalid product id")
+      setError(t("products:reviews.invalidId"))
       setIsLoading(false)
       return
     }
@@ -96,7 +99,7 @@ export default function ProductReviewsPage() {
       setProduct(productResponse.data)
       applyReviewResponse(reviewResponse)
     } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || "Failed to load product reviews"
+      const message = err?.response?.data?.message || err?.message || t("products:reviews.loadFailed")
       setError(message)
     } finally {
       setIsLoading(false)
@@ -124,8 +127,8 @@ export default function ProductReviewsPage() {
     if (reply.length < 2) {
       toast({
         variant: "destructive",
-        title: "Reply is too short",
-        description: "Please enter at least 2 characters.",
+        title: t("products:reviews.tooShort"),
+        description: t("products:reviews.tooShortDesc"),
       })
       return
     }
@@ -137,14 +140,14 @@ export default function ProductReviewsPage() {
       const reviewResponse = await productApi.getReviews(productId, { per_page: 50 })
       applyReviewResponse(reviewResponse)
       toast({
-        title: "Reply saved",
-        description: `The reply for ${review.customer_name} has been updated.`,
+        title: t("products:reviews.saved"),
+        description: t("products:reviews.savedDesc", { name: review.customer_name }),
       })
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Failed to save reply",
-        description: err?.response?.data?.message || err?.message || "Please try again.",
+        title: t("products:reviews.saveFailed"),
+        description: err?.response?.data?.message || err?.message || t("products:reviews.tryAgain"),
       })
     } finally {
       setSavingReviewId(null)
@@ -158,7 +161,7 @@ export default function ProductReviewsPage() {
           <CardContent className="flex min-h-[240px] items-center justify-center">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner />
-              Loading product reviews...
+              {t("products:reviews.loading")}
             </div>
           </CardContent>
         </Card>
@@ -171,21 +174,21 @@ export default function ProductReviewsPage() {
       <div className="space-y-1">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MessageSquare className="size-4" />
-          Product review replies
+          {t("products:reviews.eyebrow")}
         </div>
         <PageHeader
-          title={product?.name || "Product reviews"}
-          description="Review customer feedback and reply from the admin panel."
+          title={product?.name || t("products:reviews.title")}
+          description={t("products:reviews.description")}
           actions={<>
             <Button variant="outline" asChild>
               <Link href="/dashboard/products">
                 <ArrowLeft className="size-4" />
-                Back to products
+                {t("products:shared.backToProducts")}
               </Link>
             </Button>
             <Button variant="outline" onClick={() => void loadPageData()} disabled={isRefreshing}>
               {isRefreshing ? <Spinner /> : null}
-              Refresh
+              {t("common:actions.refresh")}
             </Button>
           </>}
         />
@@ -193,7 +196,7 @@ export default function ProductReviewsPage() {
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Unable to load reviews</AlertTitle>
+          <AlertTitle>{t("products:reviews.unableToLoad")}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -201,9 +204,9 @@ export default function ProductReviewsPage() {
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Review summary</CardTitle>
+            <CardTitle>{t("products:reviews.summary")}</CardTitle>
             <CardDescription>
-              {summary ? `${summary.average_rating.toFixed(1)} average rating across ${reviewCountLabel}.` : reviewCountLabel}
+              {summary ? t("products:reviews.summaryDesc", { rating: summary.average_rating.toFixed(1), reviews: reviewCountLabel }) : reviewCountLabel}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -221,12 +224,12 @@ export default function ProductReviewsPage() {
               {(summary?.distribution || []).map((row) => (
                 <div key={row.stars} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
-                    <span>{row.stars} star</span>
+                    <span>{t("products:reviews.star", { stars: row.stars })}</span>
                     <span className="text-muted-foreground">
                       {row.count} / {row.percent}%
                     </span>
                   </div>
-                  <Progress value={row.percent} aria-label={`${row.stars} star share`} className="h-2" />
+                  <Progress value={row.percent} aria-label={t("products:reviews.starShare", { stars: row.stars })} className="h-2" />
                 </div>
               ))}
             </div>
@@ -235,7 +238,7 @@ export default function ProductReviewsPage() {
 
         <div className="space-y-4">
           {reviews.length === 0 ? (
-            <EmptyState bordered icon={MessageSquare} title="No customer reviews found for this product yet." />
+            <EmptyState bordered icon={MessageSquare} title={t("products:reviews.empty")} />
           ) : (
             reviews.map((review) => (
               <Card key={review.id}>
@@ -246,13 +249,13 @@ export default function ProductReviewsPage() {
                         <CardTitle className="text-lg">{review.customer_name}</CardTitle>
                         {review.verified_purchase ? (
                           <Badge variant="outline">
-                            Verified purchase
+                            {t("products:reviews.verified")}
                           </Badge>
                         ) : null}
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <RatingStars value={review.rating} />
-                        <span>{formatDate(review.created_at)}</span>
+                        <span>{formatDate(review.created_at, i18n.language)}</span>
                       </div>
                     </div>
                     <Badge variant="secondary">{review.rating}/5</Badge>
@@ -266,9 +269,9 @@ export default function ProductReviewsPage() {
                   {review.reply ? (
                     <Alert>
                       <AlertTitle className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <span>Existing reply from {review.reply.author_name}</span>
+                        <span>{t("products:reviews.existingReply", { name: review.reply.author_name })}</span>
                         <span className="text-xs font-normal text-muted-foreground">
-                          {formatDate(review.reply.replied_at)}
+                          {formatDate(review.reply.replied_at, i18n.language)}
                         </span>
                       </AlertTitle>
                       <AlertDescription className="leading-6">{review.reply.body}</AlertDescription>
@@ -276,7 +279,7 @@ export default function ProductReviewsPage() {
                   ) : null}
 
                   <FormField
-                    label={review.reply ? "Update reply" : "Write a reply"}
+                    label={review.reply ? t("products:reviews.update") : t("products:reviews.write")}
                     htmlFor={`reply-${review.id}`}
                     description={`${(draftReplies[review.id] || "").trim().length}/2000`}
                   >
@@ -289,7 +292,7 @@ export default function ProductReviewsPage() {
                           [review.id]: event.target.value.slice(0, 2000),
                         }))
                       }
-                      placeholder="Write a reply that will appear under the customer review."
+                      placeholder={t("products:reviews.placeholder")}
                       className="min-h-[120px]"
                     />
                     <div className="flex items-center justify-end">
@@ -298,7 +301,7 @@ export default function ProductReviewsPage() {
                         disabled={savingReviewId === review.id}
                       >
                         {savingReviewId === review.id ? <Spinner /> : null}
-                        {review.reply ? "Update reply" : "Send reply"}
+                        {review.reply ? t("products:reviews.update") : t("products:reviews.send")}
                       </Button>
                     </div>
                   </FormField>

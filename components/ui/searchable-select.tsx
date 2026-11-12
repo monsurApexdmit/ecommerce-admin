@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -21,9 +22,9 @@ export function SearchableSelect({
   options,
   value,
   onChange,
-  placeholder = "Select…",
-  searchPlaceholder = "Search…",
-  emptyText = "No results.",
+  placeholder,
+  searchPlaceholder,
+  emptyText,
   className,
   disabled,
 }: {
@@ -36,6 +37,7 @@ export function SearchableSelect({
   className?: string
   disabled?: boolean
 }) {
+  const { t } = useTranslation(["ui", "common"])
   const [open, setOpen] = useState(false)
   const selected = options.find((o) => o.value === value)
 
@@ -50,15 +52,15 @@ export function SearchableSelect({
           disabled={disabled}
           className={cn("w-full justify-between font-normal", !selected && "text-muted-foreground", className)}
         >
-          <span className="truncate">{selected ? selected.label : placeholder}</span>
+          <span className="truncate">{selected ? selected.label : (placeholder ?? t("ui:select.placeholder"))}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder ?? t("common:extra.searchPlaceholder")} />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandEmpty>{emptyText ?? t("common:status.noResults")}</CommandEmpty>
             <CommandGroup>
               {options.map((o) => (
                 <CommandItem

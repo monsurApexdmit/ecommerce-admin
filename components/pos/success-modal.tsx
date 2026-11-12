@@ -1,6 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Trans, useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
+import { WALK_IN_NAME } from "@/components/pos/pos-customer-picker"
 import { Check, Printer, Clock } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -43,9 +46,13 @@ interface StoreInfo {
 }
 
 export function SuccessModal({ open, onOpenChange, onClose, orderDetails, formatCurrency: fmt, taxLabel }: SuccessModalProps) {
+  const { t, i18n } = useTranslation(["pos", "common"])
+  const locale = localeTag(i18n.language)
   const { formatCurrency: companyFormatCurrency } = useCompanySettings()
   const formatCurrency = fmt ?? companyFormatCurrency
-  const taxLabelText = taxLabel ?? "Tax"
+  const taxLabelText = taxLabel ?? t("common:money.tax")
+  // the walk-in name is stored in English; show it in the staff member's language
+  const customerName = orderDetails?.customer === WALK_IN_NAME ? t("pos:walkIn") : orderDetails?.customer
   const [storeInfo, setStoreInfo] = useState<StoreInfo>({ storeName: "", storePhone: "", storeAddress: "" })
 
   useEffect(() => {
@@ -62,8 +69,8 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
   const handlePrint = () => {
     if (!orderDetails) return
     const printWindow = window.open('', '_blank', 'height=600,width=800')
-    if (!printWindow) { alert("Please allow popups to print the invoice."); return }
-    const html = `<html><head><title>Receipt</title><meta name="viewport" content="width=80mm"><style>
+    if (!printWindow) { alert(t("pos:success.allowPopups")); return }
+    const html = `<html lang="${i18n.language}"><head><meta charset="utf-8"><title>${t("pos:receipt.receipt")}</title><meta name="viewport" content="width=80mm"><style>
       /* 80mm thermal roll. size:80mm auto keeps the sheet as tall as the
          content (no blank A4 page). Real thermal printers honour this; if a
          browser preview still shows A4, pick the 80mm/Roll paper in the dialog. */
@@ -86,12 +93,12 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
       }
     </style></head><body>
       <div class="header">
-        <div class="store-name">${storeInfo.storeName || "Store"}</div>
+        <div class="store-name">${storeInfo.storeName || t("pos:success.store")}</div>
         ${storeInfo.storeAddress ? `<div class="meta">${storeInfo.storeAddress}</div>` : ''}
-        ${storeInfo.storePhone ? `<div class="meta">Tel: ${storeInfo.storePhone}</div>` : ''}
-        <div class="meta">Date: ${new Date().toLocaleString()}</div>
-        ${orderDetails.invoiceNo ? `<div class="meta">Invoice: ${orderDetails.invoiceNo}</div>` : ''}
-        ${orderDetails.customer ? `<div class="meta">Customer: ${orderDetails.customer}</div>` : ''}
+        ${storeInfo.storePhone ? `<div class="meta">${t("pos:success.tel", { phone: storeInfo.storePhone })}</div>` : ''}
+        <div class="meta">${t("pos:success.date", { date: new Date().toLocaleString(locale) })}</div>
+        ${orderDetails.invoiceNo ? `<div class="meta">${t("pos:success.invoice", { no: orderDetails.invoiceNo })}</div>` : ''}
+        ${customerName ? `<div class="meta">${t("pos:success.customer", { name: customerName })}</div>` : ''}
       </div>
       <div class="items">
         ${orderDetails.cart.map(item => `
@@ -102,11 +109,11 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
           </div>`).join('')}
       </div>
       <div class="divider"></div>
-      <div class="summary-row"><span>Subtotal</span><span>${formatCurrency(orderDetails.subtotal)}</span></div>
+      <div class="summary-row"><span>${t("common:money.subtotal")}</span><span>${formatCurrency(orderDetails.subtotal)}</span></div>
       <div class="summary-row"><span>${taxLabelText}</span><span>${formatCurrency(orderDetails.tax)}</span></div>
-      ${orderDetails.discount > 0 ? `<div class="summary-row"><span>Discount</span><span>-${formatCurrency(orderDetails.discount)}</span></div>` : ''}
-      <div class="total-row"><span>Total</span><span>${formatCurrency(orderDetails.total)}</span></div>
-      <div class="footer"><p>Thank you for shopping!</p><p style="margin-top:5px">Return Policy: 7 days with receipt</p></div>
+      ${orderDetails.discount > 0 ? `<div class="summary-row"><span>${t("common:money.discount")}</span><span>-${formatCurrency(orderDetails.discount)}</span></div>` : ''}
+      <div class="total-row"><span>${t("common:money.total")}</span><span>${formatCurrency(orderDetails.total)}</span></div>
+      <div class="footer"><p>${t("pos:success.thanks")}</p><p style="margin-top:5px">${t("pos:success.returnPolicy")}</p></div>
     </body></html>`
     printWindow.document.open()
     printWindow.document.write(html)
@@ -119,8 +126,8 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="items-center text-center sm:text-center">
           <UserAvatar className="mb-2 size-16 animate-in zoom-in duration-500" fallback={<Check className="size-8" strokeWidth={2.5} />} />
-          <DialogTitle className="text-2xl">Order Confirmed!</DialogTitle>
-          <DialogDescription>Your payment has been processed successfully</DialogDescription>
+          <DialogTitle className="text-2xl">{t("pos:success.title")}</DialogTitle>
+          <DialogDescription>{t("pos:success.description")}</DialogDescription>
         </DialogHeader>
 
         {/* Invoice and Details */}
@@ -129,7 +136,7 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
           {orderDetails?.invoiceNo && (
             <div className="flex justify-center">
               <Badge variant="secondary">
-                Invoice #<span className="font-mono">{orderDetails.invoiceNo}</span>
+                <Trans t={t} i18nKey="pos:success.invoiceBadge" values={{ no: orderDetails.invoiceNo }} components={{ mono: <span className="font-mono" /> }} />
               </Badge>
             </div>
           )}
@@ -139,15 +146,15 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
             <Card className="p-4">
               <InfoList className="gap-3">
                 {/* Customer */}
-                {orderDetails.customer && <InfoRow label="Customer" value={orderDetails.customer} className="items-center" />}
+                {customerName && <InfoRow label={t("common:fields.customer")} value={customerName} className="items-center" />}
 
                 {/* Items Count */}
-                <InfoRow label="Items" value={`${orderDetails.cart.length} item${orderDetails.cart.length !== 1 ? 's' : ''}`} className="items-center" />
+                <InfoRow label={t("pos:success.items")} value={t("common:count.items", { count: orderDetails.cart.length })} className="items-center" />
 
                 {/* Order Time */}
                 <InfoRow
-                  label={<span className="flex items-center gap-2"><Clock className="size-4" />Ordered</span>}
-                  value={<span className="text-xs">{new Date().toLocaleTimeString()}</span>}
+                  label={<span className="flex items-center gap-2"><Clock className="size-4" />{t("pos:success.ordered")}</span>}
+                  value={<span className="text-xs">{new Date().toLocaleTimeString(locale)}</span>}
                   className="items-center"
                 />
               </InfoList>
@@ -158,13 +165,13 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
           {orderDetails && (
             <Card className="p-4">
               <InfoList>
-                <InfoRow label="Subtotal" value={<span className="font-normal">{formatCurrency(orderDetails.subtotal)}</span>} />
+                <InfoRow label={t("common:money.subtotal")} value={<span className="font-normal">{formatCurrency(orderDetails.subtotal)}</span>} />
                 <InfoRow label={taxLabelText} value={<span className="font-normal">{formatCurrency(orderDetails.tax)}</span>} />
                 {orderDetails.discount > 0 && (
-                  <InfoRow label="Discount" value={`-${formatCurrency(orderDetails.discount)}`} />
+                  <InfoRow label={t("common:money.discount")} value={`-${formatCurrency(orderDetails.discount)}`} />
                 )}
                 <Separator />
-                <InfoRow label={<span className="font-bold text-foreground">Total Amount</span>} value={<span className="text-2xl font-bold">{formatCurrency(orderDetails.total)}</span>} className="items-center" />
+                <InfoRow label={<span className="font-bold text-foreground">{t("pos:success.totalAmount")}</span>} value={<span className="text-2xl font-bold">{formatCurrency(orderDetails.total)}</span>} className="items-center" />
               </InfoList>
             </Card>
           )}
@@ -179,7 +186,7 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
                 onClick={handlePrint}
               >
                 <Printer />
-                Print Receipt
+                {t("pos:success.print")}
               </Button>
             )}
             <Button
@@ -187,7 +194,7 @@ export function SuccessModal({ open, onOpenChange, onClose, orderDetails, format
               className="w-full"
               onClick={onClose}
             >
-              Complete & Start New Order
+              {t("pos:success.newOrder")}
             </Button>
           </div>
         </div>

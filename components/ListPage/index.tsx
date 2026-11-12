@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils"
 import type React from "react"
 import { useState, useCallback, useMemo, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -125,7 +126,7 @@ export function ListPage({
   data,
   isLoading = false,
   columns,
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   searchFields = [],
   filters = [],
   sortOptions = [],
@@ -135,7 +136,7 @@ export function ListPage({
   onFilterChange,
   actions = [],
   onAddClick,
-  addButtonLabel = "Add",
+  addButtonLabel,
   bulkActions = [],
   enableCheckboxes = false,
   onExport,
@@ -148,9 +149,10 @@ export function ListPage({
   onPageSizeChange,
   stats,
   statsLoading = false,
-  emptyMessage = "No items found",
+  emptyMessage,
   rowClassName,
 }: ListPageProps) {
+  const { t } = useTranslation(["ui", "common"])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkActionDialog, setBulkActionDialog] = useState<{ open: boolean; action?: BulkAction; showSelector?: boolean }>({ open: false })
@@ -229,12 +231,7 @@ export function ListPage({
 
       // Find the data key to filter by
       // Try common patterns: filterId, filterId + 'Id', filter key name
-      const possibleKeys = [
-        filterId,
-        filterId + 'Id',
-        filterId + '_id',
-        filters.find(f => f.id === filterId)?.id
-      ]
+      const possibleKeys = [filterId, filterId + 'Id', filterId + '_id']
 
       result = result.filter(item => {
         for (const key of possibleKeys) {
@@ -303,7 +300,7 @@ export function ListPage({
     if (onExport) {
       onExport(filteredAndSortedData)
     } else {
-      exportToCSV(filteredAndSortedData, exportFileName)
+      exportToCSV(filteredAndSortedData, exportFileName, columns.map(c => c.key))
     }
   }
 
@@ -317,13 +314,13 @@ export function ListPage({
           {onExport && (
             <Button onClick={handleExport} variant="outline" size="sm">
               <Download size={16} className="mr-2" />
-              Export
+              {t("common:actions.export")}
             </Button>
           )}
           {onImport && (
             <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm">
               <Upload size={16} className="mr-2" />
-              Import
+              {t("common:actions.import")}
             </Button>
           )}
           {enableCheckboxes && bulkActions.length > 0 && (
@@ -337,7 +334,7 @@ export function ListPage({
               disabled={selectedIds.length === 0}
             >
               <FilePen size={16} className="mr-2" />
-              Bulk Action
+              {t("ui:listPage.bulkAction")}
             </Button>
           )}
           {enableCheckboxes && bulkActions.find(a => a.id === "delete") && (
@@ -352,13 +349,13 @@ export function ListPage({
               disabled={selectedIds.length === 0}
             >
               <Trash2 size={16} className="mr-2" />
-              Delete
+              {t("common:actions.delete")}
             </Button>
           )}
           {onAddClick && (
             <Button onClick={onAddClick} size="sm">
               <Plus size={16} className="mr-2" />
-              {addButtonLabel}
+              {addButtonLabel ?? t("common:actions.add")}
             </Button>
           )}
         </> : undefined}
@@ -386,7 +383,7 @@ export function ListPage({
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" size={18} />
             <Input
-              placeholder={searchPlaceholder}
+              placeholder={searchPlaceholder ?? t("common:extra.searchPlaceholder")}
               value={searchQuery}
               onChange={e => handleSearch(e.target.value)}
               className="pl-10 h-10"
@@ -406,7 +403,7 @@ export function ListPage({
                     <SelectValue placeholder={filter.label} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All {filter.label}</SelectItem>
+                    <SelectItem value="all">{t("ui:listPage.allOf", { label: filter.label })}</SelectItem>
                     {filter.options.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
@@ -419,7 +416,7 @@ export function ListPage({
               {sortOptions.length > 0 && (
                 <Select value={sortBy} onValueChange={handleSortChange}>
                   <SelectTrigger className="w-[160px] h-9">
-                    <SelectValue placeholder="Sort by" />
+                    <SelectValue placeholder={t("ui:listPage.sortBy")} />
                   </SelectTrigger>
                   <SelectContent>
                     {sortOptions.map(opt => (
@@ -444,7 +441,7 @@ export function ListPage({
             ))}
           </div>
         ) : currentData.length === 0 ? (
-          <EmptyState title={emptyMessage} />
+          <EmptyState title={emptyMessage ?? t("ui:listPage.empty")} />
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -468,7 +465,7 @@ export function ListPage({
                   ))}
                   {actions.length > 0 && (
                     <TableHead className="w-20 sticky right-0 bg-background">
-                      Actions
+                      {t("common:fields.actions")}
                     </TableHead>
                   )}
                 </TableRow>
@@ -537,11 +534,11 @@ export function ListPage({
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Import {title}</DialogTitle>
-            <DialogDescription>Upload a CSV file to import {title.toLowerCase()}</DialogDescription>
+            <DialogTitle>{t("ui:listPage.importTitle", { title })}</DialogTitle>
+            <DialogDescription>{t("ui:listPage.importDescription", { title: title.toLowerCase() })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <FormField label="CSV File" htmlFor="listpage-import-file" description="Upload a CSV file with the required columns">
+            <FormField label={t("ui:listPage.csvFile")} htmlFor="listpage-import-file" description={t("ui:listPage.csvHint")}>
               <Input
                 id="listpage-import-file"
                 type="file"
@@ -574,7 +571,7 @@ export function ListPage({
               variant="outline"
               onClick={() => setImportDialogOpen(false)}
             >
-              Cancel
+              {t("common:actions.cancel")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -584,13 +581,13 @@ export function ListPage({
       <Dialog open={bulkActionDialog.open && bulkActionDialog.showSelector} onOpenChange={open => setBulkActionDialog({ open })}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Bulk Actions</DialogTitle>
+            <DialogTitle>{t("ui:listPage.bulkTitle")}</DialogTitle>
             <DialogDescription>
-              Apply actions to {selectedIds.length} selected item{selectedIds.length !== 1 ? "s" : ""}
+              {t("ui:listPage.bulkDescription", { count: selectedIds.length })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <FormField label="Select Action" htmlFor="listpage-bulk-action">
+            <FormField label={t("ui:listPage.selectAction")} htmlFor="listpage-bulk-action">
               <Select
                 onValueChange={(actionId) => {
                   const action = bulkActions.find(a => a.id === actionId)
@@ -600,7 +597,7 @@ export function ListPage({
                 }}
               >
                 <SelectTrigger id="listpage-bulk-action">
-                  <SelectValue placeholder="Choose an action..." />
+                  <SelectValue placeholder={t("ui:listPage.chooseAction")} />
                 </SelectTrigger>
                 <SelectContent>
                   {bulkActions.map(action => (
@@ -617,7 +614,7 @@ export function ListPage({
               variant="outline"
               onClick={() => setBulkActionDialog({ open: false })}
             >
-              Cancel
+              {t("common:actions.cancel")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -627,10 +624,10 @@ export function ListPage({
       <Dialog open={bulkActionDialog.open && !!bulkActionDialog.action} onOpenChange={open => setBulkActionDialog({ open })}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm {bulkActionDialog.action?.label}</DialogTitle>
+            <DialogTitle>{t("ui:listPage.confirmTitle", { action: bulkActionDialog.action?.label ?? "" })}</DialogTitle>
             <DialogDescription>
               {bulkActionDialog.action?.confirmMessage ||
-                `Are you sure you want to ${bulkActionDialog.action?.label.toLowerCase()} ${selectedIds.length} item${selectedIds.length !== 1 ? "s" : ""}?`}
+                t("ui:listPage.confirmMessage", { action: bulkActionDialog.action?.label.toLowerCase() ?? "", count: selectedIds.length })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -639,7 +636,7 @@ export function ListPage({
               onClick={() => setBulkActionDialog({ open: false })}
               disabled={bulkLoading}
             >
-              Cancel
+              {t("common:actions.cancel")}
             </Button>
             <Button
               onClick={confirmBulkAction}
@@ -649,10 +646,10 @@ export function ListPage({
               {bulkLoading ? (
                 <>
                   <Spinner />
-                  Processing...
+                  {t("ui:listPage.processing")}
                 </>
               ) : (
-                `Confirm ${bulkActionDialog.action?.label}`
+                t("ui:listPage.confirmTitle", { action: bulkActionDialog.action?.label ?? "" })
               )}
             </Button>
           </DialogFooter>
