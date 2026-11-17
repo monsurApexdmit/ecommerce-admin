@@ -177,6 +177,8 @@ export interface PaymentSettings {
   /** Extra fee added to COD orders */
   cod_fee?: number;
   cod_phone_verify?: 'new' | 'always' | 'never';
+  /** Minutes an unpaid online-gateway order holds its stock before it is cancelled (5–1440, default 15) */
+  payment_hold_minutes?: number;
   /** The six fixed methods (cash, bkash, nagad, card, bank, cod) */
   methods?: Record<string, PaymentMethodConfig>;
   /** Slug of the default method (must be enabled) */
@@ -189,6 +191,30 @@ export interface PaymentMethodConfig {
   /** Sales channels the method is offered in; an enabled method needs at least one */
   channels?: ('pos' | 'online')[];
   fields?: { account?: string; accountName?: string; bankName?: string };
+}
+
+/**
+ * Content blocks for the storefront templates (Online store > Template content). Each block is null until
+ * saved once; the template then shows its own default. Which template uses which: lib/storeThemes.ts TEMPLATE_BLOCKS.
+ */
+export interface TemplatePromoTile {
+  id: string;
+  tag: string;
+  title: string;
+  text: string;
+  cta: string;
+  link: string;
+  imagePath: string | null;
+}
+
+export interface TemplateContent {
+  announcement?: { enabled: boolean; text: string; code: string; link: string } | null;
+  headerNote?: { enabled: boolean; label: string; text: string } | null;
+  promoTiles?: { enabled: boolean; items: TemplatePromoTile[] } | null;
+  stats?: { enabled: boolean; items: { value: string; label: string }[] } | null;
+  testimonials?: { enabled: boolean; title: string; items: { name: string; text: string; rating: number; note: string }[] } | null;
+  newsletter?: { enabled: boolean; title: string; text: string } | null;
+  cta?: { enabled: boolean; tag: string; title: string; text: string; cta: string; link: string; cta2: string; link2: string; imagePath: string | null } | null;
 }
 
 export interface BusinessSettings {
@@ -205,6 +231,7 @@ export interface BusinessSettings {
   onlineStore?: OnlineStoreSettings;
   promoBanner?: PromoBannerSettings;
   homepageSections?: HomepageSections;
+  templateContent?: TemplateContent;
   socialLinks?: {
     facebook?: string;
     instagram?: string;
@@ -215,7 +242,14 @@ export interface BusinessSettings {
 export interface OnlineStoreSettings {
   name?: string;
   slug?: string;
-  theme?: string;
+  /** Accent colour hex; null/empty = the theme's own accent */
+  theme?: string | null;
+  /** Storefront theme (lib/storeThemes.ts) */
+  themePreset?: string;
+  /** "theme" = theme colours; "brand" = Company settings brand colours (default) */
+  colorSource?: "theme" | "brand";
+  /** Default storefront language; shoppers can switch */
+  language?: "en" | "bn";
   published?: boolean;
   apiUrl?: string;
   companyId?: string;

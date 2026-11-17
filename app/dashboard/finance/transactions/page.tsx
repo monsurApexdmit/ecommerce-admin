@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { ArrowLeftRight, Banknote, Download, MoreHorizontal, Pencil, Percent, Plus, Search, Star, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import financeApi, { financeError, type AccountsResult, type FinanceAccount, type LedgerParams, type LedgerResult, type LedgerRow } from "@/lib/financeApi"
@@ -29,14 +30,14 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { AccountDialog, EntryDialog, TransferDialog } from "@/components/finance/account-dialogs"
 import { PaymentFeesDialog } from "@/components/finance/transactions-fees-dialog"
 import { FinanceFilters, useFinanceFilters } from "@/components/finance/finance-filters"
-import {
-  CurrencyTag, SOURCE_LABELS, SignedMoney, accountTypeLabel, csvMoney, downloadCsv, sourceLabel, useFinanceFormat,
-} from "@/components/finance/finance-ui"
+import { CurrencyTag, SignedMoney, csvMoney, downloadCsv, useFinanceFormat } from "@/components/finance/finance-ui"
+import { FIN_NS, SOURCE_TYPES, accountTypeText, methodText, sourceText } from "@/components/finance/i18n"
 
 const ALL = "all"
 
 export default function TransactionsPage() {
   const blocked = useModuleGuard("Finance")
+  const { t } = useTranslation(FIN_NS)
   const { formatCurrency, currency } = useCompanySettings()
   const fmt = useFinanceFormat()
   const { canWrite, canDelete } = useSaasAuth()
@@ -81,7 +82,7 @@ export default function TransactionsPage() {
   useEffect(() => { setPage(1) }, [filters.key, account, direction, source, qD])
 
   const loadAccounts = useCallback(async () => {
-    try { setAccRes(await financeApi.getAccounts()) } catch (e) { toast.error(financeError(e, "Could not load accounts")) } finally { setAccLoading(false) }
+    try { setAccRes(await financeApi.getAccounts()) } catch (e) { toast.error(financeError(e, t("finance:accounts.loadFailed"))) } finally { setAccLoading(false) }
   }, [])
   useEffect(() => { loadAccounts() }, [loadAccounts])
 
@@ -98,7 +99,7 @@ export default function TransactionsPage() {
     if (!filters.ready || filters.incomplete) return
     setLoading(true); setError("")
     try { setData(await financeApi.getTransactions(params(page, perPage))) }
-    catch (e) { setError(financeError(e, "Could not load transactions.")) }
+    catch (e) { setError(financeError(e, t("finance:transactions.loadFailed"))) }
     finally { setLoading(false) }
   }, [params, page, perPage, filters.ready, filters.incomplete])
   useEffect(() => { load() }, [load])
@@ -122,39 +123,39 @@ export default function TransactionsPage() {
         rows.push(...r.rows)
         if (p >= r.meta.lastPage || r.rows.length === 0) break
       }
-      if (!rows.length) { toast.error("Nothing to export."); return }
+      if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
       const oneAccount = account !== ALL
       downloadCsv("transactions", [
-        ["Date", (r) => r.date],
-        ["Type", (r) => r.sourceLabel || sourceLabel(r.sourceType)],
-        ["Direction", (r) => (r.direction === "in" ? "In" : "Out")],
-        ["Gross", (r) => csvMoney(r.gross)],
-        ["Fee", (r) => csvMoney(r.fee)],
-        ["Net", (r) => csvMoney(r.net)],
-        ["Currency", (r) => r.currency ?? currency],
-        ["Account", (r) => r.accountName],
-        ["Method", (r) => r.methodLabel],
-        ["Party", (r) => r.party],
-        ["Reference", (r) => r.reference],
-        ["Category", (r) => r.category],
-        ["Note", (r) => r.note],
-        ...(oneAccount ? [["Balance", (r: LedgerRow) => (r.runningBalance != null ? csvMoney(r.runningBalance) : "")] as [string, (r: LedgerRow) => string]] : []),
+        [t("common:fields.date"), (r) => r.date],
+        [t("common:fields.type"), (r) => sourceText(t, r.sourceType, r.sourceLabel)],
+        [t("finance:transactions.direction"), (r) => (r.direction === "in" ? t("finance:col.in") : t("finance:col.out"))],
+        [t("finance:col.gross"), (r) => csvMoney(r.gross)],
+        [t("finance:col.fee"), (r) => csvMoney(r.fee)],
+        [t("finance:col.net"), (r) => csvMoney(r.net)],
+        [t("finance:col.currency"), (r) => r.currency ?? currency],
+        [t("finance:col.account"), (r) => r.accountName],
+        [t("finance:col.method"), (r) => methodText(t, r.methodKey, r.methodLabel)],
+        [t("finance:col.party"), (r) => r.party],
+        [t("common:extra.reference"), (r) => r.reference],
+        [t("common:fields.category"), (r) => r.category],
+        [t("common:fields.note"), (r) => r.note],
+        ...(oneAccount ? [[t("finance:col.balance"), (r: LedgerRow) => (r.runningBalance != null ? csvMoney(r.runningBalance) : "")] as [string, (r: LedgerRow) => string]] : []),
       ], rows)
     } catch (e) {
-      toast.error(financeError(e, "Export failed"))
+      toast.error(financeError(e, t("finance:actions.exportFailed")))
     } finally {
       setExporting(false)
     }
   }
 
   const setDefault = async (a: FinanceAccount) => {
-    try { await financeApi.setDefaultAccount(a.id); toast.success(`${a.name} is now the default account`); loadAccounts() }
-    catch (e) { toast.error(financeError(e, "Could not change the default account")) }
+    try { await financeApi.setDefaultAccount(a.id); toast.success(t("finance:accounts.nowDefault", { name: a.name })); loadAccounts() }
+    catch (e) { toast.error(financeError(e, t("finance:accounts.defaultFailed"))) }
   }
 
   const runConfirm = async () => {
     if (!confirm) return
-    try { await confirm.run(); refresh() } catch (e) { toast.error(financeError(e, "Could not delete")) } finally { setConfirm(null) }
+    try { await confirm.run(); refresh() } catch (e) { toast.error(financeError(e, t("finance:transactions.deleteFailed"))) } finally { setConfirm(null) }
   }
 
   if (blocked) return blocked
@@ -168,28 +169,28 @@ export default function TransactionsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       <PageHeader
-        title="Transactions"
-        description={<>Every taka in and out — sales, refunds, supplier payments, expenses, salaries, payouts, manual entries and transfers. Money out is negative. <CurrencyTag code={data?.context.currency?.code} className="ml-1 align-middle" /></>}
+        title={t("finance:transactions.title")}
+        description={<>{t("finance:transactions.description")} <CurrencyTag code={data?.context.currency?.code} className="ml-1 align-middle" /></>}
         actions={<>
-          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export CSV"}</Button>
+          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? t("finance:actions.exporting") : t("finance:actions.exportCsv")}</Button>
           {writable && <>
-            <Button type="button" variant="outline" onClick={() => setTransferDlg("new")} disabled={activeAccounts.length < 2}><ArrowLeftRight className="size-4" aria-hidden /> Transfer</Button>
-            <Button type="button" onClick={() => setEntryDlg("new")} disabled={!activeAccounts.length}><Plus className="size-4" aria-hidden /> Add entry</Button>
+            <Button type="button" variant="outline" onClick={() => setTransferDlg("new")} disabled={activeAccounts.length < 2}><ArrowLeftRight className="size-4" aria-hidden /> {t("finance:transfer.button")}</Button>
+            <Button type="button" onClick={() => setEntryDlg("new")} disabled={!activeAccounts.length}><Plus className="size-4" aria-hidden /> {t("finance:entry.add")}</Button>
           </>}
         </>}
       />
 
       <div className="grid gap-5 xl:grid-cols-[320px_1fr]">
         <SectionCard
-          title="Accounts"
-          description={accLoading ? undefined : `Total ${formatCurrency(total)}`}
+          title={t("finance:accounts.title")}
+          description={accLoading ? undefined : t("finance:accounts.total", { amount: formatCurrency(total) })}
           actions={writable && (
             <>
-              <WithTooltip content="Payment fees">
-                <Button type="button" variant="outline" size="icon" aria-label="Payment fees" onClick={() => setFeesOpen(true)}><Percent className="size-4" aria-hidden /></Button>
+              <WithTooltip content={t("finance:fees.title")}>
+                <Button type="button" variant="outline" size="icon" aria-label={t("finance:fees.title")} onClick={() => setFeesOpen(true)}><Percent className="size-4" aria-hidden /></Button>
               </WithTooltip>
-              <WithTooltip content="Add account">
-                <Button type="button" variant="outline" size="icon" aria-label="Add account" onClick={() => setAccDlg("new")}><Plus className="size-4" aria-hidden /></Button>
+              <WithTooltip content={t("finance:account.add")}>
+                <Button type="button" variant="outline" size="icon" aria-label={t("finance:account.add")} onClick={() => setAccDlg("new")}><Plus className="size-4" aria-hidden /></Button>
               </WithTooltip>
             </>
           )}
@@ -201,7 +202,7 @@ export default function TransactionsPage() {
               <li>
                 <Button type="button" variant="ghost" aria-pressed={!oneAccount} onClick={() => setAccount(ALL)}
                   className={cn("h-auto w-full justify-between px-3 py-2.5", !oneAccount && "bg-accent")}>
-                  <span className="font-medium">All accounts</span>
+                  <span className="font-medium">{t("finance:accounts.all")}</span>
                 </Button>
               </li>
               {accounts.map((a) => (
@@ -211,30 +212,30 @@ export default function TransactionsPage() {
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5 font-medium">
                         <span className="truncate">{a.name}</span>
-                        {a.isDefault && <Badge variant="secondary" className="px-1.5">Default</Badge>}
-                        {!a.isActive && <Badge variant="outline" className="px-1.5">Inactive</Badge>}
+                        {a.isDefault && <Badge variant="secondary" className="px-1.5">{t("finance:accounts.default")}</Badge>}
+                        {!a.isActive && <Badge variant="outline" className="px-1.5">{t("common:status.inactive")}</Badge>}
                       </span>
-                      <span className="block truncate text-xs font-normal text-muted-foreground">{a.typeLabel || accountTypeLabel(a.type)}{a.methodLabels.length ? ` · ${a.methodLabels.join(", ")}` : ""}{a.receivesUnmapped ? " · other methods" : ""}</span>
+                      <span className="block truncate text-xs font-normal text-muted-foreground">{accountTypeText(t, a.type, a.typeLabel)}{a.methodKeys.length ? ` · ${a.methodKeys.map((k, i) => methodText(t, k, a.methodLabels[i])).join(", ")}` : ""}{a.receivesUnmapped ? ` · ${t("finance:accounts.otherMethods")}` : ""}</span>
                     </span>
                     <SignedMoney value={a.balance} format={money} className="font-semibold" />
                   </Button>
                   {writable && (
                     <DropdownMenu>
-                      <WithTooltip content={`${a.name} options`}>
+                      <WithTooltip content={t("finance:accounts.options", { name: a.name })}>
                         <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={`${a.name} options`}><MoreHorizontal className="size-4" aria-hidden /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("finance:accounts.options", { name: a.name })}><MoreHorizontal className="size-4" aria-hidden /></Button>
                         </DropdownMenuTrigger>
                       </WithTooltip>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setAccDlg(a)}><Pencil className="size-4" aria-hidden /> Edit</DropdownMenuItem>
-                        {!a.isDefault && a.isActive && <DropdownMenuItem onClick={() => setDefault(a)}><Star className="size-4" aria-hidden /> Set as default</DropdownMenuItem>}
+                        <DropdownMenuItem onClick={() => setAccDlg(a)}><Pencil className="size-4" aria-hidden /> {t("common:actions.edit")}</DropdownMenuItem>
+                        {!a.isDefault && a.isActive && <DropdownMenuItem onClick={() => setDefault(a)}><Star className="size-4" aria-hidden /> {t("finance:accounts.setDefault")}</DropdownMenuItem>}
                         {deletable && !a.isDefault && <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant="destructive" onClick={() => setConfirm({
-                            title: `Delete ${a.name}?`,
-                            body: "Accounts with manual entries or transfers cannot be deleted — deactivate them instead. Its payment methods will post to the default account.",
-                            run: async () => { await financeApi.deleteAccount(a.id); toast.success("Account deleted"); if (account === String(a.id)) setAccount(ALL) },
-                          })}><Trash2 className="size-4" aria-hidden /> Delete</DropdownMenuItem>
+                            title: t("common:confirm.deleteTitle", { name: a.name }),
+                            body: t("finance:accounts.deleteBody"),
+                            run: async () => { await financeApi.deleteAccount(a.id); toast.success(t("finance:accounts.deleted")); if (account === String(a.id)) setAccount(ALL) },
+                          })}><Trash2 className="size-4" aria-hidden /> {t("common:actions.delete")}</DropdownMenuItem>
                         </>}
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -245,46 +246,46 @@ export default function TransactionsPage() {
           )}
           {unmapped.length > 0 && (
             <p className="mt-3 px-3 text-xs text-muted-foreground">
-              Not mapped to an account (posted to {defaultName ?? "the default account"}): {unmapped.map((m) => `${m.label} (${m.count})`).join(", ")}.
+              {t("finance:accounts.unmapped", { account: defaultName ?? t("finance:accounts.theDefault"), methods: unmapped.map((m) => `${methodText(t, m.key, m.label)} (${m.count})`).join(", ") })}
             </p>
           )}
         </SectionCard>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <section aria-label="Totals" className={cn("grid gap-4 sm:grid-cols-3", loading && data && "opacity-60")}>
-            <StatTile label="Gross" value={<SignedMoney value={data?.totals.gross ?? 0} format={money} />}
-              hint={`In ${money(data?.totals.moneyIn ?? 0)} · out ${money(data?.totals.moneyOut ?? 0)}`} />
-            <StatTile label="Fees" value={<span className={cn((data?.totals.fees ?? 0) > 0 && "text-destructive")}>{(data?.totals.fees ?? 0) > 0 ? "−" : ""}{money(data?.totals.fees ?? 0)}</span>}
-              hint={writable ? <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setFeesOpen(true)}>Estimated payment fees · edit rates</Button> : "Estimated payment fees"} />
-            <StatTile label="Net after fees" value={<SignedMoney value={data?.totals.netAfterFees ?? 0} format={money} />}
-              hint={oneAccount && data?.openingBalance != null ? `Opening ${money(data.openingBalance)} → closing ${money(data.closingBalance ?? 0)}` : `${fmt.number(data?.totals.count ?? 0)} transactions · ${filters.label}`} />
+          <section aria-label={t("finance:transactions.totalsAria")} className={cn("grid gap-4 sm:grid-cols-3", loading && data && "opacity-60")}>
+            <StatTile label={t("finance:col.gross")} value={<SignedMoney value={data?.totals.gross ?? 0} format={money} />}
+              hint={t("finance:transactions.inOut", { in: money(data?.totals.moneyIn ?? 0), out: money(data?.totals.moneyOut ?? 0) })} />
+            <StatTile label={t("finance:transactions.fees")} value={<span className={cn((data?.totals.fees ?? 0) > 0 && "text-destructive")}>{(data?.totals.fees ?? 0) > 0 ? "−" : ""}{money(data?.totals.fees ?? 0)}</span>}
+              hint={writable ? <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setFeesOpen(true)}>{t("finance:transactions.feesEdit")}</Button> : t("finance:transactions.feesEstimated")} />
+            <StatTile label={t("finance:transactions.netAfterFees")} value={<SignedMoney value={data?.totals.netAfterFees ?? 0} format={money} />}
+              hint={oneAccount && data?.openingBalance != null ? t("finance:transactions.openingClosing", { opening: money(data.openingBalance), closing: money(data.closingBalance ?? 0) }) : `${t("finance:transactions.count", { count: data?.totals.count ?? 0, n: fmt.number(data?.totals.count ?? 0) })} · ${filters.label}`} />
           </section>
 
           <FilterBar>
             <InputGroup className="w-full sm:w-64">
               <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-              <InputGroupInput aria-label="Search transactions" placeholder="Party, reference, note…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <InputGroupInput aria-label={t("finance:transactions.search")} placeholder={t("finance:transactions.searchPh")} value={q} onChange={(e) => setQ(e.target.value)} />
             </InputGroup>
             <FinanceFilters filters={filters} idPrefix="transactions" />
             <Select value={direction} onValueChange={setDirection}>
-              <SelectTrigger aria-label="Direction" className="w-36"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("finance:transactions.direction")} className="w-36"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>In and out</SelectItem>
-                <SelectItem value="in">Money in</SelectItem>
-                <SelectItem value="out">Money out</SelectItem>
+                <SelectItem value={ALL}>{t("finance:transactions.inAndOut")}</SelectItem>
+                <SelectItem value="in">{t("finance:ui.moneyIn")}</SelectItem>
+                <SelectItem value="out">{t("finance:ui.moneyOut")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={source} onValueChange={setSource}>
-              <SelectTrigger aria-label="Type" className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("common:fields.type")} className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All types</SelectItem>
-                {Object.entries(SOURCE_LABELS).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                <SelectItem value={ALL}>{t("finance:transactions.allTypes")}</SelectItem>
+                {SOURCE_TYPES.map((k) => <SelectItem key={k} value={k}>{sourceText(t, k)}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={account} onValueChange={setAccount}>
-              <SelectTrigger aria-label="Account" className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("finance:col.account")} className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All accounts</SelectItem>
+                <SelectItem value={ALL}>{t("finance:accounts.all")}</SelectItem>
                 {accounts.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -296,23 +297,23 @@ export default function TransactionsPage() {
             {loading && !data ? (
               <div className="flex flex-col gap-2 px-2">{[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-11" />)}</div>
             ) : !data || data.rows.length === 0 ? (
-              <EmptyState icon={Banknote} title="No transactions" description="Nothing matches these filters for the period." />
+              <EmptyState icon={Banknote} title={t("finance:transactions.emptyTitle")} description={t("finance:transactions.emptyDesc")} />
             ) : (
               <div className={cn("overflow-x-auto", loading && "opacity-60")}>
                 <Table className="min-w-[1040px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Party / details</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="text-right">Gross</TableHead>
-                      <TableHead className="text-right">Fee</TableHead>
-                      <TableHead className="text-right">Net</TableHead>
-                      <TableHead>Currency</TableHead>
-                      {oneAccount && <TableHead className="text-right">Balance</TableHead>}
-                      {writable && <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>}
+                      <TableHead>{t("common:fields.date")}</TableHead>
+                      <TableHead>{t("common:fields.type")}</TableHead>
+                      <TableHead>{t("finance:transactions.partyDetails")}</TableHead>
+                      <TableHead>{t("common:extra.reference")}</TableHead>
+                      <TableHead>{t("finance:col.account")}</TableHead>
+                      <TableHead className="text-right">{t("finance:col.gross")}</TableHead>
+                      <TableHead className="text-right">{t("finance:col.fee")}</TableHead>
+                      <TableHead className="text-right">{t("finance:col.net")}</TableHead>
+                      <TableHead>{t("finance:col.currency")}</TableHead>
+                      {oneAccount && <TableHead className="text-right">{t("finance:col.balance")}</TableHead>}
+                      {writable && <TableHead className="w-10"><span className="sr-only">{t("common:fields.actions")}</span></TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -321,15 +322,15 @@ export default function TransactionsPage() {
                       return (
                         <TableRow key={r.id}>
                           <TableCell className="whitespace-nowrap text-muted-foreground">{fmt.date(r.date)}</TableCell>
-                          <TableCell><Badge variant={r.direction === "in" ? "secondary" : "outline"}>{r.sourceLabel || sourceLabel(r.sourceType)}</Badge></TableCell>
+                          <TableCell><Badge variant={r.direction === "in" ? "secondary" : "outline"}>{sourceText(t, r.sourceType, r.sourceLabel)}</Badge></TableCell>
                           <TableCell className="max-w-[260px]">
                             <div className="truncate font-medium">{r.party || r.category || "—"}</div>
                             {(r.note || (r.category && r.party)) && <div className="truncate text-xs text-muted-foreground">{[r.party ? r.category : null, r.note].filter(Boolean).join(" · ")}</div>}
                           </TableCell>
-                          <TableCell>{r.link ? <Link href={r.link.href} className="font-medium text-primary hover:underline">{r.reference || "Open"}</Link> : (r.reference || "—")}</TableCell>
+                          <TableCell>{r.link ? <Link href={r.link.href} className="font-medium text-primary hover:underline">{r.reference || t("finance:actions.open")}</Link> : (r.reference || "—")}</TableCell>
                           <TableCell className="text-muted-foreground">
                             <div>{r.accountName ?? "—"}</div>
-                            {r.methodLabel && <div className="text-xs">{r.methodLabel}</div>}
+                            {r.methodLabel && <div className="text-xs">{methodText(t, r.methodKey, r.methodLabel)}</div>}
                           </TableCell>
                           <TableCell className="text-right font-medium"><SignedMoney value={r.gross} format={money} positiveTone /></TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">{r.fee ? `−${money(r.fee)}` : "—"}</TableCell>
@@ -340,24 +341,27 @@ export default function TransactionsPage() {
                             <TableCell>
                               {editable && (
                                 <DropdownMenu>
-                                  <WithTooltip content="Entry options">
+                                  <WithTooltip content={t("finance:transactions.entryOptions")}>
                                     <DropdownMenuTrigger asChild>
-                                      <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Entry options"><MoreHorizontal className="size-4" aria-hidden /></Button>
+                                      <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("finance:transactions.entryOptions")}><MoreHorizontal className="size-4" aria-hidden /></Button>
                                     </DropdownMenuTrigger>
                                   </WithTooltip>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => (r.entryId != null ? setEntryDlg(r.entryId) : setTransferDlg(r.transferId!))}>
-                                      <Pencil className="size-4" aria-hidden /> Edit
+                                      <Pencil className="size-4" aria-hidden /> {t("common:actions.edit")}
                                     </DropdownMenuItem>
                                     {deletable && (
                                       <DropdownMenuItem variant="destructive" onClick={() => setConfirm(r.entryId != null ? {
-                                        title: "Delete this entry?", body: `${money(r.amount)} ${r.direction === "in" ? "in" : "out"} on ${fmt.date(r.date)} will be removed from the ledger.`,
-                                        run: async () => { await financeApi.deleteEntry(r.entryId!); toast.success("Entry deleted") },
+                                        title: t("finance:transactions.deleteEntryTitle"),
+                                        body: r.direction === "in"
+                                          ? t("finance:transactions.deleteEntryBodyIn", { amount: money(r.amount), date: fmt.date(r.date) })
+                                          : t("finance:transactions.deleteEntryBodyOut", { amount: money(r.amount), date: fmt.date(r.date) }),
+                                        run: async () => { await financeApi.deleteEntry(r.entryId!); toast.success(t("finance:transactions.entryDeleted")) },
                                       } : {
-                                        title: "Delete this transfer?", body: "Both sides of the transfer are removed and the account balances change back.",
-                                        run: async () => { await financeApi.deleteTransfer(r.transferId!); toast.success("Transfer deleted") },
+                                        title: t("finance:transactions.deleteTransferTitle"), body: t("finance:transactions.deleteTransferBody"),
+                                        run: async () => { await financeApi.deleteTransfer(r.transferId!); toast.success(t("finance:transactions.transferDeleted")) },
                                       })}>
-                                        <Trash2 className="size-4" aria-hidden /> Delete
+                                        <Trash2 className="size-4" aria-hidden /> {t("common:actions.delete")}
                                       </DropdownMenuItem>
                                     )}
                                   </DropdownMenuContent>
@@ -392,8 +396,8 @@ export default function TransactionsPage() {
             <AlertDialogDescription>{confirm?.body}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={runConfirm} className="bg-destructive text-white hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={runConfirm} className="bg-destructive text-white hover:bg-destructive/90">{t("common:actions.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -1,5 +1,7 @@
 import type { ShipmentResponse, ShipmentStatus } from "@/lib/shipmentsApi"
 
+// English labels kept for existing callers; screens show translated text from
+// `orders:shipments.status.*` / `orders:shipments.cod.*` (see shipment-detail-dialog.tsx).
 export const STATUS_LABEL: Record<ShipmentStatus, string> = {
   pending: "Pending pickup",
   picked_up: "Picked up",
@@ -79,5 +81,6 @@ export function codView(s: ShipmentResponse): CodView {
   return { amount: kind === "prepaid" || kind === "none" ? 0 : amount, kind, label: map[kind][0], cls: map[kind][1], collected: kind === "collected" }
 }
 
-export const shortDate = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"
+/** "25 Oct"-style date; pass `localeTag(i18n.language)` for the staff member's language. */
+export const shortDate = (iso?: string | null, locale = "en-US") =>
+  iso ? new Date(iso).toLocaleDateString(locale, { month: "short", day: "numeric" }) : "—"

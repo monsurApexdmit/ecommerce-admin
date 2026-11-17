@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Check } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
@@ -9,14 +10,15 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 // var on <html>; every brand-tinted element (active nav, buttons, badges, POS
 // price/checkout) reads that var, so the whole UI recolours instantly.
 // Persisted in localStorage under `brand-accent`.
+// `name` is the stored/English id (saved as accentName); show `labelKey` translated.
 export const ACCENTS = [
-  { name: "Blue", value: "#2449E8" },
-  { name: "Emerald", value: "#059669" },
-  { name: "Indigo", value: "#4f46e5" },
-  { name: "Violet", value: "#7c3aed" },
-  { name: "Rose", value: "#e11d48" },
-  { name: "Amber", value: "#d97706" },
-  { name: "Sky", value: "#0284c7" },
+  { name: "Blue", value: "#2449E8", labelKey: "ui:accent.names.blue" },
+  { name: "Emerald", value: "#059669", labelKey: "ui:accent.names.emerald" },
+  { name: "Indigo", value: "#4f46e5", labelKey: "ui:accent.names.indigo" },
+  { name: "Violet", value: "#7c3aed", labelKey: "ui:accent.names.violet" },
+  { name: "Rose", value: "#e11d48", labelKey: "ui:accent.names.rose" },
+  { name: "Amber", value: "#d97706", labelKey: "ui:accent.names.amber" },
+  { name: "Sky", value: "#0284c7", labelKey: "ui:accent.names.sky" },
 ] as const
 
 export const ACCENT_STORAGE_KEY = "brand-accent"
@@ -32,6 +34,7 @@ export function applyAccent(value: string) {
  * state and the colour name, versus the compact topbar variant.
  */
 export function AccentPicker() {
+  const { t } = useTranslation(["ui", "common"])
   const [mounted, setMounted] = useState(false)
   const [accent, setAccent] = useState<string>(ACCENTS[0].value)
 
@@ -49,22 +52,23 @@ export function AccentPicker() {
   return (
     <div className="space-y-3">
       <div>
-        <p className="text-sm font-medium text-foreground">Accent color</p>
+        <p className="text-sm font-medium text-foreground">{t("ui:accent.title")}</p>
         <p className="text-xs text-muted-foreground">
-          Applies across buttons, active navigation, and highlights.
+          {t("ui:accent.hint")}
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Accent color">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t("ui:accent.title")}>
         {ACCENTS.map((a) => {
           const active = mounted && accent === a.value
+          const label = t(a.labelKey)
           return (
-            <WithTooltip key={a.value} content={a.name}>
+            <WithTooltip key={a.value} content={label}>
               <Button
                 type="button"
                 variant={active ? "default" : "outline"}
                 onClick={() => pick(a.value)}
-                aria-label={a.name}
+                aria-label={label}
                 aria-pressed={active}
               >
                 <span
@@ -73,7 +77,7 @@ export function AccentPicker() {
                 >
                   {active && <Check className="size-3 text-white" strokeWidth={3} />}
                 </span>
-                <span>{a.name}</span>
+                <span>{label}</span>
               </Button>
             </WithTooltip>
           )

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,7 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: CheckoutModalProps) {
+    const { t } = useTranslation(["pos", "common"])
     const [paymentMethod, setPaymentMethod] = useState("Cash")
     const [isProcessing, setIsProcessing] = useState(false)
     const [tenderedInput, setTenderedInput] = useState("")
@@ -62,12 +64,12 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader className="items-center text-center sm:text-center">
-                    <DialogTitle className="sr-only">Payment Checkout</DialogTitle>
-                    <p className="text-sm font-medium text-muted-foreground">Total Amount Payable</p>
+                    <DialogTitle className="sr-only">{t("pos:checkout.title")}</DialogTitle>
+                    <p className="text-sm font-medium text-muted-foreground">{t("pos:checkout.payable")}</p>
                     <p className="text-4xl font-bold tabular-nums">{formatCurrency(totalAmount)}</p>
                     <div className="mt-1 flex items-center justify-center gap-1 text-xs text-muted-foreground">
                         <Lock className="size-3" />
-                        <span>Secure Payment</span>
+                        <span>{t("pos:checkout.secure")}</span>
                     </div>
                 </DialogHeader>
                 <Separator />
@@ -75,23 +77,23 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                 <div className="space-y-6">
                     {/* Payment Method Selection */}
                     <div className="space-y-4">
-                        <SectionTitle>Select Payment Method</SectionTitle>
-                        <ChoiceCardGroup value={paymentMethod} onValueChange={setPaymentMethod} className="grid-cols-3 gap-3" aria-label="Payment method">
-                            <ChoiceCard value="Cash" icon={<Banknote className="size-5" />} title="Cash" className="items-center p-3" />
-                            <ChoiceCard value="Card" icon={<CreditCard className="size-5" />} title="Card" className="items-center p-3" />
-                            <ChoiceCard value="Online" icon={<Truck className="size-5" />} title="COD" className="items-center p-3" />
+                        <SectionTitle>{t("pos:checkout.selectMethod")}</SectionTitle>
+                        <ChoiceCardGroup value={paymentMethod} onValueChange={setPaymentMethod} className="grid-cols-3 gap-3" aria-label={t("common:payment.method")}>
+                            <ChoiceCard value="Cash" icon={<Banknote className="size-5" />} title={t("pos:methods.cash")} className="items-center p-3" />
+                            <ChoiceCard value="Card" icon={<CreditCard className="size-5" />} title={t("pos:methods.card")} className="items-center p-3" />
+                            <ChoiceCard value="Online" icon={<Truck className="size-5" />} title={t("pos:methods.cod")} className="items-center p-3" />
                         </ChoiceCardGroup>
                     </div>
 
                     {/* Cash Tendered */}
                     {paymentMethod === "Cash" && (
                         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                            <FormField label="Cash Tendered" htmlFor="checkout-tendered">
+                            <FormField label={t("pos:checkout.tendered")} htmlFor="checkout-tendered">
                                 <Input
                                     id="checkout-tendered"
                                     type="number"
                                     inputMode="decimal"
-                                    placeholder={`Min ${formatCurrency(totalAmount)}`}
+                                    placeholder={t("pos:checkout.min", { amount: formatCurrency(totalAmount) })}
                                     value={tenderedInput}
                                     onChange={e => setTenderedInput(e.target.value)}
                                     autoFocus
@@ -115,7 +117,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                             {tendered > 0 && (
                                 <Alert variant={change >= 0 ? "default" : "destructive"} className="flex items-center justify-between">
                                     <span className="text-sm font-semibold">
-                                        {change >= 0 ? "Change Due" : "Amount Short"}
+                                        {change >= 0 ? t("pos:checkout.changeDue") : t("pos:checkout.amountShort")}
                                     </span>
                                     <span className="text-xl font-bold tabular-nums">
                                         {formatCurrency(Math.abs(change))}
@@ -128,14 +130,14 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                     {/* Card Details Form */}
                     {paymentMethod === "Card" && (
                         <Card className="gap-3 p-4 animate-in fade-in slide-in-from-top-2">
-                            <FormField label="Card Number" htmlFor="checkout-card-number">
+                            <FormField label={t("pos:checkout.cardNumber")} htmlFor="checkout-card-number">
                                 <Input id="checkout-card-number" placeholder="0000 0000 0000 0000" />
                             </FormField>
                             <div className="grid grid-cols-2 gap-3">
-                                <FormField label="Expiry" htmlFor="checkout-card-expiry">
+                                <FormField label={t("pos:checkout.expiry")} htmlFor="checkout-card-expiry">
                                     <Input id="checkout-card-expiry" placeholder="MM/YY" />
                                 </FormField>
-                                <FormField label="CVC" htmlFor="checkout-card-cvc">
+                                <FormField label={t("pos:checkout.cvc")} htmlFor="checkout-card-cvc">
                                     <Input id="checkout-card-cvc" placeholder="123" />
                                 </FormField>
                             </div>
@@ -151,7 +153,7 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                             disabled={isProcessing}
                             className="flex-1"
                         >
-                            Cancel
+                            {t("common:actions.cancel")}
                         </Button>
                         <Button
                             size="lg"
@@ -159,10 +161,10 @@ export function CheckoutModal({ open, onOpenChange, totalAmount, onConfirm }: Ch
                             onClick={handleConfirm}
                             disabled={isProcessing || !isValidCash}
                         >
-                            {isProcessing ? "Processing..." : (
+                            {isProcessing ? t("pos:checkout.processing") : (
                                 <>
                                     <Check />
-                                    Confirm Order
+                                    {t("pos:checkout.confirm")}
                                 </>
                             )}
                         </Button>

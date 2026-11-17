@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { ArrowRight, Download, HandCoins, Scissors, Search, Truck, Users } from "lucide-react"
 import { toast } from "sonner"
 import financeApi, {
@@ -35,12 +36,12 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 import { RecordPaymentDialog } from "@/components/sales/record-payment-dialog"
 import { TailorPaymentDialog, type TailorPayTarget } from "@/components/finance/payout-dialogs"
 import { ReceivableCollectDialog } from "@/components/finance/receivable-collect-dialog"
-import { AsOfNowLabel, CHANNELS } from "@/components/finance/finance-filters"
+import { AsOfNowLabel, CHANNELS, channelLabel } from "@/components/finance/finance-filters"
 import { AgingBar, CurrencyTag, SignedMoney, TileSkeletons, csvMoney, downloadCsv, sentenceCase, useFinanceFormat } from "@/components/finance/finance-ui"
+import { FIN_NS, methodText, statusText } from "@/components/finance/i18n"
 
 const TABS = ["suppliers", "customers", "cod", "tailor"] as const
 type Tab = (typeof TABS)[number]
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** Just the fields RecordPaymentDialog reads. */
 function asSale(r: CustomerReceivableRow): SellResponse {
@@ -61,6 +62,10 @@ function patchQuery(patch: Record<string, string | null>) {
 
 export default function ReceivablesPage() {
   const blocked = useModuleGuard("Finance")
+  const { t } = useTranslation(FIN_NS)
+  /** Supplier balance direction code → label (server label is the fallback). */
+  const directionText = (dir: string, serverLabel: string) =>
+    dir === "we_owe" ? t("finance:receivables.weOwe") : dir === "they_owe" ? t("finance:receivables.theyOwe") : serverLabel
   const f = useFinanceFormat()
   const money = f.money
   const sp = useSearchParams()
@@ -119,7 +124,7 @@ export default function ReceivablesPage() {
   useEffect(() => { setPage(1) }, [qD, bucket, cod, channel, sort])
 
   const loadSummary = useCallback(async () => {
-    try { setSummary(await financeApi.getReceivableSummary()) } catch (e) { toast.error(financeError(e, "Could not load receivables")) }
+    try { setSummary(await financeApi.getReceivableSummary()) } catch (e) { toast.error(financeError(e, t("finance:receivables.loadFailed"))) }
   }, [])
   useEffect(() => { loadSummary() }, [loadSummary])
 
@@ -133,9 +138,9 @@ export default function ReceivablesPage() {
         collectFromUrl.current = null
         patchQuery({ collect: null })
         if (row && row.net < 0) setCollect(row)
-        else if (row) toast.info(`${row.displayName} doesn't owe you anything.`)
+        else if (row) toast.info(t("finance:receivables.owesNothing", { name: row.displayName }))
       }
-    } catch (e) { setSupErr(financeError(e, "Could not load supplier balances.")) }
+    } catch (e) { setSupErr(financeError(e, t("finance:receivables.supFailed"))) }
   }, [supQD, supDir])
   useEffect(() => { loadSup() }, [loadSup])
 
@@ -147,7 +152,7 @@ export default function ReceivablesPage() {
   const loadCust = useCallback(async () => {
     setCustLoading(true); setCustErr("")
     try { setCust(await financeApi.getCustomerReceivables(custParams(page, perPage))) }
-    catch (e) { setCustErr(financeError(e, "Could not load customer receivables.")) }
+    catch (e) { setCustErr(financeError(e, t("finance:receivables.custFailed"))) }
     finally { setCustLoading(false) }
   }, [custParams, page, perPage])
   useEffect(() => { loadCust() }, [loadCust])
@@ -159,10 +164,10 @@ export default function ReceivablesPage() {
     setCodBusy(true)
     try {
       await shipmentsApi.recordCodPayment(codRow.shipmentId)
-      toast.success(`COD of ${money(codRow.amount)} recorded for ${codRow.invoiceNo ?? "the order"}`)
+      toast.success(t("finance:receivables.codRecorded", { amount: money(codRow.amount), invoice: codRow.invoiceNo ?? t("finance:receivables.theOrder") }))
       setCodRow(null); refresh()
     } catch (e) {
-      toast.error(financeError(e, "Could not record the COD payment"))
+      toast.error(financeError(e, t("finance:receivables.codFailed")))
     } finally {
       setCodBusy(false)
     }
@@ -173,10 +178,10 @@ export default function ReceivablesPage() {
     try {
       if (tab === "suppliers") {
         const rows = sup?.rows ?? []
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("receivables-suppliers", [
-          ["Supplier", (r) => r.displayName], ["Owed to them", (r) => csvMoney(r.owed)], ["Not yet due", (r) => csvMoney(r.notYetDue)], ["Credits", (r) => csvMoney(r.credits)],
-          ["Net", (r) => csvMoney(r.net)], ["Payable now", (r) => csvMoney(r.payableNow)], ["Direction", (r) => r.directionLabel], ["Currency", () => cur],
+          [t("common:extra.supplier"), (r) => r.displayName], [t("finance:receivables.owedToThem"), (r) => csvMoney(r.owed)], [t("finance:payable.notYetDue"), (r) => csvMoney(r.notYetDue)], [t("finance:receivables.credits"), (r) => csvMoney(r.credits)],
+          [t("finance:col.net"), (r) => csvMoney(r.net)], [t("finance:payable.payableNow"), (r) => csvMoney(r.payableNow)], [t("finance:transactions.direction"), (r) => directionText(r.direction, r.directionLabel)], [t("finance:col.currency"), () => cur],
         ], rows)
       } else if (tab === "customers") {
         const rows: CustomerReceivableRow[] = []
@@ -185,28 +190,28 @@ export default function ReceivablesPage() {
           rows.push(...r.rows)
           if (p >= r.meta.lastPage || r.rows.length === 0) break
         }
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("receivables-customers", [
-          ["Invoice", (r) => r.invoiceNo], ["Customer", (r) => r.customerName], ["Phone", (r) => r.customerPhone], ["Order date", (r) => r.orderDate], ["Age days", (r) => r.ageDays],
-          ["Total", (r) => csvMoney(r.total)], ["Paid", (r) => csvMoney(r.paid)], ["Due", (r) => csvMoney(r.due)], ["Method", (r) => r.method], ["Channel", (r) => r.channel], ["Currency", () => cur],
+          [t("finance:col.invoice"), (r) => r.invoiceNo], [t("common:fields.customer"), (r) => r.customerName], [t("common:fields.phone"), (r) => r.customerPhone], [t("finance:receivables.orderDate"), (r) => r.orderDate], [t("finance:receivables.ageDays"), (r) => r.ageDays],
+          [t("common:money.total"), (r) => csvMoney(r.total)], [t("common:money.paid"), (r) => csvMoney(r.paid)], [t("common:money.due"), (r) => csvMoney(r.due)], [t("finance:col.method"), (r) => r.isCod ? "COD" : methodText(t, r.methodKey ?? r.method, r.method)], [t("finance:channel.label"), (r) => r.channel ? channelLabel(t, r.channel) : ""], [t("finance:col.currency"), () => cur],
         ], rows)
       } else if (tab === "cod") {
         const rows = summary?.codWithCouriers.rows ?? []
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("receivables-cod", [
-          ["Invoice", (r) => r.invoiceNo], ["Customer", (r) => r.customerName], ["Courier", (r) => r.carrier], ["Tracking", (r) => r.trackingNumber],
-          ["Status", (r) => sentenceCase(r.status)], ["Amount", (r) => csvMoney(r.amount)], ["Shipped", (r) => r.shippedAt?.slice(0, 10)], ["Delivered", (r) => r.deliveredAt?.slice(0, 10)], ["Age days", (r) => r.ageDays],
+          [t("finance:col.invoice"), (r) => r.invoiceNo], [t("common:fields.customer"), (r) => r.customerName], [t("finance:receivables.courier"), (r) => r.carrier], [t("finance:receivables.tracking"), (r) => r.trackingNumber],
+          [t("common:fields.status"), (r) => statusText(t, r.status)], [t("common:money.amount"), (r) => csvMoney(r.amount)], [t("common:orderStatus.shipped"), (r) => r.shippedAt?.slice(0, 10)], [t("common:orderStatus.delivered"), (r) => r.deliveredAt?.slice(0, 10)], [t("finance:receivables.ageDays"), (r) => r.ageDays],
         ], rows)
       } else {
         const rows = summary?.tailorBalances.rows ?? []
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("receivables-tailor", [
-          ["Order", (r) => r.orderNumber], ["Customer", (r) => r.customerName], ["Order date", (r) => r.orderDate], ["Delivery date", (r) => r.deliveryDate],
-          ["Status", (r) => sentenceCase(r.status)], ["Total", (r) => csvMoney(r.total)], ["Paid", (r) => csvMoney(r.paid)], ["Due", (r) => csvMoney(r.due)],
+          [t("finance:col.order"), (r) => r.orderNumber], [t("common:fields.customer"), (r) => r.customerName], [t("finance:receivables.orderDate"), (r) => r.orderDate], [t("finance:receivables.deliveryDate"), (r) => r.deliveryDate],
+          [t("common:fields.status"), (r) => statusText(t, r.status)], [t("common:money.total"), (r) => csvMoney(r.total)], [t("common:money.paid"), (r) => csvMoney(r.paid)], [t("common:money.due"), (r) => csvMoney(r.due)],
         ], rows)
       }
     } catch (e) {
-      toast.error(financeError(e, "Export failed"))
+      toast.error(financeError(e, t("finance:actions.exportFailed")))
     }
   }
 
@@ -219,59 +224,59 @@ export default function ReceivablesPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       <PageHeader
-        title="Receivables"
-        description="Owed to and from suppliers and customers"
-        actions={<Button type="button" variant="outline" onClick={exportCsv}><Download className="size-4" aria-hidden /> Export CSV</Button>}
+        title={t("finance:receivables.title")}
+        description={t("finance:receivables.description")}
+        actions={<Button type="button" variant="outline" onClick={exportCsv}><Download className="size-4" aria-hidden /> {t("finance:actions.exportCsv")}</Button>}
       >
         <div className="flex items-center gap-2"><AsOfNowLabel /><CurrencyTag code={currency} /></div>
       </PageHeader>
 
-      <section aria-label="Totals" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label={t("finance:transactions.totalsAria")} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {!s ? <TileSkeletons /> : <>
-          <StatTile label="Suppliers owe you" icon={<HandCoins />} value={money(s.suppliers.theyOweYou)} hint={`Credits ${money(s.suppliers.credits)} not yet used`}
+          <StatTile label={t("finance:overview.suppliersOweYou")} icon={<HandCoins />} value={money(s.suppliers.theyOweYou)} hint={t("finance:receivables.creditsUnused", { amount: money(s.suppliers.credits) })}
             onClick={() => setTab("suppliers")} active={tab === "suppliers"} />
-          <StatTile label="Owed by customers" icon={<Users />} value={money(owedByCustomers ?? 0)} hint={`${plural(s.customerDues.partyCount, "customer")} · incl. COD ${money(s.codWithCouriers.total)}`}
+          <StatTile label={t("finance:overview.owedByCustomers")} icon={<Users />} value={money(owedByCustomers ?? 0)} hint={`${t("finance:receivables.customers", { count: s.customerDues.partyCount })} · ${t("finance:receivables.inclCod", { amount: money(s.codWithCouriers.total) })}`}
             onClick={() => setTab("customers")} active={tab === "customers"} />
-          <StatTile label="COD with couriers" icon={<Truck />} value={money(s.codWithCouriers.total)}
-            hint={s.codWithCouriers.byCourier.length ? s.codWithCouriers.byCourier.map((c) => `${c.carrier} ${money(c.amount)}`).join(" · ") : plural(s.codWithCouriers.count, "shipment")}
+          <StatTile label={t("finance:receivables.codWithCouriers")} icon={<Truck />} value={money(s.codWithCouriers.total)}
+            hint={s.codWithCouriers.byCourier.length ? s.codWithCouriers.byCourier.map((c) => `${c.carrier} ${money(c.amount)}`).join(" · ") : t("finance:receivables.shipments", { count: s.codWithCouriers.count })}
             onClick={() => setTab("cod")} active={tab === "cod"} />
-          <StatTile label="Tailor balances" icon={<Scissors />} value={money(s.tailorBalances.total)} hint={plural(s.tailorBalances.count, "order")}
+          <StatTile label={t("finance:receivables.tailorBalances")} icon={<Scissors />} value={money(s.tailorBalances.total)} hint={t("common:count.orders", { count: s.tailorBalances.count })}
             onClick={() => setTab("tailor")} active={tab === "tailor"} />
         </>}
       </section>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-4">
-        <TabsList aria-label="Receivable type" className="h-auto flex-wrap">
-          <TabsTrigger value="suppliers">Suppliers{sup ? ` (${sup.rows.length})` : ""}</TabsTrigger>
-          <TabsTrigger value="customers">Customers{cust ? ` (${cust.totals.count})` : ""}</TabsTrigger>
-          <TabsTrigger value="cod">COD with couriers{s ? ` (${s.codWithCouriers.count})` : ""}</TabsTrigger>
-          <TabsTrigger value="tailor">Tailor orders{s ? ` (${s.tailorBalances.count})` : ""}</TabsTrigger>
+        <TabsList aria-label={t("finance:receivables.typeAria")} className="h-auto flex-wrap">
+          <TabsTrigger value="suppliers">{t("finance:payouts.suppliers")}{sup ? ` (${sup.rows.length})` : ""}</TabsTrigger>
+          <TabsTrigger value="customers">{t("finance:overview.customers")}{cust ? ` (${cust.totals.count})` : ""}</TabsTrigger>
+          <TabsTrigger value="cod">{t("finance:receivables.codWithCouriers")}{s ? ` (${s.codWithCouriers.count})` : ""}</TabsTrigger>
+          <TabsTrigger value="tailor">{t("finance:receivables.tailorOrders")}{s ? ` (${s.tailorBalances.count})` : ""}</TabsTrigger>
         </TabsList>
 
         {/* ── Suppliers ── */}
         <TabsContent value="suppliers" className="flex flex-col gap-4">
           <SectionCard contentClassName="flex flex-col gap-4 px-2"
-            description="What you owe each supplier, less the credits (returns credited to you). A negative net means they owe you."
-            actions={<Button asChild variant="ghost" size="sm"><Link href="/dashboard/finance/payouts">Payouts <ArrowRight className="size-4" aria-hidden /></Link></Button>}>
+            description={t("finance:receivables.supDesc")}
+            actions={<Button asChild variant="ghost" size="sm"><Link href="/dashboard/finance/payouts">{t("finance:payouts.title")} <ArrowRight className="size-4" aria-hidden /></Link></Button>}>
             <FilterBar className="px-2">
               <InputGroup className="w-full sm:w-64">
                 <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-                <InputGroupInput aria-label="Search suppliers" placeholder="Supplier…" value={supQ} onChange={(e) => setSupQ(e.target.value)} />
+                <InputGroupInput aria-label={t("finance:receivables.searchSup")} placeholder={t("finance:receivables.searchSupPh")} value={supQ} onChange={(e) => setSupQ(e.target.value)} />
               </InputGroup>
-              <SegmentedControl aria-label="Direction" value={supDir} onValueChange={(v) => setSupDir(v as typeof supDir)}
-                options={[{ value: "all", label: "All" }, { value: "we_owe", label: "You owe" }, { value: "they_owe", label: "They owe you" }]} />
+              <SegmentedControl aria-label={t("finance:transactions.direction")} value={supDir} onValueChange={(v) => setSupDir(v as typeof supDir)}
+                options={[{ value: "all", label: t("common:status.all") }, { value: "we_owe", label: t("finance:overview.youOwe") }, { value: "they_owe", label: t("finance:payable.theyOweYou") }]} />
             </FilterBar>
             {supErr && <Alert variant="destructive"><AlertDescription>{supErr}</AlertDescription></Alert>}
             {!sup ? <div className="flex flex-col gap-2 px-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-11" />)}</div> : sup.rows.length === 0 ? (
-              <EmptyState icon={Truck} title="No supplier balances" description={supQD || supDir !== "all" ? "Nothing matches these filters." : "You owe no supplier and none owes you."} />
+              <EmptyState icon={Truck} title={t("finance:receivables.noSupTitle")} description={supQD || supDir !== "all" ? t("finance:ui.noMatchFilters") : t("finance:receivables.noSupDesc")} />
             ) : (
               <div className="overflow-x-auto">
                 <Table className="min-w-[820px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Supplier</TableHead><TableHead className="text-right">Owed to them</TableHead><TableHead className="text-right">Not yet due</TableHead>
-                      <TableHead className="text-right">Credits</TableHead><TableHead className="text-right">Net</TableHead><TableHead className="text-right">Payable now</TableHead>
-                      <TableHead className="w-28"><span className="sr-only">Actions</span></TableHead>
+                      <TableHead>{t("common:extra.supplier")}</TableHead><TableHead className="text-right">{t("finance:receivables.owedToThem")}</TableHead><TableHead className="text-right">{t("finance:payable.notYetDue")}</TableHead>
+                      <TableHead className="text-right">{t("finance:receivables.credits")}</TableHead><TableHead className="text-right">{t("finance:col.net")}</TableHead><TableHead className="text-right">{t("finance:payable.payableNow")}</TableHead>
+                      <TableHead className="w-28"><span className="sr-only">{t("common:fields.actions")}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -279,11 +284,11 @@ export default function ReceivablesPage() {
                       <TableRow key={r.vendorId}>
                         <TableCell>
                           {r.deleted ? (
-                            <WithTooltip content={r.fullId ? `Supplier id ${r.fullId}` : "This supplier was deleted"}>
+                            <WithTooltip content={r.fullId ? t("finance:receivables.supplierId", { id: r.fullId }) : t("finance:receivables.supplierDeleted")}>
                               <span tabIndex={0} className="font-medium text-muted-foreground">{r.displayName}</span>
                             </WithTooltip>
                           ) : <Link href={`/dashboard/vendors/${r.vendorId}`} className="font-medium hover:underline">{r.displayName}</Link>}
-                          <div className={cn("text-xs", r.net < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{r.directionLabel}</div>
+                          <div className={cn("text-xs", r.net < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{directionText(r.direction, r.directionLabel)}</div>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{money(r.owed)}</TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">{r.notYetDue ? money(r.notYetDue) : "—"}</TableCell>
@@ -292,13 +297,13 @@ export default function ReceivablesPage() {
                         <TableCell className="text-right tabular-nums">{money(Math.max(0, r.payableNow))}</TableCell>
                         <TableCell className="text-right">
                           {r.net < 0 ? (
-                            canReceive && <Button type="button" size="sm" variant="outline" onClick={() => setCollect(r)}>Collect</Button>
+                            canReceive && <Button type="button" size="sm" variant="outline" onClick={() => setCollect(r)}>{t("finance:actions.collect")}</Button>
                           ) : r.net > 0 && (
                             r.payableNow > 0 && r.payHref && canWrite("Dues") ? (
-                              <Button asChild size="sm" variant="outline"><Link href={r.payHref} prefetch={false}>Pay out</Link></Button>
+                              <Button asChild size="sm" variant="outline"><Link href={r.payHref} prefetch={false}>{t("finance:receivables.payOut")}</Link></Button>
                             ) : (
-                              <WithTooltip content={!canWrite("Dues") ? "You don't have permission to pay suppliers." : r.payDisabledReason ?? "Nothing is payable yet."}>
-                                <span tabIndex={0}><Button type="button" size="sm" variant="outline" disabled>Pay out</Button></span>
+                              <WithTooltip content={!canWrite("Dues") ? t("finance:receivables.noPayPermission") : r.payDisabledReason ?? t("finance:receivables.nothingPayableYet")}>
+                                <span tabIndex={0}><Button type="button" size="sm" variant="outline" disabled>{t("finance:receivables.payOut")}</Button></span>
                               </WithTooltip>
                             )
                           )}
@@ -308,7 +313,7 @@ export default function ReceivablesPage() {
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell className="font-bold">Total</TableCell>
+                      <TableCell className="font-bold">{t("common:money.total")}</TableCell>
                       <TableCell className="text-right font-bold tabular-nums">{money(sup.totals.owed)}</TableCell>
                       <TableCell />
                       <TableCell className="text-right font-bold tabular-nums">{money(sup.totals.credits)}</TableCell>
@@ -325,41 +330,41 @@ export default function ReceivablesPage() {
 
         {/* ── Customers ── */}
         <TabsContent value="customers" className="flex flex-col gap-4">
-          <SectionCard title="How old are the customer dues?" description="By order date of each unpaid or partly paid sale (COD not collected included).">
+          <SectionCard title={t("finance:receivables.agingTitle")} description={t("finance:receivables.agingDesc")}>
             {!cust ? <Skeleton className="h-16" /> : <AgingBar buckets={cust.aging} format={money} />}
           </SectionCard>
           <SectionCard contentClassName="flex flex-col gap-4 px-2"
-            description={cust ? `${money(cust.totals.due)} due on ${plural(cust.totals.count, "sale")} from ${plural(cust.totals.customers, "customer")}${cust.totals.codDue ? ` · ${money(cust.totals.codDue)} COD` : ""}. With no filters this equals “Owed by customers” on the Overview.` : undefined}>
+            description={cust ? `${t("finance:receivables.custSummary", { amount: money(cust.totals.due), sales: t("finance:receivables.sales", { count: cust.totals.count }), customers: t("finance:receivables.customers", { count: cust.totals.customers }) })}${cust.totals.codDue ? ` · ${t("finance:receivables.codAmount", { amount: money(cust.totals.codDue) })}` : ""}. ${t("finance:receivables.equalsOverview")}` : undefined}>
             <FilterBar className="px-2">
               <InputGroup className="w-full sm:w-64">
                 <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-                <InputGroupInput aria-label="Search customer receivables" placeholder="Invoice, customer, phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+                <InputGroupInput aria-label={t("finance:receivables.searchCust")} placeholder={t("finance:receivables.searchCustPh")} value={q} onChange={(e) => setQ(e.target.value)} />
               </InputGroup>
               <Select value={bucket} onValueChange={setBucket}>
-                <SelectTrigger aria-label="Age" className="w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("finance:col.age")} className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Any age</SelectItem>
+                  <SelectItem value="all">{t("finance:receivables.anyAge")}</SelectItem>
                   {(cust?.aging ?? []).map((b) => <SelectItem key={b.key} value={String(b.key)}>{b.label}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={cod} onValueChange={(v) => { setCod(v as typeof cod); patchQuery({ cod: v === "all" ? null : v === "cod" ? "true" : "false" }) }}>
-                <SelectTrigger aria-label="COD" className="w-40"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("common:extra.codShort")} className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">COD and other</SelectItem>
-                  <SelectItem value="cod">COD only</SelectItem>
-                  <SelectItem value="other">Not COD</SelectItem>
+                  <SelectItem value="all">{t("finance:receivables.codAll")}</SelectItem>
+                  <SelectItem value="cod">{t("finance:receivables.codOnly")}</SelectItem>
+                  <SelectItem value="other">{t("finance:receivables.notCod")}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={channel} onValueChange={setChannel}>
-                <SelectTrigger aria-label="Channel" className="w-40"><SelectValue /></SelectTrigger>
-                <SelectContent>{CHANNELS.map(([c, l]) => <SelectItem key={c} value={c}>{l}</SelectItem>)}</SelectContent>
+                <SelectTrigger aria-label={t("finance:channel.label")} className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>{CHANNELS.map(([c, l]) => <SelectItem key={c} value={c}>{t(l)}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={sort} onValueChange={(v) => setSort(v as typeof sort)}>
-                <SelectTrigger aria-label="Sort" className="w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("finance:sort.label")} className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="age">Oldest first</SelectItem>
-                  <SelectItem value="amount">Highest due</SelectItem>
-                  <SelectItem value="name">Name A–Z</SelectItem>
+                  <SelectItem value="age">{t("finance:sort.oldest")}</SelectItem>
+                  <SelectItem value="amount">{t("finance:sort.highestDue")}</SelectItem>
+                  <SelectItem value="name">{t("finance:sort.nameAsc")}</SelectItem>
                 </SelectContent>
               </Select>
             </FilterBar>
@@ -367,14 +372,14 @@ export default function ReceivablesPage() {
             {custLoading && !cust ? (
               <div className="flex flex-col gap-2 px-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11" />)}</div>
             ) : !cust || cust.rows.length === 0 ? (
-              <EmptyState icon={Users} title="No customer dues" description={qD || bucket !== "all" || cod !== "all" || channel !== "all" ? "Nothing matches these filters." : "Every sale is paid."} />
+              <EmptyState icon={Users} title={t("finance:receivables.noCustTitle")} description={qD || bucket !== "all" || cod !== "all" || channel !== "all" ? t("finance:ui.noMatchFilters") : t("finance:receivables.noCustDesc")} />
             ) : (
               <div className={cn("overflow-x-auto", custLoading && "opacity-60")}>
                 <Table className="min-w-[860px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Invoice</TableHead><TableHead>Customer</TableHead><TableHead>Age</TableHead><TableHead>Payment</TableHead>
-                      <TableHead className="text-right">Total</TableHead><TableHead className="text-right">Due</TableHead><TableHead className="w-36"><span className="sr-only">Actions</span></TableHead>
+                      <TableHead>{t("finance:col.invoice")}</TableHead><TableHead>{t("common:fields.customer")}</TableHead><TableHead>{t("finance:col.age")}</TableHead><TableHead>{t("finance:receivables.payment")}</TableHead>
+                      <TableHead className="text-right">{t("common:money.total")}</TableHead><TableHead className="text-right">{t("common:money.due")}</TableHead><TableHead className="w-36"><span className="sr-only">{t("common:fields.actions")}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -382,27 +387,27 @@ export default function ReceivablesPage() {
                       <TableRow key={r.sellId}>
                         <TableCell>
                           {r.orderHref ? <Link href={r.orderHref} className="font-medium text-primary hover:underline">{r.invoiceNo}</Link> : <span className="font-medium">{r.invoiceNo}</span>}
-                          <div className="text-xs text-muted-foreground">{f.date(r.orderDate)}{r.channel ? ` · ${CHANNELS.find(([c]) => c === r.channel)?.[1] ?? sentenceCase(r.channel)}` : ""}</div>
+                          <div className="text-xs text-muted-foreground">{f.date(r.orderDate)}{r.channel ? ` · ${CHANNELS.some(([c]) => c === r.channel) ? channelLabel(t, r.channel) : sentenceCase(r.channel)}` : ""}</div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">{r.customerName || "Walk-in"}</div>
+                          <div className="font-medium">{r.customerName || t("finance:pickSale.walkIn")}</div>
                           {r.customerPhone && <div className="text-xs text-muted-foreground">{r.customerPhone}</div>}
                         </TableCell>
                         <TableCell>
-                          <div className={cn(r.ageDays > 30 && "text-destructive")}>{r.ageDays} days</div>
+                          <div className={cn(r.ageDays > 30 && "text-destructive")}>{t("finance:receivables.days", { count: r.ageDays })}</div>
                           <div className="text-xs text-muted-foreground">{cust.aging.find((b) => b.key === r.bucket)?.label ?? ""}</div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span>{r.isCod ? "COD" : sentenceCase(r.method)}</span>
-                            {r.paid > 0 && <Badge variant="secondary">Partly paid</Badge>}
+                            <span>{r.isCod ? t("common:extra.codShort") : r.method ? methodText(t, r.methodKey ?? r.method, sentenceCase(r.method)) : "—"}</span>
+                            {r.paid > 0 && <Badge variant="secondary">{t("common:payment.partial")}</Badge>}
                           </div>
-                          {r.isCod && r.codState && <div className="text-xs text-muted-foreground">{r.codState === "to_collect" ? "With the courier" : "Delivered — record the collection"}</div>}
+                          {r.isCod && r.codState && <div className="text-xs text-muted-foreground">{r.codState === "to_collect" ? t("finance:receivables.withCourier") : t("finance:receivables.deliveredRecord")}</div>}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">{money(r.total)}</TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">{money(r.due)}</TableCell>
                         <TableCell className="text-right">
-                          {canCollectDue && <Button type="button" size="sm" variant="outline" onClick={() => setSale(asSale(r))}>Record payment</Button>}
+                          {canCollectDue && <Button type="button" size="sm" variant="outline" onClick={() => setSale(asSale(r))}>{t("finance:actions.recordPayment")}</Button>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -420,17 +425,17 @@ export default function ReceivablesPage() {
         {/* ── COD with couriers ── */}
         <TabsContent value="cod">
           <SectionCard contentClassName="px-2"
-            description="COD shipments handed to the courier whose cash is not recorded yet. Record the collection once the courier pays you. Already part of “Owed by customers”."
-            actions={<Button asChild variant="ghost" size="sm"><Link href="/dashboard/orders/shipments">Shipments <ArrowRight className="size-4" aria-hidden /></Link></Button>}>
+            description={t("finance:receivables.codDesc")}
+            actions={<Button asChild variant="ghost" size="sm"><Link href="/dashboard/orders/shipments">{t("finance:receivables.shipmentsLink")} <ArrowRight className="size-4" aria-hidden /></Link></Button>}>
             {!s ? <Skeleton className="mx-2 h-32" /> : s.codWithCouriers.rows.length === 0 ? (
-              <EmptyState icon={Truck} title="No COD cash with couriers" description="Every delivered COD order has been collected." />
+              <EmptyState icon={Truck} title={t("finance:receivables.noCodTitle")} description={t("finance:receivables.noCodDesc")} />
             ) : (
               <div className="overflow-x-auto">
                 <Table className="min-w-[760px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Invoice</TableHead><TableHead>Customer</TableHead><TableHead>Courier</TableHead><TableHead>Status</TableHead><TableHead>Delivered</TableHead>
-                      <TableHead className="text-right">COD</TableHead><TableHead className="w-28"><span className="sr-only">Actions</span></TableHead>
+                      <TableHead>{t("finance:col.invoice")}</TableHead><TableHead>{t("common:fields.customer")}</TableHead><TableHead>{t("finance:receivables.courier")}</TableHead><TableHead>{t("common:fields.status")}</TableHead><TableHead>{t("common:orderStatus.delivered")}</TableHead>
+                      <TableHead className="text-right">{t("common:extra.codShort")}</TableHead><TableHead className="w-28"><span className="sr-only">{t("common:fields.actions")}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -439,13 +444,13 @@ export default function ReceivablesPage() {
                         <TableCell className="font-medium">{r.invoiceNo ? <Link href={`/dashboard/orders?q=${encodeURIComponent(r.invoiceNo)}`} className="text-primary hover:underline">{r.invoiceNo}</Link> : "—"}</TableCell>
                         <TableCell>{r.customerName ?? "—"}</TableCell>
                         <TableCell><div>{r.carrier ?? "—"}</div>{r.trackingNumber && <div className="text-xs text-muted-foreground">{r.trackingNumber}</div>}</TableCell>
-                        <TableCell><StatusBadge status={r.status ?? "—"} label={sentenceCase(r.status)} /></TableCell>
-                        <TableCell className="text-muted-foreground"><div>{f.date(r.deliveredAt)}</div><div className="text-xs">{r.ageDays} days</div></TableCell>
+                        <TableCell><StatusBadge status={r.status ?? "—"} label={statusText(t, r.status)} /></TableCell>
+                        <TableCell className="text-muted-foreground"><div>{f.date(r.deliveredAt)}</div><div className="text-xs">{t("finance:receivables.days", { count: r.ageDays })}</div></TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">{money(r.amount)}</TableCell>
                         <TableCell className="text-right">
                           {r.codState === "delivered_record_payment" && canCollectCod
-                            ? <Button type="button" size="sm" variant="outline" onClick={() => setCodRow(r)}>Record</Button>
-                            : <span className="text-xs text-muted-foreground">{r.codState === "to_collect" ? "On the way" : ""}</span>}
+                            ? <Button type="button" size="sm" variant="outline" onClick={() => setCodRow(r)}>{t("finance:actions.record")}</Button>
+                            : <span className="text-xs text-muted-foreground">{r.codState === "to_collect" ? t("finance:receivables.onTheWay") : ""}</span>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -458,30 +463,30 @@ export default function ReceivablesPage() {
 
         {/* ── Tailor ── */}
         <TabsContent value="tailor">
-          <SectionCard contentClassName="px-2" description="Tailor orders with a balance still to collect."
-            actions={<Button asChild variant="ghost" size="sm"><Link href="/dashboard/tailor/payments">Tailor payments <ArrowRight className="size-4" aria-hidden /></Link></Button>}>
+          <SectionCard contentClassName="px-2" description={t("finance:receivables.tailorDesc")}
+            actions={<Button asChild variant="ghost" size="sm"><Link href="/dashboard/tailor/payments">{t("finance:receivables.tailorPayments")} <ArrowRight className="size-4" aria-hidden /></Link></Button>}>
             {!s ? <Skeleton className="mx-2 h-32" /> : s.tailorBalances.rows.length === 0 ? (
-              <EmptyState icon={Scissors} title="No tailor balances" description="Every tailor order is paid." />
+              <EmptyState icon={Scissors} title={t("finance:receivables.noTailorTitle")} description={t("finance:receivables.noTailorDesc")} />
             ) : (
               <div className="overflow-x-auto">
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Order</TableHead><TableHead>Customer</TableHead><TableHead>Delivery</TableHead><TableHead>Status</TableHead>
-                      <TableHead className="text-right">Total</TableHead><TableHead className="text-right">Due</TableHead><TableHead className="w-24"><span className="sr-only">Actions</span></TableHead>
+                      <TableHead>{t("finance:col.order")}</TableHead><TableHead>{t("common:fields.customer")}</TableHead><TableHead>{t("finance:receivables.delivery")}</TableHead><TableHead>{t("common:fields.status")}</TableHead>
+                      <TableHead className="text-right">{t("common:money.total")}</TableHead><TableHead className="text-right">{t("common:money.due")}</TableHead><TableHead className="w-24"><span className="sr-only">{t("common:fields.actions")}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {s.tailorBalances.rows.map((r) => (
                       <TableRow key={r.orderId}>
-                        <TableCell className="font-medium"><Link href={`/dashboard/tailor/orders/${r.orderId}`} className="text-primary hover:underline">{r.orderNumber ?? "Open order"}</Link></TableCell>
+                        <TableCell className="font-medium"><Link href={`/dashboard/tailor/orders/${r.orderId}`} className="text-primary hover:underline">{r.orderNumber ?? t("finance:receivables.openOrder")}</Link></TableCell>
                         <TableCell>{r.customerName ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{f.date(r.deliveryDate)}</TableCell>
-                        <TableCell>{r.status ? <StatusBadge status={r.status} label={sentenceCase(r.status)} /> : "—"}</TableCell>
+                        <TableCell>{r.status ? <StatusBadge status={r.status} label={statusText(t, r.status)} /> : "—"}</TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">{money(r.total)}</TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">{money(r.due)}</TableCell>
                         <TableCell className="text-right">
-                          {canCollectTailor && <Button type="button" size="sm" variant="outline" onClick={() => setTailor({ kind: "customer", id: r.orderId })}>Collect</Button>}
+                          {canCollectTailor && <Button type="button" size="sm" variant="outline" onClick={() => setTailor({ kind: "customer", id: r.orderId })}>{t("finance:actions.collect")}</Button>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -500,14 +505,14 @@ export default function ReceivablesPage() {
       <AlertDialog open={!!codRow} onOpenChange={(o) => !o && !codBusy && setCodRow(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Record COD collection?</AlertDialogTitle>
+            <AlertDialogTitle>{t("finance:receivables.codQ")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {codRow ? `${codRow.carrier ?? "The courier"} handed over ${money(codRow.amount)} for ${codRow.invoiceNo ?? "this order"}. This records the payment on the sale, the same as on the Shipments page.` : ""}
+              {codRow ? t("finance:receivables.codQDesc", { courier: codRow.carrier ?? t("finance:receivables.theCourier"), amount: money(codRow.amount), invoice: codRow.invoiceNo ?? t("finance:receivables.thisOrder") }) : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={codBusy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.preventDefault(); recordCod() }} disabled={codBusy}>{codBusy ? "Saving…" : "Record collection"}</AlertDialogAction>
+            <AlertDialogCancel disabled={codBusy}>{t("common:actions.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); recordCod() }} disabled={codBusy}>{codBusy ? t("common:actions.saving") : t("finance:receivables.recordCollection")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

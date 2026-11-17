@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
@@ -39,6 +40,7 @@ export default function BarcodeScanner({
   autoFocus = true,
 }: BarcodeScannerProps) {
   const { formatCurrency } = useCompanySettings()
+  const { t } = useTranslation(["ui", "common"])
   const [barcodeInput, setBarcodeInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -56,7 +58,7 @@ export default function BarcodeScanner({
     const trimmedBarcode = barcode.trim()
 
     if (!trimmedBarcode) {
-      setError("Please enter or scan a barcode")
+      setError(t("ui:barcode.enterOrScan"))
       return
     }
 
@@ -69,7 +71,7 @@ export default function BarcodeScanner({
 
       if (response.success && response.data) {
         setFoundProduct(response.data)
-        toast.success(`Product found: ${response.data.name}`)
+        toast.success(t("ui:barcode.found", { name: response.data.name }))
 
         if (onProductFound) {
           onProductFound(response.data)
@@ -79,7 +81,7 @@ export default function BarcodeScanner({
         setBarcodeInput("")
       }
     } catch (err: any) {
-      const message = err.response?.data?.message || "Failed to find product by barcode"
+      const message = err.response?.data?.message || t("ui:barcode.findFailed")
       setError(message)
       toast.error(message)
 
@@ -128,9 +130,9 @@ export default function BarcodeScanner({
       {/* Scanner Input */}
       <Card className="p-6">
         <FormField
-          label="Barcode Scanner / Search"
+          label={t("ui:barcode.scannerLabel")}
           htmlFor="barcode-scanner-input"
-          description="Scan a barcode or enter it manually. Press Enter to search, Escape to clear."
+          description={t("ui:barcode.scannerHint")}
         >
           <div className="flex gap-2">
             <div className="flex-1 relative">
@@ -141,15 +143,15 @@ export default function BarcodeScanner({
                 value={barcodeInput}
                 onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
-                placeholder="Scan or enter barcode (e.g., PROD-12345678-ABCD)"
+                placeholder={t("ui:barcode.scannerPlaceholder")}
                 disabled={loading}
                 className="pr-10"
               />
               {barcodeInput && (
-                <WithTooltip content="Clear barcode"><Button
+                <WithTooltip content={t("ui:barcode.clearBarcode")}><Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Clear barcode"
+                  aria-label={t("ui:barcode.clearBarcode")}
                   onClick={() => setBarcodeInput("")}
                   className="absolute right-1 top-1/2 -translate-y-1/2"
                 >
@@ -165,12 +167,12 @@ export default function BarcodeScanner({
               {loading ? (
                 <>
                   <Spinner />
-                  Searching...
+                  {t("ui:barcode.searching")}
                 </>
               ) : (
                 <>
                   <Search className="size-4" />
-                  Search
+                  {t("common:actions.search")}
                 </>
               )}
             </Button>
@@ -182,7 +184,7 @@ export default function BarcodeScanner({
       {error && (
         <Alert variant="destructive">
           <AlertCircle />
-          <AlertTitle>Search Failed</AlertTitle>
+          <AlertTitle>{t("ui:barcode.searchFailed")}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
@@ -191,24 +193,24 @@ export default function BarcodeScanner({
       {foundProduct && (
         <SectionCard
           title={foundProduct.name}
-          description="Product Found"
-          actions={<Button variant="outline" size="sm" onClick={handleClear}>Clear</Button>}
+          description={t("ui:barcode.productFound")}
+          actions={<Button variant="outline" size="sm" onClick={handleClear}>{t("common:actions.clear")}</Button>}
           contentClassName="space-y-4"
         >
           <InfoList className="grid-cols-2 gap-4 md:grid-cols-4">
-            <InfoRow layout="stacked" label="SKU" value={foundProduct.sku || "N/A"} />
-            <InfoRow layout="stacked" label="Barcode" value={<span className="font-mono">{foundProduct.barcode}</span>} />
-            <InfoRow layout="stacked" label="Stock" value={`${foundProduct.stock} units`} />
-            <InfoRow layout="stacked" label="Sale Price" value={formatCurrency(foundProduct.sale_price)} />
+            <InfoRow layout="stacked" label={t("common:fields.sku")} value={foundProduct.sku || t("ui:barcode.na")} />
+            <InfoRow layout="stacked" label={t("common:fields.barcode")} value={<span className="font-mono">{foundProduct.barcode}</span>} />
+            <InfoRow layout="stacked" label={t("common:fields.stock")} value={t("ui:barcode.units", { count: foundProduct.stock })} />
+            <InfoRow layout="stacked" label={t("ui:barcode.salePrice")} value={formatCurrency(foundProduct.sale_price)} />
           </InfoList>
 
           {foundProduct.barcode_image_path && (
             <div className="space-y-2">
-              <SectionTitle>Barcode Image</SectionTitle>
+              <SectionTitle>{t("ui:barcode.image")}</SectionTitle>
               <Card className="items-center bg-white p-2">
                 <img
                   src={foundProduct.barcode_image_path}
-                  alt="Barcode"
+                  alt={t("common:fields.barcode")}
                   className="max-h-20"
                 />
               </Card>
@@ -217,7 +219,7 @@ export default function BarcodeScanner({
 
           {foundProduct.description && (
             <InfoList>
-              <InfoRow layout="stacked" label="Description" value={<span className="font-normal">{foundProduct.description}</span>} />
+              <InfoRow layout="stacked" label={t("common:fields.description")} value={<span className="font-normal">{foundProduct.description}</span>} />
             </InfoList>
           )}
         </SectionCard>
@@ -226,11 +228,9 @@ export default function BarcodeScanner({
       {/* Help Text */}
       <Alert>
         <Lightbulb />
-        <AlertTitle>Tip</AlertTitle>
+        <AlertTitle>{t("ui:barcode.tip")}</AlertTitle>
         <AlertDescription>
-          This component works with physical barcode scanners that emulate
-          keyboard input. Just ensure the scanner is connected and scan the barcode. The scanner
-          will input the barcode and press Enter automatically.
+          {t("ui:barcode.tipBody")}
         </AlertDescription>
       </Alert>
     </div>

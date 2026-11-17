@@ -1,5 +1,7 @@
 "use client"
 
+import { useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { Separator } from "@/components/ui/separator"
 import { bucketLabel, compactMoney, currencySymbol, niceAxis, wholeMoney } from "./format"
@@ -10,20 +12,25 @@ import { useDashboardSection } from "./use-dashboard-section"
 
 const CHART_H = 190
 
-const RANGE_SUBTITLE: Record<RangePreset, string> = {
-  today: "Hourly, today",
-  "7d": "Daily, last 7 days",
-  "30d": "Daily, last 30 days",
-  year: `Monthly, ${new Date().getFullYear()}`,
-}
+const RANGE_SUBTITLE = {
+  today: "dashboard:revenue.hourlyToday",
+  "7d": "dashboard:revenue.daily7",
+  "30d": "dashboard:revenue.daily30",
+  year: "dashboard:revenue.monthlyYear",
+} as const satisfies Record<RangePreset, string>
+
+const BEST = { hour: "dashboard:revenue.bestHour", day: "dashboard:revenue.bestDay", month: "dashboard:revenue.bestMonth" } as const
+const CHART_ARIA = { hour: "dashboard:revenue.ariaHour", day: "dashboard:revenue.ariaDay", month: "dashboard:revenue.ariaMonth" } as const
 
 /** "2026-10-25" -> "25 Oct" */
-function dayMonthLabel(key: string): string {
+function dayMonthLabel(key: string, lng: string): string {
   const d = new Date(`${key}T00:00:00`)
-  return `${d.getDate()} ${d.toLocaleString("en-US", { month: "short" })}`
+  return `${d.toLocaleString(localeTag(lng), { day: "numeric" })} ${d.toLocaleString(localeTag(lng), { month: "short" })}`
 }
 
 export function RevenueChart() {
+  const { t, i18n } = useTranslation(["dashboard", "common"])
+  const lng = i18n.language
   const { formatCurrency } = useCompanySettings()
   const symbol = currencySymbol(formatCurrency)
   const { preset } = useDashboardFilters()
@@ -57,38 +64,38 @@ export function RevenueChart() {
                 backgroundSize: "100% 66px",
               }}
               role="img"
-              aria-label={`Revenue and gross profit by ${data.bucket}`}
+              aria-label={t(CHART_ARIA[data.bucket])}
             >
               {data.buckets.map((b, i) => (
                 <div key={b.key} className="flex h-[220px] flex-col items-center justify-end gap-1.5">
                   <div className="flex items-end gap-[3px]" style={{ height: CHART_H }}>
                     <div
-                      title={`${bucketLabel(b.key, data.bucket)} · Revenue ${formatCurrency(b.revenue)}`}
+                      title={t("dashboard:revenue.barRevenue", { label: bucketLabel(b.key, data.bucket, t, lng), amount: formatCurrency(b.revenue) })}
                       className="w-3 rounded-t bg-dash-accent sm:w-3.5"
                       style={{ height: Math.max(2, Math.round((b.revenue / max) * CHART_H)) }}
                     />
                     <div
-                      title={`${bucketLabel(b.key, data.bucket)} · Gross profit ${formatCurrency(b.grossProfit)}`}
+                      title={t("dashboard:revenue.barProfit", { label: bucketLabel(b.key, data.bucket, t, lng), amount: formatCurrency(b.grossProfit) })}
                       className="w-3 rounded-t bg-dash-warn sm:w-3.5"
                       style={{ height: Math.max(2, Math.round((b.grossProfit / max) * CHART_H)) }}
                     />
                   </div>
-                  <span className="h-4 text-[11px] text-dash-muted">
-                    {manyBuckets && i % Math.ceil(data.buckets.length / 10) !== 0 ? "" : bucketLabel(b.key, data.bucket)}
+                  <span className="h-4 whitespace-nowrap text-[11px] text-dash-muted">
+                    {manyBuckets && i % Math.ceil(data.buckets.length / 10) !== 0 ? "" : bucketLabel(b.key, data.bucket, t, lng)}
                   </span>
                 </div>
               ))}
             </div>
           </div>
         </div>
-        {!hasData && <div className="mt-3"><EmptyNote>No sales in this period.</EmptyNote></div>}
+        {!hasData && <div className="mt-3"><EmptyNote>{t("dashboard:revenue.noSales")}</EmptyNote></div>}
         <Separator className="mt-5" />
         <dl className="grid gap-3 pt-4 [grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
           {[
-            ["Avg order value", formatCurrency(f.aov)],
-            ["Gross margin", f.grossMarginPct !== null ? `${f.grossMarginPct}%` : "—"],
-            ["Returns rate", f.returnsRatePct !== null ? `${f.returnsRatePct}%` : "—"],
-            ["Discounts given", formatCurrency(f.discounts)],
+            [t("dashboard:revenue.aov"), formatCurrency(f.aov)],
+            [t("dashboard:revenue.grossMargin"), f.grossMarginPct !== null ? `${f.grossMarginPct}%` : "—"],
+            [t("dashboard:revenue.returnsRate"), f.returnsRatePct !== null ? `${f.returnsRatePct}%` : "—"],
+            [t("dashboard:revenue.discounts"), formatCurrency(f.discounts)],
           ].map(([k, v]) => (
             <div key={k}>
               <dt className="text-xs text-muted-foreground">{k}</dt>
@@ -103,22 +110,24 @@ export function RevenueChart() {
   return (
     <DashCard className="flex-[2_1_560px]">
       <CardTitle
-        title="Revenue & gross profit"
+        title={t("dashboard:revenue.title")}
         subtitle={
           data
-            ? `${RANGE_SUBTITLE[preset]}${
+            ? [
+                t(RANGE_SUBTITLE[preset], { year: new Date().getFullYear() }),
                 data.best
-                  ? ` · Best ${data.bucket === "hour" ? "hour" : data.bucket === "month" ? "month" : "day"} ${
-                      data.bucket === "day" ? dayMonthLabel(data.best.key) : bucketLabel(data.best.key, data.bucket)
-                    } (${money(data.best.revenue)})`
-                  : " · No sales in this period"
-              }`
+                  ? t(BEST[data.bucket], {
+                      label: data.bucket === "day" ? dayMonthLabel(data.best.key, lng) : bucketLabel(data.best.key, data.bucket, t, lng),
+                      amount: money(data.best.revenue),
+                    })
+                  : t("dashboard:revenue.noSalesInline"),
+              ].join(" · ")
             : undefined
         }
         action={
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-dash-accent" aria-hidden />Revenue</span>
-            <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-dash-warn" aria-hidden />Gross profit</span>
+            <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-dash-accent" aria-hidden />{t("dashboard:revenue.revenue")}</span>
+            <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-[3px] bg-dash-warn" aria-hidden />{t("dashboard:revenue.grossProfit")}</span>
           </div>
         }
       />

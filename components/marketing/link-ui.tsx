@@ -1,31 +1,40 @@
 "use client"
 
 import * as React from "react"
+import { useTranslation } from "react-i18next"
 import { Check, Copy, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 import { WithTooltip } from "@/components/common/WithTooltip"
-import { AD_SOURCE_META } from "@/components/sales/ad-source"
+import { adSourceText } from "@/components/sales/ad-source"
+import type { OrdersT } from "@/components/sales/i18n"
+import { MARKETING_NS, type MarketingKey, type MarketingT } from "@/components/marketing/i18n"
+import { localeTag } from "@/lib/i18n"
 import { qrMatrix } from "@/lib/qr"
 import type { CampaignLink, LinkChannel, LinkPeriod, LinkTargetType } from "@/lib/campaignLinkApi"
 import { cn } from "@/lib/utils"
 
-export const PERIODS: { value: LinkPeriod; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "90d", label: "90 days" },
-  { value: "all", label: "All time" },
+/** Period options; labels are keys, translate with `periodOptions(t)`. */
+export const PERIODS: { value: LinkPeriod; label: MarketingKey }[] = [
+  { value: "today", label: "common:time.today" },
+  { value: "7d", label: "commerce:marketing.period.d7" },
+  { value: "30d", label: "commerce:marketing.period.d30" },
+  { value: "90d", label: "commerce:marketing.period.d90" },
+  { value: "all", label: "common:time.allTime" },
 ]
 
-export const TARGET_LABEL: Record<LinkTargetType, string> = {
-  product: "Product page",
-  quick_order: "Quick order form",
-  collection: "Collection",
-  store: "Whole store",
+export const periodOptions = (t: MarketingT) => PERIODS.map((p) => ({ value: p.value, label: t(p.label) }))
+
+/** Link target type → label key. */
+export const TARGET_LABEL: Record<LinkTargetType, MarketingKey> = {
+  product: "commerce:marketing.target.product",
+  quick_order: "commerce:marketing.target.quickOrder",
+  collection: "commerce:marketing.target.collection",
+  store: "commerce:marketing.target.store",
 }
 
-export const channelLabel = (c: string) => AD_SOURCE_META[c]?.label ?? c
+/** Channel code → label (brand names stay; "Other" etc. translated). Needs `t` of `useTranslation(ORDERS_NS)`. */
+export const channelLabel = (tOrders: OrdersT, c: string) => adSourceText(tOrders, c) || c
 
 /** Server UTM defaults (AD_ORDERS_API_CONTRACT.md §3.1), mirrored for the live preview in the form. */
 export const UTM_MEDIUM: Record<LinkChannel, string> = {
@@ -43,6 +52,7 @@ export const shareUrl = (l: Pick<CampaignLink, "shortUrl" | "fullUrl" | "targetP
 
 /** Read-only URL field with a copy button. */
 export function CopyField({ id, label, value, onCopied }: { id: string; label: string; value: string; onCopied?: () => void }) {
+  const { t } = useTranslation(MARKETING_NS)
   const [done, setDone] = React.useState(false)
   const copy = async () => {
     try {
@@ -55,8 +65,8 @@ export function CopyField({ id, label, value, onCopied }: { id: string; label: s
     <InputGroup>
       <InputGroupInput id={id} readOnly value={value} aria-label={label} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
       <InputGroupAddon align="inline-end">
-        <WithTooltip content={done ? "Copied" : `Copy ${label.toLowerCase()}`}>
-          <InputGroupButton size="icon-xs" aria-label={`Copy ${label.toLowerCase()}`} onClick={copy}>
+        <WithTooltip content={done ? t("common:actions.copied") : t("commerce:marketing.copyLabel", { label: label.toLowerCase() })}>
+          <InputGroupButton size="icon-xs" aria-label={t("commerce:marketing.copyLabel", { label: label.toLowerCase() })} onClick={copy}>
             {done ? <Check aria-hidden /> : <Copy aria-hidden />}
           </InputGroupButton>
         </WithTooltip>
@@ -67,8 +77,9 @@ export function CopyField({ id, label, value, onCopied }: { id: string; label: s
 
 /** QR code for a URL (pure-TS encoder, no dependency) with an SVG download. */
 export function QrCode({ value, size = 168, fileName = "order-link-qr", className }: { value: string; size?: number; fileName?: string; className?: string }) {
+  const { t } = useTranslation(MARKETING_NS)
   const matrix = React.useMemo(() => qrMatrix(value), [value])
-  if (!matrix) return <p className="text-xs text-muted-foreground">This link is too long for a QR code. Use the short link.</p>
+  if (!matrix) return <p className="text-xs text-muted-foreground">{t("commerce:marketing.qrTooLong")}</p>
   const n = matrix.length + 8
   let d = ""
   matrix.forEach((row, y) => row.forEach((on, x) => { if (on) d += `M${x + 4},${y + 4}h1v1h-1z` }))
@@ -81,51 +92,53 @@ export function QrCode({ value, size = 168, fileName = "order-link-qr", classNam
   }
   return (
     <div className={cn("flex flex-col items-center gap-2", className)}>
-      <svg viewBox={`0 0 ${n} ${n}`} width={size} height={size} shapeRendering="crispEdges" role="img" aria-label={`QR code for ${value}`} className="rounded-md border">
+      <svg viewBox={`0 0 ${n} ${n}`} width={size} height={size} shapeRendering="crispEdges" role="img" aria-label={t("commerce:marketing.qrFor", { value })} className="rounded-md border">
         <rect width={n} height={n} fill="#fff" />
         <path d={d} fill="#000" />
       </svg>
       <Button type="button" variant="outline" size="sm" onClick={download}>
-        <Download className="size-4" aria-hidden /> Download QR
+        <Download className="size-4" aria-hidden /> {t("commerce:marketing.downloadQr")}
       </Button>
     </div>
   )
 }
 
 /** Ready-to-post text for a link. */
-export function buildCaption(kind: "facebook" | "whatsapp", link: Pick<CampaignLink, "targetType" | "target" | "shortUrl" | "fullUrl" | "targetPath">, storeName?: string) {
+export function buildCaption(t: MarketingT, kind: "facebook" | "whatsapp", link: Pick<CampaignLink, "targetType" | "target" | "shortUrl" | "fullUrl" | "targetPath">, storeName?: string) {
   const url = shareUrl(link)
-  const what = link.target?.name || storeName || "our new collection"
-  const action = link.targetType === "quick_order" ? "Order in 1 minute, no login needed" : link.targetType === "store" ? "Shop now" : "See details and order"
+  const what = link.target?.name || storeName || t("commerce:marketing.caption.ourCollection")
+  const action = link.targetType === "quick_order" ? t("commerce:marketing.caption.actionQuick") : link.targetType === "store" ? t("commerce:marketing.caption.actionStore") : t("commerce:marketing.caption.actionProduct")
   if (kind === "whatsapp") {
     return [
-      `Assalamu alaikum! ${what} is available now.`,
-      `${action} (cash on delivery): ${url}`,
-      "Reply here if you have any question.",
+      t("commerce:marketing.caption.waGreeting", { what }),
+      t("commerce:marketing.caption.waAction", { action, url }),
+      t("commerce:marketing.caption.waReply"),
     ].join("\n")
   }
   return [
     `${what}`,
     "",
-    `${action} — cash on delivery all over Bangladesh.`,
-    `Order here: ${url}`,
+    t("commerce:marketing.caption.fbAction", { action }),
+    t("commerce:marketing.caption.fbOrder", { url }),
     "",
-    "Inbox us for size or colour questions.",
+    t("commerce:marketing.caption.fbInbox"),
   ].join("\n")
 }
 
 /** Daily clicks (light) with orders (solid) on the same scale. */
 export function ClicksOrdersChart({ days, height = 150 }: { days: { date: string; clicks: number; orders: number }[]; height?: number }) {
+  const { t, i18n } = useTranslation(MARKETING_NS)
   const peak = Math.max(1, ...days.map((d) => Math.max(d.clicks, d.orders)))
-  if (!days.some((d) => d.clicks || d.orders)) return <p className="py-8 text-center text-sm text-muted-foreground">No clicks or orders in this period.</p>
-  const label = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+  if (!days.some((d) => d.clicks || d.orders)) return <p className="py-8 text-center text-sm text-muted-foreground">{t("commerce:marketing.chart.empty")}</p>
+  const tag = localeTag(i18n.language)
+  const label = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(tag, { day: "numeric", month: "short" })
   const every = days.length > 14 ? Math.ceil(days.length / 7) : 1
   return (
     <div>
       <div className="flex items-end gap-0.5 border-b" style={{ height }} role="img"
-        aria-label={`Daily clicks and orders, peak ${peak}`}>
+        aria-label={t("commerce:marketing.chart.aria", { peak })}>
         {days.map((d) => (
-          <WithTooltip key={d.date} content={`${label(d.date)}: ${d.clicks} click${d.clicks === 1 ? "" : "s"}, ${d.orders} order${d.orders === 1 ? "" : "s"}`}>
+          <WithTooltip key={d.date} content={t("commerce:marketing.chart.tip", { date: label(d.date), clicks: t("commerce:marketing.chart.clicks", { count: d.clicks }), orders: t("common:count.orders", { count: d.orders }) })}>
             <div className="relative flex h-full min-w-0 flex-1 items-end justify-center">
               <div className="absolute bottom-0 w-full max-w-5 rounded-t-sm bg-primary/20" style={{ height: `${d.clicks ? Math.max(2, (d.clicks / peak) * 100) : 0}%` }} />
               <div className="absolute bottom-0 w-full max-w-5 rounded-t-sm bg-primary" style={{ height: `${d.orders ? Math.max(3, (d.orders / peak) * 100) : 0}%` }} />
@@ -139,9 +152,9 @@ export function ClicksOrdersChart({ days, height = 150 }: { days: { date: string
         ))}
       </div>
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-primary/20" aria-hidden /> Clicks</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-primary" aria-hidden /> Orders</span>
-        <span className="ml-auto tabular-nums">Peak {peak}/day</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-primary/20" aria-hidden /> {t("commerce:marketing.chart.legendClicks")}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-primary" aria-hidden /> {t("commerce:marketing.chart.legendOrders")}</span>
+        <span className="ml-auto tabular-nums">{t("commerce:marketing.chart.peak", { peak })}</span>
       </div>
     </div>
   )

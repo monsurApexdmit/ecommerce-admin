@@ -36,15 +36,30 @@ import { FinanceFilters, useFinanceFilters } from "@/components/finance/finance-
 import { formatDate, todayIn } from "@/lib/finance-format"
 import { ExpenseVoidDialog } from "@/components/finance/expense-void-dialog"
 import { ExpenseActivitySheet } from "@/components/finance/expense-activity-sheet"
+import { useTranslation } from "react-i18next"
 
-const CLOSED_MSG = "This month is closed. Void this expense and add a new one in an open month instead."
 /** Generated from Salary / Tailor payments: read-only here. */
 const isGenerated = (e: ExpenseResponse) => !!e.locked || e.source === "salary" || e.source === "dorji_payout"
 
 type Tab = "all" | "rec" | "salary" | "manual"
 
+// Values are stored on the expense as-is; only the label is translated (unknown stored values show raw)
 const METHODS = ["Cash", "bKash", "Bank", "Card", "Other"]
-const EVERY = ["Week", "Month", "Quarter", "Year"]
+const METHOD_KEYS = {
+  Cash: "customers:shared.methods.cash",
+  bKash: "customers:shared.methods.bkash",
+  Bank: "customers:shared.methods.bank",
+  Card: "customers:shared.methods.card",
+  Other: "customers:shared.methods.other",
+} as const
+const EVERY = ["Week", "Month", "Quarter", "Year"] as const
+type Every = (typeof EVERY)[number]
+const EVERY_KEYS = {
+  Week: "customers:expenses.every.week",
+  Month: "customers:expenses.every.month",
+  Quarter: "customers:expenses.every.quarter",
+  Year: "customers:expenses.every.year",
+} as const
 const PALETTE = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
 
 const NONE = "__none"
@@ -53,8 +68,13 @@ const pad = (n: number) => String(n).padStart(2, "0")
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const fmtD = (d?: string | null) => (d ? formatDate(d.slice(0, 10)) : "—")
 
-const REC_LABEL: Record<string, string> = { Week: "Weekly", Month: "Monthly", Quarter: "Quarterly", Year: "Yearly" }
-const normEvery = (f?: string | null) => {
+const REC_LABEL = {
+  Week: "customers:expenses.recurrence.week",
+  Month: "customers:expenses.recurrence.month",
+  Quarter: "customers:expenses.recurrence.quarter",
+  Year: "customers:expenses.recurrence.year",
+} as const
+const normEvery = (f?: string | null): Every => {
   const v = String(f ?? "Month").toLowerCase()
   return v.startsWith("week") ? "Week" : v.startsWith("quarter") ? "Quarter" : v.startsWith("year") || v.startsWith("annual") ? "Year" : "Month"
 }
@@ -81,6 +101,9 @@ const blankForm = (): FormState => ({
 })
 
 export default function ExpensesPage() {
+  const { t } = useTranslation(["customers", "common"])
+  const methodLabel = (m?: string | null) => { const k = m ? (METHOD_KEYS as Record<string, (typeof METHOD_KEYS)[keyof typeof METHOD_KEYS] | undefined>)[m] : undefined; return k ? t(k) : (m || "—") }
+  const CLOSED_MSG = t("customers:expenses.closedMsg")
   const { formatCurrency } = useCompanySettings()
   const { warehouses } = useWarehouse()
   const blocked = useModuleGuard("Expenses")
@@ -120,7 +143,7 @@ export default function ExpensesPage() {
 
   useEffect(() => { const t = setTimeout(() => setQD(q.trim()), 250); return () => clearTimeout(t) }, [q])
 
-  const win = { from: filters.from || undefined, to: filters.to || undefined, label: filters.label.toLowerCase() === "all time" ? "all time" : filters.label }
+  const win = { from: filters.from || undefined, to: filters.to || undefined, label: filters.applied.preset === "all_time" ? t("common:time.allTime") : filters.label }
   useEffect(() => { setPage(1) }, [filters.key])
 
   const loadCommon = useCallback(() => {
@@ -146,7 +169,7 @@ export default function ExpensesPage() {
       setRows(res.data); setTotal(res.total); setStats(res.stats); setCounts(res.counts); setByCat(res.byCategory); setTrend(res.trend)
     } catch {
       setRows([])
-      toast.error("Failed to load expenses")
+      toast.error(t("customers:expenses.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -157,7 +180,7 @@ export default function ExpensesPage() {
 
   const startEdit = (e: ExpenseResponse | null) => {
     if (e && (e.voided || e.periodClosed || e.editable === false)) {
-      toast.error(e.voided ? "A voided expense cannot be edited." : CLOSED_MSG)
+      toast.error(e.voided ? t("customers:expenses.voidedNoEdit") : CLOSED_MSG)
       return
     }
     setEditing(e)
@@ -206,18 +229,20 @@ export default function ExpensesPage() {
         all.push(...res.data)
         if (all.length >= res.total || res.data.length === 0) break
       }
-      if (!all.length) { toast.error("Nothing to export"); return }
-      const head = ["No", "Date", "Title", "Category", "Paid to", "Supplier", "Paid from", "Location", "Reference", "Recurring", "Repeats until", "Source", "Amount", "Note"]
+      if (!all.length) { toast.error(t("common:extra.nothingToExport")); return }
+      // Export only (nothing imports this file back), so headers follow the staff member's language
+      const head = (["no", "date", "title", "category", "paidTo", "supplier", "paidFrom", "location", "reference", "recurring", "repeatsUntil", "source", "amount", "note"] as const)
+        .map((k) => t(`customers:expenses.csv.${k}`))
       const lines = [head].concat(all.map((e) => [
         `EXP-${e.id}`, (e.expenseDate || "").slice(0, 10), e.title, e.categoryName ?? "", e.paidTo ?? "", e.vendorName ?? "", e.paymentMethod ?? "", e.locationName ?? "",
-        e.referenceNo ?? "", e.isRecurring ? REC_LABEL[normEvery(e.recurringFrequency)] : "", e.isRecurring ? (e.recurringEndDate ?? "").slice(0, 10) : "", e.source ?? "manual", String(e.amount), e.notes ?? "",
+        e.referenceNo ?? "", e.isRecurring ? t(REC_LABEL[normEvery(e.recurringFrequency)]) : "", e.isRecurring ? (e.recurringEndDate ?? "").slice(0, 10) : "", e.source ?? "manual", String(e.amount), e.notes ?? "",
       ]))
       const blob = new Blob(["\ufeff" + lines.map((r) => r.map(csvEsc).join(",")).join("\n")], { type: "text/csv;charset=utf-8" })
       const a = document.createElement("a")
       a.href = URL.createObjectURL(blob); a.download = `expenses-${ymd(new Date())}.csv`; a.click(); URL.revokeObjectURL(a.href)
-      toast.success(`Exported ${all.length} expense${all.length === 1 ? "" : "s"}`)
+      toast.success(t("customers:expenses.toast.exported", { count: all.length }))
     } catch {
-      toast.error("Could not export expenses")
+      toast.error(t("customers:expenses.toast.exportFailed"))
     } finally {
       setExporting(false)
     }
@@ -225,13 +250,13 @@ export default function ExpensesPage() {
 
   const save = async () => {
     const amount = Number(form.amount)
-    if (!(amount > 0)) { setErr("Enter an amount above zero."); return }
-    if (!form.title.trim()) { setErr("Say what the money was for."); return }
-    if (!form.categoryId) { setErr("Pick a category."); return }
-    if (!form.date) { setErr("Choose the date."); return }
-    if (form.recurring && !form.nextDue) { setErr("Choose when the next bill is due."); return }
-    if (form.recurring && form.nextDue < form.date) { setErr("Next due date must be on or after the expense date."); return }
-    if (form.recurring && form.recEnd && form.recEnd < form.date) { setErr("The repeat end date must be on or after the expense date."); return }
+    if (!(amount > 0)) { setErr(t("customers:expenses.errors.amount")); return }
+    if (!form.title.trim()) { setErr(t("customers:expenses.errors.title")); return }
+    if (!form.categoryId) { setErr(t("customers:expenses.errors.category")); return }
+    if (!form.date) { setErr(t("customers:expenses.errors.date")); return }
+    if (form.recurring && !form.nextDue) { setErr(t("customers:expenses.errors.nextDue")); return }
+    if (form.recurring && form.nextDue < form.date) { setErr(t("customers:expenses.errors.nextDueBefore")); return }
+    if (form.recurring && form.recEnd && form.recEnd < form.date) { setErr(t("customers:expenses.errors.endBefore")); return }
     setSaving(true); setErr("")
     try {
       const body = {
@@ -242,11 +267,11 @@ export default function ExpensesPage() {
       }
       if (editing) await expenseApi.update(editing.id, body)
       else await expenseApi.create(body)
-      toast.success(editing ? "Expense updated" : "Expense saved")
+      toast.success(editing ? t("customers:expenses.toast.updated") : t("customers:expenses.toast.saved"))
       startEdit(null)
       load(); loadCommon()
     } catch (e: any) {
-      setErr(e?.response?.data?.message || "Could not save the expense.")
+      setErr(e?.response?.data?.message || t("customers:expenses.errors.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -268,11 +293,11 @@ export default function ExpensesPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       <PageHeader
-        title="Expenses"
-        description="Track every taka going out — rent, bills, salaries — and see what is left as profit."
+        title={t("customers:expenses.title")}
+        description={t("customers:expenses.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export"}</Button>
-          <Button type="button" onClick={() => startEdit(null)}><Plus className="size-4" aria-hidden /> New expense</Button>
+          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? t("customers:expenses.exporting") : t("common:actions.export")}</Button>
+          <Button type="button" onClick={() => startEdit(null)}><Plus className="size-4" aria-hidden /> {t("customers:expenses.newExpense")}</Button>
         </>}
       />
 
@@ -280,23 +305,23 @@ export default function ExpensesPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
-          { label: "Spent this month", value: formatCurrency(stats.spentThisMonth), icon: <Wallet className="size-4" />, color: "yellow",
-            hint: stats.deltaPct === null ? "No spending last month" : `${stats.deltaPct >= 0 ? "+" : "−"}${Math.abs(Math.round(stats.deltaPct))}% vs last month` },
-          { label: "This year", value: formatCurrency(stats.yearTotal), icon: <Banknote className="size-4" />, color: "blue", hint: `${stats.yearCount} expenses` },
-          { label: "Recurring / month", value: formatCurrency(stats.recurringMonthly), icon: <Repeat className="size-4" />, color: "purple",
-            hint: stats.recurringCount ? `${stats.recurringCount} repeating bill${stats.recurringCount === 1 ? "" : "s"}` : "No recurring bills" },
-          { label: "Bills due this week", value: stats.billsDueThisWeek.length, icon: <CalendarClock className="size-4" />, color: stats.billsDueThisWeek.length ? "red" : "green",
-            hint: stats.billsDueThisWeek.length ? stats.billsDueThisWeek.slice(0, 2).map((b) => `${b.title} ${formatDate(b.nextDueDate?.slice(0, 10), undefined, "day")}`).join(" · ") : "Nothing due" },
-          { label: "Profit after expenses", value: `${stats.profitAfterExpenses < 0 ? "−" : ""}${formatCurrency(Math.abs(stats.profitAfterExpenses))}`, icon: <TrendingUp className="size-4" />, color: stats.profitAfterExpenses < 0 ? "red" : "green",
-            hint: `Revenue ${formatCurrency(stats.monthRevenue)} this month` },
+          { label: t("customers:expenses.kpi.spentMonth"), value: formatCurrency(stats.spentThisMonth), icon: <Wallet className="size-4" />, color: "yellow",
+            hint: stats.deltaPct === null ? t("customers:expenses.kpi.noSpendLast") : t("customers:expenses.kpi.vsLast", { delta: `${stats.deltaPct >= 0 ? "+" : "−"}${Math.abs(Math.round(stats.deltaPct))}%` }) },
+          { label: t("customers:expenses.kpi.year"), value: formatCurrency(stats.yearTotal), icon: <Banknote className="size-4" />, color: "blue", hint: t("customers:expenses.kpi.yearHint", { count: stats.yearCount }) },
+          { label: t("customers:expenses.kpi.recurring"), value: formatCurrency(stats.recurringMonthly), icon: <Repeat className="size-4" />, color: "purple",
+            hint: stats.recurringCount ? t("customers:expenses.kpi.recurringHint", { count: stats.recurringCount }) : t("customers:expenses.kpi.noRecurring") },
+          { label: t("customers:expenses.kpi.billsDue"), value: stats.billsDueThisWeek.length, icon: <CalendarClock className="size-4" />, color: stats.billsDueThisWeek.length ? "red" : "green",
+            hint: stats.billsDueThisWeek.length ? stats.billsDueThisWeek.slice(0, 2).map((b) => `${b.title} ${formatDate(b.nextDueDate?.slice(0, 10), undefined, "day")}`).join(" · ") : t("customers:expenses.kpi.nothingDue") },
+          { label: t("customers:expenses.kpi.profit"), value: `${stats.profitAfterExpenses < 0 ? "−" : ""}${formatCurrency(Math.abs(stats.profitAfterExpenses))}`, icon: <TrendingUp className="size-4" />, color: stats.profitAfterExpenses < 0 ? "red" : "green",
+            hint: t("customers:expenses.kpi.profitHint", { amount: formatCurrency(stats.monthRevenue) }) },
         ]} />
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <div className="flex w-full min-w-0 flex-1 flex-col gap-5">
           <div className="grid gap-5 lg:grid-cols-2">
-            <SectionCard title={`Where the money went · ${win.label}`}>
-              {byCat.length === 0 ? <p className="py-6 text-sm text-muted-foreground">No expenses in this period.</p> : (
+            <SectionCard title={t("customers:expenses.whereWent", { period: win.label })}>
+              {byCat.length === 0 ? <p className="py-6 text-sm text-muted-foreground">{t("customers:expenses.noneInPeriod")}</p> : (
                 <div className="flex flex-col gap-3">
                   {byCat.slice(0, 6).map((b, i) => (
                     <div key={`${b.categoryId}-${b.name}`} className="flex flex-col gap-1.5">
@@ -307,7 +332,7 @@ export default function ExpensesPage() {
                 </div>
               )}
             </SectionCard>
-            <SectionCard title="Last 6 months">
+            <SectionCard title={t("customers:expenses.last6")}>
               <div className="flex h-[150px] items-end gap-2">
                 {trend.map((t) => (
                   <div key={t.month} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
@@ -323,32 +348,32 @@ export default function ExpensesPage() {
           <Card className="gap-0 py-0">
             <div className="px-4">
               <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }} tabs={[
-                { value: "all", label: "All", count: counts.all }, { value: "rec", label: "Recurring", count: counts.rec },
-                { value: "salary", label: "Salaries", count: counts.salary }, { value: "manual", label: "Manual", count: counts.manual },
+                { value: "all", label: t("common:status.all"), count: counts.all }, { value: "rec", label: t("customers:expenses.tabs.recurring"), count: counts.rec },
+                { value: "salary", label: t("customers:expenses.tabs.salaries"), count: counts.salary }, { value: "manual", label: t("customers:expenses.tabs.manual"), count: counts.manual },
               ]} />
             </div>
             <div className="flex flex-wrap items-center gap-2.5 p-4">
               <div className="relative min-w-[220px] flex-1">
-                <Label htmlFor="expense-search" className="sr-only">Search expenses</Label>
+                <Label htmlFor="expense-search" className="sr-only">{t("customers:expenses.searchLabel")}</Label>
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input id="expense-search" type="search" placeholder="Search title, note, category, paid to or reference…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
+                <Input id="expense-search" type="search" placeholder={t("customers:expenses.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
                   className="pl-9" />
               </div>
               <Select value={fCat} onValueChange={(v) => { setFCat(v); setPage(1) }}>
-                <SelectTrigger aria-label="Category"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Category: All</SelectItem>{cats.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger aria-label={t("common:fields.category")}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">{t("customers:expenses.filter.categoryAll")}</SelectItem>{cats.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={fMethod} onValueChange={(v) => { setFMethod(v); setPage(1) }}>
-                <SelectTrigger aria-label="Paid from"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Paid from: All</SelectItem>{METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                <SelectTrigger aria-label={t("customers:expenses.filter.paidFrom")}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">{t("customers:expenses.filter.paidFromAll")}</SelectItem>{METHODS.map((m) => <SelectItem key={m} value={m}>{methodLabel(m)}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={fLoc} onValueChange={(v) => { setFLoc(v); setPage(1) }}>
-                <SelectTrigger aria-label="Location"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Location: All</SelectItem>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger aria-label={t("common:fields.location")}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">{t("customers:expenses.filter.locationAll")}</SelectItem>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={fVendor} onValueChange={(v) => { setFVendor(v); setPage(1) }}>
-                <SelectTrigger aria-label="Supplier"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Supplier: All</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger aria-label={t("common:extra.supplier")}><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">{t("customers:expenses.filter.supplierAll")}</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
               </Select>
               <FinanceFilters filters={filters} channel={false} idPrefix="expenses" />
             </div>
@@ -357,31 +382,31 @@ export default function ExpensesPage() {
               <Table className="min-w-[760px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4">Expense</TableHead><TableHead>Category</TableHead><TableHead>Date</TableHead>
-                    <TableHead>Paid from</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                    <TableHead className="pl-4">{t("customers:expenses.cols.expense")}</TableHead><TableHead>{t("common:fields.category")}</TableHead><TableHead>{t("common:fields.date")}</TableHead>
+                    <TableHead>{t("customers:expenses.filter.paidFrom")}</TableHead><TableHead className="text-right">{t("common:money.amount")}</TableHead><TableHead className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={6} className="px-4"><Skeleton className="h-11 rounded" /></TableCell></TableRow>) :
                     rows.length === 0 ? (
                       <TableRow><TableCell colSpan={6}>
-                        <EmptyState icon={Wallet} title="No expenses found" description={hasFilter ? "Try clearing the filters." : "Record the first expense with the form."} className="p-4 md:p-6" />
+                        <EmptyState icon={Wallet} title={t("customers:expenses.empty.title")} description={hasFilter ? t("customers:shared.tryClearing") : t("customers:expenses.empty.first")} className="p-4 md:p-6" />
                       </TableCell></TableRow>
                     ) : rows.map((r) => (
                       <TableRow key={r.id} data-state={editing?.id === r.id ? "selected" : undefined} className={cn(r.voided && "text-muted-foreground")}>
                         <TableCell className="pl-4">
-                          <div className={cn("font-medium", r.voided && "line-through decoration-muted-foreground/70")}>{r.title}{r.isRecurring && <Badge variant="secondary" className="ml-2">↻ {String(r.recurringFrequency ?? "")}{r.recurringEndDate ? ` until ${fmtD(r.recurringEndDate)}` : ""}</Badge>}</div>
+                          <div className={cn("font-medium", r.voided && "line-through decoration-muted-foreground/70")}>{r.title}{r.isRecurring && <Badge variant="secondary" className="ml-2">↻ {t(REC_LABEL[normEvery(r.recurringFrequency)])}{r.recurringEndDate ? ` ${t("customers:expenses.until", { date: fmtD(r.recurringEndDate) })}` : ""}</Badge>}</div>
                           <div className="text-xs text-muted-foreground">{[r.vendorName ?? r.paidTo, r.referenceNo && `#${r.referenceNo}`].filter(Boolean).join(" · ") || "—"}</div>
                           {r.notes && <div className="max-w-[260px] truncate text-xs text-muted-foreground">{r.notes}</div>}
                           {r.voided && (
                             <div className="mt-1 flex max-w-[320px] flex-wrap items-center gap-1.5 text-xs">
-                              <Badge variant="destructive">Voided</Badge>
+                              <Badge variant="destructive">{t("customers:expenses.voided")}</Badge>
                               <span className="text-muted-foreground">
-                                {[r.voidedAt && fmtD(r.voidedAt), r.voidedByName && `by ${r.voidedByName}`].filter(Boolean).join(" ")}{r.voidReason ? ` · ${r.voidReason}` : ""}
+                                {[r.voidedAt && fmtD(r.voidedAt), r.voidedByName && t("customers:expenses.by", { name: r.voidedByName })].filter(Boolean).join(" ")}{r.voidReason ? ` · ${r.voidReason}` : ""}
                               </span>
                             </div>
                           )}
-                          {!r.voided && r.periodClosed && <Badge variant="outline" className="mt-1">Closed month</Badge>}
+                          {!r.voided && r.periodClosed && <Badge variant="outline" className="mt-1">{t("customers:expenses.closedMonth")}</Badge>}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">
@@ -389,25 +414,25 @@ export default function ExpensesPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-muted-foreground">{fmtD(r.expenseDate)}</TableCell>
-                        <TableCell>{r.paymentMethod || "—"}</TableCell>
+                        <TableCell>{methodLabel(r.paymentMethod)}</TableCell>
                         <TableCell className={cn("text-right font-bold tabular-nums", r.voided && "font-normal line-through")}>{formatCurrency(r.amount)}</TableCell>
                         <TableCell className="pr-4">
                           <div className="flex items-center justify-end gap-1">
                             {isGenerated(r) ? (
-                              <span className="text-xs text-muted-foreground">{r.source === "dorji_payout" ? "Paid via Tailor payments" : "Paid via Salary"}</span>
+                              <span className="text-xs text-muted-foreground">{r.source === "dorji_payout" ? t("customers:expenses.viaTailor") : t("customers:expenses.viaSalary")}</span>
                             ) : !r.voided && (
                               <>
                                 {r.periodClosed || r.editable === false ? (
                                   <WithTooltip content={CLOSED_MSG}>
-                                    <span tabIndex={0} className="inline-flex"><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title} (month closed)`} disabled><Pencil className="size-4" /></Button></span>
+                                    <span tabIndex={0} className="inline-flex"><Button type="button" variant="outline" size="icon" aria-label={t("customers:expenses.editClosedAria", { title: r.title })} disabled><Pencil className="size-4" /></Button></span>
                                   </WithTooltip>
                                 ) : (
-                                  <WithTooltip content={`Edit ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.title}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
+                                  <WithTooltip content={t("customers:expenses.editAria", { title: r.title })}><Button type="button" variant="outline" size="icon" aria-label={t("customers:expenses.editAria", { title: r.title })} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
                                 )}
-                                <WithTooltip content={`Void ${r.title}`}><Button type="button" variant="outline" size="icon" aria-label={`Void ${r.title}`} onClick={() => setVoiding(r)}><Ban className="size-4" /></Button></WithTooltip>
+                                <WithTooltip content={t("customers:expenses.voidAria", { title: r.title })}><Button type="button" variant="outline" size="icon" aria-label={t("customers:expenses.voidAria", { title: r.title })} onClick={() => setVoiding(r)}><Ban className="size-4" /></Button></WithTooltip>
                               </>
                             )}
-                            <WithTooltip content="Activity"><Button type="button" variant="ghost" size="icon" aria-label={`Activity of ${r.title}`} onClick={() => setActivity(r)}><History className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("customers:expenses.activity")}><Button type="button" variant="ghost" size="icon" aria-label={t("customers:expenses.activityAria", { title: r.title })} onClick={() => setActivity(r)}><History className="size-4" /></Button></WithTooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -415,7 +440,7 @@ export default function ExpensesPage() {
                 </TableBody>
               </Table>
             </div>
-            <div className="px-4 pt-3.5 pb-4 text-sm text-muted-foreground tabular-nums">{total} expenses · {formatCurrency(rowSum)}{total > rows.length ? " on this page" : ""}</div>
+            <div className="px-4 pt-3.5 pb-4 text-sm text-muted-foreground tabular-nums">{total > rows.length ? t("customers:expenses.footerPage", { count: total, amount: formatCurrency(rowSum) }) : t("customers:expenses.footer", { count: total, amount: formatCurrency(rowSum) })}</div>
             {!loading && total > 0 && (
               <div className="p-4 pt-0">
                 <PaginationControl currentPage={page} totalPages={Math.max(1, Math.ceil(total / perPage))} itemsPerPage={perPage} totalItems={total}
@@ -426,76 +451,76 @@ export default function ExpensesPage() {
         </div>
 
         <aside className="w-full shrink-0 xl:w-[380px]">
-         <SectionCard title={editing ? "Edit expense" : "New expense"} contentClassName="flex flex-col gap-3.5">
+         <SectionCard title={editing ? t("customers:expenses.form.edit") : t("customers:expenses.newExpense")} contentClassName="flex flex-col gap-3.5">
           {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
           {!editing && templates.length > 0 && (
-            <FormField label="Repeat a recent expense">
-              <div role="group" aria-label="Templates" className="flex flex-wrap gap-1.5">
+            <FormField label={t("customers:expenses.form.repeatRecent")}>
+              <div role="group" aria-label={t("customers:expenses.form.templates")} className="flex flex-wrap gap-1.5">
                 {templates.map((t, i) => (
                   <Button key={i} type="button" variant="outline" size="sm" onClick={() => applyTemplate(t)}>{t.title}</Button>
                 ))}
               </div>
             </FormField>
           )}
-          <FormField label="Amount" required htmlFor="exp-amount">
+          <FormField label={t("common:money.amount")} required htmlFor="exp-amount">
             <Input id="exp-amount" type="number" min={0} step="any" className="tabular-nums" value={form.amount} onChange={(e) => set("amount", e.target.value)} placeholder="0.00" /></FormField>
-          <FormField label="What for" required htmlFor="exp-title">
-            <Input id="exp-title" value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Shop rent" /></FormField>
-          <FormField label="Category" required>
-            <div role="group" aria-label="Category" className="flex flex-wrap gap-1.5">
+          <FormField label={t("customers:expenses.form.whatFor")} required htmlFor="exp-title">
+            <Input id="exp-title" value={form.title} onChange={(e) => set("title", e.target.value)} placeholder={t("customers:expenses.form.whatForPlaceholder")} /></FormField>
+          <FormField label={t("common:fields.category")} required>
+            <div role="group" aria-label={t("common:fields.category")} className="flex flex-wrap gap-1.5">
               {(editing && !cats.some((c) => c.id === editing.expenseCategoryId) ? [...cats, ...allCats.filter((c) => c.id === editing.expenseCategoryId)] : cats).map((c) => (
-                <Button key={c.id} type="button" size="sm" variant={form.categoryId === String(c.id) ? "default" : "outline"} aria-pressed={form.categoryId === String(c.id)} onClick={() => set("categoryId", String(c.id))}>{c.name}{c.status === false ? " (inactive)" : ""}</Button>
+                <Button key={c.id} type="button" size="sm" variant={form.categoryId === String(c.id) ? "default" : "outline"} aria-pressed={form.categoryId === String(c.id)} onClick={() => set("categoryId", String(c.id))}>{c.status === false ? t("customers:expenses.form.inactiveName", { name: c.name }) : c.name}</Button>
               ))}
-              <Button asChild variant="link" size="sm"><Link href="/dashboard/expenses/categories">+ New</Link></Button>
+              <Button asChild variant="link" size="sm"><Link href="/dashboard/expenses/categories">{t("customers:expenses.form.newCategory")}</Link></Button>
             </div>
           </FormField>
-          <FormField label="Paid from" required>
-            <div role="radiogroup" aria-label="Paid from" className="flex flex-wrap gap-1.5">
+          <FormField label={t("customers:expenses.filter.paidFrom")} required>
+            <div role="radiogroup" aria-label={t("customers:expenses.filter.paidFrom")} className="flex flex-wrap gap-1.5">
               {METHODS.map((m) => (
-                <Button key={m} type="button" size="sm" variant={form.method === m ? "default" : "outline"} role="radio" aria-checked={form.method === m} onClick={() => set("method", m)}>{m}</Button>
+                <Button key={m} type="button" size="sm" variant={form.method === m ? "default" : "outline"} role="radio" aria-checked={form.method === m} onClick={() => set("method", m)}>{methodLabel(m)}</Button>
               ))}
             </div>
           </FormField>
           <div className="grid grid-cols-2 gap-2.5">
-            <FormField label="Date" required htmlFor="exp-date"><Input id="exp-date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></FormField>
-            <FormField label="Paid to" htmlFor="exp-paid-to"><Input id="exp-paid-to" value={form.paidTo} onChange={(e) => set("paidTo", e.target.value)} placeholder="Vendor or person" /></FormField>
+            <FormField label={t("common:fields.date")} required htmlFor="exp-date"><Input id="exp-date" type="date" value={form.date} onChange={(e) => set("date", e.target.value)} /></FormField>
+            <FormField label={t("customers:expenses.form.paidTo")} htmlFor="exp-paid-to"><Input id="exp-paid-to" value={form.paidTo} onChange={(e) => set("paidTo", e.target.value)} placeholder={t("customers:expenses.form.paidToPlaceholder")} /></FormField>
           </div>
-          <FormField label="Supplier (optional)" htmlFor="exp-vendor">
+          <FormField label={t("customers:expenses.form.supplierOptional")} htmlFor="exp-vendor">
             <Select value={form.vendorId || NONE} onValueChange={(v) => pickVendor(v === NONE ? "" : v)}>
               <SelectTrigger id="exp-vendor" className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={NONE}>None</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value={NONE}>{t("common:status.none")}</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
             </Select></FormField>
           <div className="grid grid-cols-2 gap-2.5">
-            <FormField label="Location" htmlFor="exp-location">
+            <FormField label={t("common:fields.location")} htmlFor="exp-location">
               <Select value={form.locationId || NONE} onValueChange={(v) => set("locationId", v === NONE ? "" : v)}>
                 <SelectTrigger id="exp-location" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value={NONE}>All / none</SelectItem>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value={NONE}>{t("customers:expenses.form.allNone")}</SelectItem>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
               </Select></FormField>
-            <FormField label="Reference / bill no." htmlFor="exp-ref"><Input id="exp-ref" value={form.ref} onChange={(e) => set("ref", e.target.value)} placeholder="Optional" /></FormField>
+            <FormField label={t("customers:expenses.form.ref")} htmlFor="exp-ref"><Input id="exp-ref" value={form.ref} onChange={(e) => set("ref", e.target.value)} placeholder={t("common:status.optional")} /></FormField>
           </div>
-          <FormField label="Note" htmlFor="exp-note">
-            <Textarea id="exp-note" rows={2} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder="Optional" /></FormField>
+          <FormField label={t("common:fields.note")} htmlFor="exp-note">
+            <Textarea id="exp-note" rows={2} value={form.note} onChange={(e) => set("note", e.target.value)} placeholder={t("common:status.optional")} /></FormField>
           <FieldLabel htmlFor="exp-recurring">
             <Field orientation="horizontal">
-              <FieldContent><FieldTitle>Repeats every month</FieldTitle><FieldDescription>Marks it as a repeating bill</FieldDescription></FieldContent>
+              <FieldContent><FieldTitle>{t("customers:expenses.form.repeats")}</FieldTitle><FieldDescription>{t("customers:expenses.form.repeatsHint")}</FieldDescription></FieldContent>
               <Switch id="exp-recurring" checked={form.recurring} onCheckedChange={toggleRecurring} />
             </Field>
           </FieldLabel>
           {form.recurring && (
             <div className="grid gap-2.5 sm:grid-cols-3">
-              <FormField label="Every" htmlFor="exp-every">
+              <FormField label={t("customers:expenses.form.every")} htmlFor="exp-every">
                 <Select value={form.every} onValueChange={(v) => changeEvery(v)}>
                   <SelectTrigger id="exp-every" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{EVERY.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}</SelectContent>
+                  <SelectContent>{EVERY.map((x) => <SelectItem key={x} value={x}>{t(EVERY_KEYS[x])}</SelectItem>)}</SelectContent>
                 </Select></FormField>
-              <FormField label="Next due" htmlFor="exp-next-due"><Input id="exp-next-due" type="date" value={form.nextDue} onChange={(e) => set("nextDue", e.target.value)} /></FormField>
-              <FormField label="Stop repeating after" htmlFor="exp-rec-end"><Input id="exp-rec-end" type="date" value={form.recEnd} onChange={(e) => set("recEnd", e.target.value)} /></FormField>
+              <FormField label={t("customers:expenses.form.nextDue")} htmlFor="exp-next-due"><Input id="exp-next-due" type="date" value={form.nextDue} onChange={(e) => set("nextDue", e.target.value)} /></FormField>
+              <FormField label={t("customers:expenses.form.stopAfter")} htmlFor="exp-rec-end"><Input id="exp-rec-end" type="date" value={form.recEnd} onChange={(e) => set("recEnd", e.target.value)} /></FormField>
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+            <Button type="button" variant="outline" onClick={() => startEdit(null)}>{t("common:actions.clear")}</Button>
             <Button type="button" disabled={saving} onClick={save}>
-              {saving ? "Saving…" : `${editing ? "Save changes" : "Save expense"}${amtVal > 0 ? ` · ${formatCurrency(amtVal)}` : ""}`}
+              {saving ? t("common:actions.saving") : (() => { const label = editing ? t("common:actions.saveChanges") : t("customers:expenses.form.save"); return amtVal > 0 ? t("customers:expenses.form.withAmount", { label, amount: formatCurrency(amtVal) }) : label })()}
             </Button>
           </div>
          </SectionCard>

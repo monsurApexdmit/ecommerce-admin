@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils"
 import { Suspense, useState, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import { productApi, type ProductResponse, type ProductVariantResponse } from '@/lib/productApi'
 import purchaseOrderApi from '@/lib/purchaseOrderApi'
 import { settingsApi } from '@/lib/settingsApi'
@@ -60,14 +61,25 @@ interface FontSizes {
 
 // ============ CONSTANTS ============
 
-const LABEL_FIELDS: { key: keyof LabelSettings; sizeKey: keyof FontSizes; label: string }[] = [
-  { key: 'showProductName', sizeKey: 'productName', label: 'Product name' },
-  { key: 'showProductVariation', sizeKey: 'productVariation', label: 'Variant (size/colour)' },
-  { key: 'showProductPrice', sizeKey: 'productPrice', label: 'Price' },
-  { key: 'showBusinessName', sizeKey: 'businessName', label: 'Business name' },
-  { key: 'showSku', sizeKey: 'sku', label: 'SKU' },
-  { key: 'showPackingDate', sizeKey: 'packingDate', label: 'Packing date' },
-]
+// `label` is an i18n key, translated at render.
+const LABEL_FIELDS = [
+  { key: 'showProductName', sizeKey: 'productName', label: 'products:print.fields.productName' },
+  { key: 'showProductVariation', sizeKey: 'productVariation', label: 'products:print.fields.variant' },
+  { key: 'showProductPrice', sizeKey: 'productPrice', label: 'common:money.price' },
+  { key: 'showBusinessName', sizeKey: 'businessName', label: 'products:print.fields.businessName' },
+  { key: 'showSku', sizeKey: 'sku', label: 'common:fields.sku' },
+  { key: 'showPackingDate', sizeKey: 'packingDate', label: 'products:print.fields.packingDate' },
+] as const satisfies readonly { key: keyof LabelSettings; sizeKey: keyof FontSizes; label: string }[]
+
+// Translated title/description per paper size id from lib/barcode-labels (falls back to its English text).
+const PAPER_TEXT = {
+  'a4-24': ['products:print.paperSizes.a4_24.label', 'products:print.paperSizes.a4_24.sub'],
+  'a4-40': ['products:print.paperSizes.a4_40.label', 'products:print.paperSizes.a4_40.sub'],
+  'letter-20': ['products:print.paperSizes.letter_20.label', 'products:print.paperSizes.letter_20.sub'],
+  'letter-30': ['products:print.paperSizes.letter_30.label', 'products:print.paperSizes.letter_30.sub'],
+  'letter-50': ['products:print.paperSizes.letter_50.label', 'products:print.paperSizes.letter_50.sub'],
+  'roll': ['products:print.paperSizes.roll.label', 'products:print.paperSizes.roll.sub'],
+} as const
 
 const DEFAULT_LABELS: LabelSettings = { showProductName: true, showProductVariation: true, showProductPrice: true, showBusinessName: true, showSku: false, showPackingDate: false }
 const DEFAULT_SIZES: FontSizes = { productName: 12, productVariation: 11, productPrice: 13, businessName: 11, sku: 9, packingDate: 9 }
@@ -93,6 +105,7 @@ function PrintBarcodeInner() {
   const { formatCurrency, taxRate } = useCompanySettings() as any
   const { toast } = useToast()
   const { company } = useSaasAuth()
+  const { t } = useTranslation(['products', 'common'])
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -139,7 +152,7 @@ function PrintBarcodeInner() {
     settingsApi.getGeneral().then(r => setStoreName(r.data?.storeName?.trim() || '')).catch(() => {})
   }, [])
 
-  const businessName = storeName || company?.name || 'Business'
+  const businessName = storeName || company?.name || t('products:print.businessFallback')
 
   const rowsFor = (product: ProductResponse): PrintItem[] => {
     const vs = product.variants ?? []
@@ -193,7 +206,7 @@ function PrintBarcodeInner() {
     try {
       const res = await purchaseOrderApi.getAll({ page: 1, limit: 20 })
       const list: any[] = (res.data?.data?.data ?? []).filter((o: any) => o.status !== 'cancelled' && o.status !== 'draft')
-      if (!list.length) { toast({ title: 'No purchase orders', description: 'There is no purchase order to take products from.', variant: 'destructive' }); return }
+      if (!list.length) { toast({ title: t('products:print.noPo'), description: t('products:print.noPoDesc'), variant: 'destructive' }); return }
       const last = list.reduce((a, b) => (new Date(b.createdAt).getTime() > new Date(a.createdAt).getTime() ? b : a))
       const full = (await purchaseOrderApi.getById(last.id)).data?.data ?? last
       const items: any[] = full.items ?? []
@@ -209,9 +222,9 @@ function PrintBarcodeInner() {
         rows.forEach(r => { const i = next.findIndex(x => x.key === r.key); if (i >= 0) next[i] = { ...next[i], quantity: r.quantity }; else next.push(r) })
         return next
       })
-      toast({ title: `Added from ${full.poNumber ?? 'last purchase'}`, description: `${rows.length} item(s), label counts set to the ordered quantities.` })
+      toast({ title: t('products:print.addedFrom', { po: full.poNumber ?? t('products:print.lastPurchase') }), description: t('products:print.addedFromDesc', { count: rows.length }) })
     } catch {
-      toast({ title: 'Could not load the last purchase', variant: 'destructive' })
+      toast({ title: t('products:print.poFailed'), variant: 'destructive' })
     } finally { setLoadingPo(false) }
   }
 
@@ -252,6 +265,7 @@ function PrintBarcodeInner() {
   const pageN = Math.min(sheetNo, sheets)
   const previewLabels = expanded.slice((pageN - 1) * paper.perSheet, pageN * paper.perSheet)
   const hasOffer = printItems.some(i => !i.variant && offerActive(i.product))
+  const labelSummary = `${t('products:print.labels', { count: totalLabels })} · ${t('products:print.sheets', { count: sheets })}`
 
   const buildLabelsHtml = () => {
     const calls: string[] = []
@@ -264,8 +278,8 @@ function PrintBarcodeInner() {
       html += `<svg id="barcode-${index}" class="barcode-svg"></svg>`
       html += `<div class="barcode-code">${escHtml(l.code)}</div>`
       if (labelSettings.showProductPrice) html += `<div class="price" style="font-size:${fontSizes.productPrice}px">${escHtml(formatCurrency(l.price))}</div>`
-      if (labelSettings.showSku && l.sku) html += `<div class="sku" style="font-size:${fontSizes.sku}px">SKU ${escHtml(l.sku)}</div>`
-      if (labelSettings.showPackingDate) html += `<div class="packing-date" style="font-size:${fontSizes.packingDate}px">Packed: ${escHtml(item.packingDate)}</div>`
+      if (labelSettings.showSku && l.sku) html += `<div class="sku" style="font-size:${fontSizes.sku}px">${escHtml(t('common:fields.sku'))} ${escHtml(l.sku)}</div>`
+      if (labelSettings.showPackingDate) html += `<div class="packing-date" style="font-size:${fontSizes.packingDate}px">${escHtml(t('products:print.packed', { date: item.packingDate }))}</div>`
       html += '</div>'
       calls.push(`bc(${index}, ${JSON.stringify(l.code)}, "${l.format}");`)
       return html
@@ -277,16 +291,16 @@ function PrintBarcodeInner() {
 
   const openPrint = (autoPrint: boolean) => {
     if (printItems.length === 0) {
-      toast({ title: 'No products', description: 'Add at least one product to print', variant: 'destructive' })
+      toast({ title: t('products:print.noProducts'), description: t('products:print.noProductsDesc'), variant: 'destructive' })
       return
     }
     const { sheetsHtml, calls } = buildLabelsHtml()
     const win = window.open('', '_blank')
     if (!win) {
-      toast({ title: 'Popup blocked', description: 'Allow popups to print labels', variant: 'destructive' })
+      toast({ title: t('products:print.popupBlocked'), description: t('products:print.popupBlockedDesc'), variant: 'destructive' })
       return
     }
-    win.document.write(`<!DOCTYPE html><html><head><title>Print Labels</title>
+    win.document.write(`<!DOCTYPE html><html><head><title>${escHtml(t('products:print.windowTitle'))}</title>
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
       <style>
         @page{size:${paper.pageCss};margin:${paper.id === 'roll' ? '0' : '8mm'}}
@@ -317,20 +331,20 @@ function PrintBarcodeInner() {
 
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
-      <PageHeader title="Print barcode labels" description="Pick products, choose what to show, and print, with a live preview." />
+      <PageHeader title={t("products:print.title")} description={t("products:print.description")} />
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-5">
           {/* 1 Products */}
-          <SectionCard title="1 · Products">
+          <SectionCard title={t("products:print.sectionProducts")}>
             <div className="relative">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Label htmlFor="barcode-product-search" className="sr-only">Search products</Label>
+                <Label htmlFor="barcode-product-search" className="sr-only">{t("products:shared.searchProducts")}</Label>
                 <Input
                   id="barcode-product-search"
                   type="search"
-                  placeholder="Search products to add…"
+                  placeholder={t("products:shared.searchProductsToAdd")}
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
@@ -347,7 +361,7 @@ function PrintBarcodeInner() {
                         <span className="block text-sm font-semibold">{product.name}</span>
                         <span className="block text-xs text-muted-foreground">{product.sku}</span>
                       </span>
-                      <span className="text-sm font-semibold">{(product.variants?.length ?? 0) > 0 ? `${product.variants!.length} variants` : formatCurrency(labelOf({ key: '', product, variant: null, quantity: 1, packingDate: '' }).price)}</span>
+                      <span className="text-sm font-semibold">{(product.variants?.length ?? 0) > 0 ? t('products:shared.variantCount', { count: product.variants!.length }) : formatCurrency(labelOf({ key: '', product, variant: null, quantity: 1, packingDate: '' }).price)}</span>
                     </Button>
                   ))}
                 </Card>
@@ -356,10 +370,10 @@ function PrintBarcodeInner() {
 
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={addFromLastPurchase} disabled={loadingPo}>
-                {loadingPo ? <Spinner /> : <ShoppingCart className="size-4" aria-hidden />} Add from last purchase
+                {loadingPo ? <Spinner /> : <ShoppingCart className="size-4" aria-hidden />} {t("products:print.addFromPo")}
               </Button>
               <Button type="button" variant="outline" onClick={() => setPrintItems([])} disabled={printItems.length === 0}>
-                <Eraser className="size-4" aria-hidden /> Clear list
+                <Eraser className="size-4" aria-hidden /> {t("products:print.clearList")}
               </Button>
             </div>
 
@@ -367,15 +381,15 @@ function PrintBarcodeInner() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Labels</TableHead>
-                    <TableHead>Packed on</TableHead>
-                    <TableHead className="w-12"><span className="sr-only">Remove</span></TableHead>
+                    <TableHead>{t("common:fields.product")}</TableHead>
+                    <TableHead>{t("products:print.colLabels")}</TableHead>
+                    <TableHead>{t("products:print.packedOn")}</TableHead>
+                    <TableHead className="w-12"><span className="sr-only">{t("common:actions.remove")}</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {printItems.length === 0 ? (
-                    <TableRow><TableCell colSpan={4}><EmptyState className="p-4 md:p-6" title="No products added" description="Search and add products above, or pick them on the Products page." /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4}><EmptyState className="p-4 md:p-6" title={t("products:print.emptyTitle")} description={t("products:print.emptyDesc")} /></TableCell></TableRow>
                   ) : printItems.map(item => (
                     <TableRow key={item.key}>
                       <TableCell>
@@ -384,31 +398,31 @@ function PrintBarcodeInner() {
                       </TableCell>
                       <TableCell>
                         <div className="inline-flex items-center gap-1">
-                          <WithTooltip content="Fewer labels"><Button type="button" variant="outline" size="icon" aria-label="Fewer labels" onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })}><Minus className="size-4" aria-hidden /></Button></WithTooltip>
-                          <Input type="number" min={1} aria-label={`Labels for ${item.product.name}`} value={item.quantity}
+                          <WithTooltip content={t("products:print.fewer")}><Button type="button" variant="outline" size="icon" aria-label={t("products:print.fewer")} onClick={() => updateItem(item.key, { quantity: Math.max(1, item.quantity - 1) })}><Minus className="size-4" aria-hidden /></Button></WithTooltip>
+                          <Input type="number" min={1} aria-label={t("products:print.labelsFor", { name: item.product.name })} value={item.quantity}
                             onChange={e => updateItem(item.key, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                             className="w-14 text-center tabular-nums" />
-                          <WithTooltip content="More labels"><Button type="button" variant="outline" size="icon" aria-label="More labels" onClick={() => updateItem(item.key, { quantity: item.quantity + 1 })}><Plus className="size-4" aria-hidden /></Button></WithTooltip>
+                          <WithTooltip content={t("products:print.more")}><Button type="button" variant="outline" size="icon" aria-label={t("products:print.more")} onClick={() => updateItem(item.key, { quantity: item.quantity + 1 })}><Plus className="size-4" aria-hidden /></Button></WithTooltip>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Input type="date" aria-label="Packing date" value={item.packingDate}
+                        <Input type="date" aria-label={t("products:print.fields.packingDate")} value={item.packingDate}
                           onChange={e => updateItem(item.key, { packingDate: e.target.value })}
                           className="w-40" />
                       </TableCell>
                       <TableCell className="text-right">
-                        <WithTooltip content={`Remove ${item.product.name}`}><Button type="button" variant="ghost" size="icon" aria-label={`Remove ${item.product.name}`} onClick={() => removeItem(item.key)}><Trash2 className="size-4" aria-hidden /></Button></WithTooltip>
+                        <WithTooltip content={t("products:shared.removeName", { name: item.product.name })}><Button type="button" variant="ghost" size="icon" aria-label={t("products:shared.removeName", { name: item.product.name })} onClick={() => removeItem(item.key)}><Trash2 className="size-4" aria-hidden /></Button></WithTooltip>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <p className="mt-3 text-xs font-semibold text-muted-foreground">{totalLabels} labels · {sheets} sheet{sheets === 1 ? '' : 's'}</p>
+            <p className="mt-3 text-xs font-semibold text-muted-foreground">{labelSummary}</p>
           </SectionCard>
 
           {/* 2 What to show */}
-          <SectionCard title="2 · What to show">
+          <SectionCard title={t("products:print.sectionShow")}>
             <div className="grid gap-3 sm:grid-cols-2">
               {LABEL_FIELDS.map(field => {
                 const checked = labelSettings[field.key]
@@ -418,14 +432,14 @@ function PrintBarcodeInner() {
                     <ItemContent>
                       <Label className="cursor-pointer">
                         <Checkbox checked={checked} onCheckedChange={v => setLabelSettings(prev => ({ ...prev, [field.key]: !!v }))} />
-                        {field.label}
+                        {t(field.label)}
                       </Label>
                     </ItemContent>
                     <ItemActions>
                       <Label className="text-xs text-muted-foreground">
-                        <span>Size</span>
+                        <span>{t("products:print.size")}</span>
                         <Input type="number" min={6} max={40} disabled={!checked} value={fontSizes[field.sizeKey]}
-                          aria-label={`${field.label} font size`}
+                          aria-label={t("products:print.fontSizeAria", { field: t(field.label) })}
                           onChange={e => setFontSizes(prev => ({ ...prev, [field.sizeKey]: parseInt(e.target.value) || 10 }))}
                           className="w-14 text-center tabular-nums" />
                       </Label>
@@ -434,37 +448,38 @@ function PrintBarcodeInner() {
                 )
               })}
             </div>
-            <FormField label="Price shown" htmlFor="price-shown" className="mt-4"
-              description={<>Products with an active offer print the offer price{hasOffer ? ' (some in your list do)' : ''}. Variants print their own selling price.</>}>
+            <FormField label={t("products:print.priceShown")} htmlFor="price-shown" className="mt-4"
+              description={hasOffer ? t("products:print.priceShownHelpSome") : t("products:print.priceShownHelp")}>
               <Select value={showPrice} onValueChange={v => setShowPrice(v as 'inc' | 'exc')}>
                 <SelectTrigger id="price-shown" className="w-full max-w-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="inc">Including tax{rate ? ` (${rate}%)` : ''}</SelectItem>
-                  <SelectItem value="exc">Excluding tax</SelectItem>
+                  <SelectItem value="inc">{rate ? t("products:print.incTaxRate", { rate }) : t("products:print.incTax")}</SelectItem>
+                  <SelectItem value="exc">{t("products:print.excTax")}</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
           </SectionCard>
 
           {/* 3 Paper */}
-          <SectionCard title="3 · Paper">
-            <ChoiceCardGroup aria-label="Paper" className="gap-3 sm:grid-cols-2"
+          <SectionCard title={t("products:print.sectionPaper")}>
+            <ChoiceCardGroup aria-label={t("products:print.paper")} className="gap-3 sm:grid-cols-2"
               value={selectedPaperSizeId} onValueChange={(id) => { setSelectedPaperSizeId(id); setSheetNo(1) }}>
-              {PAPER_SIZES.map(ps => (
-                <ChoiceCard key={ps.id} value={ps.id} title={ps.label} description={ps.sub} />
-              ))}
+              {PAPER_SIZES.map(ps => {
+                const text = PAPER_TEXT[ps.id as keyof typeof PAPER_TEXT] as (typeof PAPER_TEXT)[keyof typeof PAPER_TEXT] | undefined
+                return <ChoiceCard key={ps.id} value={ps.id} title={text ? t(text[0]) : ps.label} description={text ? t(text[1]) : ps.sub} />
+              })}
             </ChoiceCardGroup>
-            <p className="mt-3 text-xs text-muted-foreground">Tip: for thermal label printers choose “Label roll” — one label per page. Codes follow each product’s barcode type; values that do not fit it (and QR) print as Code 128.</p>
+            <p className="mt-3 text-xs text-muted-foreground">{t("products:print.paperTip")}</p>
           </SectionCard>
         </div>
 
         {/* Preview */}
-        <aside aria-label="Preview" className="xl:sticky xl:top-4">
-        <SectionCard title="Preview" contentClassName="flex flex-col gap-4"
-          actions={<span className="text-xs text-muted-foreground">{totalLabels} labels · {sheets} sheet{sheets === 1 ? '' : 's'}</span>}>
+        <aside aria-label={t("products:print.preview")} className="xl:sticky xl:top-4">
+        <SectionCard title={t("products:print.preview")} contentClassName="flex flex-col gap-4"
+          actions={<span className="text-xs text-muted-foreground">{labelSummary}</span>}>
           <Card className="bg-muted/50 p-3 shadow-none">
             {previewLabels.length === 0 ? (
-              <EmptyState className="p-6 md:p-6" title="Add products to see a preview." />
+              <EmptyState className="p-6 md:p-6" title={t("products:print.previewEmpty")} />
             ) : (
               <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${paper.cols}, minmax(0, 1fr))` }}>
                 {previewLabels.map((item, idx) => {
@@ -477,8 +492,8 @@ function PrintBarcodeInner() {
                       {labelSettings.showProductVariation && l.variant && <span className="max-w-full truncate text-neutral-600" style={{ fontSize: z(fontSizes.productVariation) }}>{l.variant}</span>}
                       <Barcode value={l.code} format={l.format as any} height={24} width={1} fontSize={8} margin={2} background="#ffffff" lineColor="#000000" />
                       {labelSettings.showProductPrice && <span className="font-bold" style={{ fontSize: z(fontSizes.productPrice) }}>{formatCurrency(l.price)}</span>}
-                      {labelSettings.showSku && l.sku && <span className="text-neutral-600" style={{ fontSize: z(fontSizes.sku) }}>SKU {l.sku}</span>}
-                      {labelSettings.showPackingDate && <span className="text-neutral-600" style={{ fontSize: z(fontSizes.packingDate) }}>Packed: {item.packingDate}</span>}
+                      {labelSettings.showSku && l.sku && <span className="text-neutral-600" style={{ fontSize: z(fontSizes.sku) }}>{t("common:fields.sku")} {l.sku}</span>}
+                      {labelSettings.showPackingDate && <span className="text-neutral-600" style={{ fontSize: z(fontSizes.packingDate) }}>{t("products:print.packed", { date: item.packingDate })}</span>}
                     </div>
                   )
                 })}
@@ -487,17 +502,17 @@ function PrintBarcodeInner() {
           </Card>
           {sheets > 1 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <WithTooltip content="Previous sheet"><Button type="button" variant="outline" size="icon-sm" aria-label="Previous sheet" disabled={pageN <= 1} onClick={() => setSheetNo(pageN - 1)}><ChevronLeft className="size-4" aria-hidden /></Button></WithTooltip>
-              <span>Sheet {pageN} of {sheets}</span>
-              <WithTooltip content="Next sheet"><Button type="button" variant="outline" size="icon-sm" aria-label="Next sheet" disabled={pageN >= sheets} onClick={() => setSheetNo(pageN + 1)}><ChevronRight className="size-4" aria-hidden /></Button></WithTooltip>
+              <WithTooltip content={t("products:print.prevSheet")}><Button type="button" variant="outline" size="icon-sm" aria-label={t("products:print.prevSheet")} disabled={pageN <= 1} onClick={() => setSheetNo(pageN - 1)}><ChevronLeft className="size-4" aria-hidden /></Button></WithTooltip>
+              <span>{t("products:print.sheetOf", { page: pageN, pages: sheets })}</span>
+              <WithTooltip content={t("products:print.nextSheet")}><Button type="button" variant="outline" size="icon-sm" aria-label={t("products:print.nextSheet")} disabled={pageN >= sheets} onClick={() => setSheetNo(pageN + 1)}><ChevronRight className="size-4" aria-hidden /></Button></WithTooltip>
             </div>
           )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => openPrint(false)} disabled={printItems.length === 0} className="flex-1">
-              <Eye className="size-4" aria-hidden /> Preview
+              <Eye className="size-4" aria-hidden /> {t("products:print.preview")}
             </Button>
             <Button type="button" onClick={() => openPrint(true)} disabled={printItems.length === 0} className="flex-1">
-              <Printer className="size-4" aria-hidden /> Print {totalLabels} labels
+              <Printer className="size-4" aria-hidden /> {t("products:print.printN", { count: totalLabels })}
             </Button>
           </div>
         </SectionCard>

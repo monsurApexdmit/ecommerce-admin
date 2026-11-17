@@ -3,6 +3,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Bell, ShoppingCart, Package, Wallet, MessageSquare, Star, Settings, X, Smartphone, Circle, SlidersHorizontal, AlertTriangle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusTabs } from "@/components/ui/status-tabs"
@@ -29,70 +32,71 @@ import { Toolbar } from "@/components/common/Toolbar"
 import { WithTooltip } from "@/components/common/WithTooltip"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+type K = ParseKeys<["account", "common"]>
 type TabKey = "all" | NotificationType
 
-const TABS: { value: TabKey; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "order", label: "Orders" },
-  { value: "stock_alert", label: "Stock alerts" },
-  { value: "payment", label: "Payments" },
-  { value: "support", label: "Support" },
-  { value: "review", label: "Reviews" },
-  { value: "system", label: "System" },
+const TABS: { value: TabKey; label: K }[] = [
+  { value: "all", label: "common:status.all" },
+  { value: "order", label: "account:notifications.tabs.orders" },
+  { value: "stock_alert", label: "account:notifications.tabs.stockAlerts" },
+  { value: "payment", label: "account:notifications.tabs.payments" },
+  { value: "support", label: "account:notifications.tabs.support" },
+  { value: "review", label: "account:notifications.tabs.reviews" },
+  { value: "system", label: "account:notifications.tabs.system" },
 ]
 
-const TYPE_META: Record<NotificationType, { icon: typeof Bell; label: string }> = {
-  order: { icon: ShoppingCart, label: "New order" },
-  stock_alert: { icon: Package, label: "Stock alert" },
-  payment: { icon: Wallet, label: "Payment" },
-  support: { icon: MessageSquare, label: "Support" },
-  review: { icon: Star, label: "Product review" },
-  system: { icon: Settings, label: "System" },
+const TYPE_META: Record<NotificationType, { icon: typeof Bell; label: K }> = {
+  order: { icon: ShoppingCart, label: "account:notifications.types.order" },
+  stock_alert: { icon: Package, label: "account:notifications.types.stockAlert" },
+  payment: { icon: Wallet, label: "account:notifications.types.payment" },
+  support: { icon: MessageSquare, label: "account:notifications.types.support" },
+  review: { icon: Star, label: "account:notifications.types.review" },
+  system: { icon: Settings, label: "account:notifications.types.system" },
 }
 
-const PRIORITY: Record<string, { label: string; variant: "destructive" | "secondary" } | undefined> = {
-  high: { label: "High priority", variant: "destructive" },
-  medium: { label: "Medium", variant: "secondary" },
+const PRIORITY: Record<string, { label: K; variant: "destructive" | "secondary" } | undefined> = {
+  high: { label: "account:notifications.priority.high", variant: "destructive" },
+  medium: { label: "account:notifications.priority.medium", variant: "secondary" },
 }
 
-const CTA: [string, string][] = [
-  ["/dashboard/vendors/purchase-orders", "Reorder"],
-  ["/dashboard/dues/vendors", "Pay vendor"],
-  ["/dashboard/coupons", "View coupon"],
-  ["/dashboard/inventory/adjustment", "View adjustment"],
-  ["/dashboard/orders", "View orders"],
-  ["/dashboard/inventory", "View stock"],
-  ["/dashboard/staff/salary", "Open payroll"],
-  ["/dashboard/dues", "Collect"],
-  ["/dashboard/support", "Open ticket"],
-  ["/dashboard/products", "View product"],
-  ["/dashboard/staff", "View staff"],
+const CTA: [string, K][] = [
+  ["/dashboard/vendors/purchase-orders", "account:notifications.cta.reorder"],
+  ["/dashboard/dues/vendors", "account:notifications.cta.payVendor"],
+  ["/dashboard/coupons", "account:notifications.cta.viewCoupon"],
+  ["/dashboard/inventory/adjustment", "account:notifications.cta.viewAdjustment"],
+  ["/dashboard/orders", "account:notifications.cta.viewOrders"],
+  ["/dashboard/inventory", "account:notifications.cta.viewStock"],
+  ["/dashboard/staff/salary", "account:notifications.cta.openPayroll"],
+  ["/dashboard/dues", "account:notifications.cta.collect"],
+  ["/dashboard/support", "account:notifications.cta.openTicket"],
+  ["/dashboard/products", "account:notifications.cta.viewProduct"],
+  ["/dashboard/staff", "account:notifications.cta.viewStaff"],
 ]
-const ctaFor = (url: string) => CTA.find(([p]) => url.startsWith(p))?.[1] ?? "Open"
-
-const rel = (iso: string) => {
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return ""
-  const m = Math.floor((Date.now() - t) / 60000)
-  if (m < 1) return "Just now"
-  if (m < 60) return `${m} min ago`
-  if (m < 1440) return `${Math.floor(m / 60)} hour${m >= 120 ? "s" : ""} ago`
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
-}
-
-const dayLabel = (iso: string) => {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return "Earlier"
-  const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`
-  if (key(d) === key(new Date())) return "Today"
-  if (key(d) === key(new Date(Date.now() - 864e5))) return "Yesterday"
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
-}
+const ctaFor = (url: string): K => CTA.find(([p]) => url.startsWith(p))?.[1] ?? "account:notifications.cta.open"
 
 interface TodoItem { n: string; label: string; href: string }
 
 export default function NotificationsPage() {
   const blocked = useModuleGuard("Notifications")
+  const { t, i18n } = useTranslation(["account", "common"])
+  const lang = localeTag(i18n.language)
+  const rel = (iso: string) => {
+    const ts = new Date(iso).getTime()
+    if (Number.isNaN(ts)) return ""
+    const m = Math.floor((Date.now() - ts) / 60000)
+    if (m < 1) return t("account:notifications.justNow")
+    if (m < 60) return t("common:ago.minutes", { count: m })
+    if (m < 1440) return t("common:ago.hours", { count: Math.floor(m / 60) })
+    return new Date(iso).toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" })
+  }
+  const dayLabel = (iso: string) => {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return t("account:notifications.earlier")
+    const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`
+    if (key(d) === key(new Date())) return t("common:time.today")
+    if (key(d) === key(new Date(Date.now() - 864e5))) return t("common:time.yesterday")
+    return d.toLocaleDateString(lang, { day: "numeric", month: "short", year: "numeric" })
+  }
   const { toast } = useToast()
   const router = useRouter()
   const { formatCurrency } = useCompanySettings()
@@ -122,7 +126,7 @@ export default function NotificationsPage() {
       setItems(res.data ?? [])
       setMeta({ total: res.meta.total, lastPage: res.meta.lastPage, unreadCount: res.meta.unreadCount, counts: res.meta.counts })
     } catch {
-      toast({ variant: "destructive", title: "Could not load notifications" })
+      toast({ variant: "destructive", title: t("account:notifications.loadFailed") })
     } finally {
       setLoading(false)
     }
@@ -141,21 +145,21 @@ export default function NotificationsPage() {
     if (!live) return null
     const a = live.attention
     const out: TodoItem[] = []
-    if (a.pendingOrders > 0) out.push({ n: String(a.pendingOrders), label: "Orders pending confirmation", href: "/dashboard/orders" })
-    if (a.customerDue > 0) out.push({ n: formatCurrency(a.customerDue), label: `Customer dues to collect (${a.customerDueInvoices} invoice${a.customerDueInvoices === 1 ? "" : "s"})`, href: "/dashboard/dues/customers" })
-    if (a.vendorDue > 0) out.push({ n: formatCurrency(a.vendorDue), label: `Owed to vendors (${a.vendorDueOrders} order${a.vendorDueOrders === 1 ? "" : "s"})`, href: "/dashboard/dues/vendors" })
-    if (a.salariesUnpaid > 0) out.push({ n: formatCurrency(a.salariesUnpaid), label: `Salaries due (${a.salaryMonth})`, href: "/dashboard/staff/salary" })
+    if (a.pendingOrders > 0) out.push({ n: String(a.pendingOrders), label: t("account:notifications.todo.pendingOrders"), href: "/dashboard/orders" })
+    if (a.customerDue > 0) out.push({ n: formatCurrency(a.customerDue), label: t("account:notifications.todo.customerDue", { count: a.customerDueInvoices }), href: "/dashboard/dues/customers" })
+    if (a.vendorDue > 0) out.push({ n: formatCurrency(a.vendorDue), label: t("account:notifications.todo.vendorDue", { count: a.vendorDueOrders }), href: "/dashboard/dues/vendors" })
+    if (a.salariesUnpaid > 0) out.push({ n: formatCurrency(a.salariesUnpaid), label: t("account:notifications.todo.salariesDue", { month: a.salaryMonth }), href: "/dashboard/staff/salary" })
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live])
+  }, [live, t])
 
   const dismissLive = async (key: string) => {
     setLiveBusy(true)
-    try { await notificationApi.dismissAlert(key); await loadLive() } catch { toast({ variant: "destructive", title: "Could not dismiss alert" }) } finally { setLiveBusy(false) }
+    try { await notificationApi.dismissAlert(key); await loadLive() } catch { toast({ variant: "destructive", title: t("account:notifications.dismissFailed") }) } finally { setLiveBusy(false) }
   }
   const restoreLive = async () => {
     setLiveBusy(true)
-    try { await notificationApi.restoreAlerts(); await loadLive() } catch { toast({ variant: "destructive", title: "Could not restore alerts" }) } finally { setLiveBusy(false) }
+    try { await notificationApi.restoreAlerts(); await loadLive() } catch { toast({ variant: "destructive", title: t("account:notifications.restoreFailed") }) } finally { setLiveBusy(false) }
   }
 
   const pageIds = items.map((n) => n.id)
@@ -170,7 +174,7 @@ export default function NotificationsPage() {
       g.rows.push(n)
     }
     return out
-  }, [items])
+  }, [items, t, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (blocked) return blocked
 
@@ -182,7 +186,7 @@ export default function NotificationsPage() {
       await load()
       void fetchNotifications()
     } catch {
-      toast({ variant: "destructive", title: "Action failed" })
+      toast({ variant: "destructive", title: t("account:notifications.actionFailed") })
     } finally {
       setBusy(false)
     }
@@ -190,20 +194,20 @@ export default function NotificationsPage() {
 
   const markSelected = () => {
     const unread = items.filter((n) => selected.includes(n.id) && !n.readAt)
-    if (!selected.length) return toast({ variant: "destructive", title: "Select notifications first" })
-    void act(async () => { await Promise.all(unread.map((n) => notificationApi.markAsRead(n.id))); setSelected([]) }, "Marked as read")
+    if (!selected.length) return toast({ variant: "destructive", title: t("account:notifications.selectFirst") })
+    void act(async () => { await Promise.all(unread.map((n) => notificationApi.markAsRead(n.id))); setSelected([]) }, t("account:notifications.markedRead"))
   }
   const deleteSelected = () => {
-    if (!selected.length || !window.confirm(`Delete ${selected.length} selected notification${selected.length > 1 ? "s" : ""}?`)) return
-    void act(async () => { await notificationApi.bulkDelete(selected); setSelected([]) }, "Notifications deleted")
+    if (!selected.length || !window.confirm(t("account:notifications.deleteSelectedConfirm", { count: selected.length }))) return
+    void act(async () => { await notificationApi.bulkDelete(selected); setSelected([]) }, t("account:notifications.deleted"))
   }
   const clearAll = () => {
-    if (!window.confirm(`Delete all ${totalAll} notification${totalAll === 1 ? "" : "s"}?`)) return
-    void act(async () => { await notificationApi.deleteAll(); setSelected([]); setPage(1) }, "Notifications cleared")
+    if (!window.confirm(t("account:notifications.clearConfirm", { count: totalAll }))) return
+    void act(async () => { await notificationApi.deleteAll(); setSelected([]); setPage(1) }, t("account:notifications.cleared"))
   }
   const markAll = () => {
-    if (meta.unreadCount === 0) return toast({ title: "Nothing to mark" })
-    void act(() => notificationApi.markAllAsRead(), "All notifications marked as read")
+    if (meta.unreadCount === 0) return toast({ title: t("account:notifications.nothingToMark") })
+    void act(() => notificationApi.markAllAsRead(), t("account:notifications.allMarked"))
   }
   const open = (n: NotificationResponse) => {
     if (!n.readAt) void notificationApi.markAsRead(n.id).then(() => fetchNotifications()).catch(() => {})
@@ -212,31 +216,30 @@ export default function NotificationsPage() {
 
   const counts = meta.counts
   const totalAll = counts?.all ?? 0
-  const selTxt = selected.length ? ` (${selected.length})` : ""
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Notifications"
-        description="Everything that happened in your business, with a next step for each. Filter by type or status, then bulk read or delete."
+        title={t("account:notifications.title")}
+        description={t("account:notifications.description")}
       />
 
       <div className="flex flex-col items-start gap-4 xl:flex-row">
         <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
         {live && (live.alerts.length > 0 || live.dismissedCount > 0) && (
-          <Card className="gap-0 overflow-hidden py-0" role="region" aria-label="Live alerts">
+          <Card className="gap-0 overflow-hidden py-0" role="region" aria-label={t("account:notifications.live.title")}>
             <div className="flex flex-wrap items-center gap-2 px-5 py-3">
               <AlertTriangle className="size-[18px] text-muted-foreground" aria-hidden />
-              <h2 className="text-lg font-semibold">Live alerts</h2>
-              <span className="text-sm text-muted-foreground">{live.total} active · computed from your current data</span>
+              <h2 className="text-lg font-semibold">{t("account:notifications.live.title")}</h2>
+              <span className="text-sm text-muted-foreground">{t("account:notifications.live.summary", { count: live.total })}</span>
               {live.dismissedCount > 0 && (
                 <Button type="button" variant="link" size="sm" disabled={liveBusy} onClick={() => void restoreLive()} className="ml-auto">
-                  Restore {live.dismissedCount} dismissed
+                  {t("account:notifications.live.restore", { count: live.dismissedCount })}
                 </Button>
               )}
             </div>
             <Separator />
-            {live.alerts.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">No active alerts. Dismissed alerts come back on their own if the problem returns.</p>}
+            {live.alerts.length === 0 && <p className="px-5 py-4 text-sm text-muted-foreground">{t("account:notifications.live.none")}</p>}
             <ItemGroup>
               {live.alerts.map((a, i) => {
                 const pri = PRIORITY[a.priority]
@@ -249,14 +252,14 @@ export default function NotificationsPage() {
                         <ItemTitle className="font-semibold">{a.title}</ItemTitle>
                         <ItemDescription className="line-clamp-none">{a.message}</ItemDescription>
                         <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          {pri && <Badge variant={pri.variant}>{pri.label}</Badge>}
+                          {pri && <Badge variant={pri.variant}>{t(pri.label)}</Badge>}
                           {a.since && rel(a.since)}
                           <Button variant="link" size="sm" asChild className="h-auto p-0 text-xs"><Link href={a.actionUrl}>{a.ctaLabel} →</Link></Button>
                         </span>
                       </ItemContent>
                       <ItemActions>
-                        <WithTooltip content="Dismiss">
-                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Dismiss ${a.title}`} disabled={liveBusy} onClick={() => void dismissLive(a.key)}>
+                        <WithTooltip content={t("account:notifications.live.dismiss")}>
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={t("account:notifications.live.dismissName", { title: a.title })} disabled={liveBusy} onClick={() => void dismissLive(a.key)}>
                             <X className="size-4" />
                           </Button>
                         </WithTooltip>
@@ -266,28 +269,30 @@ export default function NotificationsPage() {
                 )
               })}
             </ItemGroup>
-            {live.total > live.alerts.length && <><Separator /><p className="px-5 py-2.5 text-xs text-muted-foreground">Showing the top {live.alerts.length} of {live.total}.</p></>}
+            {live.total > live.alerts.length && <><Separator /><p className="px-5 py-2.5 text-xs text-muted-foreground">{t("account:notifications.live.showingTop", { shown: live.alerts.length, total: live.total })}</p></>}
           </Card>
         )}
         <Card className="w-full min-w-0 gap-0 py-0">
           <div className="px-4">
             <StatusTabs
               value={tab}
-              onChange={(t) => { setTab(t as TabKey); setPage(1); setSelected([]) }}
-              tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: counts?.[t.value] }))}
+              onChange={(v) => { setTab(v as TabKey); setPage(1); setSelected([]) }}
+              tabs={TABS.map((tb) => ({ value: tb.value, label: t(tb.label), count: counts?.[tb.value] }))}
             />
           </div>
 
           <Toolbar
             className="px-4 py-3"
             actions={<>
-              <Button type="button" variant="destructive" size="sm" onClick={clearAll} disabled={busy || totalAll === 0}>Clear all</Button>
-              <Button type="button" variant="outline" size="sm" onClick={markAll} disabled={busy}>Mark all as read</Button>
-              <Button asChild variant="outline" size="sm"><Link href="/dashboard/settings/notifications">Settings</Link></Button>
+              <Button type="button" variant="destructive" size="sm" onClick={clearAll} disabled={busy || totalAll === 0}>{t("account:notifications.clearAll")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={markAll} disabled={busy}>{t("account:notifications.markAll")}</Button>
+              <Button asChild variant="outline" size="sm"><Link href="/dashboard/settings/notifications">{t("common:extra.settings")}</Link></Button>
             </>}
           >
             <span className="text-sm text-muted-foreground">
-              {meta.unreadCount} unread · {totalAll} total{meta.total !== totalAll ? ` · ${meta.total} shown` : ""}
+              {meta.total !== totalAll
+                ? t("account:notifications.countsShown", { unread: meta.unreadCount, total: totalAll, shown: meta.total })
+                : t("account:notifications.counts", { unread: meta.unreadCount, total: totalAll })}
             </span>
           </Toolbar>
           <Separator />
@@ -296,33 +301,33 @@ export default function NotificationsPage() {
             <Label className="min-h-9">
               <Checkbox
                 checked={allChecked}
-                aria-label="Select all notifications on this page"
+                aria-label={t("account:notifications.selectAllAria")}
                 onCheckedChange={() => setSelected(allChecked ? selected.filter((id) => !pageIds.includes(id)) : [...new Set([...selected, ...pageIds])])}
               />
-              Select page
+              {t("account:notifications.selectPage")}
             </Label>
-            <Button type="button" variant="outline" size="sm" onClick={markSelected} disabled={busy} className={cn(!selected.length && "opacity-50")}>Mark selected as read{selTxt}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={markSelected} disabled={busy} className={cn(!selected.length && "opacity-50")}>{selected.length ? t("account:notifications.markSelectedCount", { count: selected.length }) : t("account:notifications.markSelected")}</Button>
             {selected.length > 0 && (
-              <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={busy}>Delete selected{selTxt}</Button>
+              <Button type="button" variant="destructive" size="sm" onClick={deleteSelected} disabled={busy}>{t("account:notifications.deleteSelectedCount", { count: selected.length })}</Button>
             )}
             <div className="ml-auto flex items-center gap-1.5">
-              <Label htmlFor="notif-status">Status</Label>
+              <Label htmlFor="notif-status">{t("common:fields.status")}</Label>
               <Select value={status} onValueChange={(v) => { setStatus(v as typeof status); setPage(1); setSelected([]) }}>
                 <SelectTrigger id="notif-status" size="sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All status</SelectItem>
-                  <SelectItem value="unread">Unread only</SelectItem>
-                  <SelectItem value="read">Read only</SelectItem>
+                  <SelectItem value="all">{t("account:notifications.allStatus")}</SelectItem>
+                  <SelectItem value="unread">{t("account:notifications.unreadOnly")}</SelectItem>
+                  <SelectItem value="read">{t("account:notifications.readOnly")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-center gap-1.5">
-              <Label htmlFor="notif-sort">Sort</Label>
+              <Label htmlFor="notif-sort">{t("account:notifications.sort")}</Label>
               <Select value={sort} onValueChange={(v) => { setSort(v as typeof sort); setPage(1) }}>
                 <SelectTrigger id="notif-sort" size="sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="newest">Newest first</SelectItem>
-                  <SelectItem value="oldest">Oldest first</SelectItem>
+                  <SelectItem value="newest">{t("account:notifications.newest")}</SelectItem>
+                  <SelectItem value="oldest">{t("account:notifications.oldest")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -334,8 +339,8 @@ export default function NotificationsPage() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={Bell}
-              title={totalAll === 0 && status === "all" ? "You’re all caught up." : "No notifications found."}
-              description={totalAll === 0 && status === "all" ? "New orders, stock alerts and payment reminders will show up here." : "Try adjusting your filters."}
+              title={totalAll === 0 && status === "all" ? t("account:notifications.caughtUp") : t("account:notifications.noneFound")}
+              description={totalAll === 0 && status === "all" ? t("account:notifications.caughtUpDesc") : t("account:notifications.noneFoundDesc")}
             />
           ) : (
             groups.map((g) => (
@@ -344,15 +349,15 @@ export default function NotificationsPage() {
                 <Separator />
                 {g.rows.map((n) => {
                   const unread = !n.readAt
-                  const t = TYPE_META[n.type] ?? TYPE_META.system
-                  const Icon = n.data && "adjustmentNo" in n.data ? SlidersHorizontal : t.icon
+                  const meta_ = TYPE_META[n.type] ?? TYPE_META.system
+                  const Icon = n.data && "adjustmentNo" in n.data ? SlidersHorizontal : meta_.icon
                   const pri = PRIORITY[n.priority]
                   return (
                     <Fragment key={n.id}>
                       <Item size="sm" variant={unread ? "muted" : "default"} className="items-start rounded-none px-5">
                         <Checkbox
                           className="mt-2.5 flex-none" checked={selected.includes(n.id)}
-                          aria-label={`Select notification ${n.title}`}
+                          aria-label={t("account:notifications.selectOne", { title: n.title })}
                           onCheckedChange={() => setSelected((s) => (s.includes(n.id) ? s.filter((x) => x !== n.id) : [...s, n.id]))}
                         />
                         <ItemMedia variant="icon"><Icon aria-hidden /></ItemMedia>
@@ -360,30 +365,30 @@ export default function NotificationsPage() {
                           <ItemTitle className={unread ? "font-bold" : "font-medium"}>{n.title}</ItemTitle>
                           <ItemDescription className="line-clamp-none">{n.message}</ItemDescription>
                           <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="secondary">{t.label}</Badge>
-                            {pri && <Badge variant={pri.variant}>{pri.label}</Badge>}
+                            <Badge variant="secondary">{t(meta_.label)}</Badge>
+                            {pri && <Badge variant={pri.variant}>{t(pri.label)}</Badge>}
                             {rel(n.createdAt)}
                             {n.actionUrl && (
-                              <Button variant="link" size="sm" asChild className="h-auto p-0 text-xs"><Link href={n.actionUrl} onClick={() => open(n)}>{ctaFor(n.actionUrl)} →</Link></Button>
+                              <Button variant="link" size="sm" asChild className="h-auto p-0 text-xs"><Link href={n.actionUrl} onClick={() => open(n)}>{t(ctaFor(n.actionUrl))} →</Link></Button>
                             )}
                           </span>
                         </ItemContent>
                         <ItemActions className="flex-col items-end gap-1.5">
                           {unread ? (
-                            <WithTooltip content="Mark as read">
-                              <Button type="button" variant="ghost" size="icon-sm" aria-label="Mark as read" disabled={busy} onClick={() => void act(() => notificationApi.markAsRead(n.id))}>
+                            <WithTooltip content={t("account:notifications.markRead")}>
+                              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("account:notifications.markRead")} disabled={busy} onClick={() => void act(() => notificationApi.markAsRead(n.id))}>
                                 <Circle className="size-2.5 fill-primary text-primary" aria-hidden />
                               </Button>
                             </WithTooltip>
                           ) : (
-                            <WithTooltip content="Mark as unread">
-                              <Button type="button" variant="ghost" size="icon-sm" aria-label="Mark as unread" disabled={busy} onClick={() => void act(() => notificationApi.markAsUnread(n.id))}>
+                            <WithTooltip content={t("account:notifications.markUnread")}>
+                              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("account:notifications.markUnread")} disabled={busy} onClick={() => void act(() => notificationApi.markAsUnread(n.id))}>
                                 <Circle className="size-2.5 text-muted-foreground" aria-hidden />
                               </Button>
                             </WithTooltip>
                           )}
-                          <WithTooltip content="Delete">
-                            <Button type="button" variant="ghost" size="icon-sm" aria-label="Delete notification" disabled={busy} onClick={() => void act(() => notificationApi.delete(n.id))}>
+                          <WithTooltip content={t("common:actions.delete")}>
+                            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("account:notifications.deleteOne")} disabled={busy} onClick={() => void act(() => notificationApi.delete(n.id))}>
                               <X className="size-4" />
                             </Button>
                           </WithTooltip>
@@ -409,17 +414,17 @@ export default function NotificationsPage() {
         </div>
 
         <aside className="flex w-full flex-col gap-4 xl:w-[340px] xl:flex-none">
-          <SectionCard title="Needs your attention" contentClassName="flex flex-col gap-3">
+          <SectionCard title={t("account:notifications.attention")} contentClassName="flex flex-col gap-3">
             {todo === null ? (
               <div className="flex flex-col gap-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
             ) : todo.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing needs your attention right now.</p>
+              <p className="text-sm text-muted-foreground">{t("account:notifications.attentionNone")}</p>
             ) : (
-              todo.map((t) => (
-                <Item key={t.label} asChild variant="outline" size="sm">
-                  <Link href={t.href}>
-                    <strong className="min-w-8 text-lg">{t.n}</strong>
-                    <ItemContent><ItemTitle>{t.label}</ItemTitle></ItemContent>
+              todo.map((td) => (
+                <Item key={td.href} asChild variant="outline" size="sm">
+                  <Link href={td.href}>
+                    <strong className="min-w-8 text-lg">{td.n}</strong>
+                    <ItemContent><ItemTitle>{td.label}</ItemTitle></ItemContent>
                     <span aria-hidden>→</span>
                   </Link>
                 </Item>
@@ -428,10 +433,10 @@ export default function NotificationsPage() {
           </SectionCard>
 
           <SectionCard
-            title={<span className="flex items-center gap-2"><Smartphone className="size-[18px]" aria-hidden />Get these on your phone</span>}
-            description="Turn on SMS or app alerts for new orders and low stock so you don’t have to keep this page open."
+            title={<span className="flex items-center gap-2"><Smartphone className="size-[18px]" aria-hidden />{t("account:notifications.phoneTitle")}</span>}
+            description={t("account:notifications.phoneDesc")}
           >
-            <Button asChild className="w-full"><Link href="/dashboard/settings/notifications">Choose alerts</Link></Button>
+            <Button asChild className="w-full"><Link href="/dashboard/settings/notifications">{t("account:notifications.chooseAlerts")}</Link></Button>
           </SectionCard>
         </aside>
       </div>

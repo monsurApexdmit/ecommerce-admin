@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command"
@@ -44,6 +45,7 @@ export function CategoryPicker({ categories, value, onChange, labelledBy }: {
   onChange: (id: string, name: string) => void
   labelledBy?: string
 }) {
+  const { t } = useTranslation(["products", "common"])
   const [open, setOpen] = useState(false)
   const groups = useMemo(() => buildGroups(categories), [categories])
   const selected = useMemo(() => groups.flat().find((r) => r.category.id === value), [groups, value])
@@ -55,18 +57,18 @@ export function CategoryPicker({ categories, value, onChange, labelledBy }: {
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-labelledby={labelledBy}
           title={selected?.path} className="w-full justify-between font-normal">
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>{selected?.path ?? "No category"}</span>
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>{selected?.path ?? t("products:shared.noCategory")}</span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-[280px] p-0">
         <Command filter={(_, search, keywords) => (keywords?.join(" ").toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0)}>
-          <CommandInput placeholder="Search categories…" />
+          <CommandInput placeholder={t("products:category.search")} />
           <CommandList>
-            <CommandEmpty>No category found.</CommandEmpty>
+            <CommandEmpty>{t("products:category.noneFound")}</CommandEmpty>
             <CommandGroup>
-              <CommandItem value="none" keywords={["No category"]} onSelect={() => pick("", "")} className="text-muted-foreground">
-                No category
+              <CommandItem value="none" keywords={[t("products:shared.noCategory")]} onSelect={() => pick("", "")} className="text-muted-foreground">
+                {t("products:shared.noCategory")}
                 <Check className={cn("ml-auto size-4", value ? "opacity-0" : "opacity-100")} aria-hidden />
               </CommandItem>
             </CommandGroup>
@@ -78,7 +80,7 @@ export function CategoryPicker({ categories, value, onChange, labelledBy }: {
                     <CommandItem key={c.id} value={c.id} keywords={[path]} onSelect={() => pick(c.id, c.category_name)}
                       style={{ paddingLeft: `${0.5 + depth}rem` }} className={cn(depth === 0 && "font-medium")}>
                       <span className="truncate">{c.category_name}</span>
-                      {!c.status && <span className="shrink-0 text-xs font-normal text-muted-foreground">Inactive</span>}
+                      {!c.status && <span className="shrink-0 text-xs font-normal text-muted-foreground">{t("common:status.inactive")}</span>}
                       <Check className={cn("ml-auto size-4", value === c.id ? "opacity-100" : "opacity-0")} aria-hidden />
                     </CommandItem>
                   ))}

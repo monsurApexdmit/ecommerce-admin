@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +24,11 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { AccessDenied } from "@/components/ui/access-denied"
 import { useModuleGuard } from "@/hooks/use-module-guard"
+import { ORDERS_NS, methodLabel, orderStatusLabel } from "@/components/sales/i18n"
+
+/** Status / method filter values of the demo data; labels translated at render. */
+const SELL_STATUSES: Sell["status"][] = ["Delivered", "Processing", "Pending"]
+const SELL_METHODS = ["Cash", "Card", "Online"]
 
 interface Sell {
     invoiceNo: string
@@ -141,6 +147,7 @@ const initialSells: Sell[] = [
 ]
 
 export default function SellsPage() {
+    const { t } = useTranslation(ORDERS_NS)
     const { canRead } = useSaasAuth()
     const searchParams = useSearchParams()
     const { formatCurrency } = useCompanySettings()
@@ -207,14 +214,14 @@ export default function SellsPage() {
 
     const handleDownloadAllSells = () => {
         const csvContent = [
-            ["Invoice No", "Sell Time", "Customer Name", "Method", "Amount", "Status"],
+            [t("orders:sells.invoiceNo"), t("orders:sells.sellTime"), t("orders:sells.customerName"), t("orders:sells.method"), t("common:money.amount"), t("common:fields.status")],
             ...filteredSells.map((sell) => [
                 sell.invoiceNo,
                 sell.orderTime,
                 sell.customerName,
-                sell.method,
+                methodLabel(t, sell.method),
                 sell.amount.toString(),
-                sell.status,
+                orderStatusLabel(t, sell.status),
             ]),
         ]
             .map((row) => row.join(","))
@@ -235,7 +242,7 @@ export default function SellsPage() {
             printWindow.document.write(`
         <html>
           <head>
-            <title>Invoice ${sell.invoiceNo}</title>
+            <title>${t("orders:invoice.docTitle", { invoice: sell.invoiceNo })}</title>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body { 
@@ -383,10 +390,10 @@ export default function SellsPage() {
             <div class="invoice-container">
               <div class="header">
                 <div>
-                  <h1 class="invoice-title">INVOICE</h1>
+                  <h1 class="invoice-title">${t("orders:invoice.heading")}</h1>
                   <div>
-                    <span style="font-weight: 600; margin-right: 8px;">STATUS</span>
-                    <span class="status-badge">${sell.status}</span>
+                    <span style="font-weight: 600; margin-right: 8px;">${t("orders:invoice.status")}</span>
+                    <span class="status-badge">${orderStatusLabel(t, sell.status)}</span>
                   </div>
                 </div>
                 <div class="company-info">
@@ -403,15 +410,15 @@ export default function SellsPage() {
 
               <div class="invoice-meta">
                 <div class="meta-item">
-                  <h3>Date</h3>
+                  <h3>${t("orders:invoice.date")}</h3>
                   <p>${sell.orderTime.split(" ")[0]} ${sell.orderTime.split(" ")[1]} ${sell.orderTime.split(" ")[2]}</p>
                 </div>
                 <div class="meta-item">
-                  <h3>Invoice No</h3>
+                  <h3>${t("orders:invoice.invoiceNo")}</h3>
                   <p>#${sell.invoiceNo}</p>
                 </div>
                 <div class="meta-item invoice-to">
-                  <h3>Invoice To</h3>
+                  <h3>${t("orders:invoice.invoiceTo")}</h3>
                   <p style="font-weight: 600;">${sell.customerName}</p>
                   <p style="font-size: 13px; color: #6b7280;">hram8251@gmail.com</p>
                   <p style="font-size: 13px; color: #6b7280;">123456789</p>
@@ -422,11 +429,11 @@ export default function SellsPage() {
               <table>
                 <thead>
                   <tr>
-                    <th style="width: 80px;">SR.</th>
-                    <th>PRODUCT TITLE</th>
-                    <th style="text-align: center; width: 120px;">QUANTITY</th>
-                    <th style="text-align: right; width: 120px;">ITEM PRICE</th>
-                    <th style="width: 120px;">AMOUNT</th>
+                    <th style="width: 80px;">${t("orders:invoice.sr")}</th>
+                    <th>${t("orders:invoice.productTitle")}</th>
+                    <th style="text-align: center; width: 120px;">${t("orders:invoice.quantity")}</th>
+                    <th style="text-align: right; width: 120px;">${t("orders:invoice.itemPrice")}</th>
+                    <th style="width: 120px;">${t("orders:invoice.amount")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -442,19 +449,19 @@ export default function SellsPage() {
 
               <div class="summary">
                 <div class="summary-item">
-                  <h3>Payment Method</h3>
-                  <p>${sell.method}</p>
+                  <h3>${t("orders:invoice.paymentMethod")}</h3>
+                  <p>${methodLabel(t, sell.method)}</p>
                 </div>
                 <div class="summary-item">
-                  <h3>Shipping Cost</h3>
+                  <h3>${t("orders:invoice.shippingCost")}</h3>
                   <p style="color: #6b7280;">${formatCurrency(60)}</p>
                 </div>
                 <div class="summary-item">
-                  <h3>Discount</h3>
+                  <h3>${t("orders:invoice.discount")}</h3>
                   <p style="color: #6b7280;">${formatCurrency(0)}</p>
                 </div>
                 <div class="summary-item">
-                  <h3>Total Amount</h3>
+                  <h3>${t("orders:invoice.totalAmount")}</h3>
                   <p class="total-amount">${formatCurrency(sell.amount)}</p>
                 </div>
               </div>
@@ -472,7 +479,7 @@ export default function SellsPage() {
     }
 
     const handleEmailInvoice = (sell: Sell) => {
-        alert(`Email invoice #${sell.invoiceNo} functionality would be implemented here`)
+        alert(t("orders:sells.emailTodo", { invoice: sell.invoiceNo }))
     }
 
     const handleReset = () => {
@@ -492,7 +499,7 @@ export default function SellsPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader title="Sells" />
+            <PageHeader title={t("orders:sells.title")} />
 
             <Card className="p-6">
                 <div className="space-y-4 mb-6">
@@ -500,7 +507,7 @@ export default function SellsPage() {
                         <div className="relative flex-1">
                             <Input
                                 type="text"
-                                placeholder="Search by Customer Name"
+                                placeholder={t("orders:sells.searchPlaceholder")}
                                 value={searchQuery}
                                 onChange={(e) => {
                                     setSearchQuery(e.target.value)
@@ -517,25 +524,21 @@ export default function SellsPage() {
                             }}
                         >
                             <SelectTrigger className="w-full lg:w-48">
-                                <SelectValue placeholder="Status" />
+                                <SelectValue placeholder={t("common:fields.status")} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="Delivered">Delivered</SelectItem>
-                                <SelectItem value="Processing">Processing</SelectItem>
-                                <SelectItem value="Pending">Pending</SelectItem>
+                                <SelectItem value="all">{t("orders:sells.allStatus")}</SelectItem>
+                                {SELL_STATUSES.map((st) => <SelectItem key={st} value={st}>{orderStatusLabel(t, st)}</SelectItem>)}
                             </SelectContent>
                         </Select>
 
                         <Select value={limitFilter} onValueChange={setLimitFilter}>
                             <SelectTrigger className="w-full lg:w-48">
-                                <SelectValue placeholder="Order limits" />
+                                <SelectValue placeholder={t("orders:sells.orderLimits")} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Limits</SelectItem>
-                                <SelectItem value="5">Last 5</SelectItem>
-                                <SelectItem value="10">Last 10</SelectItem>
-                                <SelectItem value="20">Last 20</SelectItem>
+                                <SelectItem value="all">{t("orders:sells.allLimits")}</SelectItem>
+                                {[5, 10, 20].map((n) => <SelectItem key={n} value={String(n)}>{t("orders:sells.lastN", { count: n })}</SelectItem>)}
                             </SelectContent>
                         </Select>
 
@@ -547,24 +550,22 @@ export default function SellsPage() {
                             }}
                         >
                             <SelectTrigger className="w-full lg:w-48">
-                                <SelectValue placeholder="Method" />
+                                <SelectValue placeholder={t("orders:sells.method")} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Methods</SelectItem>
-                                <SelectItem value="Cash">Cash</SelectItem>
-                                <SelectItem value="Card">Card</SelectItem>
-                                <SelectItem value="Online">Online</SelectItem>
+                                <SelectItem value="all">{t("orders:sells.allMethods")}</SelectItem>
+                                {SELL_METHODS.map((m) => <SelectItem key={m} value={m}>{methodLabel(t, m)}</SelectItem>)}
                             </SelectContent>
                         </Select>
 
                         <Button onClick={handleDownloadAllSells} className="whitespace-nowrap">
                             <Download className="size-4" />
-                            Download All Sells
+                            {t("orders:sells.downloadAll")}
                         </Button>
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-4">
-                        <FormField label="Start Date" htmlFor="sells-start-date" className="flex-1">
+                        <FormField label={t("orders:sells.startDate")} htmlFor="sells-start-date" className="flex-1">
                             <Input
                                 id="sells-start-date"
                                 type="date"
@@ -576,7 +577,7 @@ export default function SellsPage() {
                             />
                         </FormField>
 
-                        <FormField label="End Date" htmlFor="sells-end-date" className="flex-1">
+                        <FormField label={t("orders:sells.endDate")} htmlFor="sells-end-date" className="flex-1">
                             <Input
                                 id="sells-end-date"
                                 type="date"
@@ -590,10 +591,10 @@ export default function SellsPage() {
 
                         <div className="flex items-end gap-2">
                             <Button onClick={() => { }}>
-                                Filter
+                                {t("common:actions.filter")}
                             </Button>
                             <Button onClick={handleReset} variant="outline">
-                                Reset
+                                {t("common:actions.reset")}
                             </Button>
                         </div>
                     </div>
@@ -602,14 +603,14 @@ export default function SellsPage() {
                 <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Invoice No</TableHead>
-                                <TableHead>Sell Time</TableHead>
-                                <TableHead>Customer Name</TableHead>
-                                <TableHead>Method</TableHead>
-                                <TableHead>Amount</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Action</TableHead>
-                                <TableHead>Invoice</TableHead>
+                                <TableHead>{t("orders:sells.invoiceNo")}</TableHead>
+                                <TableHead>{t("orders:sells.sellTime")}</TableHead>
+                                <TableHead>{t("orders:sells.customerName")}</TableHead>
+                                <TableHead>{t("orders:sells.method")}</TableHead>
+                                <TableHead>{t("common:money.amount")}</TableHead>
+                                <TableHead>{t("common:fields.status")}</TableHead>
+                                <TableHead>{t("orders:sells.action")}</TableHead>
+                                <TableHead>{t("orders:sells.invoice")}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -652,10 +653,10 @@ export default function SellsPage() {
                                         </TableCell>
                                         <TableCell>{sell.orderTime}</TableCell>
                                         <TableCell>{sell.customerName}</TableCell>
-                                        <TableCell>{sell.method}</TableCell>
+                                        <TableCell>{methodLabel(t, sell.method)}</TableCell>
                                         <TableCell>{formatCurrency(sell.amount)}</TableCell>
                                         <TableCell>
-                                            <StatusBadge status={sell.status} />
+                                            <StatusBadge status={sell.status} label={orderStatusLabel(t, sell.status)} />
                                         </TableCell>
                                         <TableCell>
                                             <Select
@@ -666,21 +667,19 @@ export default function SellsPage() {
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="Delivered">Delivered</SelectItem>
-                                                    <SelectItem value="Processing">Processing</SelectItem>
-                                                    <SelectItem value="Pending">Pending</SelectItem>
+                                                    {SELL_STATUSES.map((st) => <SelectItem key={st} value={st}>{orderStatusLabel(t, st)}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <WithTooltip content="Print invoice">
-                                                    <Button variant="ghost" size="icon" aria-label={`Print invoice ${sell.invoiceNo}`} onClick={() => handlePrintInvoice(sell)}>
+                                                <WithTooltip content={t("orders:sells.printInvoice")}>
+                                                    <Button variant="ghost" size="icon" aria-label={t("orders:sells.printInvoiceFor", { invoice: sell.invoiceNo })} onClick={() => handlePrintInvoice(sell)}>
                                                         <Printer className="size-4" />
                                                     </Button>
                                                 </WithTooltip>
-                                                <WithTooltip content="View details">
-                                                    <Button variant="ghost" size="icon" aria-label={`View ${sell.invoiceNo}`} onClick={() => handleViewDetails(sell)}>
+                                                <WithTooltip content={t("orders:sells.viewDetails")}>
+                                                    <Button variant="ghost" size="icon" aria-label={t("orders:sells.viewFor", { invoice: sell.invoiceNo })} onClick={() => handleViewDetails(sell)}>
                                                         <Eye className="size-4" />
                                                     </Button>
                                                 </WithTooltip>
@@ -692,7 +691,7 @@ export default function SellsPage() {
                     </Table>
 
                 {filteredSells.length === 0 && (
-                    <EmptyState title="No sells found" className="p-4 md:p-6" />
+                    <EmptyState title={t("orders:sells.empty")} className="p-4 md:p-6" />
                 )}
             </Card>
 
@@ -708,7 +707,7 @@ export default function SellsPage() {
             <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
                 <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Invoice</DialogTitle>
+                        <DialogTitle>{t("orders:sells.invoice")}</DialogTitle>
                     </DialogHeader>
 
                     {selectedSell && (
@@ -716,10 +715,10 @@ export default function SellsPage() {
                             {/* Header Section */}
                             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                                 <div>
-                                    <h1 className="text-4xl font-bold mb-3">INVOICE</h1>
+                                    <h1 className="text-4xl font-bold mb-3">{t("orders:invoice.heading")}</h1>
                                     <div className="flex items-center gap-3">
-                                        <span className="font-semibold text-muted-foreground">STATUS</span>
-                                        <StatusBadge status={selectedSell.status} />
+                                        <span className="font-semibold text-muted-foreground">{t("orders:invoice.status")}</span>
+                                        <StatusBadge status={selectedSell.status} label={orderStatusLabel(t, selectedSell.status)} />
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -737,18 +736,18 @@ export default function SellsPage() {
                             {/* Invoice Meta */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
                                 <div>
-                                    <SectionTitle className="mb-2">Date</SectionTitle>
+                                    <SectionTitle className="mb-2">{t("orders:invoice.date")}</SectionTitle>
                                     <p className="text-sm text-foreground">
                                         {selectedSell.orderTime.split(" ")[0]} {selectedSell.orderTime.split(" ")[1]}{" "}
                                         {selectedSell.orderTime.split(" ")[2]}
                                     </p>
                                 </div>
                                 <div>
-                                    <SectionTitle className="mb-2">Invoice No</SectionTitle>
+                                    <SectionTitle className="mb-2">{t("orders:invoice.invoiceNo")}</SectionTitle>
                                     <p className="text-sm text-foreground">#{selectedSell.invoiceNo}</p>
                                 </div>
                                 <div className="sm:text-right">
-                                    <SectionTitle className="mb-2">Invoice To</SectionTitle>
+                                    <SectionTitle className="mb-2">{t("orders:invoice.invoiceTo")}</SectionTitle>
                                     <p className="text-sm font-semibold text-foreground">{selectedSell.customerName}</p>
                                     <p className="text-xs text-muted-foreground">hram8251@gmail.com</p>
                                     <p className="text-xs text-muted-foreground">123456789</p>
@@ -761,13 +760,13 @@ export default function SellsPage() {
                                 <Table className="min-w-[600px]">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>SR.</TableHead>
+                                            <TableHead>{t("orders:invoice.sr")}</TableHead>
                                             <TableHead>
-                                                Product Title
+                                                {t("orders:invoice.productTitle")}
                                             </TableHead>
-                                            <TableHead className="text-center">Quantity</TableHead>
-                                            <TableHead className="text-right">Item Price</TableHead>
-                                            <TableHead className="text-right">Amount</TableHead>
+                                            <TableHead className="text-center">{t("orders:invoice.quantity")}</TableHead>
+                                            <TableHead className="text-right">{t("orders:invoice.itemPrice")}</TableHead>
+                                            <TableHead className="text-right">{t("orders:invoice.amount")}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -790,19 +789,19 @@ export default function SellsPage() {
                             <Card className="p-6">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
                                     <div>
-                                        <SectionTitle className="mb-2">Payment Method</SectionTitle>
-                                        <p className="text-base font-semibold text-foreground">{selectedSell.method}</p>
+                                        <SectionTitle className="mb-2">{t("orders:invoice.paymentMethod")}</SectionTitle>
+                                        <p className="text-base font-semibold text-foreground">{methodLabel(t, selectedSell.method)}</p>
                                     </div>
                                     <div>
-                                        <SectionTitle className="mb-2">Shipping Cost</SectionTitle>
+                                        <SectionTitle className="mb-2">{t("orders:invoice.shippingCost")}</SectionTitle>
                                         <p className="text-base font-semibold text-muted-foreground">{formatCurrency(60)}</p>
                                     </div>
                                     <div>
-                                        <SectionTitle className="mb-2">Discount</SectionTitle>
+                                        <SectionTitle className="mb-2">{t("orders:invoice.discount")}</SectionTitle>
                                         <p className="text-base font-semibold text-muted-foreground">{formatCurrency(0)}</p>
                                     </div>
                                     <div>
-                                        <SectionTitle className="mb-2">Total Amount</SectionTitle>
+                                        <SectionTitle className="mb-2">{t("orders:invoice.totalAmount")}</SectionTitle>
                                         <p className="text-2xl font-bold">{formatCurrency(selectedSell.amount)}</p>
                                     </div>
                                 </div>
@@ -816,7 +815,7 @@ export default function SellsPage() {
                                     className="flex-1"
                                 >
                                     <Download className="size-4" />
-                                    Download Invoice
+                                    {t("orders:invoice.download")}
                                 </Button>
                                 <Button
                                     onClick={() => handleEmailInvoice(selectedSell)}
@@ -824,14 +823,14 @@ export default function SellsPage() {
                                     className="flex-1"
                                 >
                                     <Mail className="size-4" />
-                                    Email Invoice
+                                    {t("orders:invoice.email")}
                                 </Button>
                                 <Button
                                     onClick={() => handlePrintInvoice(selectedSell)}
                                     className="flex-1"
                                 >
                                     <Printer className="size-4" />
-                                    Print Invoice
+                                    {t("orders:invoice.print")}
                                 </Button>
                             </div>
                         </div>

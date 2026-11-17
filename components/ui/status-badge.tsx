@@ -1,11 +1,15 @@
+"use client"
+
 import React from "react"
 import { cn } from "@/lib/utils"
+import { useStatusLabel } from "@/components/common/StatusBadge"
 
 interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
     status: string
 }
 
 export const StatusBadge = ({ status, className, ...props }: StatusBadgeProps) => {
+    const statusLabel = useStatusLabel()
     let badgeClass = "bg-gray-500 text-white" // Default
 
     // Normalize status for easier matching
@@ -32,7 +36,7 @@ export const StatusBadge = ({ status, className, ...props }: StatusBadgeProps) =
             )}
             {...props}
         >
-            {status}
+            {statusLabel(status)}
         </span>
     )
 }

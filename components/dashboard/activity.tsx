@@ -1,5 +1,6 @@
 "use client"
 
+import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { relativeTime } from "./format"
 import { CardTitle, DashCard, EmptyNote, SectionError, SectionSkeleton } from "./section"
@@ -20,13 +21,14 @@ const DOT: Record<string, string> = {
 }
 
 export function Activity() {
+  const { t, i18n } = useTranslation(["dashboard", "common"])
   const { data, loading, error, retry } = useDashboardSection("activity", { limit: 8 })
 
   const body = () => {
     if (error && !data) return <SectionError message={error} onRetry={retry} />
     if (loading && !data) return <SectionSkeleton rows={6} />
     if (!data) return null
-    if (data.items.length === 0) return <EmptyNote>No activity yet.</EmptyNote>
+    if (data.items.length === 0) return <EmptyNote>{t("dashboard:activity.empty")}</EmptyNote>
     return (
       <ul>
         {data.items.map((a, i) => (
@@ -34,7 +36,7 @@ export function Activity() {
             <span className={cn("mt-[5px] size-2.5 shrink-0 rounded-full", DOT[a.type] ?? "bg-dash-danger")} aria-hidden />
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="text-sm leading-snug">{a.text}</span>
-              <span className="text-xs text-muted-foreground">{relativeTime(a.createdAt)}</span>
+              <span className="text-xs text-muted-foreground">{relativeTime(a.createdAt, t, i18n.language)}</span>
             </div>
           </li>
         ))}
@@ -44,7 +46,7 @@ export function Activity() {
 
   return (
     <DashCard className="flex-[1_1_320px]">
-      <CardTitle title="Activity" subtitle="Sales, purchases, expenses and alerts" />
+      <CardTitle title={t("dashboard:activity.title")} subtitle={t("dashboard:activity.subtitle")} />
       <div className="mt-2">{body()}</div>
     </DashCard>
   )

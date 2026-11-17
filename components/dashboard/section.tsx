@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 import { AlertTriangle, RotateCcw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,7 @@ export function CardTitle({ title, subtitle, action }: { title: string; subtitle
 }
 
 export function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useTranslation(["dashboard", "common"])
   return (
     <Alert variant="destructive">
       <AlertTriangle aria-hidden />
@@ -45,7 +47,7 @@ export function SectionError({ message, onRetry }: { message: string; onRetry: (
           className="mt-2"
           onClick={onRetry}
         >
-          <RotateCcw className="size-3.5" aria-hidden /> Retry
+          <RotateCcw className="size-3.5" aria-hidden /> {t("common:actions.retry")}
         </Button>
       </AlertDescription>
     </Alert>
@@ -62,8 +64,9 @@ export function Bar({ className }: { className?: string }) {
 
 /** Section-level skeleton: a few stacked bars. */
 export function SectionSkeleton({ rows = 4 }: { rows?: number }) {
+  const { t } = useTranslation(["dashboard", "common"])
   return (
-    <div className="space-y-3" role="status" aria-label="Loading">
+    <div className="space-y-3" role="status" aria-label={t("common:status.loading")}>
       {Array.from({ length: rows }).map((_, i) => (
         <Bar key={i} className={i === 0 ? "h-6 w-1/3" : "h-5 w-full"} />
       ))}

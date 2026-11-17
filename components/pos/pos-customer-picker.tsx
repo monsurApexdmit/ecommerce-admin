@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react"
 import { ChevronsUpDown, UserPlus } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCustomer } from "@/contexts/customer-context"
 import { useCompanySettings } from "@/contexts/company-settings-context"
@@ -18,6 +19,9 @@ function useLatest<T>(v: T) {
     return r
 }
 
+/** customerName stored on a sale without a customer. Data: keep in English, display t("pos:walkIn"). */
+export const WALK_IN_NAME = "Walk-in Customer"
+
 interface Props {
     /** Customer id, "" for walk-in */
     value: string
@@ -26,6 +30,7 @@ interface Props {
 
 /** Customer search popover with a quick "add customer" form, as in the design. */
 export function PosCustomerPicker({ value, onChange }: Props) {
+    const { t } = useTranslation(["pos", "common"])
     const { customers, addCustomer, refreshCustomers } = useCustomer()
     const { formatCurrency } = useCompanySettings()
     const { toast } = useToast()
@@ -38,10 +43,10 @@ export function PosCustomerPicker({ value, onChange }: Props) {
     const latest = useLatest(customers)
 
     const current = customers.find((c) => c.id === value)
-    const name = current?.name ?? "Walk-in Customer"
+    const name = current?.name ?? t("pos:walkIn")
     const sub = current
-        ? [current.phone, (current.dueAmount ?? 0) > 0 ? `Due ${formatCurrency(current.dueAmount ?? 0)}` : ""].filter(Boolean).join(" · ") || "Customer"
-        : "Search by name or phone"
+        ? [current.phone, (current.dueAmount ?? 0) > 0 ? t("pos:customer.due", { amount: formatCurrency(current.dueAmount ?? 0) }) : ""].filter(Boolean).join(" · ") || t("pos:customer.customer")
+        : t("pos:customer.searchHint")
 
     const list = useMemo(() => {
         const s = q.trim().toLowerCase()
@@ -52,10 +57,10 @@ export function PosCustomerPicker({ value, onChange }: Props) {
 
     const save = async () => {
         const n = f.name.trim(), p = f.phone.trim(), e = f.email.trim()
-        if (!n) return setErr("Customer name is required.")
-        if (!p) return setErr("Phone is required.")
-        if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return setErr("Enter a valid email address.")
-        if (customers.some((c) => (c.phone ?? "").replace(/\D/g, "") === p.replace(/\D/g, ""))) return setErr("A customer with this phone already exists.")
+        if (!n) return setErr(t("pos:customer.nameRequired"))
+        if (!p) return setErr(t("pos:customer.phoneRequired"))
+        if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return setErr(t("pos:customer.invalidEmail"))
+        if (customers.some((c) => (c.phone ?? "").replace(/\D/g, "") === p.replace(/\D/g, ""))) return setErr(t("pos:customer.phoneExists"))
         setSaving(true)
         try {
             await addCustomer({
@@ -65,12 +70,12 @@ export function PosCustomerPicker({ value, onChange }: Props) {
             // the context refresh runs inside addCustomer; pick the new customer by phone
             const fresh = await refreshAndFind(p)
             if (fresh) onChange(fresh.id, fresh.name)
-            toast({ title: "Customer added", description: n })
+            toast({ title: t("pos:customer.added"), description: n })
             setF({ name: "", phone: "", email: "" })
             setQuick(false)
             setErr("")
         } catch (er: any) {
-            setErr(er?.message || "Could not add customer")
+            setErr(er?.message || t("pos:customer.addFailed"))
         } finally {
             setSaving(false)
         }
@@ -93,7 +98,7 @@ export function PosCustomerPicker({ value, onChange }: Props) {
                             variant="outline"
                             role="combobox"
                             aria-expanded={open}
-                            aria-label="Select customer"
+                            aria-label={t("pos:customer.select")}
                             className="h-auto min-w-0 flex-1 justify-start gap-2.5 py-1.5 text-left"
                         >
                             <UserAvatar name={name} className="size-[34px]" />
@@ -108,8 +113,8 @@ export function PosCustomerPicker({ value, onChange }: Props) {
                         <Input
                             type="search"
                             autoFocus
-                            aria-label="Search customers"
-                            placeholder="Search name or phone…"
+                            aria-label={t("pos:customer.search")}
+                            placeholder={t("pos:customer.searchPlaceholder")}
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                             className="mb-2"
@@ -120,11 +125,11 @@ export function PosCustomerPicker({ value, onChange }: Props) {
                                 variant={!value ? "secondary" : "ghost"}
                                 role="option"
                                 aria-selected={!value}
-                                onClick={() => { onChange("", "Walk-in Customer"); setOpen(false) }}
+                                onClick={() => { onChange("", WALK_IN_NAME); setOpen(false) }}
                                 className="h-auto w-full flex-col items-start gap-0 whitespace-normal text-left"
                             >
-                                <span className="text-sm font-semibold">Walk-in Customer</span>
-                                <span className="text-xs font-normal text-muted-foreground">Must be paid in full</span>
+                                <span className="text-sm font-semibold">{t("pos:walkIn")}</span>
+                                <span className="text-xs font-normal text-muted-foreground">{t("pos:customer.mustPayFull")}</span>
                             </Button>
                             {list.map((c) => (
                                 <Button
@@ -138,19 +143,19 @@ export function PosCustomerPicker({ value, onChange }: Props) {
                                 >
                                     <span className="text-sm font-semibold">{c.name}</span>
                                     <span className="text-xs font-normal text-muted-foreground">
-                                        {[c.phone, (c.dueAmount ?? 0) > 0 ? `Due ${formatCurrency(c.dueAmount ?? 0)}` : ""].filter(Boolean).join(" · ") || "No phone"}
+                                        {[c.phone, (c.dueAmount ?? 0) > 0 ? t("pos:customer.due", { amount: formatCurrency(c.dueAmount ?? 0) }) : ""].filter(Boolean).join(" · ") || t("pos:customer.noPhone")}
                                     </span>
                                 </Button>
                             ))}
-                            {list.length === 0 && <p className="px-2.5 py-3 text-sm text-muted-foreground">No customers match.</p>}
+                            {list.length === 0 && <p className="px-2.5 py-3 text-sm text-muted-foreground">{t("pos:customer.noMatch")}</p>}
                         </div>
                     </PopoverContent>
                 </Popover>
-                <WithTooltip content="Add new customer"><Button
+                <WithTooltip content={t("pos:customer.addNew")}><Button
                     type="button"
                     variant="outline"
                     size="icon-lg"
-                    aria-label="Add new customer"
+                    aria-label={t("pos:customer.addNew")}
                     aria-expanded={quick}
                     onClick={() => { setQuick((v) => !v); setErr("") }}
                 >
@@ -160,14 +165,14 @@ export function PosCustomerPicker({ value, onChange }: Props) {
 
             {quick && (
                 <Card className="gap-2 bg-muted/50 p-3 shadow-none">
-                    <Input aria-label="Customer name" placeholder="Customer name *" value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErr("") }} />
-                    <Input aria-label="Phone" placeholder="Phone *" value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); setErr("") }} />
-                    <Input aria-label="Email" type="email" placeholder="Email (optional)" value={f.email} onChange={(e) => { setF({ ...f, email: e.target.value }); setErr("") }} />
+                    <Input aria-label={t("common:fields.name")} placeholder={t("pos:customer.namePlaceholder")} value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErr("") }} />
+                    <Input aria-label={t("common:fields.phone")} placeholder={t("pos:customer.phonePlaceholder")} value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); setErr("") }} />
+                    <Input aria-label={t("common:fields.email")} type="email" placeholder={t("pos:customer.emailPlaceholder")} value={f.email} onChange={(e) => { setF({ ...f, email: e.target.value }); setErr("") }} />
                     {err && <span role="alert" className="text-xs font-semibold text-destructive">{err}</span>}
                     <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => setQuick(false)}>Cancel</Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setQuick(false)}>{t("common:actions.cancel")}</Button>
                         <Button type="button" size="sm" onClick={save} disabled={saving}>
-                            {saving ? "Adding…" : "Add customer"}
+                            {saving ? t("pos:customer.adding") : t("pos:customer.add")}
                         </Button>
                     </div>
                 </Card>

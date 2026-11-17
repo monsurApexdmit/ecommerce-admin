@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { FileText, Package, Receipt, Search, User, X } from "lucide-react"
 import { productApi } from "@/lib/productApi"
 import { sellsApi } from "@/lib/sellsApi"
@@ -16,38 +17,44 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { WithTooltip } from "@/components/common/WithTooltip"
 
 const PAGES = [
-  { label: "Dashboard", href: "/dashboard", module: "Dashboard" },
-  { label: "POS", href: "/dashboard/pos", module: "POS" },
-  { label: "Sales", href: "/dashboard/sales", module: "Orders" },
-  { label: "Orders", href: "/dashboard/orders", module: "Orders" },
-  { label: "Shipments", href: "/dashboard/orders/shipments", module: "Shipments" },
-  { label: "Customers", href: "/dashboard/customers", module: "Customers" },
-  { label: "Ad order links (Facebook, WhatsApp, TikTok…)", href: "/dashboard/marketing/links", module: "Marketing" },
-  { label: "Products", href: "/dashboard/products", module: "Products" },
-  { label: "Categories", href: "/dashboard/categories", module: "Categories" },
-  { label: "Collections", href: "/dashboard/collections", module: "Collections" },
-  { label: "Stock overview", href: "/dashboard/inventory", module: "Inventory" },
-  { label: "Purchase orders", href: "/dashboard/vendors/purchase-orders", module: "Vendors" },
-  { label: "Suppliers", href: "/dashboard/vendors", module: "Vendors" },
-  { label: "Finance overview", href: "/dashboard/finance", module: "Finance" },
-  { label: "Inventory and ledger", href: "/dashboard/finance/inventory", module: "Finance" },
-  { label: "Expenses", href: "/dashboard/expenses", module: "Expenses" },
-  { label: "Payouts", href: "/dashboard/finance/payouts", module: "Finance" },
-  { label: "Receivables", href: "/dashboard/finance/receivables", module: "Finance" },
-  { label: "Payments received", href: "/dashboard/finance/payments", module: "Finance" },
-  { label: "Transactions", href: "/dashboard/finance/transactions", module: "Finance" },
-  { label: "Finance reports", href: "/dashboard/finance/reports", module: "Finance" },
-  { label: "Analytics (sales, purchases, stock reports)", href: "/dashboard/reports", module: "Reports" },
-  { label: "Customer dues", href: "/dashboard/dues/customers", module: "Dues" },
-  { label: "Vendor dues", href: "/dashboard/dues/vendors", module: "Dues" },
-  { label: "Salary management", href: "/dashboard/staff/salary", module: "Salary Management" },
-  { label: "Settings", href: "/dashboard/settings", module: "Settings" },
-]
+  { label: "nav:search.pages.dashboard", href: "/dashboard", module: "Dashboard" },
+  { label: "nav:search.pages.pos", href: "/dashboard/pos", module: "POS" },
+  { label: "nav:search.pages.sales", href: "/dashboard/sales", module: "Orders" },
+  { label: "nav:search.pages.orders", href: "/dashboard/orders", module: "Orders" },
+  { label: "nav:search.pages.shipments", href: "/dashboard/orders/shipments", module: "Shipments" },
+  { label: "nav:search.pages.customers", href: "/dashboard/customers", module: "Customers" },
+  { label: "nav:search.pages.adOrderLinks", href: "/dashboard/marketing/links", module: "Marketing" },
+  { label: "nav:search.pages.products", href: "/dashboard/products", module: "Products" },
+  { label: "nav:search.pages.categories", href: "/dashboard/categories", module: "Categories" },
+  { label: "nav:search.pages.collections", href: "/dashboard/collections", module: "Collections" },
+  { label: "nav:search.pages.stockOverview", href: "/dashboard/inventory", module: "Inventory" },
+  { label: "nav:search.pages.purchaseOrders", href: "/dashboard/vendors/purchase-orders", module: "Vendors" },
+  { label: "nav:search.pages.suppliers", href: "/dashboard/vendors", module: "Vendors" },
+  { label: "nav:search.pages.financeOverview", href: "/dashboard/finance", module: "Finance" },
+  { label: "nav:search.pages.inventoryLedger", href: "/dashboard/finance/inventory", module: "Finance" },
+  { label: "nav:search.pages.expenses", href: "/dashboard/expenses", module: "Expenses" },
+  { label: "nav:search.pages.payouts", href: "/dashboard/finance/payouts", module: "Finance" },
+  { label: "nav:search.pages.receivables", href: "/dashboard/finance/receivables", module: "Finance" },
+  { label: "nav:search.pages.paymentsReceived", href: "/dashboard/finance/payments", module: "Finance" },
+  { label: "nav:search.pages.transactions", href: "/dashboard/finance/transactions", module: "Finance" },
+  { label: "nav:search.pages.financeReports", href: "/dashboard/finance/reports", module: "Finance" },
+  { label: "nav:search.pages.analytics", href: "/dashboard/reports", module: "Reports" },
+  { label: "nav:search.pages.customerDues", href: "/dashboard/dues/customers", module: "Dues" },
+  { label: "nav:search.pages.vendorDues", href: "/dashboard/dues/vendors", module: "Dues" },
+  { label: "nav:search.pages.salaryManagement", href: "/dashboard/staff/salary", module: "Salary Management" },
+  { label: "nav:search.pages.settings", href: "/dashboard/settings", module: "Settings" },
+] as const
 
 type Kind = "Product" | "Invoice" | "Customer" | "Page"
 type Hit = { id: string; kind: Kind; label: string; hint?: string; href: string }
 const GROUPS: Kind[] = ["Product", "Invoice", "Customer", "Page"]
 const ICONS: Record<Kind, React.ElementType> = { Product: Package, Invoice: Receipt, Customer: User, Page: FileText }
+const GROUP_LABEL = {
+  Product: "nav:search.groups.product",
+  Invoice: "nav:search.groups.invoice",
+  Customer: "nav:search.groups.customer",
+  Page: "nav:search.groups.page",
+} as const satisfies Record<Kind, string>
 
 function SearchBox({ autoFocus, className, inputRef, onDone }: {
   autoFocus?: boolean
@@ -55,6 +62,7 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
   inputRef: React.RefObject<HTMLInputElement | null>
   onDone?: () => void
 }) {
+  const { t } = useTranslation(["nav", "common"])
   const router = useRouter()
   const { canRead } = useSaasAuth()
   const [query, setQuery] = useState("")
@@ -70,7 +78,7 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
   useEffect(() => {
     if (q.length < 2) { setProducts([]); setInvoices([]); setCustomers([]); return }
     let stale = false
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const enc = encodeURIComponent(q)
       if (canRead("Products")) {
         productApi.getAll({ search: q, limit: 5 })
@@ -95,15 +103,16 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
       }
       void enc
     }, 250)
-    return () => { stale = true; clearTimeout(t) }
+    return () => { stale = true; clearTimeout(timer) }
   }, [q, canRead])
 
   const pages = useMemo<Hit[]>(() => {
     if (!q) return []
     const n = q.toLowerCase()
-    return PAGES.filter((p) => canRead(p.module) && p.label.toLowerCase().includes(n))
-      .slice(0, 5).map((p) => ({ id: `g${p.href}`, kind: "Page" as const, label: p.label, href: p.href }))
-  }, [q, canRead])
+    // Match the label in the staff member's language, and the English one too (people type either)
+    return PAGES.filter((p) => canRead(p.module) && [t(p.label), t(p.label, { lng: "en" })].some((l) => l.toLowerCase().includes(n)))
+      .slice(0, 5).map((p) => ({ id: `g${p.href}`, kind: "Page" as const, label: t(p.label), href: p.href }))
+  }, [q, canRead, t])
 
   const groups = useMemo(
     () => GROUPS.map((k) => ({ kind: k, hits: ({ Product: products, Invoice: invoices, Customer: customers, Page: pages } as const)[k] })).filter((g) => g.hits.length),
@@ -157,13 +166,13 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
           role="combobox"
           aria-expanded={showPanel}
           aria-controls="global-search-list"
-          aria-label="Search products, invoices, customers and pages"
-          placeholder="Search products, SKUs, invoices, customers…"
+          aria-label={t("nav:search.label")}
+          placeholder={t("nav:search.placeholder")}
           className="min-w-0"
         />
         <InputGroupAddon align="inline-end">
           {query ? (
-            <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => { setQuery(""); inputRef.current?.focus() }}>
+            <InputGroupButton size="icon-xs" aria-label={t("nav:search.clear")} onClick={() => { setQuery(""); inputRef.current?.focus() }}>
               <X aria-hidden />
             </InputGroupButton>
           ) : (
@@ -176,12 +185,12 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
       </InputGroup>
       {showPanel && (
         <Card id="global-search-list" role="listbox" className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[70vh] gap-0 overflow-auto p-1.5 shadow-xl">
-          {flat.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted-foreground">{q.length < 2 ? "Keep typing…" : "No results."}</div>}
+          {flat.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted-foreground">{q.length < 2 ? t("nav:search.keepTyping") : t("common:status.noResults")}</div>}
           {groups.map((g) => {
             const Icon = ICONS[g.kind]
             return (
               <div key={g.kind} className="py-1">
-                <SectionTitle as="p" className="px-2.5 pb-1 pt-1">{g.kind}</SectionTitle>
+                <SectionTitle as="p" className="px-2.5 pb-1 pt-1">{t(GROUP_LABEL[g.kind])}</SectionTitle>
                 {g.hits.map((h) => {
                   idx += 1
                   const i = idx
@@ -217,6 +226,7 @@ function SearchBox({ autoFocus, className, inputRef, onDone }: {
  * Ctrl/⌘ K focuses it. `icon` collapses to a 44px button that reveals the field as an overlay on narrow screens.
  */
 export function GlobalSearch({ variant = "bar", className }: { variant?: "bar" | "icon"; className?: string }) {
+  const { t } = useTranslation(["nav", "common"])
   const inputRef = useRef<HTMLInputElement>(null)
   const [overlay, setOverlay] = useState(false)
 
@@ -238,7 +248,7 @@ export function GlobalSearch({ variant = "bar", className }: { variant?: "bar" |
   if (variant === "icon") {
     return (
       <>
-        <WithTooltip content="Search"><Button type="button" variant="outline" size="icon" onClick={() => setOverlay(true)} aria-label="Search" className={className}>
+        <WithTooltip content={t("common:actions.search")}><Button type="button" variant="outline" size="icon" onClick={() => setOverlay(true)} aria-label={t("common:actions.search")} className={className}>
           <Search className="size-[18px]" aria-hidden />
         </Button></WithTooltip>
         {overlay && (

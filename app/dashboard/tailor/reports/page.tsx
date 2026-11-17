@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Printer } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,12 +26,15 @@ import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { KpiIcon } from "@/components/tailor/kpi-icon"
+import { TAILOR_NS, payStatusLabel, stageLabel, type TailorKey, type TailorT } from "@/components/tailor/i18n"
+import { localeTag } from "@/lib/i18n"
 
-const TABS: [TailorReportType, string][] = [["orders", "Orders & income"], ["fabrics", "Fabrics"], ["dorjis", "Dorjis"]]
-const RANGES = [
-  ["month", "This month"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["ytd", "This year"], ["all", "All time"], ["custom", "Custom…"],
-] as const
-type RangeId = (typeof RANGES)[number][0]
+const TABS: [TailorReportType, TailorKey][] = [["orders", "tailor:reports.tabOrders"], ["fabrics", "tailor:reports.tabFabrics"], ["dorjis", "tailor:reports.tabDorjis"]]
+type RangeId = "month" | "7" | "30" | "90" | "ytd" | "all" | "custom"
+const RANGES: [RangeId, TailorKey][] = [
+  ["month", "common:time.thisMonth"], ["7", "common:time.last7Days"], ["30", "common:time.last30Days"], ["90", "tailor:reports.last90"],
+  ["ytd", "tailor:reports.thisYear"], ["all", "common:time.allTime"], ["custom", "tailor:reports.custom"],
+]
 
 const SUB_TONE: Record<string, string> = { muted: "text-muted-foreground", red: "text-destructive", amber: "text-dash-warn-fg", teal: "text-dash-success-fg" }
 const MIX_COLORS = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8"]
@@ -40,6 +44,12 @@ const PILL: Record<string, string> = {
   "stage:new": "new", "stage:cutting": "cutting", "stage:stitching": "stitching", "stage:trial": "trial",
   "stage:ready": "ready", "stage:delivered": "delivered", "stage:cancelled": "cancelled",
   "fabric:ok": "in stock", "fabric:low": "low stock", "fabric:out-of-stock": "out of stock", "fabric:inactive": "inactive",
+}
+/** Translated pill text for stage / payment cells; null keeps the API's own text (fabric cells may carry quantities). */
+function pillLabel(t: TailorT, tone: string): string | null {
+  if (tone.startsWith("stage:")) return stageLabel(t, tone.slice(6), "") || null
+  if (tone === "paid" || tone === "partial" || tone === "unpaid") return payStatusLabel(t, tone)
+  return null
 }
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -67,6 +77,7 @@ const short = (n: number) => {
 
 export default function TailorReportsPage() {
   const { formatCurrency } = useCompanySettings()
+  const { t, i18n } = useTranslation(TAILOR_NS)
   const { toast } = useToast()
   const blocked = useModuleGuard("TailorReports")
 
@@ -90,11 +101,11 @@ export default function TailorReportsPage() {
       setReport(await tailorApi.getReport(type, { from: wFrom || undefined, to: wTo || undefined }))
     } catch (e: any) {
       setReport(null)
-      setError(e?.response?.data?.message || "Could not load this report.")
+      setError(e?.response?.data?.message || t("tailor:reports.couldNotLoad"))
     } finally {
       setLoading(false)
     }
-  }, [type, wFrom, wTo, customIncomplete])
+  }, [type, wFrom, wTo, customIncomplete, t])
   useEffect(() => { load() }, [load])
   useEffect(() => { setPage(1) }, [type, wFrom, wTo])
 
@@ -112,14 +123,14 @@ export default function TailorReportsPage() {
     kind === "money" ? formatCurrency(v) : kind === "num" ? `${Number(v.toFixed(1))}${unitTxt(unit)}` : String(Math.round(v))
 
   const periodTxt = useMemo(() => {
-    if (range === "all") return "Period: all time"
-    if (!wFrom && !wTo) return "Pick a start and end date to see this report."
-    const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    return `Period: ${wFrom ? f(wFrom) : "start"} to ${wTo ? f(wTo) : "today"}`
-  }, [range, wFrom, wTo])
+    if (range === "all") return t("tailor:reports.periodAll")
+    if (!wFrom && !wTo) return t("tailor:reports.pickDates")
+    const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" })
+    return t("tailor:reports.period", { from: wFrom ? f(wFrom) : t("tailor:reports.start"), to: wTo ? f(wTo) : t("tailor:reports.today") })
+  }, [range, wFrom, wTo, t, i18n.language])
 
   const handleExport = () => {
-    if (!report || !table || table.rows.length === 0) { toast({ variant: "destructive", title: "Nothing to export for this period" }); return }
+    if (!report || !table || table.rows.length === 0) { toast({ variant: "destructive", title: t("tailor:reports.nothingExport") }); return }
     const out: string[][] = [table.columns, ...table.rows.map((r) => r.map((c) => (c.t === "money" || c.t === "int" || c.t === "pct" ? String(c.v) : String(c.v))))]
     const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
     const blob = new Blob([out.map((r) => r.map(esc).join(",")).join("\n")], { type: "text/csv;charset=utf-8" })
@@ -140,26 +151,26 @@ export default function TailorReportsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Tailor reports"
-        description={report?.subtitle ?? "How the workshop is doing — orders, fabric and dorjis."}
+        title={t("tailor:reports.title")}
+        description={report?.subtitle ?? t("tailor:reports.description")}
         actions={<div className="flex gap-2 print:hidden">
-          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> Print</Button>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export CSV</Button>
+          <Button type="button" variant="outline" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> {t("common:actions.print")}</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("tailor:reports.exportCsv")}</Button>
         </div>}
       />
 
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <SegmentedControl aria-label="Report" size="default" value={type} onValueChange={(v) => setType(v as TailorReportType)}
-          options={TABS.map(([id, label]) => ({ value: id, label }))} />
-        <SegmentedControl aria-label="Date range" className="md:ml-auto" value={range} onValueChange={(v) => setRange(v as RangeId)}
-          options={RANGES.map(([id, label]) => ({ value: id, label }))} />
+        <SegmentedControl aria-label={t("tailor:reports.reportAria")} size="default" value={type} onValueChange={(v) => setType(v as TailorReportType)}
+          options={TABS.map(([id, label]) => ({ value: id, label: t(label) }))} />
+        <SegmentedControl aria-label={t("tailor:reports.dateRange")} className="md:ml-auto" value={range} onValueChange={(v) => setRange(v as RangeId)}
+          options={RANGES.map(([id, label]) => ({ value: id, label: t(label) }))} />
       </div>
 
       {range === "custom" && (
         <div className="flex flex-wrap gap-3 print:hidden">
-          <FormField orientation="horizontal" className="w-auto gap-2" label="From" htmlFor="rep-from">
+          <FormField orientation="horizontal" className="w-auto gap-2" label={t("common:extra.from")} htmlFor="rep-from">
             <Input id="rep-from" type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} /></FormField>
-          <FormField orientation="horizontal" className="w-auto gap-2" label="To" htmlFor="rep-to">
+          <FormField orientation="horizontal" className="w-auto gap-2" label={t("common:extra.to")} htmlFor="rep-to">
             <Input id="rep-to" type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} /></FormField>
         </div>
       )}
@@ -171,7 +182,7 @@ export default function TailorReportsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : report ? (
         <>
-          <section aria-label="Summary" className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length >= 5 ? "xl:grid-cols-5" : "xl:grid-cols-4", loading && "opacity-60")}>
+          <section aria-label={t("common:extra.summary")} className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", report.kpis.length >= 5 ? "xl:grid-cols-5" : "xl:grid-cols-4", loading && "opacity-60")}>
             {report.kpis.map((k) => (
               <StatTile key={k.label} label={k.label} value={fmtKpi(k)} icon={<KpiIcon label={k.label} />}
                 hint={k.sub ? <span className={SUB_TONE[k.subTone ?? "muted"]}>{k.sub}</span> : undefined} />
@@ -202,7 +213,7 @@ export default function TailorReportsPage() {
                 return (
                   <div key={mx.title} className={cn("flex flex-col gap-3", mi > 0 && "mt-3")}>
                     <h2 className="leading-none font-semibold">{mx.title}</h2>
-                    {top.length === 0 ? <p className="text-sm text-muted-foreground">Nothing to show for this period.</p> : top.map((m, i) => (
+                    {top.length === 0 ? <p className="text-sm text-muted-foreground">{t("tailor:reports.nothingPeriod")}</p> : top.map((m, i) => (
                       <div key={m.label}>
                         <div className="flex justify-between text-sm"><span className="font-medium">{m.label}</span><span className="tabular-nums text-muted-foreground">{fmtNum(m.value, mx.kind, mx.unit)}</span></div>
                         <Progress value={Math.round((Math.abs(m.value) / peak) * 100)} aria-label={m.label}
@@ -229,7 +240,7 @@ export default function TailorReportsPage() {
                       <TableRow key={ri}>
                         {r.map((c, ci) => (
                           <TableCell key={ci} className={cn("tabular-nums", c.bold && "font-bold")}>
-                            {c.tone && PILL[c.tone] ? <StatusBadge status={PILL[c.tone]} label={fmt(c)} /> : fmt(c)}
+                            {c.tone && PILL[c.tone] ? <StatusBadge status={PILL[c.tone]} label={pillLabel(t, c.tone) ?? fmt(c)} /> : fmt(c)}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -237,7 +248,7 @@ export default function TailorReportsPage() {
                   </TableBody>
                 </Table>
               </div>
-              {table.rows.length === 0 && <EmptyState className="p-4 md:p-6" title={table.empty || "No rows for this period"} />}
+              {table.rows.length === 0 && <EmptyState className="p-4 md:p-6" title={table.empty || t("tailor:reports.noRows")} />}
               {table.rows.length > 10 && (
                 <div className="print:hidden">
                   <Separator />

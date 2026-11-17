@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { Fragment, useState, useEffect, useCallback } from "react"
+import { Trans, useTranslation } from "react-i18next"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -124,6 +125,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const { categories, getAllCategoriesFlat, refreshCategories } = useCategory()
   const { attributes: globalAttributes, isLoading: attributesLoading } = useAttribute()
   const { toast } = useToast()
+  const { t } = useTranslation(["products", "common"])
   const { formatCurrency } = useCompanySettings()
   const [barcodeCopied, setBarcodeCopied] = useState(false)
   const [units, setUnits] = useState<UnitResponse[]>([])
@@ -375,12 +377,12 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     const productId = product.id ? parseInt(product.id) : product.id
     const variantId = variant?.id ? parseInt(variant.id) : undefined
     if (editingProduct && String(productId) === editingProduct.id) {
-      toast({ variant: "destructive", title: "Not allowed", description: "A bundle cannot contain itself." })
+      toast({ variant: "destructive", title: t("products:form.bundle.notAllowed"), description: t("products:form.bundle.self") })
       return
     }
     const exists = bundleItems.some(bi => bi.productId === productId && bi.variantId === variantId)
     if (exists) {
-      toast({ variant: "destructive", title: "Already in bundle", description: "That item is already in this bundle — change its quantity instead." })
+      toast({ variant: "destructive", title: t("products:form.bundle.already"), description: t("products:form.bundle.alreadyDesc") })
       return
     }
     setBundleItems(prev => [...prev, {
@@ -394,7 +396,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     }])
     setBundleSearch("")
     setBundleSearchResults([])
-  }, [bundleItems, editingProduct, toast])
+  }, [bundleItems, editingProduct, toast, t])
 
   const updateBundleItemQty = useCallback((index: number, qty: number) => {
     setBundleItems(prev => prev.map((bi, i) => i === index ? { ...bi, quantity: Math.max(1, qty) } : bi))
@@ -412,29 +414,29 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const submit = async (mode: "save" | "draft" | "another") => {
     const asDraft = mode === "draft"
     const missing: string[] = []
-    if (!formData.name?.trim()) missing.push("Product name")
-    if (!asDraft && !(basePrice > 0)) missing.push("Selling price above 0 (set a cost and margin, or a variant price)")
-    if (!(formData.locationId || editingProduct?.locationId || warehouses[0]?.id)) missing.push("Warehouse")
+    if (!formData.name?.trim()) missing.push(t("products:form.validation.productName"))
+    if (!asDraft && !(basePrice > 0)) missing.push(t("products:form.validation.priceAboveZero"))
+    if (!(formData.locationId || editingProduct?.locationId || warehouses[0]?.id)) missing.push(t("common:fields.warehouse"))
     const fail = (title: string, msg: string) => {
       setErrorMessage(msg)
       toast({ variant: "destructive", title, description: msg })
     }
-    if (missing.length) return fail("Missing required fields", `Please fill in: ${missing.join(", ")}`)
+    if (missing.length) return fail(t("products:form.validation.missingTitle"), t("products:form.validation.missingDesc", { fields: missing.join(", ") }))
 
-    if (skuError) return fail("Duplicate SKU", skuError)
+    if (skuError) return fail(t("products:form.validation.dupSku"), skuError)
     const vErr = Object.values(variantSkuErrors)[0]
-    if (vErr) return fail("Duplicate variant SKU", vErr)
-    if (barcodeError) return fail("Duplicate barcode", barcodeError)
-    if (costNum < 0) return fail("Invalid cost", "Cost price cannot be negative.")
-    if (Number(formData.profitMargin) < 0) return fail("Invalid margin", "Profit margin cannot be negative.")
-    if (formData.offerType === "percentage" && offerNum > 100) return fail("Invalid offer", "A percentage offer cannot be more than 100%.")
-    if (offerNum < 0) return fail("Invalid offer", "Offer cannot be negative.")
+    if (vErr) return fail(t("products:form.validation.dupVariantSku"), vErr)
+    if (barcodeError) return fail(t("products:form.validation.dupBarcode"), barcodeError)
+    if (costNum < 0) return fail(t("products:form.validation.invalidCost"), t("products:form.validation.costNegative"))
+    if (Number(formData.profitMargin) < 0) return fail(t("products:form.validation.invalidMargin"), t("products:form.validation.marginNegative"))
+    if (formData.offerType === "percentage" && offerNum > 100) return fail(t("products:form.validation.invalidOffer"), t("products:form.pricing.maxPct"))
+    if (offerNum < 0) return fail(t("products:form.validation.invalidOffer"), t("products:form.validation.offerNegative"))
     const badVariant = generatedVariants.find(v => (v.offerType ?? "percentage") === "percentage" && (v.offerPrice || 0) > 100)
-    if (badVariant) return fail("Invalid offer", `Variant "${badVariant.name}": a percentage offer cannot be more than 100%.`)
+    if (badVariant) return fail(t("products:form.validation.invalidOffer"), t("products:form.validation.variantOfferMax", { name: badVariant.name }))
     if (!asDraft && isBundle) {
-      if (bundleItems.length === 0) return fail("Bundle is empty", "Add at least one product to the bundle.")
+      if (bundleItems.length === 0) return fail(t("products:form.validation.bundleEmpty"), t("products:form.validation.bundleEmptyDesc"))
       if (editingProduct && bundleItems.some(bi => String(bi.productId) === editingProduct.id))
-        return fail("Invalid bundle", "A bundle cannot contain itself.")
+        return fail(t("products:form.validation.invalidBundle"), t("products:form.bundle.self"))
     }
 
     let finalStock = Number.parseInt(formData.stock || "0") || 0
@@ -442,7 +444,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     const supplierTotalNow = costNum * finalStock
     if (!editingProduct && formData.vendorId && formData.supplierPaymentStatus === "partial") {
       const paid = Number(formData.supplierPaidAmount) || 0
-      if (paid <= 0 || paid >= supplierTotalNow) return fail("Invalid supplier payment", "Partial payment must be more than 0 and less than the total supplier cost")
+      if (paid <= 0 || paid >= supplierTotalNow) return fail(t("products:form.validation.invalidSupplierPay"), t("products:form.validation.partialRange"))
     }
 
     const isEdit = !!editingProduct
@@ -521,14 +523,14 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         })
       }
       if (mode === "another") {
-        toast({ title: "Product added", description: `"${formData.name.trim()}" saved. Ready for the next one.` })
+        toast({ title: t("products:form.saved.added"), description: t("products:form.saved.addedDesc", { name: formData.name.trim() }) })
         setResetKey(k => k + 1)
       } else {
-        if (asDraft) toast({ title: "Saved as draft", description: "The product is hidden until you publish it." })
+        if (asDraft) toast({ title: t("products:form.saved.draft"), description: t("products:form.saved.draftDesc") })
         handleClose()
       }
     } catch (err: any) {
-      const msg = err?.message || err?.response?.data?.error || (isEdit ? "Failed to update product" : "Failed to create product")
+      const msg = err?.message || err?.response?.data?.error || (isEdit ? t("products:form.saved.updateFailed") : t("products:form.saved.createFailed"))
       console.error("Failed to save product:", msg, err)
       setErrorMessage(msg)
     } finally {
@@ -552,19 +554,19 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     const errors: string[] = []
     const typeOk = files.filter(f => {
       const ok = ["image/jpeg", "image/png", "image/webp"].includes(f.type)
-      if (!ok) errors.push(`"${f.name}" is not a JPG, PNG or WEBP image.`)
+      if (!ok) errors.push(t("products:form.images.errType", { name: f.name }))
       return ok
     })
     const sizeOk = typeOk.filter(f => {
       const ok = f.size <= MAX_IMAGE_BYTES
-      if (!ok) errors.push(`"${f.name}" is ${(f.size / 1024 / 1024).toFixed(1)} MB — images must be 5 MB or smaller.`)
+      if (!ok) errors.push(t("products:form.images.errSize", { name: f.name, size: (f.size / 1024 / 1024).toFixed(1) }))
       return ok
     })
     const room = Math.max(0, MAX_IMAGES - uploadedImages.length)
     const valid = sizeOk.slice(0, room)
-    if (sizeOk.length > room) errors.push(`You can add up to ${MAX_IMAGES} images — ${sizeOk.length - room} not added.`)
+    if (sizeOk.length > room) errors.push(t("products:form.images.errMax", { max: MAX_IMAGES, skipped: sizeOk.length - room }))
     setImageError(errors.length ? errors.join(" ") : null)
-    if (errors.length) toast({ variant: "destructive", title: "Some images were not added", description: errors[0] })
+    if (errors.length) toast({ variant: "destructive", title: t("products:form.images.someNotAdded"), description: errors[0] })
     if (!valid.length) return
     setImageFiles(prev => [...prev, ...valid])
     valid.forEach(file => {
@@ -645,7 +647,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     })
     setGeneratedVariants([...keepers, ...added])
     if (!opts?.silent) {
-      toast({ title: added.length ? `${added.length} new variant${added.length === 1 ? "" : "s"} added` : "No new combinations", description: added.length ? "Existing variants were kept as they are." : "All combinations already exist." })
+      toast({
+        title: added.length ? t("products:form.variants.added", { count: added.length }) : t("products:form.variants.noNew"),
+        description: added.length ? t("products:form.variants.kept") : t("products:form.variants.allExist"),
+      })
     }
   }
 
@@ -752,8 +757,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
   const skuError = (() => {
     const k = norm(formData.sku)
     if (!k) return null
-    if (takenSkus.has(k)) return `SKU "${formData.sku.trim()}" is already used by "${takenSkus.get(k)}".`
-    if (generatedVariants.some(v => norm(v.sku) === k)) return `SKU "${formData.sku.trim()}" is also used by one of the variants.`
+    if (takenSkus.has(k)) return t("products:form.validation.skuTaken", { sku: formData.sku.trim(), product: takenSkus.get(k) })
+    if (generatedVariants.some(v => norm(v.sku) === k)) return t("products:form.validation.skuInVariants", { sku: formData.sku.trim() })
     return null
   })()
   const variantSkuErrors: Record<string, string> = (() => {
@@ -762,26 +767,26 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
     generatedVariants.forEach(v => {
       const k = norm(v.sku)
       if (!k) return
-      if (takenSkus.has(k)) out[v.id] = `Variant SKU "${v.sku}" is already used by "${takenSkus.get(k)}".`
-      else if (k === norm(formData.sku)) out[v.id] = `Variant SKU "${v.sku}" matches the product SKU.`
-      else if (seen.has(k)) out[v.id] = `Variant SKU "${v.sku}" is used by more than one variant.`
+      if (takenSkus.has(k)) out[v.id] = t("products:form.validation.variantSkuTaken", { sku: v.sku, product: takenSkus.get(k) })
+      else if (k === norm(formData.sku)) out[v.id] = t("products:form.validation.variantSkuMatches", { sku: v.sku })
+      else if (seen.has(k)) out[v.id] = t("products:form.validation.variantSkuDup", { sku: v.sku })
       seen.set(k, v.id)
     })
     return out
   })()
   const barcodeError = (() => {
     const k = norm(formData.barcode)
-    if (k && takenBarcodes.has(k)) return `Barcode "${formData.barcode.trim()}" is already used by "${takenBarcodes.get(k)}".`
+    if (k && takenBarcodes.has(k)) return t("products:form.validation.barcodeTaken", { barcode: formData.barcode.trim(), product: takenBarcodes.get(k) })
     return null
   })()
   const barcodeMisfitHint = barcodeMisfit(formData.barcodeType, formData.barcode)
 
   // ---- Non-blocking warnings ----
   const warnings: string[] = []
-  if (lossWarn) warnings.push(`Selling price ${formatCurrency(finalPrice)} is below cost ${formatCurrency(costNum)} — you would lose ${formatCurrency(costNum - finalPrice)} per unit.`)
-  if (formData.offerEndsAt && offerNum > 0 && formData.offerEndsAt < today) warnings.push("The offer end date is in the past.")
-  if (Number(formData.wholesalePrice) > 0 && Number(formData.wholesalePrice) > sellingPrice) warnings.push("Wholesale price is higher than the selling price.")
-  if (barcodeMisfitHint) warnings.push(`Barcode does not fit ${barcodeTypeLabel(formData.barcodeType)} (${barcodeMisfitHint}) — will print as Code 128.`)
+  if (lossWarn) warnings.push(t("products:form.warn.loss", { price: formatCurrency(finalPrice), cost: formatCurrency(costNum), loss: formatCurrency(costNum - finalPrice) }))
+  if (formData.offerEndsAt && offerNum > 0 && formData.offerEndsAt < today) warnings.push(t("products:form.warn.offerPast"))
+  if (Number(formData.wholesalePrice) > 0 && Number(formData.wholesalePrice) > sellingPrice) warnings.push(t("products:form.warn.wholesaleHigh"))
+  if (barcodeMisfitHint) warnings.push(t("products:form.warn.barcodeMisfit", { type: barcodeTypeLabel(formData.barcodeType), hint: t(barcodeMisfitHint) }))
 
   // ---- Bundles ----
   const findChild = (bi: { productId: number; variantId?: number }) => {
@@ -825,9 +830,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
         )}
       >
         <DialogHeader className="border-b border-dash-border bg-dash-card px-6 py-[18px] text-left">
-          <DialogTitle className="font-dash-display text-[22px] font-bold">{editingProduct ? "Edit product" : "Add product"}</DialogTitle>
+          <DialogTitle className="font-dash-display text-[22px] font-bold">{editingProduct ? t("products:form.titleEdit") : t("products:form.titleAdd")}</DialogTitle>
           <DialogDescription className="text-[13px] text-dash-muted">
-            {editingProduct ? "Update the product details below." : "Fill in the basics now. Everything except the name and price can be changed later."}
+            {editingProduct ? t("products:form.descEdit") : t("products:form.descAdd")}
           </DialogDescription>
         </DialogHeader>
 
@@ -835,19 +840,19 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
             {/* ------------ Main column ------------ */}
             <div className="flex min-w-0 flex-col gap-5">
-              <Section n={1} title="Basic information" hint="What customers and staff see.">
+              <Section n={1} title={t("products:form.basic.title")} hint={t("products:form.basic.hint")}>
                 <div className="flex flex-col gap-3">
-                  <FormField label="Product name *" htmlFor="name" className="min-w-0">
-                    <Input id="name" value={formData.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Cotton Panjabi – White" />
+                  <FormField label={t("products:form.basic.name")} htmlFor="name" className="min-w-0">
+                    <Input id="name" value={formData.name} onChange={(e) => set("name", e.target.value)} placeholder={t("products:form.basic.namePlaceholder")} />
                   </FormField>
-                  <FormField label="Description" htmlFor="description" className="min-w-0">
+                  <FormField label={t("common:fields.description")} htmlFor="description" className="min-w-0">
                     <Textarea id="description" rows={3} value={formData.description} onChange={(e) => set("description", e.target.value)}
-                      placeholder="Fabric, fit, care instructions…" />
+                      placeholder={t("products:form.basic.descriptionPlaceholder")} />
                   </FormField>
                 </div>
               </Section>
 
-              <Section n={2} title="Images" hint={`First image is the cover. JPG, PNG or WEBP, up to ${MAX_IMAGES} images, 5 MB each (${uploadedImages.length}/${MAX_IMAGES}).`}>
+              <Section n={2} title={t("products:form.images.title")} hint={t("products:form.images.hint", { max: MAX_IMAGES, used: uploadedImages.length })}>
                 <div
                   onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}
                   className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3"
@@ -855,11 +860,11 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                   {uploadedImages.map((image, index) => (
                     <Card key={index} className="group relative aspect-square gap-0 overflow-hidden bg-muted p-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={image || "/placeholder.svg"} alt={`Product image ${index + 1}`} className="size-full object-cover" />
+                      <img src={image || "/placeholder.svg"} alt={t("products:form.images.alt", { n: index + 1 })} className="size-full object-cover" />
                       {index === 0 && (
-                        <Badge className="absolute bottom-1.5 left-1.5">Cover</Badge>
+                        <Badge className="absolute bottom-1.5 left-1.5">{t("products:form.images.cover")}</Badge>
                       )}
-                      <WithTooltip content={`Remove image ${index + 1}`}><Button type="button" variant="destructive" size="icon-sm" onClick={() => removeImage(index)} aria-label={`Remove image ${index + 1}`}
+                      <WithTooltip content={t("products:form.images.remove", { n: index + 1 })}><Button type="button" variant="destructive" size="icon-sm" onClick={() => removeImage(index)} aria-label={t("products:form.images.remove", { n: index + 1 })}
                         className="absolute right-1.5 top-1.5">
                         <Trash2 className="size-3.5" />
                       </Button></WithTooltip>
@@ -871,8 +876,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                     className={cn("aspect-square h-auto cursor-pointer flex-col gap-1.5 whitespace-normal border-dashed text-center", isDragging && "border-primary bg-accent")}>
                     <Label htmlFor="file-upload">
                       <CloudUpload className="size-6" />
-                      Add images
-                      <span className="px-2 text-xs font-normal text-muted-foreground">or drag them here</span>
+                      {t("products:form.images.add")}
+                      <span className="px-2 text-xs font-normal text-muted-foreground">{t("products:form.images.drag")}</span>
                     </Label>
                   </Button>
                   </>}
@@ -880,31 +885,30 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                 {imageError && <Alert variant="destructive" className="mt-3"><AlertDescription>{imageError}</AlertDescription></Alert>}
               </Section>
 
-              <Section n={3} title="Pricing" hint="Set cost and margin — we work out the selling price.">
+              <Section n={3} title={t("products:form.pricing.title")} hint={t("products:form.pricing.hint")}>
                 <div className="flex flex-col gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FormField label="Cost price" htmlFor="costPrice" description="What you pay the supplier" className="min-w-0">
+                    <FormField label={t("products:form.pricing.cost")} htmlFor="costPrice" description={t("products:form.pricing.costHelp")} className="min-w-0">
                       {money(<Input id="costPrice" type="number" min={0} className="pl-7" value={formData.costPrice} onChange={(e) => set("costPrice", e.target.value)} placeholder="0" />, currencySymbol)}
                     </FormField>
-                    <FormField label={<span id="marginTypeLbl">Margin type</span>} className="min-w-0">
+                    <FormField label={<span id="marginTypeLbl">{t("products:form.pricing.marginType")}</span>} className="min-w-0">
                       <div role="radiogroup" aria-labelledby="marginTypeLbl" className="flex gap-2">
-                        <Button type="button" variant={formData.marginType === "percentage" ? "default" : "outline"} role="radio" aria-checked={formData.marginType === "percentage"} onClick={() => set("marginType", "percentage")} className="flex-1">% Percentage</Button>
-                        <Button type="button" variant={formData.marginType === "flat" ? "default" : "outline"} role="radio" aria-checked={formData.marginType === "flat"} onClick={() => set("marginType", "flat")} className="flex-1">{currencySymbol} Flat</Button>
+                        <Button type="button" variant={formData.marginType === "percentage" ? "default" : "outline"} role="radio" aria-checked={formData.marginType === "percentage"} onClick={() => set("marginType", "percentage")} className="flex-1">{t("products:form.pricing.percentage")}</Button>
+                        <Button type="button" variant={formData.marginType === "flat" ? "default" : "outline"} role="radio" aria-checked={formData.marginType === "flat"} onClick={() => set("marginType", "flat")} className="flex-1">{t("products:form.pricing.flat", { symbol: currencySymbol })}</Button>
                       </div>
                     </FormField>
-                    <FormField label={<>Profit margin {formData.marginType === "percentage" ? "(%)" : `(${currencySymbol})`}</>} htmlFor="profitMargin" className="min-w-0">
+                    <FormField label={t("products:form.pricing.profitMargin", { unit: formData.marginType === "percentage" ? "%" : currencySymbol })} htmlFor="profitMargin" className="min-w-0">
                       {money(<Input id="profitMargin" type="number" min={0} className="pl-7" value={formData.profitMargin} onChange={(e) => set("profitMargin", e.target.value)} placeholder="0" />, formData.marginType === "percentage" ? "%" : currencySymbol)}
                     </FormField>
                     <FormField className="min-w-0"
-                      label={<>Selling price <Badge variant="secondary" className="ml-1">auto</Badge></>}
-                      description={hasVariants ? "Variants below start from this price and can be edited."
-                        : "Worked out from cost + margin (no cost? use a flat margin as the price). This is the price customers see."}>
+                      label={<>{t("products:shared.sellingPrice")} <Badge variant="secondary" className="ml-1">{t("products:form.pricing.auto")}</Badge></>}
+                      description={hasVariants ? t("products:form.pricing.sellingHelpVariants") : t("products:form.pricing.sellingHelp")}>
                       <Card className="flex-row items-center justify-between gap-2 bg-muted/50 px-3 py-2 text-lg font-bold tabular-nums shadow-none">
                         {formatCurrency(sellingPrice)}
                         <span className="text-xs font-semibold text-muted-foreground">
-                          {isBundle && bundleOverrideNum > 0 ? "bundle price" : costNum > 0 || marginNum > 0
+                          {isBundle && bundleOverrideNum > 0 ? t("products:form.pricing.bundlePrice") : costNum > 0 || marginNum > 0
                             ? `${costNum} ${formData.marginType === "percentage" ? `+ ${marginNum}%` : `+ ${marginNum}`}`
-                            : "cost + margin"}
+                            : t("products:form.pricing.costPlusMargin")}
                         </span>
                       </Card>
                     </FormField>
@@ -912,10 +916,10 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
 
                   <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
                     {[
-                      { k: "Profit per unit", v: hasCost ? formatCurrency(profitPerUnit) : "—", bad: hasCost && profitPerUnit < 0 },
-                      { k: "Margin", v: marginPct === null ? "—" : `${marginPct.toFixed(1)}%`, bad: marginPct !== null && marginPct < 0 },
-                      { k: "Markup", v: markupPct === null ? "—" : `${markupPct.toFixed(1)}%`, bad: markupPct !== null && markupPct < 0 },
-                      { k: "Price after offer", v: salePriceNum > 0 ? formatCurrency(finalPrice) : "—", bad: false },
+                      { k: t("products:form.pricing.profitPerUnit"), v: hasCost ? formatCurrency(profitPerUnit) : "—", bad: hasCost && profitPerUnit < 0 },
+                      { k: t("products:shared.margin"), v: marginPct === null ? "—" : `${marginPct.toFixed(1)}%`, bad: marginPct !== null && marginPct < 0 },
+                      { k: t("products:form.pricing.markup"), v: markupPct === null ? "—" : `${markupPct.toFixed(1)}%`, bad: markupPct !== null && markupPct < 0 },
+                      { k: t("products:form.pricing.afterOffer"), v: salePriceNum > 0 ? formatCurrency(finalPrice) : "—", bad: false },
                     ].map(s => (
                       <StatTile key={s.k} label={s.k} className="gap-1 px-3 py-2.5"
                         value={<span className={cn(s.bad && "text-destructive")}>{s.v}</span>} />
@@ -923,72 +927,72 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
-                    <FormField label={<span id="offerTypeLbl">Offer / discount</span>} className="min-w-0">
+                    <FormField label={<span id="offerTypeLbl">{t("products:form.pricing.offer")}</span>} className="min-w-0">
                       <div role="radiogroup" aria-labelledby="offerTypeLbl" className="flex gap-2">
-                        <Button type="button" variant={formData.offerType === "percentage" ? "default" : "outline"} role="radio" aria-checked={formData.offerType === "percentage"} onClick={() => set("offerType", "percentage")} className="flex-none">% Off</Button>
-                        <Button type="button" variant={formData.offerType === "flat" ? "default" : "outline"} role="radio" aria-checked={formData.offerType === "flat"} onClick={() => set("offerType", "flat")} className="flex-none">{currencySymbol} Flat</Button>
+                        <Button type="button" variant={formData.offerType === "percentage" ? "default" : "outline"} role="radio" aria-checked={formData.offerType === "percentage"} onClick={() => set("offerType", "percentage")} className="flex-none">{t("products:form.pricing.pctOff")}</Button>
+                        <Button type="button" variant={formData.offerType === "flat" ? "default" : "outline"} role="radio" aria-checked={formData.offerType === "flat"} onClick={() => set("offerType", "flat")} className="flex-none">{t("products:form.pricing.flat", { symbol: currencySymbol })}</Button>
                       </div>
                     </FormField>
-                    <FormField label={formData.offerType === "percentage" ? "Discount (%)" : "Discount amount"} htmlFor="offerPrice" className="min-w-0"
-                      error={formData.offerType === "percentage" && offerNum > 100 ? "A percentage offer cannot be more than 100%." : undefined}
-                      description={formData.offerType === "percentage" && offerNum > 100 ? undefined : "0 = no offer"}>
+                    <FormField label={formData.offerType === "percentage" ? t("products:form.pricing.discountPct") : t("products:form.pricing.discountAmount")} htmlFor="offerPrice" className="min-w-0"
+                      error={formData.offerType === "percentage" && offerNum > 100 ? t("products:form.pricing.maxPct") : undefined}
+                      description={formData.offerType === "percentage" && offerNum > 100 ? undefined : t("products:form.pricing.noOffer")}>
                       {money(<Input id="offerPrice" type="number" min={0} max={formData.offerType === "percentage" ? 100 : undefined} aria-invalid={formData.offerType === "percentage" && offerNum > 100} className="pl-7" value={formData.offerPrice} onChange={(e) => set("offerPrice", e.target.value)} placeholder="0" />, formData.offerType === "percentage" ? "%" : currencySymbol)}
                     </FormField>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <FormField label="Offer ends" htmlFor="offerEndsAt" description="Blank = no end date" className="min-w-0">
+                    <FormField label={t("products:shared.offerEnds")} htmlFor="offerEndsAt" description={t("products:form.pricing.noEnd")} className="min-w-0">
                       <Input id="offerEndsAt" type="date" value={formData.offerEndsAt} min={today} disabled={!Number(formData.offerPrice)}
                         onChange={(e) => set("offerEndsAt", e.target.value)} />
                     </FormField>
-                    <FormField label="Wholesale price" htmlFor="wholesalePrice" className="min-w-0">
+                    <FormField label={t("products:shared.wholesalePrice")} htmlFor="wholesalePrice" className="min-w-0">
                       {money(<Input id="wholesalePrice" type="number" min={0} className="pl-7" value={formData.wholesalePrice} onChange={(e) => set("wholesalePrice", e.target.value)} placeholder="0" />, currencySymbol)}
                     </FormField>
-                    <FormField label="Min. wholesale qty" htmlFor="minWholesaleQty" className="min-w-0">
-                      <Input id="minWholesaleQty" type="number" min={0} value={formData.minWholesaleQty} onChange={(e) => set("minWholesaleQty", e.target.value)} placeholder="e.g. 12" />
+                    <FormField label={t("products:form.pricing.minWholesale")} htmlFor="minWholesaleQty" className="min-w-0">
+                      <Input id="minWholesaleQty" type="number" min={0} value={formData.minWholesaleQty} onChange={(e) => set("minWholesaleQty", e.target.value)} placeholder={t("products:form.pricing.minWholesalePlaceholder")} />
                     </FormField>
                   </div>
                   {warnings.length > 0 && (
                     <Alert role="status">
                       <AlertDescription className="flex flex-col gap-1">
                         {warnings.map(w => <span key={w} className="font-medium text-foreground">{w}</span>)}
-                        <span className="text-xs">These are warnings only — you can still save.</span>
+                        <span className="text-xs">{t("products:form.pricing.warnOnly")}</span>
                       </AlertDescription>
                     </Alert>
                   )}
                 </div>
               </Section>
 
-              <Section n={4} title="Inventory" hint="Opening stock and when to warn you.">
+              <Section n={4} title={t("products:form.inventory.title")} hint={t("products:form.inventory.hint")}>
                 <div className="flex flex-col gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FormField label={editingProduct ? "Stock" : "Opening stock"} htmlFor="stock" className="min-w-0"
-                      description={hasVariants ? `Changing this spreads the total evenly over the ${generatedVariants.length} variants; you can still edit each one.` : undefined}>
+                    <FormField label={editingProduct ? t("common:fields.stock") : t("products:form.inventory.openingStock")} htmlFor="stock" className="min-w-0"
+                      description={hasVariants ? t("products:form.inventory.spreadHelp", { n: generatedVariants.length }) : undefined}>
                       <Input id="stock" type="number" min={0} value={formData.stock} onChange={(e) => setTopStock(e.target.value)} placeholder="0" />
                     </FormField>
-                    <FormField label={<span id="whLbl">Warehouse</span>} className="min-w-0">
+                    <FormField label={<span id="whLbl">{t("common:fields.warehouse")}</span>} className="min-w-0">
                       <Select value={formData.locationId || String(warehouses[0]?.id || "")} onValueChange={(val) => set("locationId", val)}>
-                        <SelectTrigger aria-labelledby="whLbl" className={selectCls}><SelectValue placeholder="Location" /></SelectTrigger>
+                        <SelectTrigger aria-labelledby="whLbl" className={selectCls}><SelectValue placeholder={t("common:fields.location")} /></SelectTrigger>
                         <SelectContent>
                           {warehouses.map(w => (<SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>))}
                         </SelectContent>
                       </Select>
                     </FormField>
-                    <FormField label="Reorder point" htmlFor="reorderPoint" description="Low-stock alert at or below this. 0 = off" className="min-w-0">
-                      <Input id="reorderPoint" type="number" min={0} value={formData.reorderPoint} onChange={(e) => set("reorderPoint", e.target.value)} placeholder="0 (off)" />
+                    <FormField label={t("products:form.inventory.reorderPoint")} htmlFor="reorderPoint" description={t("products:form.inventory.reorderHelp")} className="min-w-0">
+                      <Input id="reorderPoint" type="number" min={0} value={formData.reorderPoint} onChange={(e) => set("reorderPoint", e.target.value)} placeholder={t("products:form.inventory.reorderPlaceholder")} />
                     </FormField>
-                    <FormField label="Receipt / batch no." htmlFor="receiptNumber" className="min-w-0">
-                      <Input id="receiptNumber" value={formData.receiptNumber} onChange={(e) => set("receiptNumber", e.target.value)} placeholder="Optional" />
+                    <FormField label={t("products:shared.receiptNo")} htmlFor="receiptNumber" className="min-w-0">
+                      <Input id="receiptNumber" value={formData.receiptNumber} onChange={(e) => set("receiptNumber", e.target.value)} placeholder={t("common:status.optional")} />
                     </FormField>
                   </div>
-                  <FormField label={<span id="trackLbl">Track by</span>} className="min-w-0"
-                    description={trackingType === "none" ? "Just a stock count — no serial or batch numbers."
-                      : trackingType === "serial" ? "Each unit gets a unique serial number. Stock = count of available serials. Manage serials from the Serial/Batch page."
-                      : trackingType === "batch" ? "Units grouped in batches/lots with expiry dates. Stock = sum of remaining batch quantities. Uses FEFO (First Expired First Out) on sell."
+                  <FormField label={<span id="trackLbl">{t("products:form.inventory.trackBy")}</span>} className="min-w-0"
+                    description={trackingType === "none" ? t("products:form.inventory.trackNoneHelp")
+                      : trackingType === "serial" ? t("products:form.inventory.trackSerialHelp")
+                      : trackingType === "batch" ? t("products:form.inventory.trackBatchHelp")
                       : undefined}>
                     <div role="radiogroup" aria-labelledby="trackLbl" className="flex flex-wrap gap-2">
                       {(["none", "serial", "batch"] as const).map((type) => (
                         <Button key={type} type="button" variant={trackingType === type ? "default" : "outline"} role="radio" aria-checked={trackingType === type} onClick={() => setTrackingType(type)} className="flex-1">
-                          {type === "none" ? "Quantity only" : type === "serial" ? "Serial" : "Batch"}
+                          {type === "none" ? t("products:shared.quantityOnly") : type === "serial" ? t("products:form.inventory.serial") : t("products:form.inventory.batch")}
                         </Button>
                       ))}
                     </div>
@@ -996,13 +1000,13 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                 </div>
               </Section>
 
-              <Section n={5} title="Variants" hint="Sell the same product in different colours or sizes." action={<Button asChild variant="link" size="sm" className="h-auto p-0"><a href="/dashboard/attributes" target="_blank" rel="noreferrer">Manage attributes →</a></Button>}>
+              <Section n={5} title={t("products:form.variants.title")} hint={t("products:form.variants.hint")} action={<Button asChild variant="link" size="sm" className="h-auto p-0"><a href="/dashboard/attributes" target="_blank" rel="noreferrer">{t("products:form.variants.manage")}</a></Button>}>
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center gap-2">
                     {attributesLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading attributes…</p>
+                      <p className="text-sm text-muted-foreground">{t("products:form.variants.loading")}</p>
                     ) : globalAttributes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No attributes found. Add attributes from the Attributes page first.</p>
+                      <p className="text-sm text-muted-foreground">{t("products:form.variants.none")}</p>
                     ) : globalAttributes.map(attr => {
                       const on = selectedAttributeIds.includes(attr.id)
                       return (
@@ -1032,8 +1036,8 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         <span className="w-24 shrink-0 text-[13px] font-semibold">{globalAttr.displayName || globalAttr.name}</span>
                         {(globalAttr.option === "dropdown" || globalAttr.option === "radio") && globalAttr.values.length > 0 && (
                           <span className="flex shrink-0 gap-2">
-                            <Button type="button" variant="link" size="sm" onClick={() => selectAllValues(attr.id, globalAttr.values)}>Select all</Button>
-                            <Button type="button" variant="link" size="sm" onClick={() => clearValues(attr.id)}>Clear</Button>
+                            <Button type="button" variant="link" size="sm" onClick={() => selectAllValues(attr.id, globalAttr.values)}>{t("common:actions.selectAll")}</Button>
+                            <Button type="button" variant="link" size="sm" onClick={() => clearValues(attr.id)}>{t("common:actions.clear")}</Button>
                           </span>
                         )}
                         {globalAttr.option === "dropdown" || globalAttr.option === "radio" ? (
@@ -1054,12 +1058,12 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                               })}
                             </div>
                           ) : (
-                            <p className="text-xs italic text-muted-foreground">No values defined for this attribute</p>
+                            <p className="text-xs italic text-muted-foreground">{t("products:form.variants.noValues")}</p>
                           )
                         ) : (
                           <Input className="flex-1" aria-label={globalAttr.displayName || globalAttr.name}
                             value={attr.value as string} onChange={(e) => handleAttributeValueChange(attr.id, e.target.value)}
-                            placeholder={`Enter ${globalAttr.displayName || globalAttr.name}`} />
+                            placeholder={t("products:form.variants.enterValue", { name: globalAttr.displayName || globalAttr.name })} />
                         )}
                       </div>
                     )
@@ -1067,7 +1071,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
 
                   {productAttributes.some(a => Array.isArray(a.value) ? a.value.length > 0 : a.value !== "") && (
                     <Button type="button" onClick={() => generateVariants()} className="w-full">
-                      {hasVariants ? "Generate new combinations" : "Generate variants"}
+                      {hasVariants ? t("products:form.variants.generateNew") : t("products:form.variants.generate")}
                     </Button>
                   )}
 
@@ -1077,28 +1081,28 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Variant</TableHead>
-                              <TableHead>Price</TableHead>
-                              <TableHead>Offer (type + value)</TableHead>
-                              <TableHead>Stock</TableHead>
-                              <TableHead>SKU</TableHead>
-                              <TableHead><span className="sr-only">Actions</span></TableHead>
+                              <TableHead>{t("common:fields.variant")}</TableHead>
+                              <TableHead>{t("common:money.price")}</TableHead>
+                              <TableHead>{t("products:form.variants.colOffer")}</TableHead>
+                              <TableHead>{t("common:fields.stock")}</TableHead>
+                              <TableHead>{t("common:fields.sku")}</TableHead>
+                              <TableHead><span className="sr-only">{t("common:fields.actions")}</span></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {generatedVariants.map(variant => (
                               <TableRow key={variant.id}>
                                 <TableCell className="font-medium">{variant.name}</TableCell>
-                                <TableCell><Input type="number" aria-label={`${variant.name} price`} min={0} className="w-24" value={variant.salePrice || ""} onChange={(e) => setVariantPrice(variant.id, Number(e.target.value))} /></TableCell>
+                                <TableCell><Input type="number" aria-label={t("products:form.variants.priceAria", { name: variant.name })} min={0} className="w-24" value={variant.salePrice || ""} onChange={(e) => setVariantPrice(variant.id, Number(e.target.value))} /></TableCell>
                                 <TableCell>
                                   <div className="flex flex-col gap-1">
                                     <div className="flex gap-1">
-                                      <WithTooltip content="Percentage offer"><Button type="button" size="icon" variant={(variant.offerType ?? "percentage") === "percentage" ? "default" : "outline"} aria-label="Percentage offer" aria-pressed={(variant.offerType ?? "percentage") === "percentage"} onClick={() => updateVariant(variant.id, "offerType", "percentage")}>%</Button></WithTooltip>
-                                      <WithTooltip content="Flat offer"><Button type="button" size="icon" variant={variant.offerType === "flat" ? "default" : "outline"} aria-label="Flat offer" aria-pressed={variant.offerType === "flat"} onClick={() => updateVariant(variant.id, "offerType", "flat")}>$</Button></WithTooltip>
-                                      <Input type="number" min={0} aria-label={`${variant.name} offer value`} aria-invalid={(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100} className="w-16" placeholder="0" value={variant.offerPrice || ""} onChange={(e) => updateVariant(variant.id, "offerPrice", Number(e.target.value) || undefined)} />
+                                      <WithTooltip content={t("products:form.variants.pctOffer")}><Button type="button" size="icon" variant={(variant.offerType ?? "percentage") === "percentage" ? "default" : "outline"} aria-label={t("products:form.variants.pctOffer")} aria-pressed={(variant.offerType ?? "percentage") === "percentage"} onClick={() => updateVariant(variant.id, "offerType", "percentage")}>%</Button></WithTooltip>
+                                      <WithTooltip content={t("products:form.variants.flatOffer")}><Button type="button" size="icon" variant={variant.offerType === "flat" ? "default" : "outline"} aria-label={t("products:form.variants.flatOffer")} aria-pressed={variant.offerType === "flat"} onClick={() => updateVariant(variant.id, "offerType", "flat")}>$</Button></WithTooltip>
+                                      <Input type="number" min={0} aria-label={t("products:form.variants.offerValueAria", { name: variant.name })} aria-invalid={(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100} className="w-16" placeholder="0" value={variant.offerPrice || ""} onChange={(e) => updateVariant(variant.id, "offerPrice", Number(e.target.value) || undefined)} />
                                     </div>
                                     {(variant.offerType ?? "percentage") === "percentage" && (variant.offerPrice || 0) > 100 ? (
-                                      <span className="text-xs font-medium text-destructive">Max 100%</span>
+                                      <span className="text-xs font-medium text-destructive">{t("products:form.variants.max100")}</span>
                                     ) : variant.offerPrice ? (
                                       <span className="text-xs font-semibold tabular-nums text-foreground">
                                         = {formatCurrency((variant.offerType ?? "percentage") === "percentage"
@@ -1108,15 +1112,15 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                     ) : null}
                                   </div>
                                 </TableCell>
-                                <TableCell><Input type="number" aria-label={`${variant.name} stock`} className="w-20" value={variant.stock || ""} onChange={(e) => updateVariant(variant.id, "stock", Number(e.target.value))} /></TableCell>
+                                <TableCell><Input type="number" aria-label={t("products:form.variants.stockAria", { name: variant.name })} className="w-20" value={variant.stock || ""} onChange={(e) => updateVariant(variant.id, "stock", Number(e.target.value))} /></TableCell>
                                 <TableCell>
                                   <WithTooltip content={variantSkuErrors[variant.id]}>
-                                    <Input aria-label={`${variant.name} SKU`} aria-invalid={!!variantSkuErrors[variant.id]} className="w-36 font-mono" value={variant.sku} onChange={(e) => updateVariant(variant.id, "sku", e.target.value)} />
+                                    <Input aria-label={t("products:form.variants.skuAria", { name: variant.name })} aria-invalid={!!variantSkuErrors[variant.id]} className="w-36 font-mono" value={variant.sku} onChange={(e) => updateVariant(variant.id, "sku", e.target.value)} />
                                   </WithTooltip>
                                   {variantSkuErrors[variant.id] && <span className="mt-1 block max-w-[220px] text-xs font-medium text-destructive">{variantSkuErrors[variant.id]}</span>}
                                 </TableCell>
                                 <TableCell>
-                                  <WithTooltip content={`Remove variant ${variant.name}`}><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove variant ${variant.name}`} onClick={() => removeVariant(variant.id)}>
+                                  <WithTooltip content={t("products:form.variants.remove", { name: variant.name })}><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={t("products:form.variants.remove", { name: variant.name })} onClick={() => removeVariant(variant.id)}>
                                     <Trash2 className="size-4" />
                                   </Button></WithTooltip>
                                 </TableCell>
@@ -1126,56 +1130,56 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                         </Table>
                       </Card>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground tabular-nums">{generatedVariants.length} variants · each gets its own SKU and stock · price starts from the product price</span>
-                        <Button type="button" variant="destructive" size="sm" onClick={() => setGeneratedVariants([])}>Remove all variants</Button>
+                        <span className="text-xs text-muted-foreground tabular-nums">{t("products:form.variants.summary", { count: generatedVariants.length })}</span>
+                        <Button type="button" variant="destructive" size="sm" onClick={() => setGeneratedVariants([])}>{t("products:form.variants.removeAll")}</Button>
                       </div>
                     </>
                   )}
                 </div>
               </Section>
 
-              <Section n={6} title="Online store & promotions" hint="How this product appears on your website.">
+              <Section n={6} title={t("products:form.online.title")} hint={t("products:form.online.hint")}>
                 <div className="flex flex-col gap-4">
                   <div className="grid gap-2.5 md:grid-cols-3">
-                    <ToggleRow id="hotDeal" title="Hot deal" sub="Show in Hot deals" checked={isHotDeal} onChange={setIsHotDeal} />
-                    <ToggleRow id="bestSeller" title="Best seller" sub="Show Best seller badge" checked={isBestSeller} onChange={setIsBestSeller} />
-                    <ToggleRow id="featured" title="Featured" sub="Show on home page" checked={isFeatured} onChange={setIsFeatured} />
+                    <ToggleRow id="hotDeal" title={t("products:shared.hotDeal")} sub={t("products:form.online.hotDealSub")} checked={isHotDeal} onChange={setIsHotDeal} />
+                    <ToggleRow id="bestSeller" title={t("products:shared.bestSeller")} sub={t("products:form.online.bestSellerSub")} checked={isBestSeller} onChange={setIsBestSeller} />
+                    <ToggleRow id="featured" title={t("products:shared.featured")} sub={t("products:form.online.featuredSub")} checked={isFeatured} onChange={setIsFeatured} />
                   </div>
-                  <FormField label="Custom tag (optional)" htmlFor="tag" description="One short tag shown as a badge, in addition to Best seller / Hot deal." className="min-w-0">
-                    <Input id="tag" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. New arrival" maxLength={30} />
+                  <FormField label={t("products:form.online.tag")} htmlFor="tag" description={t("products:form.online.tagHelp")} className="min-w-0">
+                    <Input id="tag" value={tag} onChange={(e) => setTag(e.target.value)} placeholder={t("products:form.online.tagPlaceholder")} maxLength={30} />
                   </FormField>
-                  <FormField label="Badge text (optional)" htmlFor="dealLabel" description="Replaces the automatic badge. Leave blank to use the tag name." className="min-w-0">
-                    <Input id="dealLabel" value={dealLabel} onChange={(e) => setDealLabel(e.target.value)} placeholder="e.g. Eid special, 40% off" maxLength={50} />
+                  <FormField label={t("products:form.online.badge")} htmlFor="dealLabel" description={t("products:form.online.badgeHelp")} className="min-w-0">
+                    <Input id="dealLabel" value={dealLabel} onChange={(e) => setDealLabel(e.target.value)} placeholder={t("products:form.online.badgePlaceholder")} maxLength={50} />
                   </FormField>
-                  <ToggleRow id="isBundle" title="Bundle / kit" sub="Sell several products together. Stock = lowest available item." checked={isBundle} onChange={setIsBundle} />
+                  <ToggleRow id="isBundle" title={t("products:form.bundle.toggle")} sub={t("products:form.bundle.toggleSub")} checked={isBundle} onChange={setIsBundle} />
 
                   {isBundle && (
                     <Card className="gap-4 bg-muted/50 p-4 shadow-none">
-                      <FormField label="Bundle price override" htmlFor="bundlePriceOverride" className="min-w-0 max-w-xs"
-                        description="Optional — leave blank to price the bundle from cost + margin">
-                        {money(<Input id="bundlePriceOverride" type="number" min={0} className="pl-7" value={bundlePriceOverride} onChange={(e) => setBundlePriceOverride(e.target.value)} placeholder="Use items total" />, currencySymbol)}
+                      <FormField label={t("products:form.bundle.override")} htmlFor="bundlePriceOverride" className="min-w-0 max-w-xs"
+                        description={t("products:form.bundle.overrideHelp")}>
+                        {money(<Input id="bundlePriceOverride" type="number" min={0} className="pl-7" value={bundlePriceOverride} onChange={(e) => setBundlePriceOverride(e.target.value)} placeholder={t("products:form.bundle.overridePlaceholder")} />, currencySymbol)}
                       </FormField>
 
-                      <FormField label="Add child products" htmlFor="bundleSearch" className="min-w-0">
+                      <FormField label={t("products:form.bundle.addChild")} htmlFor="bundleSearch" className="min-w-0">
                         <div className="relative">
-                          <Input id="bundleSearch" value={bundleSearch} placeholder="Search products to add…"
+                          <Input id="bundleSearch" value={bundleSearch} placeholder={t("products:shared.searchProductsToAdd")}
                             onChange={(e) => { setBundleSearch(e.target.value); searchBundleProducts(e.target.value) }} />
                           {bundleSearchResults.length > 0 && (
                             <Card className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 gap-0 overflow-y-auto py-0 shadow-lg">
-                              {bundleSearchLoading && <div className="p-2 text-sm text-muted-foreground">Searching…</div>}
+                              {bundleSearchLoading && <div className="p-2 text-sm text-muted-foreground">{t("products:form.bundle.searching")}</div>}
                               {bundleSearchResults.map((p: any, pi: number) => (
                                 <Fragment key={p.id}>
                                   {pi > 0 && <Separator />}
                                   <Button type="button" variant="ghost" onClick={() => addBundleItem(p)}
                                     className="h-auto w-full justify-between rounded-none text-left">
                                     <span>{p.name} <span className="text-xs text-muted-foreground">({p.sku})</span></span>
-                                    <span className="text-xs text-muted-foreground tabular-nums">Stock: {p.stock}</span>
+                                    <span className="text-xs text-muted-foreground tabular-nums">{t("products:form.bundle.stockN", { n: p.stock })}</span>
                                   </Button>
                                   {p.variants?.length > 0 && p.variants.map((v: any) => (
                                     <Button key={v.id} type="button" variant="ghost" size="sm" onClick={() => addBundleItem(p, v)}
                                       className="h-auto w-full justify-between rounded-none pl-6 text-left">
                                       <span>└ {v.name}</span>
-                                      <span className="tabular-nums">Stock: {v.stock}</span>
+                                      <span className="tabular-nums">{t("products:form.bundle.stockN", { n: v.stock })}</span>
                                     </Button>
                                   ))}
                                 </Fragment>
@@ -1190,11 +1194,11 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Product</TableHead>
-                                <TableHead>Variant</TableHead>
-                                <TableHead className="w-32 text-center">Qty in bundle</TableHead>
-                                <TableHead className="w-24 text-right">Available</TableHead>
-                                <TableHead className="w-10"><span className="sr-only">Remove</span></TableHead>
+                                <TableHead>{t("common:fields.product")}</TableHead>
+                                <TableHead>{t("common:fields.variant")}</TableHead>
+                                <TableHead className="w-32 text-center">{t("products:form.bundle.qtyInBundle")}</TableHead>
+                                <TableHead className="w-24 text-right">{t("products:form.bundle.available")}</TableHead>
+                                <TableHead className="w-10"><span className="sr-only">{t("common:actions.remove")}</span></TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1207,9 +1211,9 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                   <TableCell className="text-xs text-muted-foreground">{bi.variantName || "—"}</TableCell>
                                   <TableCell>
                                     <div className="flex items-center justify-center gap-1">
-                                      <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon-sm" aria-label="Decrease quantity" onClick={() => updateBundleItemQty(index, bi.quantity - 1)}><Minus className="size-3" /></Button></WithTooltip>
-                                      <Input type="number" min={1} aria-label={`${bi.productName} quantity`} value={bi.quantity} onChange={(e) => updateBundleItemQty(index, parseInt(e.target.value) || 1)} className="w-14 text-center tabular-nums" />
-                                      <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon-sm" aria-label="Increase quantity" onClick={() => updateBundleItemQty(index, bi.quantity + 1)}><Plus className="size-3" /></Button></WithTooltip>
+                                      <WithTooltip content={t("products:form.bundle.decrease")}><Button type="button" variant="outline" size="icon-sm" aria-label={t("products:form.bundle.decrease")} onClick={() => updateBundleItemQty(index, bi.quantity - 1)}><Minus className="size-3" /></Button></WithTooltip>
+                                      <Input type="number" min={1} aria-label={t("products:form.bundle.qtyAria", { name: bi.productName })} value={bi.quantity} onChange={(e) => updateBundleItemQty(index, parseInt(e.target.value) || 1)} className="w-14 text-center tabular-nums" />
+                                      <WithTooltip content={t("products:form.bundle.increase")}><Button type="button" variant="outline" size="icon-sm" aria-label={t("products:form.bundle.increase")} onClick={() => updateBundleItemQty(index, bi.quantity + 1)}><Plus className="size-3" /></Button></WithTooltip>
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-right tabular-nums">
@@ -1218,7 +1222,7 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                                       : <span className={cn("font-semibold", bundleRows[index].available === 0 && "text-destructive")}>{bundleRows[index].available}</span>}
                                   </TableCell>
                                   <TableCell>
-                                    <WithTooltip content={`Remove ${bi.productName}`}><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={`Remove ${bi.productName}`} onClick={() => removeBundleItem(index)}><Trash2 className="size-4" /></Button></WithTooltip>
+                                    <WithTooltip content={t("products:shared.removeName", { name: bi.productName })}><Button type="button" variant="ghost" size="icon" className="text-destructive" aria-label={t("products:shared.removeName", { name: bi.productName })} onClick={() => removeBundleItem(index)}><Trash2 className="size-4" /></Button></WithTooltip>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1226,12 +1230,16 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                           </Table>
                           <Separator />
                           <CardFooter className="flex-wrap justify-between gap-2 px-3 py-2 text-xs text-muted-foreground tabular-nums">
-                            <span>Bundles available from current stock: <strong className="text-foreground">{bundlesAvailable === null ? "—" : bundlesAvailable}</strong></span>
-                            <span>Items add up to <strong className="text-foreground">{formatCurrency(bundleItemsTotal)}</strong>{sellingPrice > 0 && bundleItemsTotal > 0 ? <> · bundle sells at <strong className="text-foreground">{formatCurrency(sellingPrice)}</strong></> : null}</span>
+                            <span><Trans t={t} i18nKey="products:form.bundle.availableFrom" values={{ n: bundlesAvailable === null ? "—" : bundlesAvailable }} components={{ b: <strong className="text-foreground" /> }} /></span>
+                            <span>
+                              {sellingPrice > 0 && bundleItemsTotal > 0
+                                ? <Trans t={t} i18nKey="products:form.bundle.itemsTotalSells" values={{ total: formatCurrency(bundleItemsTotal), price: formatCurrency(sellingPrice) }} components={{ b: <strong className="text-foreground" /> }} />
+                                : <Trans t={t} i18nKey="products:form.bundle.itemsTotal" values={{ total: formatCurrency(bundleItemsTotal) }} components={{ b: <strong className="text-foreground" /> }} />}
+                            </span>
                           </CardFooter>
                         </Card>
                       ) : (
-                        <EmptyState className="p-4 md:p-4" title="No child products added yet." description="Search above to add products." />
+                        <EmptyState className="p-4 md:p-4" title={t("products:form.bundle.emptyTitle")} description={t("products:form.bundle.emptyDesc")} />
                       )}
                     </Card>
                   )}
@@ -1241,35 +1249,35 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
 
             {/* ------------ Side column ------------ */}
             <aside className="flex min-w-0 flex-col gap-5 lg:sticky lg:top-0">
-              <Section title="Status" hint="Where this product is sold.">
+              <Section title={t("common:fields.status")} hint={t("products:form.status.hint")}>
                 <div className="flex flex-col gap-2.5">
-                  <ToggleRow id="availableInPos" title="Available in POS" sub="Show at the point of sale" checked={availableInPos} onChange={setAvailableInPos} />
-                  <ToggleRow id="visibleOnline" title="Visible online" sub="Show on your website" checked={visibleOnline} onChange={setVisibleOnline} />
-                  <p className="text-xs text-muted-foreground">Use “Save as draft” to keep it hidden everywhere until it is ready.</p>
+                  <ToggleRow id="availableInPos" title={t("products:form.status.pos")} sub={t("products:form.status.posSub")} checked={availableInPos} onChange={setAvailableInPos} />
+                  <ToggleRow id="visibleOnline" title={t("products:form.status.online")} sub={t("products:form.status.onlineSub")} checked={visibleOnline} onChange={setVisibleOnline} />
+                  <p className="text-xs text-muted-foreground">{t("products:form.status.draftNote")}</p>
                 </div>
               </Section>
 
-              <Section title="Organise">
+              <Section title={t("products:form.organise.title")}>
                 <div className="flex flex-col gap-3">
                   <FormField className="min-w-0">
-                    <span className="flex items-center justify-between"><Label id="catLbl">Category</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/categories" target="_blank" rel="noreferrer">+ Category</a></Button></span>
+                    <span className="flex items-center justify-between"><Label id="catLbl">{t("common:fields.category")}</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/categories" target="_blank" rel="noreferrer">{t("products:form.organise.addCategory")}</a></Button></span>
                     <CategoryPicker labelledBy="catLbl" categories={allCategories} value={formData.categoryId}
                       onChange={(id, name) => setFormData(prev => ({ ...prev, categoryId: id, category: name }))} />
                   </FormField>
                   <FormField className="min-w-0">
-                    <span className="flex items-center justify-between"><Label id="brandLbl">Brand</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/brands" target="_blank" rel="noreferrer">+ Brand</a></Button></span>
+                    <span className="flex items-center justify-between"><Label id="brandLbl">{t("products:shared.brand")}</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/brands" target="_blank" rel="noreferrer">{t("products:form.organise.addBrand")}</a></Button></span>
                     <Select value={formData.brandId || NONE} onValueChange={(value) => setFormData(prev => ({ ...prev, brandId: value === NONE ? "" : value }))}>
-                      <SelectTrigger aria-labelledby="brandLbl" className={selectCls}><SelectValue placeholder="Select brand" /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="brandLbl" className={selectCls}><SelectValue placeholder={t("products:form.organise.selectBrand")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NONE}>No brand</SelectItem>
-                        {brands.filter(b => b.status !== false || String(b.id) === formData.brandId).map((b) => (<SelectItem key={b.id} value={String(b.id)} textValue={b.brandName}>{b.brandName}{b.status === false ? " (Inactive)" : ""}</SelectItem>))}
+                        <SelectItem value={NONE}>{t("products:shared.noBrand")}</SelectItem>
+                        {brands.filter(b => b.status !== false || String(b.id) === formData.brandId).map((b) => (<SelectItem key={b.id} value={String(b.id)} textValue={b.brandName}>{b.brandName}{b.status === false ? ` (${t("common:status.inactive")})` : ""}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </FormField>
                   <FormField className="min-w-0">
-                    <span className="flex items-center justify-between"><Label id="unitLbl">Unit</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/units" target="_blank" rel="noreferrer">+ Unit</a></Button></span>
+                    <span className="flex items-center justify-between"><Label id="unitLbl">{t("products:shared.unit")}</Label><Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><a href="/dashboard/units" target="_blank" rel="noreferrer">{t("products:form.organise.addUnit")}</a></Button></span>
                     <Select value={formData.unitId} onValueChange={(value) => setFormData(prev => ({ ...prev, unitId: value }))}>
-                      <SelectTrigger aria-labelledby="unitLbl" className={selectCls}><SelectValue placeholder="Select unit" /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="unitLbl" className={selectCls}><SelectValue placeholder={t("products:form.organise.selectUnit")} /></SelectTrigger>
                       <SelectContent>
                         {units.map((u) => (
                           <SelectItem key={u.id} value={String(u.id)} textValue={u.unitName}>{u.unitName}{u.symbol ? ` (${u.symbol})` : ""}</SelectItem>
@@ -1277,11 +1285,11 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       </SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label={<span id="vendorLbl">Supplier</span>} className="min-w-0">
+                  <FormField label={<span id="vendorLbl">{t("products:shared.supplier")}</span>} className="min-w-0">
                     <Select value={formData.vendorId || NONE} onValueChange={(value) => set("vendorId", value === NONE ? "" : value)}>
-                      <SelectTrigger aria-labelledby="vendorLbl" className={selectCls}><SelectValue placeholder="Select supplier (optional)" /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="vendorLbl" className={selectCls}><SelectValue placeholder={t("products:form.organise.selectSupplier")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NONE}>None</SelectItem>
+                        <SelectItem value={NONE}>{t("common:status.none")}</SelectItem>
                         {vendors.map((vendor) => (<SelectItem key={vendor.id} value={vendor.id}>{vendor.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
@@ -1290,76 +1298,76 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
               </Section>
 
               {showSupplierPayment && (
-                <Section title="Supplier payment" hint={`Cost price × stock = ${formatCurrency(supplierTotal)}`}>
+                <Section title={t("products:form.supplierPay.title")} hint={t("products:form.supplierPay.hint", { total: formatCurrency(supplierTotal) })}>
                   {supplierTotal <= 0 ? (
-                    <p className="text-sm text-muted-foreground">Enter a cost price and stock to track what you owe this supplier.</p>
+                    <p className="text-sm text-muted-foreground">{t("products:form.supplierPay.needCost")}</p>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <FormField label={<span id="spStatusLbl">Status</span>} className="min-w-0">
+                      <FormField label={<span id="spStatusLbl">{t("common:fields.status")}</span>} className="min-w-0">
                         <Select value={formData.supplierPaymentStatus} onValueChange={(v) => set("supplierPaymentStatus", v)}>
                           <SelectTrigger aria-labelledby="spStatusLbl" className={selectCls}><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="due">Due (unpaid)</SelectItem>
-                            <SelectItem value="partial">Partial</SelectItem>
-                            <SelectItem value="paid">Paid</SelectItem>
+                            <SelectItem value="due">{t("products:form.supplierPay.due")}</SelectItem>
+                            <SelectItem value="partial">{t("products:form.supplierPay.partial")}</SelectItem>
+                            <SelectItem value="paid">{t("common:payment.paid")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormField>
                       {formData.supplierPaymentStatus === "partial" && (
-                        <FormField label="Paid amount" htmlFor="supplierPaidAmount" className="min-w-0">
+                        <FormField label={t("products:form.supplierPay.paidAmount")} htmlFor="supplierPaidAmount" className="min-w-0">
                           <Input id="supplierPaidAmount" type="number" min={0} max={supplierTotal} step="0.01" value={formData.supplierPaidAmount} onChange={(e) => set("supplierPaidAmount", e.target.value)} placeholder="0.00" />
                         </FormField>
                       )}
                       {formData.supplierPaymentStatus !== "due" && (
                         <>
-                          <FormField label={<span id="spMethodLbl">Method</span>} className="min-w-0">
+                          <FormField label={<span id="spMethodLbl">{t("products:form.supplierPay.method")}</span>} className="min-w-0">
                             <Select value={formData.supplierPaymentMethod} onValueChange={(v) => set("supplierPaymentMethod", v)}>
                               <SelectTrigger aria-labelledby="spMethodLbl" className={selectCls}><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="cash">Cash</SelectItem>
-                                <SelectItem value="bank">Bank</SelectItem>
-                                <SelectItem value="bkash">bKash</SelectItem>
-                                <SelectItem value="card">Card</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
+                                <SelectItem value="cash">{t("common:payment.cash")}</SelectItem>
+                                <SelectItem value="bank">{t("common:payment.bank")}</SelectItem>
+                                <SelectItem value="bkash">{t("products:form.supplierPay.bkash")}</SelectItem>
+                                <SelectItem value="card">{t("common:payment.card")}</SelectItem>
+                                <SelectItem value="other">{t("products:form.supplierPay.other")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormField>
-                          <FormField label="Date" htmlFor="supplierPaymentDate" className="min-w-0">
+                          <FormField label={t("common:fields.date")} htmlFor="supplierPaymentDate" className="min-w-0">
                             <Input id="supplierPaymentDate" type="date" value={formData.supplierPaymentDate} onChange={(e) => set("supplierPaymentDate", e.target.value)} />
                           </FormField>
                         </>
                       )}
                       <InfoList className="tabular-nums">
-                        <InfoRow label="Paid" value={formatCurrency(supplierPaid)} />
-                        <InfoRow label="Due" value={<span className="text-destructive">{formatCurrency(Math.max(0, supplierTotal - supplierPaid))}</span>} />
+                        <InfoRow label={t("common:money.paid")} value={formatCurrency(supplierPaid)} />
+                        <InfoRow label={t("common:money.due")} value={<span className="text-destructive">{formatCurrency(Math.max(0, supplierTotal - supplierPaid))}</span>} />
                       </InfoList>
                     </div>
                   )}
                 </Section>
               )}
 
-              <Section title="Codes">
+              <Section title={t("products:form.codes.title")}>
                 <div className="flex flex-col gap-3">
-                  <FormField label="SKU" htmlFor="sku" error={skuError || undefined} className="min-w-0">
+                  <FormField label={t("common:fields.sku")} htmlFor="sku" error={skuError || undefined} className="min-w-0">
                     <span className="flex gap-2">
-                      <Input id="sku" aria-invalid={!!skuError} className="font-mono" value={formData.sku} onChange={(e) => set("sku", e.target.value)} placeholder="SKU" />
-                      <WithTooltip content="Regenerate SKU"><Button type="button" variant="outline" size="icon" aria-label="Regenerate SKU" onClick={() => set("sku", generateSkuCode())}><RefreshCw className="size-4" /></Button></WithTooltip>
+                      <Input id="sku" aria-invalid={!!skuError} className="font-mono" value={formData.sku} onChange={(e) => set("sku", e.target.value)} placeholder={t("common:fields.sku")} />
+                      <WithTooltip content={t("products:form.codes.regenSku")}><Button type="button" variant="outline" size="icon" aria-label={t("products:form.codes.regenSku")} onClick={() => set("sku", generateSkuCode())}><RefreshCw className="size-4" /></Button></WithTooltip>
                     </span>
                   </FormField>
-                  <FormField label="Barcode" htmlFor="barcode" className="min-w-0"
+                  <FormField label={t("common:fields.barcode")} htmlFor="barcode" className="min-w-0"
                     error={barcodeError || undefined}
                     description={barcodeError ? undefined : barcodeMisfitHint
-                      ? `Does not fit ${barcodeTypeLabel(formData.barcodeType).replace(/ \(.*\)/, "")} (${barcodeMisfitHint}) — will print as Code 128.`
-                      : `Auto-generated${isNumericBarcodeType(formData.barcodeType) ? " with a valid check digit" : ""}. Type or scan an existing barcode to use it instead.`}>
+                      ? t("products:form.codes.misfit", { type: barcodeTypeLabel(formData.barcodeType).replace(/ \(.*\)/, ""), hint: t(barcodeMisfitHint) })
+                      : isNumericBarcodeType(formData.barcodeType) ? t("products:form.codes.autoGenCheck") : t("products:form.codes.autoGen")}>
                     <span className="flex gap-2">
-                      <Input id="barcode" aria-invalid={!!barcodeError} className="font-mono" value={formData.barcode} onChange={(e) => { setBarcodeTouched(true); set("barcode", e.target.value) }} placeholder="Barcode" />
-                      <WithTooltip content="Regenerate barcode"><Button type="button" variant="outline" size="icon" aria-label="Regenerate barcode" onClick={() => { setBarcodeTouched(false); set("barcode", generateBarcodeCode(formData.barcodeType)) }}><RefreshCw className="size-4" /></Button></WithTooltip>
+                      <Input id="barcode" aria-invalid={!!barcodeError} className="font-mono" value={formData.barcode} onChange={(e) => { setBarcodeTouched(true); set("barcode", e.target.value) }} placeholder={t("common:fields.barcode")} />
+                      <WithTooltip content={t("products:form.codes.regenBarcode")}><Button type="button" variant="outline" size="icon" aria-label={t("products:form.codes.regenBarcode")} onClick={() => { setBarcodeTouched(false); set("barcode", generateBarcodeCode(formData.barcodeType)) }}><RefreshCw className="size-4" /></Button></WithTooltip>
                       {formData.barcode && (
-                        <WithTooltip content="Copy barcode"><Button type="button" variant="outline" size="icon" aria-label="Copy barcode"
+                        <WithTooltip content={t("products:shared.copyBarcode")}><Button type="button" variant="outline" size="icon" aria-label={t("products:shared.copyBarcode")}
                           onClick={() => {
                             navigator.clipboard.writeText(formData.barcode)
                             setBarcodeCopied(true)
-                            toast({ title: "Copied", description: "Barcode copied to clipboard" })
+                            toast({ title: t("common:actions.copied"), description: t("products:shared.barcodeCopied") })
                             setTimeout(() => setBarcodeCopied(false), 2000)
                           }}>
                           {barcodeCopied ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -1367,23 +1375,23 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
                       )}
                     </span>
                   </FormField>
-                  <FormField label={<span id="bcTypeLbl">Barcode type</span>} className="min-w-0">
+                  <FormField label={<span id="bcTypeLbl">{t("products:shared.barcodeType")}</span>} className="min-w-0">
                     <Select value={formData.barcodeType} onValueChange={changeBarcodeType}>
-                      <SelectTrigger aria-labelledby="bcTypeLbl" className={selectCls}><SelectValue placeholder="Select barcode type" /></SelectTrigger>
+                      <SelectTrigger aria-labelledby="bcTypeLbl" className={selectCls}><SelectValue placeholder={t("products:form.codes.selectType")} /></SelectTrigger>
                       <SelectContent>
-                        {BARCODE_TYPES.map(t => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}
+                        {BARCODE_TYPES.map(bt => (<SelectItem key={bt.value} value={bt.value}>{bt.label}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </FormField>
                 </div>
               </Section>
 
-              <Section title="Preview in POS">
+              <Section title={t("products:form.preview.title")}>
                 <Item variant="outline" size="sm" className="flex-nowrap">
                   <UserAvatar shape="square" src={uploadedImages[0] || null} alt="" fallback={<Package className="size-6" />} className="size-14" />
                   <ItemContent className="min-w-0">
-                    <ItemTitle className="w-full truncate">{formData.name || "Product name"}</ItemTitle>
-                    <ItemDescription className="text-xs tabular-nums">{totalStockShown} in stock{selectedWarehouseName ? ` · ${selectedWarehouseName}` : ""}</ItemDescription>
+                    <ItemTitle className="w-full truncate">{formData.name || t("products:form.preview.namePlaceholder")}</ItemTitle>
+                    <ItemDescription className="text-xs tabular-nums">{t("products:form.preview.inStock", { qty: totalStockShown })}{selectedWarehouseName ? ` · ${selectedWarehouseName}` : ""}</ItemDescription>
                   </ItemContent>
                   <ItemActions className="text-sm font-bold tabular-nums">{formatCurrency(finalPrice)}</ItemActions>
                 </Item>
@@ -1398,18 +1406,18 @@ export function ProductFormDialog({ open, editingProduct, onClose }: ProductForm
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground tabular-nums">
-              Selling at <strong className="text-foreground">{formatCurrency(finalPrice)}</strong>
-              {hasCost && <> · profit <strong className="text-foreground">{formatCurrency(profitPerUnit)}</strong> per unit</>}
-              {hasVariants && <> · {generatedVariants.length} variants</>}
+              <Trans t={t} i18nKey="products:form.footer.sellingAt" values={{ price: formatCurrency(finalPrice) }} components={{ b: <strong className="text-foreground" /> }} />
+              {hasCost && <> · <Trans t={t} i18nKey="products:form.footer.profit" values={{ profit: formatCurrency(profitPerUnit) }} components={{ b: <strong className="text-foreground" /> }} /></>}
+              {hasVariants && <> · {t("products:shared.variantCount", { count: generatedVariants.length })}</>}
             </span>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-              <Button type="button" variant="outline" onClick={() => submit("draft")} disabled={isSaving}>Save as draft</Button>
+              <Button type="button" variant="outline" onClick={handleClose}>{t("common:actions.cancel")}</Button>
+              <Button type="button" variant="outline" onClick={() => submit("draft")} disabled={isSaving}>{t("products:form.footer.saveDraft")}</Button>
               {!editingProduct && (
-                <Button type="button" variant="secondary" onClick={() => submit("another")} disabled={isSaving}>Save &amp; add another</Button>
+                <Button type="button" variant="secondary" onClick={() => submit("another")} disabled={isSaving}>{t("products:form.footer.saveAnother")}</Button>
               )}
               <Button type="button" onClick={() => submit("save")} disabled={isSaving}>
-                {isSaving ? "Saving…" : editingProduct ? "Save changes" : "Save product"}
+                {isSaving ? t("common:actions.saving") : editingProduct ? t("common:actions.saveChanges") : t("products:form.footer.saveProduct")}
               </Button>
             </div>
           </div>

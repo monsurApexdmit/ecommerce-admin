@@ -12,16 +12,26 @@ export const BARCODE_TYPES = [
 
 export const barcodeTypeLabel = (t: string) => BARCODE_TYPES.find(b => b.value === t)?.label ?? t
 
-const RULES: Record<string, { re: RegExp; hint: string }> = {
-  EAN13: { re: /^\d{12,13}$/, hint: "12-13 digits" },
-  EAN8: { re: /^\d{7,8}$/, hint: "7-8 digits" },
-  UPCA: { re: /^\d{11,12}$/, hint: "11-12 digits" },
-  UPCE: { re: /^\d{6,8}$/, hint: "6-8 digits" },
-  C39: { re: /^[0-9A-Z\-. $/+%]+$/, hint: "A-Z, 0-9 and - . $ / + %" },
+/** Rule hints are i18n keys ("products" namespace), translated where they are shown. */
+const HINTS = {
+  EAN13: "products:form.codes.rules.ean13",
+  EAN8: "products:form.codes.rules.ean8",
+  UPCA: "products:form.codes.rules.upca",
+  UPCE: "products:form.codes.rules.upce",
+  C39: "products:form.codes.rules.c39",
+} as const
+export type BarcodeRuleHint = (typeof HINTS)[keyof typeof HINTS]
+
+const RULES: Record<string, { re: RegExp; hint: BarcodeRuleHint }> = {
+  EAN13: { re: /^\d{12,13}$/, hint: HINTS.EAN13 },
+  EAN8: { re: /^\d{7,8}$/, hint: HINTS.EAN8 },
+  UPCA: { re: /^\d{11,12}$/, hint: HINTS.UPCA },
+  UPCE: { re: /^\d{6,8}$/, hint: HINTS.UPCE },
+  C39: { re: /^[0-9A-Z\-. $/+%]+$/, hint: HINTS.C39 },
 }
 
-/** Returns null when the value fits the type (or the type has no rule), else a short rule hint. */
-export function barcodeMisfit(type: string, value: string): string | null {
+/** Returns null when the value fits the type (or the type has no rule), else the i18n key of a short rule hint. */
+export function barcodeMisfit(type: string, value: string): BarcodeRuleHint | null {
   const v = value.trim()
   const rule = RULES[type]
   if (!v || !rule) return null

@@ -15,8 +15,10 @@ import { FormField } from "@/components/common/FormField"
 import { saasAuthApi } from "@/lib/saasAuthApi"
 import { AlertCircle, Lock, Eye, EyeOff, CheckCircle, ArrowLeft } from "lucide-react"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { Trans, useTranslation } from "react-i18next"
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation(["auth", "common"])
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get("token")
@@ -62,31 +64,31 @@ export default function ResetPasswordPage() {
   }
 
   const getPasswordStrengthLabel = () => {
-    if (passwordStrength < 40) return "Weak"
-    if (passwordStrength < 70) return "Medium"
-    return "Strong"
+    if (passwordStrength < 40) return t("auth:password.weak")
+    if (passwordStrength < 70) return t("auth:password.medium")
+    return t("auth:password.strong")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!token) {
-      setError("Invalid or missing reset token")
+      setError(t("auth:password.reset.missingToken"))
       return
     }
 
     if (!password || !confirmPassword) {
-      setError("Please fill in all fields")
+      setError(t("auth:password.reset.fillAll"))
       return
     }
 
     if (password.length < 8) {
-      setError("Password must be at least 8 characters long")
+      setError(t("auth:password.reset.minLength"))
       return
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match")
+      setError(t("auth:password.mismatch"))
       return
     }
 
@@ -106,7 +108,7 @@ export default function ResetPasswordPage() {
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-          "Failed to reset password. The link may have expired."
+          t("auth:password.reset.failed")
       )
       if (err.response?.status === 400 || err.response?.status === 401) {
         setInvalidToken(true)
@@ -124,30 +126,29 @@ export default function ResetPasswordPage() {
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
-            <h1 className="text-2xl font-bold">Invalid Reset Link</h1>
+            <h1 className="text-2xl font-bold">{t("auth:password.reset.invalidTitle")}</h1>
             <p className="text-muted-foreground mt-2">
-              This password reset link is invalid or has expired.
+              {t("auth:password.reset.invalidText")}
             </p>
           </div>
 
           <Alert variant="destructive" className="mb-6">
             <AlertDescription>
               <p>
-                💡 <strong>What to do:</strong> Password reset links expire after 1 hour. Request a new reset
-                link to continue.
+                💡 <Trans t={t} i18nKey="auth:password.reset.invalidHelp" components={{ b: <strong /> }} />
               </p>
             </AlertDescription>
           </Alert>
 
           <Button asChild className="w-full">
-            <Link href="/auth/forgot-password">Request New Reset Link</Link>
+            <Link href="/auth/forgot-password">{t("auth:password.reset.requestNew")}</Link>
           </Button>
 
           <div className="mt-4">
             <Button asChild variant="outline" className="w-full">
               <Link href="/auth/login">
                 <ArrowLeft className="w-4 h-4" />
-                Back to Login
+                {t("auth:login.backToLogin")}
               </Link>
             </Button>
           </div>
@@ -164,21 +165,20 @@ export default function ResetPasswordPage() {
             <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
-            <h1 className="text-2xl font-bold">Password Reset</h1>
-            <p className="text-muted-foreground mt-2">Your password has been successfully reset.</p>
+            <h1 className="text-2xl font-bold">{t("auth:password.reset.doneTitle")}</h1>
+            <p className="text-muted-foreground mt-2">{t("auth:password.reset.doneText")}</p>
           </div>
 
           <Alert className="mb-6">
             <AlertDescription>
               <p>
-                ✅ <strong>Success:</strong> You can now sign in with your new password. Redirecting to
-                login page...
+                ✅ <Trans t={t} i18nKey="auth:password.reset.doneHelp" components={{ b: <strong /> }} />
               </p>
             </AlertDescription>
           </Alert>
 
           <Button asChild className="w-full">
-            <Link href="/auth/login">Go to Login</Link>
+            <Link href="/auth/login">{t("auth:login.goToLogin")}</Link>
           </Button>
         </Card>
       </div>
@@ -192,12 +192,12 @@ export default function ResetPasswordPage() {
           <Button asChild variant="link" className="mb-6 px-0">
             <Link href="/auth/login">
               <ArrowLeft className="w-4 h-4" />
-              Back to Login
+              {t("auth:login.backToLogin")}
             </Link>
           </Button>
 
-          <h1 className="text-3xl font-bold mb-2">Reset Password</h1>
-          <p className="text-muted-foreground">Create a new password for your account.</p>
+          <h1 className="text-3xl font-bold mb-2">{t("auth:password.reset.title")}</h1>
+          <p className="text-muted-foreground">{t("auth:password.reset.subtitle")}</p>
         </div>
 
         {error && (
@@ -208,22 +208,22 @@ export default function ResetPasswordPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <FormField label="New Password" htmlFor="password">
+          <FormField label={t("auth:password.reset.newPassword")} htmlFor="password">
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter new password"
+                placeholder={t("auth:password.reset.newPlaceholder")}
                 disabled={loading}
               />
-              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
+              <WithTooltip content={showPassword ? t("auth:password.hide") : t("auth:password.show")}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("auth:password.hide") : t("auth:password.show")}
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -233,34 +233,34 @@ export default function ResetPasswordPage() {
             {password && (
               <div className="mt-2">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-muted-foreground">Password Strength</span>
+                  <span className="text-xs font-medium text-muted-foreground">{t("auth:password.strength")}</span>
                   <span className="text-xs font-medium text-muted-foreground">{getPasswordStrengthLabel()}</span>
                 </div>
                 <Progress
                   value={passwordStrength}
-                  aria-label="Password strength"
+                  aria-label={t("auth:password.strength")}
                   className={cn("bg-muted", getPasswordStrengthColor())}
                 />
               </div>
             )}
           </FormField>
 
-          <FormField label="Confirm Password" htmlFor="confirmPassword">
+          <FormField label={t("auth:signup.confirmPassword")} htmlFor="confirmPassword">
             <div className="relative">
               <Input
                 id="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
+                placeholder={t("auth:password.reset.confirmPlaceholder")}
                 disabled={loading}
               />
-              <WithTooltip content={showConfirmPassword ? "Hide password" : "Show password"}><Button
+              <WithTooltip content={showConfirmPassword ? t("auth:password.hide") : t("auth:password.show")}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                aria-label={showConfirmPassword ? t("auth:password.hide") : t("auth:password.show")}
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -269,18 +269,18 @@ export default function ResetPasswordPage() {
 
             {password && confirmPassword && password === confirmPassword && (
               <p className="text-xs text-emerald-600 flex items-center gap-1">
-                ✓ Passwords match
+                ✓ {t("auth:password.match")}
               </p>
             )}
           </FormField>
 
           <Alert>
             <AlertDescription className="text-xs">
-              <p>🔒 <strong>Password Requirements:</strong></p>
+              <p>🔒 <strong>{t("auth:password.reset.requirements")}</strong></p>
               <ul className="mt-2 space-y-1">
-                <li>• At least 8 characters long</li>
-                <li>• Mix of uppercase and lowercase letters</li>
-                <li>• At least one number</li>
+                <li>• {t("auth:password.reset.reqLength")}</li>
+                <li>• {t("auth:password.reset.reqCase")}</li>
+                <li>• {t("auth:password.reset.reqNumber")}</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -293,12 +293,12 @@ export default function ResetPasswordPage() {
             {loading ? (
               <>
                 <Spinner />
-                Resetting...
+                {t("auth:password.reset.submitting")}
               </>
             ) : (
               <>
                 <Lock className="w-4 h-4" />
-                Reset Password
+                {t("auth:password.reset.submit")}
               </>
             )}
           </Button>
@@ -307,9 +307,9 @@ export default function ResetPasswordPage() {
         <Separator className="mt-6" />
         <div className="pt-6">
           <p className="text-sm text-muted-foreground text-center">
-            Remember your password?{" "}
+            {t("auth:login.rememberPassword")}{" "}
             <Link href="/auth/login" className="text-primary hover:underline font-medium">
-              Sign in here
+              {t("auth:login.signInHere")}
             </Link>
           </p>
         </div>

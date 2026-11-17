@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -63,6 +64,7 @@ interface ColorPickerProps {
 
 /** Swatch Button that opens a Popover with preset swatches + hex Input. Replaces native `<input type="color">`. */
 export function ColorPicker({ value, onChange, id, disabled, presets = DEFAULT_COLOR_PRESETS, size = "default", showInput, className, ...props }: ColorPickerProps) {
+  const { t } = useTranslation(["ui", "common"])
   const current = normalizeHex(value) ?? value
   const trigger = (
     <Popover>
@@ -73,7 +75,7 @@ export function ColorPicker({ value, onChange, id, disabled, presets = DEFAULT_C
           size="sm"
           id={showInput ? undefined : id}
           disabled={disabled}
-          aria-label={props["aria-label"] ?? `Pick colour (current ${current})`}
+          aria-label={props["aria-label"] ?? t("ui:colorPicker.pick", { color: current })}
           className={cn("shrink-0 p-0", size === "sm" ? "h-4 w-4 rounded-sm" : "h-9 w-9")}
         >
           <span className="size-full rounded-[inherit]" style={{ backgroundColor: current }} />

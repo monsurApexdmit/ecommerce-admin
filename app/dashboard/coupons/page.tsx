@@ -2,6 +2,8 @@
 
 import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import { Copy, Download, ImagePlus, MoreHorizontal, Pencil, Plus, Search, Ticket, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -40,6 +42,7 @@ import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { localeTag } from "@/lib/i18n"
 
 type CType = "percentage" | "fixed" | "free_shipping"
 type Phase = "active" | "scheduled" | "used_up" | "expired" | "disabled"
@@ -71,19 +74,21 @@ const emptyForm: FormState = {
   appliesTo: "all", categoryIds: [], productIds: [], channelPos: true, channelOnline: true,
 }
 
-const PHASE: Record<Phase, { label: string; variant: StatusVariant }> = {
-  active: { label: "Active", variant: "default" },
-  scheduled: { label: "Scheduled", variant: "secondary" },
-  expired: { label: "Expired", variant: "outline" },
-  used_up: { label: "Used up", variant: "destructive" },
-  disabled: { label: "Disabled", variant: "outline" },
-}
+type T = TFunction<["commerce", "common"]>
 
-const TYPES: { value: CType; label: string }[] = [
-  { value: "percentage", label: "% off" },
-  { value: "fixed", label: "Amount off" },
-  { value: "free_shipping", label: "Free delivery" },
-]
+const PHASE = {
+  active: { label: "common:status.active", variant: "default" },
+  scheduled: { label: "commerce:coupons.phase.scheduled", variant: "secondary" },
+  expired: { label: "commerce:coupons.phase.expired", variant: "outline" },
+  used_up: { label: "commerce:coupons.phase.usedUp", variant: "destructive" },
+  disabled: { label: "common:status.disabled", variant: "outline" },
+} as const satisfies Record<Phase, { label: string; variant: StatusVariant }>
+
+const TYPES = [
+  { value: "percentage", label: "commerce:coupons.type.percentage" },
+  { value: "fixed", label: "commerce:coupons.type.fixed" },
+  { value: "free_shipping", label: "commerce:coupons.type.freeShipping" },
+] as const satisfies readonly { value: CType; label: string }[]
 
 const DAY = 86_400_000
 
@@ -116,22 +121,22 @@ function phaseOf(c: CouponResponse): Phase {
   return "active"
 }
 
-function timeNote(c: CouponResponse, phase: Phase): { text: string; cls: string } {
+function timeNote(t: T, c: CouponResponse, phase: Phase): { text: string; cls: string } {
   const now = Date.now()
   const end = endMs(c)
   const start = startMs(c)
-  if (phase === "disabled") return { text: "Switched off", cls: "text-muted-foreground" }
-  if (phase === "used_up") return { text: "Limit reached", cls: "text-destructive" }
-  if (phase === "expired" && end) return { text: `Ended ${Math.max(0, Math.floor((now - end) / DAY))} days ago`, cls: "text-muted-foreground" }
-  if (phase === "scheduled" && start) return { text: `Starts in ${Math.max(1, Math.ceil((start - now) / DAY))} days`, cls: "text-foreground" }
-  if (end) return { text: `${Math.max(1, Math.ceil((end - now) / DAY))} days left`, cls: "text-foreground" }
-  return { text: "No end", cls: "text-foreground" }
+  if (phase === "disabled") return { text: t("commerce:coupons.note.switchedOff"), cls: "text-muted-foreground" }
+  if (phase === "used_up") return { text: t("commerce:coupons.note.limitReached"), cls: "text-destructive" }
+  if (phase === "expired" && end) return { text: t("commerce:coupons.note.ended", { count: Math.max(0, Math.floor((now - end) / DAY)) }), cls: "text-muted-foreground" }
+  if (phase === "scheduled" && start) return { text: t("commerce:coupons.note.startsIn", { count: Math.max(1, Math.ceil((start - now) / DAY)) }), cls: "text-foreground" }
+  if (end) return { text: t("commerce:coupons.note.daysLeft", { count: Math.max(1, Math.ceil((end - now) / DAY)) }), cls: "text-foreground" }
+  return { text: t("commerce:coupons.note.noEnd"), cls: "text-foreground" }
 }
 
-function fmtDate(s?: string | null) {
-  if (!s) return "No end"
+function fmtDate(s: string | null | undefined, tag: string, noEnd: string) {
+  if (!s) return noEnd
   const d = new Date(s)
-  return isNaN(d.getTime()) ? s : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+  return isNaN(d.getTime()) ? s : d.toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" })
 }
 
 function toInputDate(s?: string | null) {
@@ -148,6 +153,9 @@ function genCode() {
 }
 
 export default function CouponsPage() {
+  const { t, i18n } = useTranslation(["commerce", "common"])
+  const tag = localeTag(i18n.language)
+  const noEnd = t("commerce:coupons.note.noEnd")
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const { getAllCategoriesFlat } = useCategory()
@@ -206,7 +214,7 @@ export default function CouponsPage() {
   const blocked = useModuleGuard("Coupons")
   if (blocked) return blocked
 
-  const changeTab = (t: string) => { setTab(t as Tab); setCurrentPage(1); setChecked(new Set()) }
+  const changeTab = (v: string) => { setTab(v as Tab); setCurrentPage(1); setChecked(new Set()) }
   const hasFilters = !!(search || tab !== "all")
 
   const allChecked = currentItems.length > 0 && currentItems.every((c) => checked.has(c.id))
@@ -216,26 +224,26 @@ export default function CouponsPage() {
   const selected = coupons.filter((c) => checked.has(c.id))
 
   const discountText = (c: CouponResponse) =>
-    c.type === "free_shipping" ? "Free delivery" : c.type === "percentage" ? `${c.discount}% off` : `${formatCurrency(Number(c.discount) || 0)} off`
+    c.type === "free_shipping" ? t("commerce:coupons.type.freeShipping") : c.type === "percentage" ? t("commerce:coupons.text.percentOff", { value: c.discount }) : t("commerce:coupons.text.amountOff", { amount: formatCurrency(Number(c.discount) || 0) })
   const condText = (c: CouponResponse) => {
     const parts: string[] = []
-    if (Number(c.minOrderAmount) > 0) parts.push(`Min ${formatCurrency(Number(c.minOrderAmount))}`)
-    if (c.type === "percentage" && Number(c.maxDiscount) > 0) parts.push(`max ${formatCurrency(Number(c.maxDiscount))}`)
-    if (c.usageLimitPerUser === 1) parts.push("1 per customer")
-    return parts.length ? parts.join(" · ") : "No minimum"
+    if (Number(c.minOrderAmount) > 0) parts.push(t("commerce:coupons.text.min", { amount: formatCurrency(Number(c.minOrderAmount)) }))
+    if (c.type === "percentage" && Number(c.maxDiscount) > 0) parts.push(t("commerce:coupons.text.max", { amount: formatCurrency(Number(c.maxDiscount)) }))
+    if (c.usageLimitPerUser === 1) parts.push(t("commerce:coupons.text.onePerCustomer"))
+    return parts.length ? parts.join(" · ") : t("commerce:coupons.text.noMinimum")
   }
 
   const scopeText = (c: CouponResponse) => {
-    if (c.appliesTo === "categories") { const k = (c.categoryIds ?? []).length; return `${k} ${k === 1 ? "category" : "categories"}` }
-    if (c.appliesTo === "products") { const k = (c.productIds ?? []).length; return `${k} ${k === 1 ? "product" : "products"}` }
-    return "All products"
+    if (c.appliesTo === "categories") return t("commerce:coupons.text.categories", { count: (c.categoryIds ?? []).length })
+    if (c.appliesTo === "products") return t("common:count.products", { count: (c.productIds ?? []).length })
+    return t("commerce:coupons.text.allProducts")
   }
   const channelText = (c: CouponResponse) =>
-    c.channelPos !== false && c.channelOnline !== false ? "POS + Online" : c.channelPos !== false ? "POS only" : c.channelOnline !== false ? "Online only" : "No channel"
+    c.channelPos !== false && c.channelOnline !== false ? t("commerce:coupons.text.posAndOnline") : c.channelPos !== false ? t("commerce:coupons.text.posOnly") : c.channelOnline !== false ? t("commerce:coupons.text.onlineOnly") : t("commerce:coupons.text.noChannel")
   const scopeNames = (c: CouponResponse) => {
     if (c.appliesTo === "categories") return (c.categoryIds ?? []).map((id) => flatCategories.find((x) => String(x.id) === String(id))?.category_name ?? `#${id}`).join("; ")
     if (c.appliesTo === "products") return (c.productIds ?? []).map((id) => allProducts.find((x) => String(x.id) === String(id))?.name ?? `#${id}`).join("; ")
-    return "All products"
+    return t("commerce:coupons.text.allProducts")
   }
 
   const openForm = (c?: CouponResponse | null) => {
@@ -273,21 +281,21 @@ export default function CouponsPage() {
   const save = async () => {
     const code = form.code.trim().toUpperCase()
     const bad = (title: string, description: string) => toast({ variant: "destructive", title, description })
-    if (form.campaign_name.trim().length < 3) return bad("Campaign name needed", "Use at least 3 characters")
-    if (code.length < 3 || !/^[A-Z0-9_-]+$/.test(code)) return bad("Check the code", "Letters, numbers, dashes and underscores only, at least 3 characters")
-    if (coupons.some((x) => x.id !== editing?.id && (x.code ?? "").toUpperCase() === code)) return bad("Code already used", `A coupon with ${code} already exists`)
+    if (form.campaign_name.trim().length < 3) return bad(t("commerce:coupons.validation.nameTitle"), t("commerce:coupons.validation.nameDesc"))
+    if (code.length < 3 || !/^[A-Z0-9_-]+$/.test(code)) return bad(t("commerce:coupons.validation.codeTitle"), t("commerce:coupons.validation.codeDesc"))
+    if (coupons.some((x) => x.id !== editing?.id && (x.code ?? "").toUpperCase() === code)) return bad(t("commerce:coupons.validation.codeUsedTitle"), t("commerce:coupons.validation.codeUsedDesc", { code }))
     if (form.type !== "free_shipping") {
       const d = parseFloat(form.discount)
-      if (!(d > 0)) return bad("Discount needed", "Enter a discount greater than 0")
-      if (form.type === "percentage" && d > 100) return bad("Check the discount", "A percentage discount cannot be more than 100%")
+      if (!(d > 0)) return bad(t("commerce:coupons.validation.discountTitle"), t("commerce:coupons.validation.discountDesc"))
+      if (form.type === "percentage" && d > 100) return bad(t("commerce:coupons.validation.percentTitle"), t("commerce:coupons.validation.percentDesc"))
     }
     if (form.usage_limit.trim() !== "") {
       const u = Number(form.usage_limit)
-      if (!Number.isInteger(u) || u < 1) return bad("Check total uses", "Use a whole number of 1 or more, or leave it empty for unlimited")
-      if (editing && u < (editing.timesUsed ?? 0)) return bad("Check total uses", `${editing.timesUsed} already redeemed, so the limit can't be lower`)
+      if (!Number.isInteger(u) || u < 1) return bad(t("commerce:coupons.validation.usesTitle"), t("commerce:coupons.validation.usesDesc"))
+      if (editing && u < (editing.timesUsed ?? 0)) return bad(t("commerce:coupons.validation.usesTitle"), t("commerce:coupons.validation.usesBelowUsed", { used: editing.timesUsed }))
     }
-    if (!form.start_date) return bad("Start date needed", "Choose when the coupon starts")
-    if (form.end_date && form.end_date < form.start_date) return bad("Check the dates", "End date can't be before the start date")
+    if (!form.start_date) return bad(t("commerce:coupons.validation.startTitle"), t("commerce:coupons.validation.startDesc"))
+    if (form.end_date && form.end_date < form.start_date) return bad(t("commerce:coupons.validation.datesTitle"), t("commerce:coupons.validation.datesDesc"))
 
     const num = (s: string) => (s.trim() !== "" && !isNaN(Number(s)) ? Number(s) : undefined)
     const payload: any = {
@@ -304,9 +312,9 @@ export default function CouponsPage() {
     const max = form.type === "percentage" ? num(form.max_discount) : undefined; if (max !== undefined) payload.max_discount = max
     const lim = num(form.usage_limit); if (lim !== undefined) payload.usage_limit = Math.floor(lim)
     if (form.oncePerCustomer) payload.usage_limit_per_user = 1
-    if (form.appliesTo === "categories" && form.categoryIds.length === 0) return toast({ variant: "destructive", title: "Pick categories", description: "Choose at least one category, or apply to everything" })
-    if (form.appliesTo === "products" && form.productIds.length === 0) return toast({ variant: "destructive", title: "Pick products", description: "Choose at least one product, or apply to everything" })
-    if (!form.channelPos && !form.channelOnline) return toast({ variant: "destructive", title: "Pick a channel", description: "Enable the coupon for POS, online, or both" })
+    if (form.appliesTo === "categories" && form.categoryIds.length === 0) return toast({ variant: "destructive", title: t("commerce:coupons.validation.categoriesTitle"), description: t("commerce:coupons.validation.categoriesDesc") })
+    if (form.appliesTo === "products" && form.productIds.length === 0) return toast({ variant: "destructive", title: t("commerce:coupons.validation.productsTitle"), description: t("commerce:coupons.validation.productsDesc") })
+    if (!form.channelPos && !form.channelOnline) return toast({ variant: "destructive", title: t("commerce:coupons.validation.channelTitle"), description: t("commerce:coupons.validation.channelDesc") })
     // The with-image endpoints only read the old snake_case keys, so the newer fields go through the JSON update.
     const clears: any = editing
       ? {
@@ -333,30 +341,30 @@ export default function CouponsPage() {
           await couponApi.updateWithImage(editing.id, { ...payload, image: form.image })
           await couponApi.update(editing.id, extra)
         } else await couponApi.update(editing.id, { ...payload, ...extra })
-        toast({ title: "Coupon updated", description: code })
+        toast({ title: t("commerce:coupons.toast.updated"), description: code })
       } else {
         if (form.image) {
           const created = await couponApi.createWithImage({ ...payload, image: form.image })
           const newId = (created as any)?.data?.id
           if (newId) await couponApi.update(newId, extra)
         } else await couponApi.create({ ...payload, ...extra })
-        toast({ title: "Coupon created", description: code })
+        toast({ title: t("commerce:coupons.toast.created"), description: code })
       }
       setFormOpen(false)
       refresh()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not save", description: err?.response?.data?.message || err?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("commerce:coupons.toast.saveFailed"), description: err?.response?.data?.message || err?.message || t("common:extra.tryAgain") })
     } finally {
       setSaving(false)
     }
   }
 
   const setStatus = async (targets: CouponResponse[], status: boolean) => {
-    setToggling((p) => new Set([...p, ...targets.map((t) => t.id)]))
+    setToggling((p) => new Set([...p, ...targets.map((x) => x.id)]))
     const results = await Promise.allSettled(targets.map((c) => couponApi.update(c.id, { status })))
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} of ${targets.length} could not be changed` })
-    else toast({ title: status ? "Enabled" : "Disabled", description: `${targets.length} coupon${targets.length === 1 ? "" : "s"} updated` })
+    if (failed) toast({ variant: "destructive", title: t("commerce:coupons.toast.someUpdatesFailed"), description: t("commerce:coupons.toast.notChanged", { failed, total: targets.length }) })
+    else toast({ title: status ? t("common:status.enabled") : t("common:status.disabled"), description: t("commerce:coupons.toast.updatedCount", { count: targets.length }) })
     setChecked(new Set())
     await refresh()
     setToggling(new Set())
@@ -366,8 +374,8 @@ export default function CouponsPage() {
     setDeleting(true)
     const results = await Promise.allSettled(deleteTargets.map((c) => couponApi.delete(c.id)))
     const failed = results.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some deletions failed", description: `${failed} of ${deleteTargets.length} could not be deleted` })
-    else toast({ title: "Deleted", description: `${deleteTargets.length} coupon${deleteTargets.length === 1 ? "" : "s"} removed` })
+    if (failed) toast({ variant: "destructive", title: t("commerce:coupons.toast.someDeletesFailed"), description: t("commerce:coupons.toast.notDeleted", { failed, total: deleteTargets.length }) })
+    else toast({ title: t("common:status.deleted"), description: t("commerce:coupons.toast.removedCount", { count: deleteTargets.length }) })
     setDeleting(false)
     setDeleteTargets([])
     setChecked(new Set())
@@ -375,8 +383,8 @@ export default function CouponsPage() {
   }
 
   const copyCode = async (code: string) => {
-    try { await navigator.clipboard.writeText(code); toast({ title: "Code copied", description: code }) }
-    catch { toast({ variant: "destructive", title: "Could not copy", description: code }) }
+    try { await navigator.clipboard.writeText(code); toast({ title: t("commerce:coupons.toast.copied"), description: code }) }
+    catch { toast({ variant: "destructive", title: t("commerce:coupons.toast.copyFailed"), description: code }) }
   }
 
   const handleExport = () => {
@@ -388,7 +396,7 @@ export default function CouponsPage() {
         min_order: c.minOrderAmount ?? 0, max_discount: c.type === "percentage" && Number(c.maxDiscount) > 0 ? c.maxDiscount : "",
         per_customer: c.oncePerCustomer || c.usageLimitPerUser === 1 ? "1" : c.usageLimitPerUser ?? "",
         used: c.timesUsed ?? 0, limit: c.usageLimit ?? "", sales: c.revenue ?? 0,
-        status: PHASE[phaseOf(c)].label, start_date: fmtDate(c.startDate), end_date: fmtDate(c.endDate),
+        status: t(PHASE[phaseOf(c)].label), start_date: fmtDate(c.startDate, tag, noEnd), end_date: fmtDate(c.endDate, tag, noEnd),
       })),
       "coupons",
       ["ID", "Campaign Name", "Code", "Discount", "Applies To", "Channels", "Min Order", "Max Discount", "Per Customer", "Used", "Limit", "Sales", "Status", "Start Date", "End Date"],
@@ -396,21 +404,21 @@ export default function CouponsPage() {
   }
 
   // Live preview values
-  const pvDisc = form.type === "free_shipping" ? "Free delivery" : form.type === "percentage" ? `${form.discount || 0}% off` : `${formatCurrency(Number(form.discount) || 0)} off`
-  const pvCond = Number(form.min_order_amount) > 0 ? `Min ${formatCurrency(Number(form.min_order_amount))}` : "No minimum"
+  const pvDisc = form.type === "free_shipping" ? t("commerce:coupons.type.freeShipping") : form.type === "percentage" ? t("commerce:coupons.text.percentOff", { value: form.discount || 0 }) : t("commerce:coupons.text.amountOff", { amount: formatCurrency(Number(form.discount) || 0) })
+  const pvCond = Number(form.min_order_amount) > 0 ? t("commerce:coupons.text.min", { amount: formatCurrency(Number(form.min_order_amount)) }) : t("commerce:coupons.text.noMinimum")
 
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
       <PageHeader
-        title="Coupons"
-        description="Discount codes customers can use in store and online."
+        title={t("commerce:coupons.title")}
+        description={t("commerce:coupons.description")}
         actions={<>
           <Button type="button" variant="outline" onClick={handleExport}>
-            <Download className="size-4" aria-hidden /> Export
+            <Download className="size-4" aria-hidden /> {t("common:actions.export")}
           </Button>
           <Button type="button" onClick={() => openForm(null)}>
-            <Plus className="size-4" aria-hidden /> Add coupon
+            <Plus className="size-4" aria-hidden /> {t("commerce:coupons.add")}
           </Button>
         </>}
       />
@@ -421,12 +429,12 @@ export default function CouponsPage() {
             value={tab}
             onChange={changeTab}
             tabs={[
-              { value: "all", label: "All", count: counts.all },
-              { value: "active", label: "Active", count: counts.active },
-              { value: "scheduled", label: "Scheduled", count: counts.scheduled },
-              { value: "used_up", label: "Used up", count: counts.used_up },
-              { value: "expired", label: "Expired", count: counts.expired },
-              { value: "disabled", label: "Disabled", count: counts.disabled },
+              { value: "all", label: t("common:status.all"), count: counts.all },
+              { value: "active", label: t("common:status.active"), count: counts.active },
+              { value: "scheduled", label: t("commerce:coupons.phase.scheduled"), count: counts.scheduled },
+              { value: "used_up", label: t("commerce:coupons.phase.usedUp"), count: counts.used_up },
+              { value: "expired", label: t("commerce:coupons.phase.expired"), count: counts.expired },
+              { value: "disabled", label: t("common:status.disabled"), count: counts.disabled },
             ]}
           />
         </div>
@@ -434,36 +442,36 @@ export default function CouponsPage() {
         <div className="flex flex-wrap items-center gap-2.5 p-4">
           <div className="relative min-w-[240px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Label htmlFor="coupon-search" className="sr-only">Search coupons</Label>
-            <Input id="coupon-search" type="search" placeholder="Search code or campaign…" value={search}
+            <Label htmlFor="coupon-search" className="sr-only">{t("commerce:coupons.list.searchLabel")}</Label>
+            <Input id="coupon-search" type="search" placeholder={t("commerce:coupons.list.searchPlaceholder")} value={search}
               onChange={(e) => { setSearch(e.target.value); setCurrentPage(1) }}
               className="pl-8" />
           </div>
           {hasFilters && (
             <Button type="button" variant="ghost" onClick={() => { setSearch(""); changeTab("all") }}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </div>
 
         <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
-            <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selected, true)}>Enable</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selected, false)}>Disable</Button>
-            <Button type="button" variant="outline" size="sm" onClick={handleExport}>Export selected</Button>
-            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selected, true)}>{t("commerce:coupons.list.enable")}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setStatus(selected, false)}>{t("commerce:coupons.list.disable")}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleExport}>{t("commerce:coupons.list.exportSelected")}</Button>
+            <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>{t("common:actions.delete")}</Button>
         </BulkBar>
 
           <Table className="min-w-[1000px]">
             <TableHeader>
               <TableRow>
-                <TableHead scope="col" className="w-5"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all on this page" /></TableHead>
-                <TableHead scope="col">Coupon</TableHead>
-                <TableHead scope="col">Discount</TableHead>
-                <TableHead scope="col">Where it works</TableHead>
-                <TableHead scope="col">Used</TableHead>
-                <TableHead scope="col">Valid</TableHead>
-                <TableHead scope="col">Status</TableHead>
-                <TableHead scope="col" className="text-right">Actions</TableHead>
+                <TableHead scope="col" className="w-5"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("commerce:coupons.list.selectPage")} /></TableHead>
+                <TableHead scope="col">{t("commerce:coupons.list.colCoupon")}</TableHead>
+                <TableHead scope="col">{t("common:money.discount")}</TableHead>
+                <TableHead scope="col">{t("commerce:coupons.list.colWhere")}</TableHead>
+                <TableHead scope="col">{t("commerce:coupons.list.colUsed")}</TableHead>
+                <TableHead scope="col">{t("commerce:coupons.list.colValid")}</TableHead>
+                <TableHead scope="col">{t("common:fields.status")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("common:fields.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -474,8 +482,8 @@ export default function CouponsPage() {
                   <TableCell colSpan={8} className="whitespace-normal">
                     <EmptyState
                       icon={Ticket}
-                      title="No coupons found"
-                      description={hasFilters ? "Try clearing the filters." : "Create your first discount code to get started."}
+                      title={t("commerce:coupons.list.emptyTitle")}
+                      description={hasFilters ? t("commerce:coupons.list.emptyFiltered") : t("commerce:coupons.list.emptyFirst")}
                       className="p-4 md:p-6"
                     />
                   </TableCell>
@@ -483,14 +491,14 @@ export default function CouponsPage() {
               ) : (
                 currentItems.map((c) => {
                   const phase = phaseOf(c)
-                  const note = timeNote(c, phase)
+                  const note = timeNote(t, c, phase)
                   const used = c.timesUsed ?? 0
                   const limit = c.usageLimit ?? 0
                   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0
                   return (
                     <TableRow key={c.id} data-state={checked.has(c.id) ? "selected" : undefined}>
                       <TableCell>
-                        <Checkbox checked={checked.has(c.id)} onCheckedChange={() => toggleOne(c.id)} aria-label={`Select ${c.code}`} />
+                        <Checkbox checked={checked.has(c.id)} onCheckedChange={() => toggleOne(c.id)} aria-label={t("common:extra.selectRow", { name: c.code })} />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">
@@ -514,33 +522,33 @@ export default function CouponsPage() {
                       <TableCell>
                         <div className="tabular-nums"><strong>{used}</strong> / {limit || "∞"}</div>
                         {(c.revenue ?? 0) > 0
-                          ? <div className="text-xs text-muted-foreground tabular-nums">{formatCurrency(c.revenue ?? 0)} in sales</div>
-                          : <div className="text-xs text-muted-foreground">{phase === "scheduled" ? "Not started" : "No sales yet"}</div>}
+                          ? <div className="text-xs text-muted-foreground tabular-nums">{t("commerce:coupons.text.inSales", { amount: formatCurrency(c.revenue ?? 0) })}</div>
+                          : <div className="text-xs text-muted-foreground">{phase === "scheduled" ? t("commerce:coupons.text.notStarted") : t("commerce:coupons.text.noSalesYet")}</div>}
                         {limit > 0 && (
-                          <Progress value={pct} aria-label="Usage" className="mt-1 h-1.5 w-24" />
+                          <Progress value={pct} aria-label={t("commerce:coupons.text.usage")} className="mt-1 h-1.5 w-24" />
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="tabular-nums">{fmtDate(c.startDate)} – {c.endDate ? fmtDate(c.endDate) : "No end"}</div>
+                        <div className="tabular-nums">{fmtDate(c.startDate, tag, noEnd)} – {fmtDate(c.endDate, tag, noEnd)}</div>
                         <div className={cn("text-xs font-semibold", note.cls)}>{note.text}</div>
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={phase} variant={PHASE[phase].variant} label={PHASE[phase].label} />
+                        <StatusBadge status={phase} variant={PHASE[phase].variant} label={t(PHASE[phase].label)} />
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
                           <Switch checked={!!c.status} disabled={toggling.has(c.id)} onCheckedChange={(v) => setStatus([c], v)}
-                            aria-label={`${c.status ? "Disable" : "Enable"} ${c.code}`} className="mr-1 self-center" />
-                          <WithTooltip content={`Copy code ${c.code}`}><Button type="button" variant="outline" size="icon" aria-label={`Copy code ${c.code}`} onClick={() => copyCode(c.code)}><Copy className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content={`Edit ${c.code}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.code}`} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
+                            aria-label={c.status ? t("commerce:coupons.list.disableCode", { code: c.code }) : t("commerce:coupons.list.enableCode", { code: c.code })} className="mr-1 self-center" />
+                          <WithTooltip content={t("commerce:coupons.list.copyCode", { code: c.code })}><Button type="button" variant="outline" size="icon" aria-label={t("commerce:coupons.list.copyCode", { code: c.code })} onClick={() => copyCode(c.code)}><Copy className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("commerce:coupons.list.editCode", { code: c.code })}><Button type="button" variant="outline" size="icon" aria-label={t("commerce:coupons.list.editCode", { code: c.code })} onClick={() => openForm(c)}><Pencil className="size-4" /></Button></WithTooltip>
                           <DropdownMenu>
-                            <WithTooltip content={`More actions for ${c.code}`}><DropdownMenuTrigger asChild>
-                              <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${c.code}`}><MoreHorizontal className="size-4" /></Button>
+                            <WithTooltip content={t("commerce:coupons.list.moreFor", { code: c.code })}><DropdownMenuTrigger asChild>
+                              <Button type="button" variant="outline" size="icon" aria-label={t("commerce:coupons.list.moreFor", { code: c.code })}><MoreHorizontal className="size-4" /></Button>
                             </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setStatus([c], !c.status)}>{c.status ? "Disable" : "Enable"}</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setStatus([c], !c.status)}>{c.status ? t("commerce:coupons.list.disable") : t("commerce:coupons.list.enable")}</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>Delete coupon</DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([c])}>{t("commerce:coupons.list.deleteCoupon")}</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -573,94 +581,94 @@ export default function CouponsPage() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[640px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]">
           <DialogHeader className="px-6 py-4 text-left">
-            <DialogTitle>{editing ? "Edit coupon" : "New coupon"}</DialogTitle>
-            <DialogDescription>Discount codes for POS and your online store.</DialogDescription>
+            <DialogTitle>{editing ? t("commerce:coupons.form.editTitle") : t("commerce:coupons.form.newTitle")}</DialogTitle>
+            <DialogDescription>{t("commerce:coupons.form.description")}</DialogDescription>
           </DialogHeader>
           <Separator />
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
-            <Card className="gap-2 px-4 py-3.5" aria-label="Coupon preview">
+            <Card className="gap-2 px-4 py-3.5" aria-label={t("commerce:coupons.form.preview")}>
               <div className="flex flex-wrap items-baseline gap-x-3">
-                <span className="text-base font-semibold">{form.campaign_name || "Campaign name"}</span>
+                <span className="text-base font-semibold">{form.campaign_name || t("commerce:coupons.form.campaignPlaceholder")}</span>
                 <span className="text-lg font-bold tabular-nums">{pvDisc}</span>
                 <span className="text-xs text-muted-foreground">{pvCond}</span>
               </div>
               <Separator />
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">CODE</span>
+                <span className="text-muted-foreground">{t("commerce:coupons.form.codeTag")}</span>
                 <span className="font-mono text-sm font-bold tracking-widest">{form.code.toUpperCase() || "—"}</span>
               </div>
             </Card>
 
-            <FormField label="Campaign name *" htmlFor="coupon-campaign" className="min-w-0">
-              <Input id="coupon-campaign" placeholder="e.g. Eid Sale 2026" value={form.campaign_name} onChange={(e) => set("campaign_name", e.target.value)} autoFocus />
+            <FormField label={t("commerce:coupons.form.campaignLabel")} htmlFor="coupon-campaign" className="min-w-0">
+              <Input id="coupon-campaign" placeholder={t("commerce:coupons.form.campaignExample")} value={form.campaign_name} onChange={(e) => set("campaign_name", e.target.value)} autoFocus />
             </FormField>
 
-            <FormField label="Coupon code *" htmlFor="coupon-code" className="min-w-0">
+            <FormField label={t("commerce:coupons.form.codeLabel")} htmlFor="coupon-code" className="min-w-0">
               <span className="flex gap-2">
                 <Input id="coupon-code" className="font-mono uppercase tracking-wide" placeholder="EID25" value={form.code}
                   onChange={(e) => set("code", e.target.value.replace(/[^a-zA-Z0-9_-]/g, "").toUpperCase())} />
-                <Button type="button" variant="outline" onClick={() => set("code", genCode())} className="shrink-0">Generate</Button>
+                <Button type="button" variant="outline" onClick={() => set("code", genCode())} className="shrink-0">{t("commerce:coupons.form.generate")}</Button>
               </span>
             </FormField>
 
-            <FormField label="Discount type">
+            <FormField label={t("commerce:coupons.form.typeLabel")}>
               <SegmentedControl
-                aria-label="Discount type"
+                aria-label={t("commerce:coupons.form.typeLabel")}
                 size="default"
                 className="w-full"
                 value={form.type}
                 onValueChange={(v) => set("type", v as CType)}
-                options={TYPES}
+                options={TYPES.map((o) => ({ value: o.value, label: t(o.label) }))}
               />
             </FormField>
 
             <div className="grid grid-cols-2 gap-2.5">
               {form.type !== "free_shipping" && (
-                <FormField label={form.type === "percentage" ? "Discount (%) *" : "Discount amount *"} htmlFor="coupon-discount" className="min-w-0">
+                <FormField label={form.type === "percentage" ? t("commerce:coupons.form.percentLabel") : t("commerce:coupons.form.amountLabel")} htmlFor="coupon-discount" className="min-w-0">
                   <Input id="coupon-discount" type="number" min={0} max={form.type === "percentage" ? 100 : undefined} step="0.01" value={form.discount} onChange={(e) => set("discount", e.target.value)} />
                 </FormField>
               )}
-              <FormField label="Minimum order" htmlFor="coupon-min" className="min-w-0">
-                <Input id="coupon-min" type="number" min={0} step="0.01" placeholder="0 = none" value={form.min_order_amount} onChange={(e) => set("min_order_amount", e.target.value)} />
+              <FormField label={t("commerce:coupons.form.minOrder")} htmlFor="coupon-min" className="min-w-0">
+                <Input id="coupon-min" type="number" min={0} step="0.01" placeholder={t("commerce:coupons.form.minPlaceholder")} value={form.min_order_amount} onChange={(e) => set("min_order_amount", e.target.value)} />
               </FormField>
               {form.type === "percentage" && (
-                <FormField label="Max discount" htmlFor="coupon-max" className="min-w-0">
-                  <Input id="coupon-max" type="number" min={0} step="0.01" placeholder="No cap" value={form.max_discount} onChange={(e) => set("max_discount", e.target.value)} />
+                <FormField label={t("commerce:coupons.form.maxDiscount")} htmlFor="coupon-max" className="min-w-0">
+                  <Input id="coupon-max" type="number" min={0} step="0.01" placeholder={t("commerce:coupons.form.noCap")} value={form.max_discount} onChange={(e) => set("max_discount", e.target.value)} />
                 </FormField>
               )}
-              <FormField label="Total uses" htmlFor="coupon-uses" className="min-w-0">
-                <Input id="coupon-uses" type="number" min={editing?.timesUsed || 1} step="1" placeholder="Unlimited" value={form.usage_limit} onChange={(e) => set("usage_limit", e.target.value)} />
+              <FormField label={t("commerce:coupons.form.totalUses")} htmlFor="coupon-uses" className="min-w-0">
+                <Input id="coupon-uses" type="number" min={editing?.timesUsed || 1} step="1" placeholder={t("commerce:coupons.form.unlimited")} value={form.usage_limit} onChange={(e) => set("usage_limit", e.target.value)} />
               </FormField>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label="Starts *" htmlFor="coupon-start" className="min-w-0">
+              <FormField label={t("commerce:coupons.form.starts")} htmlFor="coupon-start" className="min-w-0">
                 <Input id="coupon-start" type="date" value={form.start_date} onChange={(e) => set("start_date", e.target.value)} />
               </FormField>
               <FormField
-                label="Ends (optional)" htmlFor="coupon-end" className="min-w-0"
-                description={form.end_date ? "Works through the end of this day." : "Empty means No end."}
+                label={t("commerce:coupons.form.ends")} htmlFor="coupon-end" className="min-w-0"
+                description={form.end_date ? t("commerce:coupons.form.endsHelp") : t("commerce:coupons.form.noEndHelp")}
               >
                 <Input id="coupon-end" type="date" min={form.start_date || undefined} value={form.end_date} onChange={(e) => set("end_date", e.target.value)} />
               </FormField>
             </div>
 
-            <FormField label="Applies to">
+            <FormField label={t("commerce:coupons.form.appliesTo")}>
               <SegmentedControl
-                aria-label="Applies to"
+                aria-label={t("commerce:coupons.form.appliesTo")}
                 size="default"
                 className="w-full"
                 value={form.appliesTo}
                 onValueChange={(v) => { const id = v as FormState["appliesTo"]; setForm((f) => ({ ...f, appliesTo: id, categoryIds: [], productIds: [] })); setPickQ("") }}
-                options={[{ value: "all", label: "Everything" }, { value: "categories", label: "Categories" }, { value: "products", label: "Products" }]}
+                options={[{ value: "all", label: t("commerce:coupons.form.everything") }, { value: "categories", label: t("commerce:coupons.form.categories") }, { value: "products", label: t("commerce:coupons.form.products") }]}
               />
               {form.appliesTo !== "all" && (
                 <div className="flex items-center gap-2">
-                  <Input type="search" aria-label={`Filter ${form.appliesTo}`} placeholder={`Filter ${form.appliesTo}…`} value={pickQ} onChange={(e) => setPickQ(e.target.value)}
+                  <Input type="search" aria-label={form.appliesTo === "categories" ? t("commerce:coupons.form.filterCategories") : t("commerce:coupons.form.filterProducts")} placeholder={form.appliesTo === "categories" ? t("commerce:coupons.form.filterCategories") : t("commerce:coupons.form.filterProducts")} value={pickQ} onChange={(e) => setPickQ(e.target.value)}
                     className="min-w-0 flex-1" />
                   <Badge variant="secondary" className="shrink-0">
-                    {(form.appliesTo === "categories" ? form.categoryIds : form.productIds).length} selected
+                    {t("common:table.selected", { count: (form.appliesTo === "categories" ? form.categoryIds : form.productIds).length })}
                   </Badge>
                 </div>
               )}
@@ -691,33 +699,33 @@ export default function CouponsPage() {
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               <Field orientation="horizontal" className="w-auto">
                 <Checkbox id="coupon-ch-pos" checked={form.channelPos} onCheckedChange={(v) => set("channelPos", v === true)} />
-                <FieldLabel htmlFor="coupon-ch-pos">Works in POS</FieldLabel>
+                <FieldLabel htmlFor="coupon-ch-pos">{t("commerce:coupons.form.worksPos")}</FieldLabel>
               </Field>
               <Field orientation="horizontal" className="w-auto">
                 <Checkbox id="coupon-ch-online" checked={form.channelOnline} onCheckedChange={(v) => set("channelOnline", v === true)} />
-                <FieldLabel htmlFor="coupon-ch-online">Works online</FieldLabel>
+                <FieldLabel htmlFor="coupon-ch-online">{t("commerce:coupons.form.worksOnline")}</FieldLabel>
               </Field>
             </div>
 
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               <Field orientation="horizontal" className="w-auto">
                 <Checkbox id="coupon-active" checked={form.status} onCheckedChange={(v) => set("status", v === true)} />
-                <FieldLabel htmlFor="coupon-active">Active</FieldLabel>
+                <FieldLabel htmlFor="coupon-active">{t("common:status.active")}</FieldLabel>
               </Field>
               <Field orientation="horizontal" className="w-auto">
                 <Checkbox id="coupon-once" checked={form.oncePerCustomer} onCheckedChange={(v) => set("oncePerCustomer", v === true)} />
-                <FieldLabel htmlFor="coupon-once">1 use per customer</FieldLabel>
+                <FieldLabel htmlFor="coupon-once">{t("commerce:coupons.form.onePerCustomer")}</FieldLabel>
               </Field>
             </div>
 
-            <FormField label="Image (optional)" htmlFor="coupon-image">
+            <FormField label={t("commerce:coupons.form.image")} htmlFor="coupon-image">
               <div className="flex items-center gap-3">
                 {imagePreview && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={imagePreview} alt="Coupon preview" className="size-14 rounded-lg border object-cover" />
+                  <img src={imagePreview} alt={t("commerce:coupons.form.preview")} className="size-14 rounded-lg border object-cover" />
                 )}
                 <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                  <ImagePlus className="size-4" aria-hidden /> {imagePreview ? "Change image" : "Upload image"}
+                  <ImagePlus className="size-4" aria-hidden /> {imagePreview ? t("commerce:coupons.form.changeImage") : t("commerce:coupons.form.uploadImage")}
                 </Button>
                 <Input id="coupon-image" ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
               </div>
@@ -726,9 +734,9 @@ export default function CouponsPage() {
 
           <Separator />
           <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button type="button" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : editing ? "Save changes" : "Create coupon"}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("commerce:coupons.form.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -738,13 +746,13 @@ export default function CouponsPage() {
       <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].code : `${deleteTargets.length} coupons`}?</AlertDialogTitle>
-            <AlertDialogDescription>Customers will no longer be able to use {deleteTargets.length === 1 ? "this code" : "these codes"}. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTargets.length === 1 ? deleteTargets[0].code : t("commerce:coupons.remove.many", { count: deleteTargets.length }) })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("commerce:coupons.remove.desc", { count: deleteTargets.length })}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("commerce:coupons.remove.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

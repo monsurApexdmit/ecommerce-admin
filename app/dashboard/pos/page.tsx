@@ -4,11 +4,12 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import Link from "next/link"
 import { Barcode, Building2, ChevronRight, Circle, LayoutGrid, Grid2X2, List, Maximize2, Package, PanelLeft, Search, ShoppingCart } from "lucide-react"
 import { toast } from "sonner"
+import { Trans, useTranslation } from "react-i18next"
 import { PosProductCard, cardPrice, variantUnitPrice, productUnitPrice, stockPill, type PosTint } from "@/components/pos/pos-product-card"
 import { PosCartItem } from "@/components/pos/pos-cart-item"
 import { PosPayment, NEEDS_TXN, POS_METHODS, type PosPaymentMethod } from "@/components/pos/pos-payment"
-import { PosCustomerPicker } from "@/components/pos/pos-customer-picker"
-import { PosCashDrawer } from "@/components/pos/pos-cash-drawer"
+import { PosCustomerPicker, WALK_IN_NAME } from "@/components/pos/pos-customer-picker"
+import { PosCashDrawer, useRegisterLabel } from "@/components/pos/pos-cash-drawer"
 import { PosReceipt, type ReceiptData } from "@/components/pos/pos-receipt"
 import { BarcodeScanner } from "@/components/pos/barcode-scanner"
 import { ThemeAccentControls } from "@/components/theme-accent-controls"
@@ -68,10 +69,13 @@ interface CartItem {
     wholesalePrice?: number
     wholesaleMin?: number
     wholesale?: boolean
+    /** Cashier typed the price; quantity changes keep it and the server accepts it as is */
+    customPrice?: boolean
 }
 
 /** Unit price for a cart line: wholesale once the quantity reaches the product's minimum */
-const priceForQty = (item: { basePrice?: number; wholesalePrice?: number; wholesaleMin?: number; price: number }, qty: number) => {
+const priceForQty = (item: { basePrice?: number; wholesalePrice?: number; wholesaleMin?: number; price: number; customPrice?: boolean }, qty: number) => {
+    if (item.customPrice) return { price: item.price, wholesale: false }
     const base = item.basePrice ?? item.price
     const w = item.wholesalePrice ?? 0
     const on = w > 0 && (item.wholesaleMin ?? 0) > 0 && qty >= (item.wholesaleMin ?? 0) && w < base
@@ -80,13 +84,22 @@ const priceForQty = (item: { basePrice?: number; wholesalePrice?: number; wholes
 
 type Tender = "exact" | "custom" | number
 type SortKey = "best" | "stock" | "name" | "price_asc" | "price_desc"
-const SORTS: [SortKey, string][] = [
-    ["best", "Best selling"], ["stock", "Most stock"], ["name", "Name"], ["price_asc", "Price: low to high"], ["price_desc", "Price: high to low"],
-]
+/** Sort options; labels are pos: keys translated at render */
+const SORTS = [
+    ["best", "pos:sort.best"], ["stock", "pos:sort.stock"], ["name", "pos:sort.name"], ["price_asc", "pos:sort.priceAsc"], ["price_desc", "pos:sort.priceDesc"],
+] as const satisfies readonly (readonly [SortKey, string])[]
+
+const VIEW_MODES = [
+    ["large", "pos:view.large", LayoutGrid],
+    ["compact", "pos:view.compact", Grid2X2],
+    ["list", "pos:view.list", List],
+] as const
 
 const r2 = (v: number) => Math.round(v * 100) / 100
 
 export default function PosPage() {
+    const { t } = useTranslation(["pos", "common"])
+    const regLabel = useRegisterLabel()
     const { warehouses, defaultWarehouse } = useWarehouse()
     const { getAllCategoriesFlat } = useCategory()
     const { getCustomerById } = useCustomer()
@@ -110,7 +123,7 @@ export default function PosPage() {
     // sale
     const [cart, setCart] = useState<CartItem[]>([])
     const [selectedCustomerId, setSelectedCustomerId] = useState("")
-    const [selectedCustomerName, setSelectedCustomerName] = useState("Walk-in Customer")
+    const [selectedCustomerName, setSelectedCustomerName] = useState(WALK_IN_NAME)
     const [discType, setDiscType] = useState<"flat" | "percent">("flat")
     const [discValue, setDiscValue] = useState("")
     const [discOpen, setDiscOpen] = useState(false)
@@ -272,7 +285,7 @@ export default function PosPage() {
         couponApi.getAll().then((res) => setCouponChoices((res.data ?? []).filter((c) => (c.phase ? c.phase === "active" : c.status) && c.type !== "free_shipping" && c.channelPos !== false).slice(0, 8))).catch(() => {})
     }, [])
 
-    const locName = (id: string = selectedWarehouseId) => warehouses.find((w) => String(w.id) === id)?.name ?? "this location"
+    const locName = (id: string = selectedWarehouseId) => warehouses.find((w) => String(w.id) === id)?.name ?? t("pos:thisLocation")
     const lowAt = (product: Product) => (reorderById[product.id] > 0 ? reorderById[product.id] : 5)
 
     const getStock = (product: Product, variant?: Variant, whId: string = selectedWarehouseId): number => {
@@ -373,7 +386,7 @@ export default function PosPage() {
         const availableStock = getAvailableStock(product, variant)
         const cartItemId = variant ? `${product.id}-${variant.id}` : product.id
         const existingInCart = cart.find(item => item.id === cartItemId)
-        if (availableStock <= 0) { toast.error(`Only ${getStock(product, variant)} ${product.name} in stock at ${locName()}`); return }
+        if (availableStock <= 0) { toast.error(t("pos:stock.onlyAt", { qty: getStock(product, variant), name: product.name, location: locName() })); return }
         const getDisplayPrice = (p: typeof product, v?: typeof variant) => {
             if ((p as any).isBundle && (p as any).bundlePriceOverride) {
                 return (p as any).bundlePriceOverride
@@ -422,13 +435,20 @@ export default function PosPage() {
                 : undefined
             const maxStock = getStock(product, variant)
             if (cartItem.quantity >= maxStock) {
-                toast.error(`Only ${maxStock} ${product.name} in stock at ${locName()}`)
+                toast.error(t("pos:stock.onlyAt", { qty: maxStock, name: product.name, location: locName() }))
                 return
             }
         }
         setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta), ...priceForQty(item, Math.max(1, item.quantity + delta)) } : item))
     }
     const removeFromCart = (id: string) => setCart(prev => prev.filter(item => item.id !== id))
+    /** null puts the line back on its list (or wholesale) price */
+    const updatePrice = (id: string, price: number | null) =>
+        setCart(prev => prev.map(item => {
+            if (item.id !== id) return item
+            if (price === null) return { ...item, customPrice: false, ...priceForQty({ ...item, customPrice: false }, item.quantity) }
+            return { ...item, price: r2(price), customPrice: true, wholesale: false }
+        }))
 
     // switching location: cut the cart down to what the new location holds
     const fitCartToWarehouse = (items: CartItem[], id: string) => {
@@ -448,7 +468,7 @@ export default function PosPage() {
         if (id === selectedWarehouseId) return
         const { next, changed } = fitCartToWarehouse(cart, id)
         setSelectedWarehouseId(id)
-        if (changed) { setCart(next); toast.info(`Cart adjusted to stock available at ${locName(id)}`) }
+        if (changed) { setCart(next); toast.info(t("pos:stock.cartAdjusted", { location: locName(id) })) }
     }
 
     // ---- totals
@@ -459,9 +479,9 @@ export default function PosPage() {
     let discountError = ""
     if (discValue.trim() !== "") {
         const v = Number(discValue.replace(/,/g, ""))
-        if (Number.isNaN(v) || v < 0) discountError = "Discount must be a number, 0 or more."
-        else if (discType === "percent" && v > 100) discountError = "Percent discount cannot exceed 100%."
-        else if (discType === "flat" && v > subtotal && subtotal > 0) discountError = "Discount cannot be more than the subtotal."
+        if (Number.isNaN(v) || v < 0) discountError = t("pos:errors.discountNumber")
+        else if (discType === "percent" && v > 100) discountError = t("pos:errors.discountPercentMax")
+        else if (discType === "flat" && v > subtotal && subtotal > 0) discountError = t("pos:errors.discountOverSubtotal")
         else manualDiscount = discType === "percent" ? r2((subtotal * v) / 100) : v
     }
     manualDiscount = Math.min(Math.max(manualDiscount, 0), subtotal)
@@ -484,9 +504,9 @@ export default function PosPage() {
         const scoped = cartScope().filter((l) => eligibleOf(coupon, l))
         const eligibleSubtotal = r2(scoped.reduce((a, l) => a + l.subtotal, 0))
         if (coupon.minOrderAmount > 0 && subtotal < coupon.minOrderAmount) {
-            couponProblem = `Minimum order ${formatCurrency(coupon.minOrderAmount)} required.`
+            couponProblem = t("pos:coupon.minOrder", { amount: formatCurrency(coupon.minOrderAmount) })
         } else if (eligibleSubtotal <= 0) {
-            couponProblem = "No items in the cart are eligible for this coupon."
+            couponProblem = t("pos:coupon.notEligible")
         } else {
             let amt = coupon.type === "percentage" ? r2((eligibleSubtotal * coupon.discount) / 100) : Math.min(coupon.discount, eligibleSubtotal)
             if (coupon.type === "percentage" && coupon.maxDiscount && coupon.maxDiscount > 0) amt = Math.min(amt, coupon.maxDiscount)
@@ -507,24 +527,24 @@ export default function PosPage() {
 
     const applyCoupon = async (codeIn?: string) => {
         const code = (codeIn ?? couponInput).trim()
-        if (!code) { toast.error("Enter a coupon code"); return }
+        if (!code) { toast.error(t("pos:coupon.enterCode")); return }
         try {
             const res = await couponApi.validate(code, subtotal, { channel: "pos", items: cartScope().map(({ productId, categoryId }) => ({ productId, categoryId })), customerId: selectedCustomerId ? Number(selectedCustomerId) : undefined })
             setCoupon(res.data)
             setCouponInput(res.data.code)
             setCouponMsg("")
             setError("")
-            toast.success("Coupon applied")
+            toast.success(t("pos:coupon.appliedToast"))
         } catch (e) {
             setCoupon(null)
-            setCouponMsg(apiError(e, "Coupon is not valid."))
-            toast.error(apiError(e, "Coupon is not valid."))
+            setCouponMsg(apiError(e, t("pos:coupon.invalid")))
+            toast.error(apiError(e, t("pos:coupon.invalid")))
         }
     }
     const removeCoupon = () => { setCoupon(null); setCouponInput(""); setCouponMsg("") }
 
     const resetSale = () => {
-        setCart([]); setSelectedCustomerId(""); setSelectedCustomerName("Walk-in Customer")
+        setCart([]); setSelectedCustomerId(""); setSelectedCustomerName(WALK_IN_NAME)
         setDiscType("flat"); setDiscValue(""); setDiscOpen(false)
         removeCoupon(); setCouponOpen(false)
         setPayMethod(defaultMethod); setTender("exact"); setTenderInput(""); setTxnId(""); setError("")
@@ -546,14 +566,14 @@ export default function PosPage() {
             })
             return true
         } catch (e) {
-            toast.error(apiError(e, "Could not hold the sale"))
+            toast.error(apiError(e, t("pos:held.holdFailed")))
             return false
         }
     }
 
     const hold = async () => {
         if (await holdCurrent()) {
-            toast.success("Sale held")
+            toast.success(t("pos:held.held"))
             resetSale()
             refreshHeld()
         }
@@ -567,9 +587,9 @@ export default function PosPage() {
         const fit = fitCartToWarehouse(p.cart ?? [], whId)
         setCart(fit.next)
         if (p.warehouseId) setSelectedWarehouseId(whId)
-        if (fit.changed) toast.info(`Cart adjusted to stock available at ${locName(whId)}`)
+        if (fit.changed) toast.info(t("pos:stock.cartAdjusted", { location: locName(whId) }))
         setSelectedCustomerId(p.customerId ?? "")
-        setSelectedCustomerName(p.customerName ?? "Walk-in Customer")
+        setSelectedCustomerName(p.customerName ?? WALK_IN_NAME)
         setDiscType(p.discType ?? "flat")
         setDiscValue(p.discValue ?? "")
         removeCoupon()
@@ -581,20 +601,20 @@ export default function PosPage() {
     }
 
     const dropHeld = async (h: HeldSale) => {
-        if (!window.confirm(`Discard ${h.label}?`)) return
-        try { await posApi.dropHeld(h.id); refreshHeld() } catch (e) { toast.error(apiError(e, "Could not discard")) }
+        if (!window.confirm(t("pos:held.confirmDiscard", { label: h.label }))) return
+        try { await posApi.dropHeld(h.id); refreshHeld() } catch (e) { toast.error(apiError(e, t("pos:held.discardFailed"))) }
     }
 
     // ---- charge
     const handleCheckout = async () => {
         if (isSubmitting) return
-        if (!session) { setDrawerError("Open a shift before taking a sale."); setDrawerOpen(true); setError("Open a shift before taking a sale."); return }
-        if (cart.length === 0) { setError("Add at least one item."); return }
+        if (!session) { setDrawerError(t("pos:errors.openShift")); setDrawerOpen(true); setError(t("pos:errors.openShift")); return }
+        if (cart.length === 0) { setError(t("pos:errors.addItem")); return }
         if (discountError) { setError(discountError); return }
         if (coupon && couponProblem) { setError(couponProblem); return }
-        if (payMethod === "Cash" && tender === "custom" && Number.isNaN(Number(tenderInput))) { setError("Enter a valid amount received."); return }
-        if (payMethod === "COD" && !selectedCustomerId) { setError("Cash on delivery needs a customer. Pick or add one."); return }
-        if (isShort && payMethod !== "COD" && !selectedCustomerId) { setError("Walk-in sale must be paid in full. Pick a customer to allow a due balance."); return }
+        if (payMethod === "Cash" && tender === "custom" && Number.isNaN(Number(tenderInput))) { setError(t("pos:errors.invalidReceived")); return }
+        if (payMethod === "COD" && !selectedCustomerId) { setError(t("pos:errors.codNeedsCustomer")); return }
+        if (isShort && payMethod !== "COD" && !selectedCustomerId) { setError(t("pos:errors.walkInFull")); return }
 
         setIsSubmitting(true)
         setError("")
@@ -604,7 +624,7 @@ export default function PosPage() {
             const txn = NEEDS_TXN.includes(payMethod) ? txnId.trim() : ""
             const res = await sellsApi.create({
                 customerId: customer ? Number(customer.id) : undefined,
-                customerName: selectedCustomerName || "Walk-in Customer",
+                customerName: selectedCustomerName || WALK_IN_NAME,
                 customerEmail: customer?.email || undefined,
                 customerPhone: customer?.phone || undefined,
                 shippingFullName: customer?.name || undefined,
@@ -640,6 +660,7 @@ export default function PosPage() {
                     price: item.price,
                     unitPrice: item.price,
                     unit_price: item.price,
+                    priceOverride: item.customPrice || undefined,
                 })),
             })
             const whName = warehouses.find((w) => String(w.id) === selectedWarehouseId)?.name ?? ""
@@ -653,7 +674,7 @@ export default function PosPage() {
             loadProducts()
             loadLocationStock()
         } catch (err) {
-            const msg = apiError(err, "Order failed. Please try again.")
+            const msg = apiError(err, t("pos:errors.orderFailed"))
             setError(msg)
             toast.error(msg)
         } finally {
@@ -680,7 +701,7 @@ export default function PosPage() {
         if (!v) return
         const exact = products.find((p) => (p.sku ?? "").toLowerCase() === v || (p.barcode ?? "").toLowerCase() === v)
         const hit = exact ?? (filteredProducts.length === 1 ? filteredProducts[0] : undefined)
-        if (!hit) { toast.error(`No single product matches "${searchQuery}"`); return }
+        if (!hit) { toast.error(t("pos:errors.noSingleMatch", { query: searchQuery })); return }
         addProduct(hit)
         setSearchQuery("")
     }
@@ -693,7 +714,7 @@ export default function PosPage() {
     const selectedWarehouse = warehouses.find((w) => String(w.id) === selectedWarehouseId)
     const posOnly = warehouses.filter((w) => locMeta[w.id]?.sellsInPos !== false)
     const posLocations = posOnly.length > 0 ? posOnly : warehouses
-    const catTitle = selectedCategory === "all" ? "All items" : categoryName(selectedCategory) ?? "All items"
+    const catTitle = selectedCategory === "all" ? t("pos:categories.all") : categoryName(selectedCategory) ?? t("pos:categories.all")
     const cartQty = (id: string) => cart.filter((i) => String(i.productId) === id).reduce((n, i) => n + i.quantity, 0)
     const addProduct = (product: Product) => {
         if (product.variants && product.variants.length > 0) setSelectedProductForVariant(product)
@@ -705,7 +726,7 @@ export default function PosPage() {
     if (blocked) return blocked
 
     const cycleSort = () => setSort(SORTS[(SORTS.findIndex(([k]) => k === sort) + 1) % SORTS.length][0])
-    const sortLabel = SORTS.find(([k]) => k === sort)?.[1] ?? "Best selling"
+    const sortLabel = t(SORTS.find(([k]) => k === sort)?.[1] ?? "pos:sort.best")
     const sectionError = error || discountError
     const canCharge = cart.length > 0 && !isSubmitting
 
@@ -713,8 +734,8 @@ export default function PosPage() {
         <div data-pos-page="" className="flex h-full min-w-0 flex-col overflow-hidden">
             {/* Top bar */}
             <header className="app-header flex flex-wrap items-center gap-3 px-5 py-3">
-                <WithTooltip content="Toggle sidebar (Ctrl+B)">
-                    <Button type="button" variant="outline" size="icon" onClick={toggleSidebar} aria-label="Toggle sidebar">
+                <WithTooltip content={t("pos:header.toggleSidebarHint")}>
+                    <Button type="button" variant="outline" size="icon" onClick={toggleSidebar} aria-label={t("pos:header.toggleSidebar")}>
                         <PanelLeft className="size-5" strokeWidth={1.8} aria-hidden />
                     </Button>
                 </WithTooltip>
@@ -723,8 +744,8 @@ export default function PosPage() {
                     <InputGroupInput
                         ref={searchRef}
                         type="search"
-                        aria-label="Scan barcode or search products"
-                        placeholder="Scan barcode or search name / SKU…"
+                        aria-label={t("pos:header.search")}
+                        placeholder={t("pos:header.searchPlaceholder")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={onSearchKey}
@@ -743,11 +764,11 @@ export default function PosPage() {
                 </div>
 
                 <Select value={selectedWarehouseId} onValueChange={changeWarehouse}>
-                    <SelectTrigger aria-label="Warehouse" className="h-auto min-w-[240px] text-left data-[size=default]:h-auto">
+                    <SelectTrigger aria-label={t("common:fields.warehouse")} className="h-auto min-w-[240px] text-left data-[size=default]:h-auto">
                         <Building2 className="size-[18px] text-muted-foreground" aria-hidden />
                         <span className="flex flex-1 flex-col leading-tight">
-                            <span className="text-xs text-muted-foreground">Selling from</span>
-                            <span className="text-sm font-semibold">{selectedWarehouse?.name ?? "Select warehouse"}</span>
+                            <span className="text-xs text-muted-foreground">{t("pos:header.sellingFrom")}</span>
+                            <span className="text-sm font-semibold">{selectedWarehouse?.name ?? t("pos:header.selectLocation")}</span>
                         </span>
                     </SelectTrigger>
                     <SelectContent align="start" className="min-w-[300px]">
@@ -764,7 +785,7 @@ export default function PosPage() {
                                         </span>
                                         {n !== undefined && (
                                             <Badge variant={n > 0 ? "secondary" : "destructive"} className="tabular-nums">
-                                                {n > 0 ? `${n} in stock` : "No stock"}
+                                                {n > 0 ? t("pos:header.inStock", { count: n }) : t("pos:header.noStock")}
                                             </Badge>
                                         )}
                                     </span>
@@ -778,41 +799,47 @@ export default function PosPage() {
                     <Button
                         type="button"
                         variant="outline"
-                        aria-label="Cash drawer"
+                        aria-label={t("pos:header.cashDrawer")}
                         onClick={() => { setDrawerError(""); setDrawerOpen(true) }}
                     >
                         <Circle className={cn("size-2", session ? "fill-primary text-primary" : "fill-destructive text-destructive")} aria-hidden />
-                        {session ? `${session.register} · Cash ${formatCurrency(session.summary?.expected ?? session.expectedCash ?? 0)}` : "Shift closed · Open shift"}
+                        {session
+                            ? t("pos:header.shiftOpen", { register: regLabel(session.register), amount: formatCurrency(session.summary?.expected ?? session.expectedCash ?? 0) })
+                            : t("pos:header.shiftClosed")}
                     </Button>
 
                     <Popover open={heldOpen} onOpenChange={setHeldOpen}>
                         <PopoverTrigger asChild>
                             <Button type="button" variant="outline" aria-expanded={heldOpen}>
-                                Held sales
+                                {t("pos:header.heldSales")}
                                 <Badge variant="secondary" className="h-5 min-w-5 rounded-full px-1 tabular-nums">{held.length}</Badge>
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent align="end" className="w-[340px] p-2">
-                            {held.length === 0 && <p className="px-2 py-3 text-sm text-muted-foreground">No held sales. Use Hold to park the current cart.</p>}
+                            {held.length === 0 && <p className="px-2 py-3 text-sm text-muted-foreground">{t("pos:held.empty")}</p>}
                             {held.map((h) => (
                                 <Item key={h.id} size="sm" className="flex-nowrap gap-2 px-2 py-2 hover:bg-accent/50">
                                     <ItemContent className="min-w-0 gap-0">
                                         <ItemTitle>{h.label}</ItemTitle>
                                         <ItemDescription className="truncate text-xs">
-                                            {h.itemCount} items · {formatCurrency(h.total)} · {(h.payload as any)?.customerName || "Walk-in"}
+                                            {t("pos:held.summary", {
+                                                count: h.itemCount,
+                                                total: formatCurrency(h.total),
+                                                customer: !(h.payload as any)?.customerName || (h.payload as any).customerName === WALK_IN_NAME ? t("pos:walkIn") : (h.payload as any).customerName,
+                                            })}
                                         </ItemDescription>
                                     </ItemContent>
                                     <ItemActions className="gap-2">
-                                        <Button type="button" size="sm" onClick={() => resumeHeld(h)}>Resume</Button>
-                                        <WithTooltip content="Discard held sale"><Button type="button" variant="ghost" size="icon-sm" aria-label="Discard held sale" onClick={() => dropHeld(h)}>×</Button></WithTooltip>
+                                        <Button type="button" size="sm" onClick={() => resumeHeld(h)}>{t("pos:held.resume")}</Button>
+                                        <WithTooltip content={t("pos:held.discard")}><Button type="button" variant="ghost" size="icon-sm" aria-label={t("pos:held.discard")} onClick={() => dropHeld(h)}>×</Button></WithTooltip>
                                     </ItemActions>
                                 </Item>
                             ))}
                         </PopoverContent>
                     </Popover>
 
-                    <Button asChild variant="outline"><Link href="/dashboard/returns/customer">Return / exchange</Link></Button>
-                    <WithTooltip content="Full screen"><Button type="button" variant="outline" size="icon" aria-label="Full screen" onClick={toggleFullscreen}>
+                    <Button asChild variant="outline"><Link href="/dashboard/returns/customer">{t("pos:header.returnExchange")}</Link></Button>
+                    <WithTooltip content={t("pos:header.fullScreen")}><Button type="button" variant="outline" size="icon" aria-label={t("pos:header.fullScreen")} onClick={toggleFullscreen}>
                         <Maximize2 className="size-[18px]" aria-hidden />
                     </Button></WithTooltip>
                     <ThemeAccentControls />
@@ -821,9 +848,9 @@ export default function PosPage() {
 
             <div className="app-canvas flex min-h-0 flex-1 flex-wrap items-stretch gap-4 overflow-y-auto p-4 lg:flex-nowrap lg:overflow-hidden">
                 {/* Categories */}
-                <Card role="complementary" aria-label="Categories" className="w-full shrink-0 gap-1 self-start p-2.5 pt-3.5 lg:max-h-full lg:w-[220px] lg:overflow-y-auto">
-                    <SectionTitle as="h2" className="px-2.5 pb-2">Categories</SectionTitle>
-                    {[{ id: "all", name: "All items", sub: false, rootId: "all" }, ...railCategories].map((cat) => {
+                <Card role="complementary" aria-label={t("pos:categories.title")} className="w-full shrink-0 gap-1 self-start p-2.5 pt-3.5 lg:max-h-full lg:w-[220px] lg:overflow-y-auto">
+                    <SectionTitle as="h2" className="px-2.5 pb-2">{t("pos:categories.title")}</SectionTitle>
+                    {[{ id: "all", name: t("pos:categories.all"), sub: false, rootId: "all" }, ...railCategories].map((cat) => {
                         const sel = selectedCategory === cat.id
                         const ids = cat.id === "all" ? null : descend(cat.id)
                         const n = products.filter((p) => (!ids || (p.categoryId ? ids.includes(p.categoryId) : false)) && getAvailableStock(p) > 0).length
@@ -845,41 +872,39 @@ export default function PosPage() {
                         )
                     })}
                     <Separator className="mx-1 my-2.5 data-[orientation=horizontal]:w-auto" />
-                    <SectionTitle as="h2" className="px-2.5 pb-1.5">Filters</SectionTitle>
+                    <SectionTitle as="h2" className="px-2.5 pb-1.5">{t("common:actions.filters")}</SectionTitle>
                     <Label htmlFor="pos-hide-out" className="min-h-11 justify-between px-2.5">
-                        <span>Hide out of stock</span>
+                        <span>{t("pos:categories.hideOut")}</span>
                         <Switch id="pos-hide-out" checked={hideOut} onCheckedChange={(v) => setHideOut(v === true)} />
                     </Label>
                     <Button asChild variant="link" className="min-h-10 justify-start px-2.5">
-                        <Link href="/dashboard/categories">Manage categories →</Link>
+                        <Link href="/dashboard/categories">{t("pos:categories.manage")}</Link>
                     </Button>
                 </Card>
 
                 {/* Products */}
-                <Card role="region" aria-label="Products" className="min-h-[420px] min-w-0 flex-1 gap-0 py-0 lg:min-h-0">
+                <Card role="region" aria-label={t("common:fields.products")} className="min-h-[420px] min-w-0 flex-1 gap-0 py-0 lg:min-h-0">
                     <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-4">
                         <div>
                             <h1 className="text-xl font-semibold">{catTitle}</h1>
                             <p className="mt-0.5 text-sm text-muted-foreground">
-                                <strong className="text-foreground">{availableCount}</strong> products available{selectedWarehouse ? ` at ${selectedWarehouse.name}` : ""}
+                                {selectedWarehouse
+                                    ? <Trans t={t} i18nKey="pos:products.availableAt" count={availableCount} values={{ location: selectedWarehouse.name }} components={{ b: <strong className="text-foreground" /> }} />
+                                    : <Trans t={t} i18nKey="pos:products.available" count={availableCount} components={{ b: <strong className="text-foreground" /> }} />}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <Button type="button" variant="outline" onClick={cycleSort}>Sort: {sortLabel} ▾</Button>
-                            <ButtonGroup role="radiogroup" aria-label="View">
-                                {([
-                                    ["large", "Large grid", LayoutGrid],
-                                    ["compact", "Compact grid", Grid2X2],
-                                    ["list", "List", List],
-                                ] as const).map(([mode, label, Icon]) => (
-                                    <WithTooltip key={mode} content={label}>
+                            <Button type="button" variant="outline" onClick={cycleSort}>{t("pos:sort.button", { label: sortLabel })}</Button>
+                            <ButtonGroup role="radiogroup" aria-label={t("pos:view.label")}>
+                                {VIEW_MODES.map(([mode, labelKey, Icon]) => (
+                                    <WithTooltip key={mode} content={t(labelKey)}>
                                         <Button
                                             type="button"
                                             variant={viewMode === mode ? "secondary" : "outline"}
                                             size="icon"
                                             role="radio"
                                             aria-checked={viewMode === mode}
-                                            aria-label={label}
+                                            aria-label={t(labelKey)}
                                             onClick={() => setViewMode(mode)}
                                         >
                                             <Icon className="size-4" aria-hidden />
@@ -893,43 +918,43 @@ export default function PosPage() {
 
                     <div className="min-h-0 flex-1 overflow-auto px-[18px] py-4">
                         {productsLoading && products.length === 0 ? (
-                            <div className="flex h-64 items-center justify-center gap-2 text-muted-foreground"><Spinner />Loading products…</div>
+                            <div className="flex h-64 items-center justify-center gap-2 text-muted-foreground"><Spinner />{t("pos:products.loading")}</div>
                         ) : inStockHere.length === 0 ? (
                             <EmptyState
                                 icon={Package}
                                 className="min-h-[320px]"
-                                title={products.length ? `No stock at ${selectedWarehouse?.name ?? "this location"}` : "No products yet"}
+                                title={products.length ? t("pos:products.noStockAt", { location: selectedWarehouse?.name ?? t("pos:thisLocation") }) : t("pos:products.noProducts")}
                                 description={products.length
-                                    ? "None of your products have stock at this location. Switch location, or move stock here with a transfer before selling."
-                                    : "Add products to your catalogue and receive stock before selling."}
+                                    ? t("pos:products.noStockDesc")
+                                    : t("pos:products.noProductsDesc")}
                                 action={<div className="flex flex-wrap justify-center gap-2">
                                     {otherWarehouse ? (
                                         <Button type="button" onClick={() => changeWarehouse(String(otherWarehouse.id))}>
-                                            Switch to {otherWarehouse.name}
+                                            {t("pos:products.switchTo", { location: otherWarehouse.name })}
                                         </Button>
                                     ) : (
-                                        <Button asChild><Link href="/dashboard/products">Open catalogue</Link></Button>
+                                        <Button asChild><Link href="/dashboard/products">{t("pos:products.openCatalogue")}</Link></Button>
                                     )}
-                                    <Button asChild variant="outline"><Link href="/dashboard/inventory/transfer">Transfer stock here</Link></Button>
-                                    <Button asChild variant="outline"><Link href="/dashboard/vendors/purchase-orders">Receive stock</Link></Button>
+                                    <Button asChild variant="outline"><Link href="/dashboard/inventory/transfer">{t("pos:products.transferHere")}</Link></Button>
+                                    <Button asChild variant="outline"><Link href="/dashboard/vendors/purchase-orders">{t("pos:products.receiveStock")}</Link></Button>
                                 </div>}
                             />
                         ) : filteredProducts.length === 0 ? (
                             <EmptyState
                                 icon={Search}
                                 className="min-h-[260px]"
-                                title="No products match"
-                                description={searchQuery ? `Nothing matches "${searchQuery}" in ${catTitle}.` : "Nothing to show for the current filters."}
+                                title={t("pos:products.noMatch")}
+                                description={searchQuery ? t("pos:products.noMatchQuery", { query: searchQuery, category: catTitle }) : t("pos:products.noMatchFilters")}
                             />
                         ) : viewMode === "list" ? (
                             <Table className="min-w-[560px]">
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead scope="col">Product</TableHead>
-                                        <TableHead scope="col">Category</TableHead>
-                                        <TableHead scope="col">Stock</TableHead>
-                                        <TableHead scope="col" className="text-right">Price</TableHead>
-                                        <TableHead scope="col"><span className="sr-only">Action</span></TableHead>
+                                        <TableHead scope="col">{t("common:fields.product")}</TableHead>
+                                        <TableHead scope="col">{t("common:fields.category")}</TableHead>
+                                        <TableHead scope="col">{t("common:fields.stock")}</TableHead>
+                                        <TableHead scope="col" className="text-right">{t("common:money.price")}</TableHead>
+                                        <TableHead scope="col"><span className="sr-only">{t("pos:products.action")}</span></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -948,16 +973,16 @@ export default function PosPage() {
                                                         </span>
                                                         <span className="flex flex-col">
                                                             <span className="font-semibold">{product.name}</span>
-                                                            <span className="text-xs text-muted-foreground">{product.sku || "—"}{product.variants?.length ? ` · ${product.variants.length} variants` : ""}</span>
+                                                            <span className="text-xs text-muted-foreground">{product.sku || "—"}{product.variants?.length ? ` · ${t("pos:products.variants", { count: product.variants.length })}` : ""}</span>
                                                         </span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground">{product.category || categoryName(product.categoryId) || "—"}</TableCell>
-                                                <TableCell><Badge variant={pill.variant}>{pill.text}</Badge></TableCell>
-                                                <TableCell className="text-right font-bold tabular-nums">{cp.from ? "From " : ""}{formatCurrency(cp.price)}</TableCell>
+                                                <TableCell><Badge variant={pill.variant}>{t(pill.text, { count: pill.count })}</Badge></TableCell>
+                                                <TableCell className="text-right font-bold tabular-nums">{cp.from ? t("pos:products.fromPrice", { price: formatCurrency(cp.price) }) : formatCurrency(cp.price)}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button type="button" variant={qty > 0 ? "secondary" : "outline"} size="sm" disabled={avail <= 0} onClick={() => addProduct(product)} aria-label={`Add ${product.name}`}>
-                                                        {qty > 0 ? `Add (${qty})` : "Add"}
+                                                    <Button type="button" variant={qty > 0 ? "secondary" : "outline"} size="sm" disabled={avail <= 0} onClick={() => addProduct(product)} aria-label={t("pos:products.addName", { name: product.name })}>
+                                                        {qty > 0 ? t("pos:products.addQty", { count: qty }) : t("common:actions.add")}
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
@@ -985,11 +1010,11 @@ export default function PosPage() {
                 </Card>
 
                 {/* Cart */}
-                <Card role="complementary" aria-label="Current sale" className="w-full shrink-0 gap-0 overflow-hidden py-0 lg:w-[380px] xl:w-[400px]">
+                <Card role="complementary" aria-label={t("pos:cart.title")} className="w-full shrink-0 gap-0 overflow-hidden py-0 lg:w-[380px] xl:w-[400px]">
                     <div className="flex flex-col gap-2.5 px-4 py-3.5">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Current sale</h2>
-                            <span className="text-xs text-muted-foreground">Draft · {itemCount} item{itemCount === 1 ? "" : "s"}</span>
+                            <h2 className="text-lg font-semibold">{t("pos:cart.title")}</h2>
+                            <span className="text-xs text-muted-foreground">{t("pos:cart.draft", { count: itemCount })}</span>
                         </div>
                         <PosCustomerPicker
                             value={selectedCustomerId}
@@ -1000,10 +1025,10 @@ export default function PosPage() {
 
                     <div className="flex min-h-[160px] flex-1 flex-col overflow-y-auto px-4 py-1">
                         {cart.length === 0 ? (
-                            <EmptyState icon={ShoppingCart} title="Cart is empty" description="Scan a barcode or tap a product to start a sale" className="py-10 md:py-10" />
+                            <EmptyState icon={ShoppingCart} title={t("pos:cart.empty")} description={t("pos:cart.emptyHint")} className="py-10 md:py-10" />
                         ) : (
                             cart.map((item) => (
-                                <PosCartItem key={item.id} item={item} onVerifyQuantity={updateQuantity} onRemove={removeFromCart} />
+                                <PosCartItem key={item.id} item={item} onVerifyQuantity={updateQuantity} onRemove={removeFromCart} onPriceChange={updatePrice} />
                             ))
                         )}
                     </div>
@@ -1012,29 +1037,29 @@ export default function PosPage() {
                     <div className="grid grid-cols-3 gap-2 px-4 py-3">
                         <Button type="button" variant={manualDiscount > 0 ? "secondary" : "outline"} onClick={() => setDiscOpen((v) => !v)} aria-pressed={manualDiscount > 0}
                             className="min-w-0 truncate">
-                            % Discount
+                            {t("pos:cart.discount")}
                         </Button>
                         <Button type="button" variant={coupon ? "secondary" : "outline"} onClick={() => setCouponOpen((v) => !v)} aria-pressed={!!coupon}
                             className="min-w-0 truncate">
-                            {coupon ? coupon.code : "Coupon"}
+                            {coupon ? coupon.code : t("pos:cart.coupon")}
                         </Button>
                         <Button type="button" variant="destructive" onClick={() => (cart.length ? setIsResetOpen(true) : resetSale())}
-                            className="min-w-0">
-                            Reset
+                            className="min-w-0 truncate">
+                            {t("common:actions.reset")}
                         </Button>
                     </div>
 
                     {discOpen && <Separator />}
                     {discOpen && (
                         <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2 px-4 py-3">
-                            {([["flat", "Flat"], ["percent", "Percent %"]] as const).map(([id, label]) => (
+                            {([["flat", "pos:cart.flat"], ["percent", "pos:cart.percent"]] as const).map(([id, label]) => (
                                 <Button key={id} type="button" variant={discType === id ? "default" : "outline"} aria-pressed={discType === id} onClick={() => { setDiscType(id); setError("") }}>
-                                    {label}
+                                    {t(label)}
                                 </Button>
                             ))}
-                            <Input type="text" inputMode="decimal" aria-label="Discount value" value={discValue}
+                            <Input type="text" inputMode="decimal" aria-label={t("pos:cart.discountValue")} value={discValue}
                                 onChange={(e) => { setDiscValue(e.target.value); setError("") }}
-                                placeholder={discType === "percent" ? "Percent, e.g. 10" : "Amount, e.g. 100"} />
+                                placeholder={discType === "percent" ? t("pos:cart.percentPlaceholder") : t("pos:cart.amountPlaceholder")} />
                         </div>
                     )}
 
@@ -1042,20 +1067,20 @@ export default function PosPage() {
                     {couponOpen && (
                         <div className="flex flex-col gap-2 px-4 py-3">
                             <div className="flex gap-2">
-                                <Input type="text" aria-label="Coupon code" value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
+                                <Input type="text" aria-label={t("pos:coupon.code")} value={couponInput} onChange={(e) => setCouponInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === "Enter") applyCoupon() }}
-                                    placeholder="Coupon code"
+                                    placeholder={t("pos:coupon.code")}
                                     className="min-w-0 flex-1" />
-                                <Button type="button" onClick={() => applyCoupon()}>Apply</Button>
-                                {coupon && <Button type="button" variant="outline" onClick={removeCoupon}>Remove</Button>}
+                                <Button type="button" onClick={() => applyCoupon()}>{t("common:actions.apply")}</Button>
+                                {coupon && <Button type="button" variant="outline" onClick={removeCoupon}>{t("common:actions.remove")}</Button>}
                             </div>
                             <span className={cn("text-xs", coupon && !couponProblem ? "text-foreground" : couponMsg || couponProblem ? "text-destructive" : "text-muted-foreground")}>
-                                {coupon ? (couponProblem || `${coupon.campaignName || coupon.code} applied: −${formatCurrency(couponDiscount)}`) : couponMsg || "Enter a code and press Apply."}
+                                {coupon ? (couponProblem || t("pos:coupon.applied", { name: coupon.campaignName || coupon.code, amount: formatCurrency(couponDiscount) })) : couponMsg || t("pos:coupon.hint")}
                             </span>
                             {couponChoices.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5">
                                     {couponChoices.map((c) => (
-                                        <WithTooltip key={c.id} content={`${c.campaignName}${c.minOrderAmount > 0 ? ` · min ${formatCurrency(c.minOrderAmount)}` : ""}`}>
+                                        <WithTooltip key={c.id} content={c.minOrderAmount > 0 ? t("pos:coupon.minTip", { name: c.campaignName, amount: formatCurrency(c.minOrderAmount) }) : c.campaignName}>
                                             <Button type="button" variant="outline" size="sm" onClick={() => applyCoupon(c.code)}>
                                                 {c.code} · {c.type === "percentage" ? `${c.discount}%` : formatCurrency(c.discount)}
                                             </Button>
@@ -1069,14 +1094,14 @@ export default function PosPage() {
                     <Separator />
                     <div className="flex flex-col gap-3 bg-muted/50 px-4 pb-4 pt-3.5">
                         <InfoList className="gap-1.5 tabular-nums">
-                            <InfoRow label="Subtotal" value={formatCurrency(subtotal)} />
-                            <InfoRow label={`Discount${manualDiscount > 0 && discType === "percent" ? ` (${discValue}%)` : ""}`} value={`${manualDiscount > 0 ? "−" : ""}${formatCurrency(manualDiscount)}`} />
+                            <InfoRow label={t("common:money.subtotal")} value={formatCurrency(subtotal)} />
+                            <InfoRow label={manualDiscount > 0 && discType === "percent" ? t("pos:cart.discountPercent", { value: discValue }) : t("common:money.discount")} value={`${manualDiscount > 0 ? "−" : ""}${formatCurrency(manualDiscount)}`} />
                             {coupon && (
-                                <InfoRow label={`Coupon ${coupon.code}`} value={`−${formatCurrency(couponDiscount)}`} />
+                                <InfoRow label={t("pos:cart.couponLine", { code: coupon.code })} value={`−${formatCurrency(couponDiscount)}`} />
                             )}
                             <InfoRow label={formatTaxLabel()} value={formatCurrency(tax)} />
                             <Separator />
-                            <InfoRow label={<span className="font-bold text-foreground">Total</span>} value={<span className="text-3xl font-bold tracking-tight">{formatCurrency(total)}</span>} className="items-baseline" />
+                            <InfoRow label={<span className="font-bold text-foreground">{t("common:money.total")}</span>} value={<span className="text-3xl font-bold tracking-tight">{formatCurrency(total)}</span>} className="items-baseline" />
                         </InfoList>
 
                         <PosPayment
@@ -1098,16 +1123,16 @@ export default function PosPage() {
 
                         <div className="flex gap-2">
                             <Button type="button" variant="outline" size="lg" onClick={hold} disabled={cart.length === 0}>
-                                Hold
+                                {t("pos:cart.hold")}
                             </Button>
                             <Button
                                 type="button"
                                 size="lg"
                                 disabled={!canCharge}
                                 onClick={handleCheckout}
-                                className="flex-1"
+                                className="min-w-0 flex-1"
                             >
-                                {isSubmitting ? "Processing…" : `Charge ${formatCurrency(total)}`}
+                                <span className="truncate">{isSubmitting ? t("pos:cart.processing") : t("pos:cart.charge", { amount: formatCurrency(total) })}</span>
                                 {!isSubmitting && <Kbd>F8</Kbd>}
                             </Button>
                         </div>
@@ -1132,12 +1157,12 @@ export default function PosPage() {
             <AlertDialog open={isResetOpen} onOpenChange={setIsResetOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Clear the current sale?</AlertDialogTitle>
-                        <AlertDialogDescription>All items, the discount and the coupon will be removed.</AlertDialogDescription>
+                        <AlertDialogTitle>{t("pos:cart.resetTitle")}</AlertDialogTitle>
+                        <AlertDialogDescription>{t("pos:cart.resetDescription")}</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleResetCart} className={buttonVariants({ variant: "destructive" })}>Clear sale</AlertDialogAction>
+                        <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleResetCart} className={buttonVariants({ variant: "destructive" })}>{t("pos:cart.clearSale")}</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -1145,8 +1170,8 @@ export default function PosPage() {
             {/* Variant picker */}
             <Dialog open={!!selectedProductForVariant} onOpenChange={(open) => !open && setSelectedProductForVariant(null)}>
                 <DialogContent className="gap-3 sm:max-w-md">
-                    <DialogTitle>Choose variant · {selectedProductForVariant?.name}</DialogTitle>
-                    <DialogDescription className="sr-only">Pick which variant to add to the sale</DialogDescription>
+                    <DialogTitle>{t("pos:variant.title", { name: selectedProductForVariant?.name ?? "" })}</DialogTitle>
+                    <DialogDescription className="sr-only">{t("pos:variant.description")}</DialogDescription>
                     <div className="flex flex-col gap-2">
                         {selectedProductForVariant?.variants?.map((variant) => {
                             const left = getAvailableStock(selectedProductForVariant, variant)
@@ -1163,11 +1188,11 @@ export default function PosPage() {
                                 >
                                     <span className="flex flex-col">
                                         <span className="text-sm font-semibold">{variant.name}</span>
-                                        <span className="text-xs text-muted-foreground">{[variant.sku, inCart ? `${inCart.quantity} in cart` : ""].filter(Boolean).join(" · ") || "No SKU"}</span>
+                                        <span className="text-xs text-muted-foreground">{[variant.sku, inCart ? t("pos:variant.inCart", { count: inCart.quantity }) : ""].filter(Boolean).join(" · ") || t("pos:variant.noSku")}</span>
                                     </span>
                                     <span className="flex flex-col items-end">
                                         <span className="text-sm font-bold tabular-nums">{formatCurrency(variantUnitPrice(selectedProductForVariant, variant))}</span>
-                                        <span className={cn("text-xs font-semibold", out ? "text-destructive" : "text-muted-foreground")}>{out ? "Out of stock" : `${left} available`}</span>
+                                        <span className={cn("text-xs font-semibold", out ? "text-destructive" : "text-muted-foreground")}>{out ? t("pos:stock.out") : t("pos:stock.available", { count: left })}</span>
                                     </span>
                                 </Button>
                             )

@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import type { ReorderItem } from "@/lib/dashboard/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,13 +12,14 @@ import { CardTitle, DashCard, EmptyNote, SectionError, SectionSkeleton } from ".
 import { useDashboardSection } from "./use-dashboard-section"
 
 function CoverBadge({ item }: { item: ReorderItem }) {
+  const { t } = useTranslation(["dashboard", "common"])
   if (item.onHand <= 0) {
-    return <Badge variant="destructive">Out</Badge>
+    return <Badge variant="destructive">{t("dashboard:reorder.out")}</Badge>
   }
   if (item.daysOfCover === null) {
-    return <Badge variant="outline">No sales</Badge>
+    return <Badge variant="outline">{t("dashboard:reorder.noSales")}</Badge>
   }
-  return <Badge variant={item.daysOfCover < 7 ? "secondary" : "outline"}>{item.daysOfCover} days</Badge>
+  return <Badge variant={item.daysOfCover < 7 ? "secondary" : "outline"}>{t("dashboard:counts.days", { count: item.daysOfCover })}</Badge>
 }
 
 /** PO create link, pre-filled with the suggested items for one supplier (the first with a supplier). */
@@ -32,13 +34,14 @@ function poTarget(items: ReorderItem[]): { href: string; count: number } {
 }
 
 export function ReorderSuggestions() {
+  const { t } = useTranslation(["dashboard", "common"])
   const { data, loading, error, retry } = useDashboardSection("reorder", { limit: 8 })
 
   const body = () => {
     if (error && !data) return <SectionError message={error} onRetry={retry} />
     if (loading && !data) return <SectionSkeleton rows={6} />
     if (!data) return null
-    if (data.items.length === 0) return <div className="mt-4"><EmptyNote>Nothing needs reordering right now.</EmptyNote></div>
+    if (data.items.length === 0) return <div className="mt-4"><EmptyNote>{t("dashboard:reorder.empty")}</EmptyNote></div>
 
     const anyDefault = data.items.some((i) => i.leadTimeIsDefault)
     return (
@@ -47,13 +50,13 @@ export function ReorderSuggestions() {
           <Table className="min-w-[620px]">
             <TableHeader>
               <TableRow>
-                <TableHead scope="col">Product</TableHead>
-                <TableHead scope="col" className="text-right">On hand</TableHead>
-                <TableHead scope="col" className="text-right">Sells / day</TableHead>
-                <TableHead scope="col">Days of cover</TableHead>
-                <TableHead scope="col" className="text-right">Order qty</TableHead>
-                <TableHead scope="col">Supplier</TableHead>
-                <TableHead scope="col"><span className="sr-only">Action</span></TableHead>
+                <TableHead scope="col">{t("common:fields.product")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("dashboard:reorder.onHand")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("dashboard:reorder.sellsPerDay")}</TableHead>
+                <TableHead scope="col">{t("dashboard:reorder.daysOfCover")}</TableHead>
+                <TableHead scope="col" className="text-right">{t("dashboard:reorder.orderQty")}</TableHead>
+                <TableHead scope="col">{t("dashboard:reorder.supplier")}</TableHead>
+                <TableHead scope="col"><span className="sr-only">{t("dashboard:reorder.action")}</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -67,21 +70,25 @@ export function ReorderSuggestions() {
                   <TableCell className="text-right tabular-nums">{r.avgDailySales.toFixed(1)}</TableCell>
                   <TableCell><CoverBadge item={r} /></TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <WithTooltip content={r.basis === "velocity" ? `Sales rate × (${r.leadTimeDays}d lead + ${r.safetyDays ?? data.defaults.safetyDays}d safety) − on hand` : "Based on reorder point (no recent sales)"}>
+                    <WithTooltip content={r.basis === "velocity" ? t("dashboard:reorder.qtyVelocity", { lead: r.leadTimeDays, safety: r.safetyDays ?? data.defaults.safetyDays }) : t("dashboard:reorder.qtyReorderPoint")}>
                       <span tabIndex={0} className="cursor-help underline decoration-dotted underline-offset-4">{r.suggestedQty}</span>
                     </WithTooltip>
                   </TableCell>
                   <TableCell>
-                    {r.vendorName ?? <span className="italic">No supplier</span>}
-                    {r.vendorName && <div className="text-[11px]">{r.leadTimeDays}d lead{r.leadTimeIsDefault ? " (default)" : ""}</div>}
+                    {r.vendorName ?? <span className="italic">{t("dashboard:reorder.noSupplier")}</span>}
+                    {r.vendorName && (
+                      <div className="text-[11px]">
+                        {t(r.leadTimeIsDefault ? "dashboard:reorder.leadDefault" : "dashboard:reorder.lead", { days: r.leadTimeDays })}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button asChild variant="outline" size="sm">
                       <Link
-                        aria-label={`Create purchase order for ${r.name}`}
+                        aria-label={t("dashboard:reorder.createPoFor", { name: r.name })}
                         href={poTarget([r]).href}
                       >
-                        Create PO
+                        {t("dashboard:reorder.createPo")}
                       </Link>
                     </Button>
                   </TableCell>
@@ -92,7 +99,7 @@ export function ReorderSuggestions() {
         </div>
         {anyDefault && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Suppliers without a lead time use a default of {data.defaults.leadTimeDays} days plus {data.defaults.safetyDays} safety days.
+            {t("dashboard:reorder.defaultsNote", { lead: data.defaults.leadTimeDays, safety: data.defaults.safetyDays })}
           </p>
         )}
       </>
@@ -104,13 +111,13 @@ export function ReorderSuggestions() {
   return (
     <DashCard className="flex-[2_1_560px]">
       <CardTitle
-        title="Smart reorder suggestions"
-        subtitle="Based on 30-day sales velocity and supplier lead time"
+        title={t("dashboard:reorder.title")}
+        subtitle={t("dashboard:reorder.subtitle")}
         action={
           count > 0 && data ? (
             <Button asChild>
               <Link href={target!.href}>
-                Create PO for {count} item{count === 1 ? "" : "s"}
+                {t("dashboard:reorder.createPoCount", { count })}
               </Link>
             </Button>
           ) : undefined

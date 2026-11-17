@@ -1,63 +1,55 @@
 "use client"
 
 import * as React from "react"
+import { useTranslation } from "react-i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCompanySettings } from "@/contexts/company-settings-context"
-import { DEFAULT_TZ, addDaysYmd, formatDate, formatDateTime, formatNumber, todayIn } from "@/lib/finance-format"
+import { DEFAULT_TZ, addDaysYmd, formatDate, formatNumber, todayIn } from "@/lib/finance-format"
 import { compactMoney, currencySymbol } from "@/components/dashboard/format"
 import { exportToCSV } from "@/lib/export-import-utils"
 import { cn } from "@/lib/utils"
+import { FIN_NS, formatDateIn, formatDateTimeIn, periodKeyLabel } from "./i18n"
 
-// ─── Dates & formatting (FND-3: company time zone, fixed locale) ─────────────
+// ─── Dates & formatting (FND-3: company time zone, UI language) ──────────────
 
 /** Today in the company time zone ("YYYY-MM-DD"). Use `useFinanceFormat().today` inside components. */
 export const todayStr = (tz: string = DEFAULT_TZ) => todayIn(tz)
 export const addDays = addDaysYmd
 
-/** "28 Oct 2026". Date-only strings are calendar dates (never shifted); timestamps are shown in the company time zone. */
+/** "28 Oct 2026" (English). Prefer `useFinanceFormat().date`, which follows the UI language. */
 export const fmtDate = (d?: string | null, tz: string = DEFAULT_TZ) => formatDate(d ?? null, tz)
 
-/** Formatting bound to the company settings: currency, time zone, today. */
+/** Formatting bound to the company settings (currency, time zone, today) and the UI language (dates). */
 export function useFinanceFormat() {
   const { formatCurrency, timezone, currency } = useCompanySettings()
+  const { i18n } = useTranslation(FIN_NS)
+  const lng = i18n.language
   return React.useMemo(() => ({
     tz: timezone,
+    lng,
     currencyCode: currency,
     money: (n: number) => formatCurrency(n),
-    date: (d?: string | null) => formatDate(d ?? null, timezone),
-    longDate: (d?: string | null) => formatDate(d ?? null, timezone, "long"),
-    dateTime: (d?: string | null) => formatDateTime(d ?? null, timezone),
+    date: (d?: string | null) => formatDateIn(lng, d ?? null, timezone),
+    longDate: (d?: string | null) => formatDateIn(lng, d ?? null, timezone, "long"),
+    dateTime: (d?: string | null) => formatDateTimeIn(lng, d ?? null, timezone),
+    /** Month / day bucket label from its key ("2026-10", "2026-10-28"), else the server label. */
+    bucket: (key: string | null | undefined, fallback: string, monthStyle: "month" | "monthLong" = "monthLong") => periodKeyLabel(lng, key, fallback, monthStyle),
     number: formatNumber,
     today: todayIn(timezone),
-  }), [formatCurrency, timezone, currency])
+  }), [formatCurrency, timezone, currency, lng])
 }
 
 /** Small "BDT" label next to figures (currency comes from the response, else the company setting). */
 export function CurrencyTag({ code, className }: { code?: string | null; className?: string }) {
   const { currency } = useCompanySettings()
+  const { t } = useTranslation(FIN_NS)
   const c = code || currency
   if (!c) return null
-  return <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground", className)} title={`All amounts in ${c}`}>{c}</span>
+  return <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground", className)} title={t("finance:ui.allAmountsIn", { code: c })}>{c}</span>
 }
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
-
-/** Ledger source types (labels match the server's `sourceLabel`). */
-export const SOURCE_LABELS: Record<string, string> = {
-  sale: "Sale payment",
-  cod: "COD collection",
-  refund: "Customer refund",
-  supplier_payment: "Supplier payment",
-  supplier_refund: "Supplier refund",
-  expense: "Expense",
-  salary: "Salary",
-  dorji_payout: "Dorji payout",
-  tailor_payment: "Tailor payment",
-  manual: "Manual entry",
-  transfer: "Transfer",
-  expense_void: "Expense voided",
-}
-export const sourceLabel = (s?: string | null) => (s ? SOURCE_LABELS[s] ?? s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()) : "—")
+// Code → label maps live in ./i18n (sourceText, accountTypeText, methodText …).
 
 /** G-7: sentence case for raw status / method texts ("in_transit" → "In transit"), acronyms kept ("cod" → "COD"). */
 export function sentenceCase(v?: string | null): string {
@@ -66,17 +58,6 @@ export function sentenceCase(v?: string | null): string {
   const s = t.charAt(0).toUpperCase() + t.slice(1)
   return s.replace(/\bcod\b/gi, "COD").replace(/\bpos\b/gi, "POS").replace(/\bvat\b/gi, "VAT").replace(/\bbkash\b/gi, "bKash")
 }
-
-export const ACCOUNT_TYPES: [string, string][] = [
-  ["cash", "Cash"], ["bank", "Bank"], ["mobile_wallet", "Mobile wallet"], ["card", "Card"], ["other", "Other"],
-]
-export const accountTypeLabel = (t?: string | null) => ACCOUNT_TYPES.find(([v]) => v === t)?.[1] ?? (t || "—")
-
-/** Payment method keys the server normalises every stored method to (FINANCE_API_CONTRACT.md → Enums). */
-export const METHOD_KEYS: [string, string][] = [
-  ["cash", "Cash"], ["bank", "Bank transfer"], ["card", "Card"], ["bkash", "bKash"], ["nagad", "Nagad"],
-  ["rocket", "Rocket"], ["online", "Online"], ["cod", "Cash on delivery"], ["cheque", "Cheque"],
-]
 
 // ─── Money cells ─────────────────────────────────────────────────────────────
 
@@ -100,13 +81,14 @@ export function SignedMoney({ value, format, positiveTone, className }: { value:
 
 /** "+12.5% vs previous" hint for a KPI. */
 export function ChangeHint({ current, previous, invert }: { current: number; previous?: number | null; invert?: boolean }) {
+  const { t } = useTranslation(FIN_NS)
   if (previous == null) return null
-  if (previous === 0) return <span className="text-muted-foreground">{current === 0 ? "No change" : "New vs previous period"}</span>
+  if (previous === 0) return <span className="text-muted-foreground">{current === 0 ? t("finance:ui.noChange") : t("finance:ui.newVsPrevious")}</span>
   const pct = ((current - previous) / Math.abs(previous)) * 100
   const good = invert ? pct < 0 : pct > 0
   return (
     <span className={cn(pct === 0 ? "text-muted-foreground" : good ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
-      {pct > 0 ? "+" : ""}{pct.toFixed(1)}% vs previous period
+      {t("finance:ui.vsPrevious", { change: `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%` })}
     </span>
   )
 }
@@ -117,15 +99,16 @@ export interface InOutBucket { label: string; in: number; out: number }
 
 /** Paired bars per bucket: money in (green) vs money out (red). */
 export function InOutChart({ buckets, format, height = 180 }: { buckets: InOutBucket[]; format: (n: number) => string; height?: number }) {
+  const { t } = useTranslation(FIN_NS)
   const symbol = currencySymbol(format)
   const peak = Math.max(1, ...buckets.map((b) => Math.max(b.in, b.out)))
-  if (!buckets.some((b) => b.in || b.out)) return <p className="py-10 text-center text-sm text-muted-foreground">No money moved in this period.</p>
+  if (!buckets.some((b) => b.in || b.out)) return <p className="py-10 text-center text-sm text-muted-foreground">{t("finance:ui.noMoneyMoved")}</p>
   return (
     <div className="overflow-x-auto">
       <div style={{ minWidth: Math.max(360, buckets.length * 28) }}>
-        <div className="flex items-end gap-1.5 border-b" style={{ height }} role="img" aria-label="Money in versus money out">
+        <div className="flex items-end gap-1.5 border-b" style={{ height }} role="img" aria-label={t("finance:ui.inVsOutAria")}>
           {buckets.map((b) => (
-            <div key={b.label} className="flex h-full min-w-0 flex-1 items-end justify-center gap-0.5" title={`${b.label}: in ${format(b.in)}, out ${format(b.out)}`}>
+            <div key={b.label} className="flex h-full min-w-0 flex-1 items-end justify-center gap-0.5" title={t("finance:ui.barTitle", { label: b.label, in: format(b.in), out: format(b.out) })}>
               <div className="w-1/2 max-w-4 rounded-t-sm bg-emerald-500" style={{ height: `${b.in ? Math.max(2, (b.in / peak) * 100) : 0}%` }} />
               <div className="w-1/2 max-w-4 rounded-t-sm bg-rose-500" style={{ height: `${b.out ? Math.max(2, (b.out / peak) * 100) : 0}%` }} />
             </div>
@@ -140,9 +123,9 @@ export function InOutChart({ buckets, format, height = 180 }: { buckets: InOutBu
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-emerald-500" aria-hidden /> Money in</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-rose-500" aria-hidden /> Money out</span>
-        <span className="ml-auto tabular-nums">Peak {compactMoney(peak, symbol)}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-emerald-500" aria-hidden /> {t("finance:ui.moneyIn")}</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-rose-500" aria-hidden /> {t("finance:ui.moneyOut")}</span>
+        <span className="ml-auto tabular-nums">{t("finance:ui.peak", { amount: compactMoney(peak, symbol) })}</span>
       </div>
     </div>
   )
@@ -151,15 +134,16 @@ export function InOutChart({ buckets, format, height = 180 }: { buckets: InOutBu
 const MIX_COLORS = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8", "#0891B2", "#DB2777"]
 
 /** Horizontal bars for a breakdown (expenses by category, balances by account…). */
-export function MixBars({ items, format, empty = "Nothing to show for this period.", limit = 8 }: {
+export function MixBars({ items, format, empty, limit = 8 }: {
   items: { label: string; value: number; hint?: string; color?: string }[]
   format: (n: number) => string
   empty?: string
   limit?: number
 }) {
+  const { t } = useTranslation(FIN_NS)
   const top = items.slice(0, limit)
   const peak = Math.max(1, ...top.map((i) => Math.abs(i.value)))
-  if (top.length === 0) return <p className="py-6 text-sm text-muted-foreground">{empty}</p>
+  if (top.length === 0) return <p className="py-6 text-sm text-muted-foreground">{empty ?? t("finance:ui.nothingForPeriod")}</p>
   return (
     <div className="flex flex-col gap-3">
       {top.map((m, i) => (
@@ -179,11 +163,12 @@ export function MixBars({ items, format, empty = "Nothing to show for this perio
 
 /** Stacked aging bar (Current / 1–30 / 31–60 / 60+ …). */
 export function AgingBar({ buckets, format }: { buckets: { label: string; amount: number; count?: number }[]; format: (n: number) => string }) {
+  const { t } = useTranslation(FIN_NS)
   const colors = ["#0F766E", "#F59E0B", "#EA580C", "#B42318", "#7F1D1D"]
   const total = buckets.reduce((n, b) => n + Math.max(0, b.amount), 0)
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label="Aging breakdown">
+      <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={t("finance:ui.agingAria")}>
         {total > 0 && buckets.map((b, i) => b.amount > 0 && (
           <div key={b.label} style={{ width: `${(b.amount / total) * 100}%`, background: colors[i % colors.length] }} />
         ))}
@@ -195,7 +180,7 @@ export function AgingBar({ buckets, format }: { buckets: { label: string; amount
             <div className="min-w-0">
               <p className="text-muted-foreground">{b.label}</p>
               <p className="font-semibold tabular-nums">{format(b.amount)}</p>
-              {b.count != null && <p className="text-xs text-muted-foreground">{b.count} {b.count === 1 ? "item" : "items"}</p>}
+              {b.count != null && <p className="text-xs text-muted-foreground">{t("finance:ui.items", { count: b.count })}</p>}
             </div>
           </div>
         ))}

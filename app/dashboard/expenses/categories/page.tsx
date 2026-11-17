@@ -30,13 +30,23 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { Toolbar } from "@/components/common/Toolbar"
 import { WithTooltip } from "@/components/common/WithTooltip"
 import { SwatchPicker } from "@/components/common/SwatchPicker"
+import { useTranslation } from "react-i18next"
 
+// Category types are stored as these English codes; only the label is translated (unknown stored values show raw)
 const TYPES = ["Operating cost", "Cost of goods", "Owner drawing", "Tax / fees"]
+const TYPE_KEYS = {
+  "Operating cost": "customers:expenses.categories.types.operating",
+  "Cost of goods": "customers:expenses.categories.types.cogs",
+  "Owner drawing": "customers:expenses.categories.types.drawing",
+  "Tax / fees": "customers:expenses.categories.types.tax",
+} as const
 const SWATCHES = ["#2449E8", "#0F766E", "#F59E0B", "#5B21B6", "#B42318", "#7C8AA8", "#DB2777", "#0E1525"]
 
 const emptyForm = { name: "", description: "", color: SWATCHES[0], budget: "", type: TYPES[0] }
 
 export default function ExpenseCategoriesPage() {
+  const { t } = useTranslation(["customers", "common"])
+  const typeLabel = (v?: string | null) => { const k = v ? (TYPE_KEYS as Record<string, (typeof TYPE_KEYS)[keyof typeof TYPE_KEYS] | undefined>)[v] : undefined; return k ? t(k) : (v ?? "") }
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const blocked = useModuleGuard("Expenses")
@@ -80,19 +90,19 @@ export default function ExpenseCategoriesPage() {
   }
 
   const save = async () => {
-    if (!form.name.trim()) { setErr("Give the category a name."); return }
+    if (!form.name.trim()) { setErr(t("customers:expenses.categories.errors.name")); return }
     const budget = form.budget.trim() === "" ? null : Number(form.budget)
-    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) { setErr("Budget must be 0 or more."); return }
+    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) { setErr(t("customers:expenses.categories.errors.budget")); return }
     setSaving(true); setErr("")
     try {
       const body = { name: form.name.trim(), description: form.description.trim(), color: form.color, monthlyBudget: budget, type: form.type }
       if (editing) await expenseCategoryApi.update(editing.id, body)
       else await expenseCategoryApi.create({ ...body, status: true })
-      toast({ title: editing ? "Category updated" : "Category added", description: body.name })
+      toast({ title: editing ? t("customers:expenses.categories.toast.updated") : t("customers:expenses.categories.toast.added"), description: body.name })
       startEdit(null)
       load()
     } catch (e: any) {
-      setErr(e?.response?.data?.message || "Could not save the category.")
+      setErr(e?.response?.data?.message || t("customers:expenses.categories.errors.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -100,21 +110,22 @@ export default function ExpenseCategoriesPage() {
 
   const flip = async (c: ExpenseCategoryResponse) => {
     try { await expenseCategoryApi.update(c.id, { status: c.status === false }); load() }
-    catch (e: any) { toast({ variant: "destructive", title: "Could not change status", description: e?.response?.data?.message }) }
+    catch (e: any) { toast({ variant: "destructive", title: t("customers:expenses.categories.toast.statusFailed"), description: e?.response?.data?.message }) }
   }
 
   const remove = async (c: ExpenseCategoryResponse) => {
-    if (!window.confirm(`Delete ${c.name}?`)) return
+    if (!window.confirm(t("common:confirm.deleteTitle", { name: c.name }))) return
     try {
       await expenseCategoryApi.delete(c.id)
-      toast({ title: "Category deleted", description: c.name })
+      toast({ title: t("customers:expenses.categories.toast.deleted"), description: c.name })
       if (editing?.id === c.id) startEdit(null)
       load()
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not delete", description: e?.response?.data?.message || "This category is in use" })
+      toast({ variant: "destructive", title: t("customers:expenses.categories.toast.deleteFailed"), description: e?.response?.data?.message || t("customers:expenses.categories.toast.inUse") })
     }
   }
 
+  // Headers stay English: exportToCSV derives each row key from its header (lower-cased, spaces → "_")
   const handleExport = () => {
     exportToCSV(cats.map((c) => ({
       name: c.name, description: c.description ?? "", type: c.type ?? "", monthly_budget: String(c.monthlyBudget ?? 0), spent_this_month: String(c.spentThisMonth ?? 0),
@@ -127,30 +138,30 @@ export default function ExpenseCategoriesPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       <PageHeader
-        title="Expense categories"
-        description="Group spending and set monthly budgets so nothing creeps up unnoticed."
-        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+        title={t("customers:expenses.categories.title")}
+        description={t("customers:expenses.categories.description")}
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>}
       />
 
       {loading || !stats ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
-          { label: "Categories", value: stats.activeCount, icon: <Tag className="size-4" />, color: "blue", hint: `${stats.inactiveCount} inactive` },
-          { label: "Spent this month", value: formatCurrency(stats.monthTotal), icon: <Tag className="size-4" />, color: "yellow", hint: `${stats.monthCount} expenses` },
-          { label: "Monthly budget", value: formatCurrency(stats.budgetTotal), icon: <Tag className="size-4" />, color: "purple",
-            hint: stats.budgetTotal && stats.budgetUsedPct !== null ? `${Math.round(stats.budgetUsedPct)}% used across all categories` : "No budgets set" },
-          { label: "Over budget", value: stats.overBudgetCount, icon: <Tag className="size-4" />, color: stats.overBudgetCount ? "red" : "green", hint: stats.overBudgetCount ? "Needs attention" : "All within budget" },
+          { label: t("customers:expenses.categories.kpi.categories"), value: stats.activeCount, icon: <Tag className="size-4" />, color: "blue", hint: t("customers:expenses.categories.kpi.inactiveHint", { count: stats.inactiveCount }) },
+          { label: t("customers:expenses.categories.kpi.spentMonth"), value: formatCurrency(stats.monthTotal), icon: <Tag className="size-4" />, color: "yellow", hint: t("customers:expenses.categories.kpi.monthHint", { count: stats.monthCount }) },
+          { label: t("customers:expenses.categories.kpi.budget"), value: formatCurrency(stats.budgetTotal), icon: <Tag className="size-4" />, color: "purple",
+            hint: stats.budgetTotal && stats.budgetUsedPct !== null ? t("customers:expenses.categories.kpi.budgetUsed", { pct: Math.round(stats.budgetUsedPct) }) : t("customers:expenses.categories.kpi.noBudgets") },
+          { label: t("customers:expenses.categories.kpi.over"), value: stats.overBudgetCount, icon: <Tag className="size-4" />, color: stats.overBudgetCount ? "red" : "green", hint: stats.overBudgetCount ? t("customers:expenses.categories.kpi.attention") : t("customers:expenses.categories.kpi.within") },
         ]} />
       )}
 
       <Toolbar>
         <div className="min-w-[240px] flex-1">
-          <Label htmlFor="category-search" className="sr-only">Search categories</Label>
-          <Input id="category-search" type="search" placeholder="Search name, description or type…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
+          <Label htmlFor="category-search" className="sr-only">{t("customers:expenses.categories.searchLabel")}</Label>
+          <Input id="category-search" type="search" placeholder={t("customers:expenses.categories.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
         </div>
         <Label className="flex items-center gap-2">
-          <Checkbox checked={showInactive} onCheckedChange={(v) => { setShowInactive(v === true); setPage(1) }} />Show inactive ({inactiveCount})
+          <Checkbox checked={showInactive} onCheckedChange={(v) => { setShowInactive(v === true); setPage(1) }} />{t("customers:expenses.categories.showInactive", { count: inactiveCount })}
         </Label>
       </Toolbar>
 
@@ -162,8 +173,8 @@ export default function ExpenseCategoriesPage() {
             <EmptyState
               bordered
               icon={Tag}
-              title={cats.length === 0 ? "No categories yet" : "No categories match"}
-              description={cats.length === 0 ? "Add one with the form on the right." : "Try a different search."}
+              title={cats.length === 0 ? t("customers:expenses.categories.empty.none") : t("customers:expenses.categories.empty.noMatch")}
+              description={cats.length === 0 ? t("customers:expenses.categories.empty.noneDesc") : t("customers:expenses.categories.empty.noMatchDesc")}
             />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -173,41 +184,41 @@ export default function ExpenseCategoriesPage() {
                 const pct = budget ? Math.round((spent / budget) * 100) : 0
                 const barColor = !budget ? "var(--border)" : pct > 100 ? "#B42318" : pct >= 80 ? "#F59E0B" : "#0F766E"
                 const on = c.status !== false
-                const warn = budget && pct > 100 ? `Over budget by ${formatCurrency(spent - budget)}` : budget && pct >= 80 ? `${pct}% of the budget used` : ""
+                const warn = budget && pct > 100 ? t("customers:expenses.categories.overBudgetBy", { amount: formatCurrency(spent - budget) }) : budget && pct >= 80 ? t("customers:expenses.categories.pctUsed", { pct }) : ""
                 return (
                   <Card key={c.id} className={cn("gap-3 p-4", editing?.id === c.id && "border-primary", !on && "opacity-70")}>
                     <div className="flex items-start gap-3">
                       <span className="mt-0.5 size-9 shrink-0 rounded-md" style={{ background: c.color || SWATCHES[0] }} aria-hidden />
                       <div className="min-w-0">
-                        <div className="font-medium">{c.name}{!on && <Badge variant="secondary" className="ml-2">Inactive</Badge>}</div>
+                        <div className="font-medium">{c.name}{!on && <Badge variant="secondary" className="ml-2">{t("common:status.inactive")}</Badge>}</div>
                         <div className="truncate text-xs text-muted-foreground">{c.description || "—"}</div>
-                        <div className="text-xs text-muted-foreground">{c.type}</div>
+                        <div className="text-xs text-muted-foreground">{typeLabel(c.type)}</div>
                       </div>
                     </div>
                     <div className="flex items-baseline justify-between">
                       <span className="text-xl font-semibold tabular-nums">{formatCurrency(spent)}</span>
-                      <span className="text-xs text-muted-foreground">{c.countThisMonth ?? 0} this month</span>
+                      <span className="text-xs text-muted-foreground">{t("customers:expenses.categories.thisMonth", { count: c.countThisMonth ?? 0 })}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground tabular-nums">All time: {formatCurrency(c.allTimeSpent ?? 0)} · {c.allTimeCount ?? 0} expenses</div>
+                    <div className="text-xs text-muted-foreground tabular-nums">{t("customers:expenses.categories.allTime", { amount: formatCurrency(c.allTimeSpent ?? 0), count: c.allTimeCount ?? 0 })}</div>
                     <div className="flex flex-col gap-1.5">
-                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">{budget ? `Budget ${formatCurrency(budget)}` : "No budget"}</span>
-                        {budget > 0 && <strong className={cn("tabular-nums", spent > budget && "text-destructive")}>{spent > budget ? `Over by ${formatCurrency(spent - budget)}` : `${formatCurrency(budget - spent)} left`}</strong>}</div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">{budget ? t("customers:expenses.categories.budgetAmt", { amount: formatCurrency(budget) }) : t("customers:expenses.categories.noBudget")}</span>
+                        {budget > 0 && <strong className={cn("tabular-nums", spent > budget && "text-destructive")}>{spent > budget ? t("customers:expenses.categories.overBy", { amount: formatCurrency(spent - budget) }) : t("customers:expenses.categories.left", { amount: formatCurrency(budget - spent) })}</strong>}</div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${Math.min(100, budget ? pct : 0)}%`, background: barColor }} /></div>
                     </div>
                     {warn && <span className={cn("text-xs font-medium", pct > 100 ? "text-destructive" : "text-amber-600")}>{warn}</span>}
                     <div className="mt-auto flex items-center gap-1.5 pt-1">
-                      <WithTooltip content={`Edit ${c.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${c.name}`} onClick={() => startEdit(c)}><Pencil className="size-4" /></Button></WithTooltip>
-                      <WithTooltip content={c.system ? "Managed by payroll" : undefined}>
+                      <WithTooltip content={t("customers:expenses.categories.editAria", { name: c.name })}><Button type="button" variant="outline" size="icon" aria-label={t("customers:expenses.categories.editAria", { name: c.name })} onClick={() => startEdit(c)}><Pencil className="size-4" /></Button></WithTooltip>
+                      <WithTooltip content={c.system ? t("customers:expenses.categories.payroll") : undefined}>
                         <span tabIndex={c.system ? 0 : undefined}>
-                          <Button type="button" variant="outline" size="icon" aria-label={`Delete ${c.name}`} disabled={c.system} onClick={() => remove(c)}><Trash2 className="size-4" /></Button>
+                          <Button type="button" variant="outline" size="icon" aria-label={t("customers:expenses.categories.deleteAria", { name: c.name })} disabled={c.system} onClick={() => remove(c)}><Trash2 className="size-4" /></Button>
                         </span>
                       </WithTooltip>
-                      <WithTooltip content={c.system ? "Managed by payroll" : undefined}>
+                      <WithTooltip content={c.system ? t("customers:expenses.categories.payroll") : undefined}>
                         <span tabIndex={c.system ? 0 : undefined} className="ml-1 inline-flex">
-                          <Switch checked={on} aria-label={`${c.name} active`} disabled={c.system} onCheckedChange={() => flip(c)} />
+                          <Switch checked={on} aria-label={t("customers:expenses.categories.activeAria", { name: c.name })} disabled={c.system} onCheckedChange={() => flip(c)} />
                         </span>
                       </WithTooltip>
-                      <Button asChild variant="link" size="sm" className="ml-auto"><Link href="/dashboard/expenses">View expenses</Link></Button>
+                      <Button asChild variant="link" size="sm" className="ml-auto"><Link href="/dashboard/expenses">{t("customers:expenses.categories.viewExpenses")}</Link></Button>
                     </div>
                   </Card>
                 )
@@ -223,26 +234,26 @@ export default function ExpenseCategoriesPage() {
         </section>
 
         <aside className="w-full shrink-0 xl:w-[360px]">
-          <SectionCard title={editing ? `Edit ${editing.name}` : "New category"} contentClassName="flex flex-col gap-3.5">
+          <SectionCard title={editing ? t("customers:expenses.categories.editName", { name: editing.name }) : t("customers:expenses.categories.newCategory")} contentClassName="flex flex-col gap-3.5">
             {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
-            <FormField label="Name" required htmlFor="cat-name" description={editing?.system ? "The Salaries category is managed by payroll" : undefined}>
-              <Input id="cat-name" disabled={!!editing?.system} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Packaging" /></FormField>
-            <FormField label="Description" htmlFor="cat-desc">
-              <Textarea id="cat-desc" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What goes here" /></FormField>
-            <FormField label="Colour">
-              <SwatchPicker size="sm" aria-label="Colour" options={SWATCHES.map((s) => ({ value: s, label: s, color: s }))} value={form.color} onValueChange={(s) => setForm({ ...form, color: s })} />
+            <FormField label={t("common:fields.name")} required htmlFor="cat-name" description={editing?.system ? t("customers:expenses.categories.salariesNote") : undefined}>
+              <Input id="cat-name" disabled={!!editing?.system} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("customers:expenses.categories.namePlaceholder")} /></FormField>
+            <FormField label={t("common:fields.description")} htmlFor="cat-desc">
+              <Textarea id="cat-desc" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("customers:expenses.categories.descPlaceholder")} /></FormField>
+            <FormField label={t("customers:expenses.categories.colour")}>
+              <SwatchPicker size="sm" aria-label={t("customers:expenses.categories.colour")} options={SWATCHES.map((s) => ({ value: s, label: s, color: s }))} value={form.color} onValueChange={(s) => setForm({ ...form, color: s })} />
             </FormField>
-            <FormField label="Monthly budget (optional)" htmlFor="cat-budget" description="We warn you at 80% and when you go over.">
-              <Input id="cat-budget" type="number" min={0} className="tabular-nums" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} placeholder="e.g. 5000" />
+            <FormField label={t("customers:expenses.categories.budgetOptional")} htmlFor="cat-budget" description={t("customers:expenses.categories.budgetHelp")}>
+              <Input id="cat-budget" type="number" min={0} className="tabular-nums" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} placeholder={t("customers:expenses.categories.budgetPlaceholder")} />
             </FormField>
-            <FormField label="Type" htmlFor="cat-type">
+            <FormField label={t("common:fields.type")} htmlFor="cat-type">
               <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
                 <SelectTrigger id="cat-type" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>{TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                <SelectContent>{TYPES.map((ty) => <SelectItem key={ty} value={ty}>{typeLabel(ty)}</SelectItem>)}</SelectContent>
               </Select></FormField>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
-              <Button type="button" disabled={saving} onClick={save}>{saving ? "Saving…" : editing ? "Save changes" : "Add category"}</Button>
+              <Button type="button" variant="outline" onClick={() => startEdit(null)}>{t("common:actions.clear")}</Button>
+              <Button type="button" disabled={saving} onClick={save}>{saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("customers:expenses.categories.add")}</Button>
             </div>
           </SectionCard>
         </aside>

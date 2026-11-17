@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { Trans, useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { AlertTriangle, Download, Hash, Layers, Pencil, Search, Trash2, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -44,18 +47,36 @@ const SERIAL_VARIANT: Record<string, BadgeVariant> = {
   damaged: "destructive",
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
-const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+const NS = ["inventory", "common"] as const
+type K = ParseKeys<typeof NS>
 
-function expiryInfo(b: ProductBatch): { txt: string; variant: BadgeVariant } {
-  if (!b.expiryDate) return { txt: "OK", variant: "default" }
+/** Serial status code → label key (codes stay as data). */
+const SERIAL_KEY: Record<string, K> = {
+  available: "inventory:stock.serial.status.available",
+  sold: "inventory:stock.serial.status.sold",
+  returned: "common:orderStatus.returned",
+  damaged: "inventory:stock.reason.damaged",
+}
+
+const today = () => new Date().toISOString().slice(0, 10)
+
+/** Expiry state of a batch: kind + days, shown via inventory:stock.serial.expiry.* */
+function expiryInfo(b: ProductBatch): { kind: "ok" | "expired" | "soon"; days: number; variant: BadgeVariant } {
+  if (!b.expiryDate) return { kind: "ok", days: 0, variant: "default" }
   const days = Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / 864e5)
-  if (b.isExpired || days < 0) return { txt: `Expired ${Math.abs(days)}d ago`, variant: "destructive" }
-  if (b.isExpiringSoon || days <= 30) return { txt: `In ${days} days`, variant: "secondary" }
-  return { txt: "OK", variant: "default" }
+  if (b.isExpired || days < 0) return { kind: "expired", days: Math.abs(days), variant: "destructive" }
+  if (b.isExpiringSoon || days <= 30) return { kind: "soon", days, variant: "secondary" }
+  return { kind: "ok", days, variant: "default" }
 }
 
 export default function SerialBatchPage() {
+  const { t, i18n } = useTranslation(NS)
+  const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" }) : "—")
+  const expiryText = (b: ProductBatch) => {
+    const e = expiryInfo(b)
+    return e.kind === "expired" ? t("inventory:stock.serial.expiry.expired", { count: e.days }) : e.kind === "soon" ? t("inventory:stock.serial.expiry.soon", { count: e.days }) : t("inventory:stock.serial.expiry.ok")
+  }
+  const serialLabel = (s: string) => (SERIAL_KEY[s] ? t(SERIAL_KEY[s]) : s)
   const { warehouses } = useWarehouse()
   const { toast } = useToast()
   const blocked = useModuleGuard("Inventory")
@@ -91,7 +112,7 @@ export default function SerialBatchPage() {
   const [err, setErr] = useState("")
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { const t = setTimeout(() => setQDebounced(q.trim()), 250); return () => clearTimeout(t) }, [q])
+  useEffect(() => { const id = setTimeout(() => setQDebounced(q.trim()), 250); return () => clearTimeout(id) }, [q])
 
   useEffect(() => {
     productApi.getAll({ limit: 500 }).then((r: any) => setProducts(r.data ?? [])).catch(() => {})
@@ -126,7 +147,7 @@ export default function SerialBatchPage() {
   const serialCount = stats?.serialCount ?? stats?.serials.total ?? 0
   const noRecords = !!stats && batchCount === 0 && serialCount === 0
 
-  const changeTab = (t: string) => { setTab(t as Tab); setPage(1); setStatusF("all"); clearForm(); setQ("") }
+  const changeTab = (v: string) => { setTab(v as Tab); setPage(1); setStatusF("all"); clearForm(); setQ("") }
 
   function clearForm() {
     setEditing(null); setFProduct(""); setFVariant(""); setFCode(""); setFQty(""); setFMfg(""); setFExpiry(""); setFPo("")
@@ -154,15 +175,15 @@ export default function SerialBatchPage() {
   }
 
   const save = async () => {
-    if (!fProduct) { setErr("Select a product."); return }
-    if (variants.length > 0 && !fVariant) { setErr("Pick a variant."); return }
+    if (!fProduct) { setErr(t("inventory:stock.serial.validation.product")); return }
+    if (variants.length > 0 && !fVariant) { setErr(t("inventory:stock.serial.validation.variant")); return }
     setSaving(true); setErr("")
     try {
       if (tab === "batch") {
-        if (!fCode.trim()) { setErr("Enter a batch / lot number."); setSaving(false); return }
+        if (!fCode.trim()) { setErr(t("inventory:stock.serial.validation.batchNo")); setSaving(false); return }
         const qty = Number(fQty)
-        if (!Number.isInteger(qty) || fQty.trim() === "" || qty < (editing ? 0 : 1)) { setErr(editing ? "Enter a whole number, 0 or more." : "Enter a whole number above zero."); setSaving(false); return }
-        if (fMfg && fExpiry && fExpiry < fMfg) { setErr("Expiry cannot be before the manufacture date."); setSaving(false); return }
+        if (!Number.isInteger(qty) || fQty.trim() === "" || qty < (editing ? 0 : 1)) { setErr(editing ? t("inventory:stock.validation.wholeNumber") : t("inventory:stock.serial.validation.aboveZero")); setSaving(false); return }
+        if (fMfg && fExpiry && fExpiry < fMfg) { setErr(t("inventory:stock.serial.validation.expiry")); setSaving(false); return }
         const body = {
           productId: Number(fProduct), variantId: fVariant ? Number(fVariant) : undefined, locationId: fLoc ? Number(fLoc) : undefined,
           batchNumber: fCode.trim(), manufactureDate: fMfg || undefined, expiryDate: fExpiry || undefined,
@@ -173,16 +194,16 @@ export default function SerialBatchPage() {
           manufactureDate: fMfg || null, expiryDate: fExpiry || null, purchaseOrderNumber: fPo.trim() || null, notes: fNotes.trim() || null,
         } as any)
         else await serialBatchApi.createBatch({ ...body, quantityReceived: qty, receivedDate: today() })
-        toast({ title: editing ? "Batch updated" : "Batch added", description: fCode.trim() })
+        toast({ title: editing ? t("inventory:stock.serial.toast.batchUpdated") : t("inventory:stock.serial.toast.batchAdded"), description: fCode.trim() })
       } else {
         if (editing) {
           await serialBatchApi.updateSerial(editing.id, {
             serialNumber: serialLines[0], status: fStatus as any, purchaseOrderNumber: fPo.trim() || undefined,
             receivedDate: fReceived || undefined, notes: fNotes.trim() || undefined, locationId: fLoc ? Number(fLoc) : undefined,
           })
-          toast({ title: "Serial updated" })
+          toast({ title: t("inventory:stock.serial.toast.serialUpdated") })
         } else {
-          if (serialLines.length === 0) { setErr("Enter at least one serial number."); setSaving(false); return }
+          if (serialLines.length === 0) { setErr(t("inventory:stock.serial.validation.serial")); setSaving(false); return }
           const res: any = await serialBatchApi.createSerials({
             productId: Number(fProduct), variantId: fVariant ? Number(fVariant) : undefined, locationId: fLoc ? Number(fLoc) : undefined,
             serials: serialLines.map((serialNumber) => ({
@@ -192,27 +213,27 @@ export default function SerialBatchPage() {
           } as any)
           const created = Array.isArray(res) ? res.length : res?.created?.length ?? 0
           const skipped = Array.isArray(res) ? 0 : res?.skipped?.length ?? 0
-          toast({ title: `${created} serial${created === 1 ? "" : "s"} added`, description: skipped ? `${skipped} duplicate${skipped === 1 ? "" : "s"} skipped` : undefined })
+          toast({ title: t("inventory:stock.serial.toast.serialsAdded", { count: created }), description: skipped ? t("inventory:suppliers.toast.skipped", { count: skipped }) : undefined })
         }
       }
       clearForm()
       load(); loadStats()
     } catch (e: any) {
-      setErr(e?.response?.data?.message || "Could not save.")
+      setErr(e?.response?.data?.message || t("common:extra.couldNotSave"))
     } finally {
       setSaving(false)
     }
   }
 
   const remove = async (type: Tab, id: number, label: string) => {
-    if (!window.confirm(`Delete ${label}?`)) return
+    if (!window.confirm(t("common:confirm.deleteTitle", { name: label }))) return
     try {
       if (type === "batch") await serialBatchApi.deleteBatch(id)
       else await serialBatchApi.deleteSerial(id)
-      toast({ title: "Deleted", description: label })
+      toast({ title: t("common:status.deleted"), description: label })
       load(); loadStats()
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not delete", description: e?.response?.data?.message })
+      toast({ variant: "destructive", title: t("inventory:suppliers.toast.deleteFailed"), description: e?.response?.data?.message })
     }
   }
 
@@ -226,47 +247,47 @@ export default function SerialBatchPage() {
       ])
       const rows = [
         ...(bs.data as ProductBatch[]).map((b) => ({
-          type: "Batch", code: b.batchNumber, product: b.productName + (b.variantName ? ` · ${b.variantName}` : ""), qty: b.quantityRemaining,
-          manufactured: b.manufactureDate?.slice(0, 10) ?? "", expiry: b.expiryDate?.slice(0, 10) ?? "", status: expiryInfo(b).txt,
+          type: t("inventory:stock.serial.batch"), code: b.batchNumber, product: b.productName + (b.variantName ? ` · ${b.variantName}` : ""), qty: b.quantityRemaining,
+          manufactured: b.manufactureDate?.slice(0, 10) ?? "", expiry: b.expiryDate?.slice(0, 10) ?? "", status: expiryText(b),
           warehouse: b.locationName ?? "", po: b.purchaseOrderNumber ?? "", received: b.receivedDate?.slice(0, 10) ?? "", sellOrder: b.sellOrderLabel ?? "", notes: b.notes ?? "",
         })),
         ...(ss.data as ProductSerial[]).map((s) => ({
-          type: "Serial", code: s.serialNumber, product: s.productName + (s.variantName ? ` · ${s.variantName}` : ""), qty: 1,
-          manufactured: "", expiry: "", status: s.status, warehouse: s.locationName ?? "", po: s.purchaseOrderNumber ?? "",
+          type: t("inventory:stock.serial.serial"), code: s.serialNumber, product: s.productName + (s.variantName ? ` · ${s.variantName}` : ""), qty: 1,
+          manufactured: "", expiry: "", status: serialLabel(s.status), warehouse: s.locationName ?? "", po: s.purchaseOrderNumber ?? "",
           received: s.receivedDate?.slice(0, 10) ?? "", sellOrder: "", notes: s.notes ?? "",
         })),
       ]
-      if (rows.length === 0) { toast({ title: "Nothing to export" }); return }
+      if (rows.length === 0) { toast({ title: t("common:extra.nothingToExport") }); return }
       exportToCSV(rows, "serial-batch", ["type", "code", "product", "qty", "manufactured", "expiry", "status", "warehouse", "po", "received", "sellOrder", "notes"])
     } catch {
-      toast({ variant: "destructive", title: "Could not export" })
+      toast({ variant: "destructive", title: t("inventory:stock.serial.toast.exportFailed") })
     }
   }
 
   if (blocked) return blocked
 
   const rows = tab === "batch" ? batches : serials
-  const formTitle = editing ? (tab === "batch" ? "Edit batch" : "Edit serial") : tab === "batch" ? "Add batch / lot" : "Add serial numbers"
+  const formTitle = editing ? (tab === "batch" ? t("inventory:stock.serial.form.editBatch") : t("inventory:stock.serial.form.editSerial")) : tab === "batch" ? t("inventory:stock.serial.form.addBatchTitle") : t("inventory:stock.serial.form.addSerialsTitle")
 
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title={<>Serial &amp; batch tracking</>}
-        description="Trace units one by one, or by batch with expiry dates — oldest stock sells first."
-        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+        title={t("inventory:stock.serial.title")}
+        description={t("inventory:stock.serial.description")}
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>}
       />
 
       {!stats ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[118px]" />)}</div>
       ) : (
         <StatsCards stats={[
-          { label: "Batches", value: batchCount, icon: <Layers className="size-4" />, color: "blue", hint: `${stats.batchProducts ?? 0} products batch-tracked` },
-          { label: "Expiring in 30 days", value: stats.expiringSoonCount ?? stats.batches.expiringSoon, icon: <AlertTriangle className="size-4" />, color: "yellow",
-            hint: stats.firstExpiring ? `${stats.firstExpiring.batchNumber} · ${stats.firstExpiring.quantity} left` : "Nothing expiring soon" },
-          { label: "Expired", value: stats.expiredCount ?? stats.batches.expired, icon: <X className="size-4" />, color: "red",
-            hint: stats.firstExpired ? `${stats.firstExpired.batchNumber}${(stats.expiredCount ?? 0) > 1 ? ` +${(stats.expiredCount ?? 1) - 1} more` : ""}` : "None expired" },
-          { label: "Serial numbers", value: serialCount, icon: <Hash className="size-4" />, color: "purple",
-            hint: `${stats.serialAvailable ?? stats.serials.available} available · ${stats.serialSold ?? stats.serials.sold} sold` },
+          { label: t("inventory:stock.serial.kpi.batches"), value: batchCount, icon: <Layers className="size-4" />, color: "blue", hint: t("inventory:stock.serial.kpi.batchProducts", { count: stats.batchProducts ?? 0 }) },
+          { label: t("inventory:stock.serial.kpi.expiring"), value: stats.expiringSoonCount ?? stats.batches.expiringSoon, icon: <AlertTriangle className="size-4" />, color: "yellow",
+            hint: stats.firstExpiring ? t("inventory:stock.serial.kpi.left", { batch: stats.firstExpiring.batchNumber, count: stats.firstExpiring.quantity }) : t("inventory:stock.serial.kpi.nothingExpiring") },
+          { label: t("inventory:stock.serial.kpi.expired"), value: stats.expiredCount ?? stats.batches.expired, icon: <X className="size-4" />, color: "red",
+            hint: stats.firstExpired ? ((stats.expiredCount ?? 0) > 1 ? t("inventory:stock.serial.kpi.expiredMore", { batch: stats.firstExpired.batchNumber, count: (stats.expiredCount ?? 1) - 1 }) : stats.firstExpired.batchNumber) : t("inventory:stock.serial.kpi.noneExpired") },
+          { label: t("inventory:stock.serial.kpi.serials"), value: serialCount, icon: <Hash className="size-4" />, color: "purple",
+            hint: t("inventory:stock.serial.kpi.serialsHint", { available: stats.serialAvailable ?? stats.serials.available, sold: stats.serialSold ?? stats.serials.sold }) },
         ]} />
       )}
 
@@ -274,9 +295,9 @@ export default function SerialBatchPage() {
         <Alert role="status">
           <AlertDescription className="flex flex-wrap items-center gap-3.5">
             <span className="min-w-[260px] flex-1">
-              Serial and batch tracking is set per product. <strong className="text-foreground">Nothing tracked yet</strong> — add a batch or serial numbers with the form on this page, or set tracking per product when adding or editing it.
+              <Trans t={t} i18nKey="inventory:stock.serial.noRecords" components={{ b: <strong className="text-foreground" /> }} />
             </span>
-            <Button asChild><Link href="/dashboard/products">Set up a product</Link></Button>
+            <Button asChild><Link href="/dashboard/products">{t("inventory:stock.serial.setupProduct")}</Link></Button>
           </AlertDescription>
         </Alert>
       )}
@@ -285,28 +306,28 @@ export default function SerialBatchPage() {
         <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={changeTab} tabs={[
-              { value: "batch", label: "Batches / lots", count: batchCount },
-              { value: "serial", label: "Serial numbers", count: serialCount },
+              { value: "batch", label: t("inventory:stock.serial.tabs.batch"), count: batchCount },
+              { value: "serial", label: t("inventory:stock.serial.kpi.serials"), count: serialCount },
             ]} />
           </div>
           <Toolbar className="p-4">
             <div className="relative min-w-[220px] flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Label htmlFor="sb-search" className="sr-only">Search</Label>
-              <Input id="sb-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder="Search batch / serial number or product…"
+              <Label htmlFor="sb-search" className="sr-only">{t("common:actions.search")}</Label>
+              <Input id="sb-search" type="search" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} placeholder={t("inventory:stock.serial.searchPh")}
                 className="pl-9" />
             </div>
             <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
-              <SelectTrigger aria-label="Status" className="w-[190px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("common:fields.status")} className="w-[190px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Status: All</SelectItem>
+                <SelectItem value="all">{t("inventory:transfers.statusAll")}</SelectItem>
                 {tab === "batch" ? (
                   <>
-                    <SelectItem value="ok">OK</SelectItem><SelectItem value="soon">Expiring in 30 days</SelectItem><SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="ok">{t("inventory:stock.serial.expiry.ok")}</SelectItem><SelectItem value="soon">{t("inventory:stock.serial.kpi.expiring")}</SelectItem><SelectItem value="expired">{t("inventory:stock.serial.kpi.expired")}</SelectItem>
                   </>
                 ) : (
                   <>
-                    <SelectItem value="available">Available</SelectItem><SelectItem value="sold">Sold</SelectItem><SelectItem value="returned">Returned</SelectItem><SelectItem value="damaged">Damaged</SelectItem>
+                    {Object.keys(SERIAL_KEY).map((s) => <SelectItem key={s} value={s}>{serialLabel(s)}</SelectItem>)}
                   </>
                 )}
               </SelectContent>
@@ -318,10 +339,10 @@ export default function SerialBatchPage() {
               <Table className="min-w-[780px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4">Batch</TableHead><TableHead>Product</TableHead>
-                    <TableHead className="text-right">Qty left</TableHead><TableHead>Expiry</TableHead>
-                    <TableHead>Received</TableHead><TableHead>Sell order</TableHead>
-                    <TableHead className="pr-4 text-right">Actions</TableHead>
+                    <TableHead className="pl-4">{t("inventory:stock.serial.batch")}</TableHead><TableHead>{t("common:fields.product")}</TableHead>
+                    <TableHead className="text-right">{t("inventory:stock.serial.col.qtyLeft")}</TableHead><TableHead>{t("inventory:stock.serial.col.expiry")}</TableHead>
+                    <TableHead>{t("inventory:stock.serial.col.received")}</TableHead><TableHead>{t("inventory:stock.serial.col.sellOrder")}</TableHead>
+                    <TableHead className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -337,11 +358,11 @@ export default function SerialBatchPage() {
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             <div className="font-bold">{b.quantityRemaining}</div>
-                            <div className="text-xs text-muted-foreground">of {Math.max(b.quantityReceived, b.quantityRemaining)} received</div>
+                            <div className="text-xs text-muted-foreground">{t("inventory:stock.serial.ofReceived", { count: Math.max(b.quantityReceived, b.quantityRemaining) })}</div>
                           </TableCell>
                           <TableCell>
                             <div>{fmt(b.expiryDate)}</div>
-                            <Badge variant={e.variant}>{e.txt}</Badge>
+                            <Badge variant={e.variant}>{expiryText(b)}</Badge>
                           </TableCell>
                           <TableCell>
                             <div>{fmt(b.receivedDate)}</div>
@@ -350,8 +371,8 @@ export default function SerialBatchPage() {
                           <TableCell className="tabular-nums">{b.sellOrderLabel ?? "—"}</TableCell>
                           <TableCell className="pr-4">
                             <div className="flex justify-end gap-1">
-                              <WithTooltip content={`Edit ${b.batchNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${b.batchNumber}`} onClick={() => editBatch(b)}><Pencil className="size-4" /></Button></WithTooltip>
-                              <WithTooltip content={`Delete ${b.batchNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${b.batchNumber}`} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={t("inventory:suppliers.editName", { name: b.batchNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.editName", { name: b.batchNumber })} onClick={() => editBatch(b)}><Pencil className="size-4" /></Button></WithTooltip>
+                              <WithTooltip content={t("inventory:suppliers.deleteName", { name: b.batchNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.deleteName", { name: b.batchNumber })} onClick={() => remove("batch", b.id, b.batchNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -363,9 +384,9 @@ export default function SerialBatchPage() {
               <Table className="min-w-[720px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4">Serial no.</TableHead><TableHead>Product</TableHead>
-                    <TableHead>Warehouse</TableHead><TableHead>Status</TableHead>
-                    <TableHead>Received</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                    <TableHead className="pl-4">{t("inventory:stock.serial.col.serialNo")}</TableHead><TableHead>{t("common:fields.product")}</TableHead>
+                    <TableHead>{t("common:fields.warehouse")}</TableHead><TableHead>{t("common:fields.status")}</TableHead>
+                    <TableHead>{t("inventory:stock.serial.col.received")}</TableHead><TableHead className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -376,7 +397,7 @@ export default function SerialBatchPage() {
                         <TableCell className="font-semibold">{s.productName}{s.variantName ? ` · ${s.variantName}` : ""}</TableCell>
                         <TableCell>{s.locationName ?? "—"}</TableCell>
                         <TableCell>
-                          <StatusBadge status={s.status} variant={SERIAL_VARIANT[s.status] ?? SERIAL_VARIANT.sold} className="capitalize" />
+                          <StatusBadge status={s.status} variant={SERIAL_VARIANT[s.status] ?? SERIAL_VARIANT.sold} label={serialLabel(s.status)} className="capitalize" />
                         </TableCell>
                         <TableCell>
                           <div>{fmt(s.receivedDate)}</div>
@@ -384,8 +405,8 @@ export default function SerialBatchPage() {
                         </TableCell>
                         <TableCell className="pr-4">
                           <div className="flex justify-end gap-1">
-                            <WithTooltip content={`Edit ${s.serialNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${s.serialNumber}`} onClick={() => editSerial(s)}><Pencil className="size-4" /></Button></WithTooltip>
-                            <WithTooltip content={`Delete ${s.serialNumber}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${s.serialNumber}`} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("inventory:suppliers.editName", { name: s.serialNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.editName", { name: s.serialNumber })} onClick={() => editSerial(s)}><Pencil className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("inventory:suppliers.deleteName", { name: s.serialNumber })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.deleteName", { name: s.serialNumber })} onClick={() => remove("serial", s.id, s.serialNumber)}><Trash2 className="size-4" /></Button></WithTooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -398,8 +419,8 @@ export default function SerialBatchPage() {
           {!loading && rows.length === 0 && (
             <EmptyState
               icon={tab === "batch" ? Layers : Hash}
-              title={q || statusF !== "all" ? "Nothing matches" : tab === "batch" ? "No batches yet" : "No serial numbers yet"}
-              description={q || statusF !== "all" ? "Try clearing the search or status." : "Use the form to add your first one."}
+              title={q || statusF !== "all" ? t("inventory:stock.serial.empty.noMatch") : tab === "batch" ? t("inventory:stock.serial.empty.noBatches") : t("inventory:stock.serial.empty.noSerials")}
+              description={q || statusF !== "all" ? t("inventory:stock.serial.empty.filtered") : t("inventory:stock.serial.empty.first")}
             />
           )}
 
@@ -420,24 +441,24 @@ export default function SerialBatchPage() {
           )}
         </Card>
 
-        <aside aria-label="Add" className="w-full shrink-0 xl:w-[380px]">
+        <aside aria-label={t("common:actions.add")} className="w-full shrink-0 xl:w-[380px]">
         <SectionCard title={formTitle} contentClassName="flex flex-col gap-3.5">
           {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
-          <FormField label="Product *" htmlFor="sb-f-product">
+          <FormField label={t("inventory:stock.serial.form.product")} htmlFor="sb-f-product">
             <Select value={fProduct || "__none"} onValueChange={(v) => { setFProduct(v === "__none" ? "" : v); setFVariant("") }} disabled={editing?.type === "serial"}>
               <SelectTrigger id="sb-f-product" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">Select a product</SelectItem>
+                <SelectItem value="__none">{t("inventory:stock.adjust.selectProduct")}</SelectItem>
                 {products.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}{p.sku ? ` (${p.sku})` : ""}</SelectItem>)}
               </SelectContent>
             </Select>
           </FormField>
           {variants.length > 0 && (
-            <FormField label="Variant *" htmlFor="sb-f-variant">
+            <FormField label={t("inventory:stock.serial.form.variant")} htmlFor="sb-f-variant">
               <Select value={fVariant || "__none"} onValueChange={(v) => setFVariant(v === "__none" ? "" : v)} disabled={editing?.type === "serial"}>
                 <SelectTrigger id="sb-f-variant" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Select variant</SelectItem>
+                  <SelectItem value="__none">{t("inventory:stock.serial.form.selectVariant")}</SelectItem>
                   {variants.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -447,55 +468,55 @@ export default function SerialBatchPage() {
           {tab === "batch" ? (
             <>
               <div className="grid grid-cols-2 gap-2.5">
-                <FormField label="Batch / lot no. *" htmlFor="sb-f-code"><Input id="sb-f-code" className="w-full" value={fCode} onChange={(e) => setFCode(e.target.value)} placeholder="e.g. GM-2610" /></FormField>
-                <FormField label={editing ? "Qty left *" : "Quantity *"} htmlFor="sb-f-qty"><Input id="sb-f-qty" type="number" min={editing ? 0 : 1} step={1} className="w-full" value={fQty} onChange={(e) => setFQty(e.target.value)} placeholder="0" /></FormField>
+                <FormField label={t("inventory:stock.serial.form.batchNo")} htmlFor="sb-f-code"><Input id="sb-f-code" className="w-full" value={fCode} onChange={(e) => setFCode(e.target.value)} placeholder={t("inventory:stock.serial.form.batchNoPh")} /></FormField>
+                <FormField label={editing ? t("inventory:stock.serial.form.qtyLeft") : t("inventory:stock.serial.form.quantity")} htmlFor="sb-f-qty"><Input id="sb-f-qty" type="number" min={editing ? 0 : 1} step={1} className="w-full" value={fQty} onChange={(e) => setFQty(e.target.value)} placeholder="0" /></FormField>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                <FormField label="Manufactured" htmlFor="sb-f-mfg"><Input id="sb-f-mfg" type="date" className="w-full" value={fMfg} onChange={(e) => setFMfg(e.target.value)} /></FormField>
-                <FormField label="Expires" htmlFor="sb-f-expiry"><Input id="sb-f-expiry" type="date" className="w-full" value={fExpiry} onChange={(e) => setFExpiry(e.target.value)} /></FormField>
+                <FormField label={t("inventory:stock.serial.form.manufactured")} htmlFor="sb-f-mfg"><Input id="sb-f-mfg" type="date" className="w-full" value={fMfg} onChange={(e) => setFMfg(e.target.value)} /></FormField>
+                <FormField label={t("inventory:stock.serial.form.expires")} htmlFor="sb-f-expiry"><Input id="sb-f-expiry" type="date" className="w-full" value={fExpiry} onChange={(e) => setFExpiry(e.target.value)} /></FormField>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                <FormField label="PO number" htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></FormField>
-                <FormField label="Warehouse" htmlFor="sb-f-loc">
+                <FormField label={t("inventory:stock.serial.form.poNumber")} htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder={t("common:status.optional")} /></FormField>
+                <FormField label={t("common:fields.warehouse")} htmlFor="sb-f-loc">
                   <Select value={fLoc || undefined} onValueChange={setFLoc}>
                     <SelectTrigger id="sb-f-loc" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </FormField>
               </div>
-              <FormField label="Notes" htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></FormField>
+              <FormField label={t("common:fields.notes")} htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder={t("common:status.optional")} /></FormField>
             </>
           ) : (
             <>
-              <FormField label={editing ? "Serial number *" : "Serial numbers *"} htmlFor="sb-f-serials" description={editing ? undefined : `${serialLines.length} serial${serialLines.length === 1 ? "" : "s"} · duplicates are skipped automatically`}>
-                <Textarea id="sb-f-serials" rows={editing ? 1 : 5} className="w-full" value={serialText} onChange={(e) => setSerialText(e.target.value)} placeholder="Scan or type one per line" />
+              <FormField label={editing ? t("inventory:stock.serial.form.serialNumber") : t("inventory:stock.serial.form.serialNumbers")} htmlFor="sb-f-serials" description={editing ? undefined : t("inventory:stock.serial.form.serialsHint", { count: serialLines.length })}>
+                <Textarea id="sb-f-serials" rows={editing ? 1 : 5} className="w-full" value={serialText} onChange={(e) => setSerialText(e.target.value)} placeholder={t("inventory:stock.serial.form.serialsPh")} />
               </FormField>
               <div className="grid grid-cols-2 gap-2.5">
-                <FormField label="Received" htmlFor="sb-f-received"><Input id="sb-f-received" type="date" className="w-full" value={fReceived} onChange={(e) => setFReceived(e.target.value)} /></FormField>
-                <FormField label="PO number" htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder="Optional" /></FormField>
+                <FormField label={t("inventory:stock.serial.col.received")} htmlFor="sb-f-received"><Input id="sb-f-received" type="date" className="w-full" value={fReceived} onChange={(e) => setFReceived(e.target.value)} /></FormField>
+                <FormField label={t("inventory:stock.serial.form.poNumber")} htmlFor="sb-f-po"><Input id="sb-f-po" className="w-full" value={fPo} onChange={(e) => setFPo(e.target.value)} placeholder={t("common:status.optional")} /></FormField>
               </div>
-              <FormField label="Warehouse" htmlFor="sb-f-loc">
+              <FormField label={t("common:fields.warehouse")} htmlFor="sb-f-loc">
                 <Select value={fLoc || undefined} onValueChange={setFLoc}>
                     <SelectTrigger id="sb-f-loc" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
                   </Select>
               </FormField>
-              <FormField label="Status" htmlFor="sb-f-status">
+              <FormField label={t("common:fields.status")} htmlFor="sb-f-status">
                 <Select value={fStatus} onValueChange={setFStatus}>
                   <SelectTrigger id="sb-f-status" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="available">Available</SelectItem><SelectItem value="sold">Sold</SelectItem><SelectItem value="returned">Returned</SelectItem><SelectItem value="damaged">Damaged</SelectItem>
+                    {Object.keys(SERIAL_KEY).map((s) => <SelectItem key={s} value={s}>{serialLabel(s)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Notes" htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder="Optional" /></FormField>
+              <FormField label={t("common:fields.notes")} htmlFor="sb-f-notes"><Input id="sb-f-notes" className="w-full" value={fNotes} onChange={(e) => setFNotes(e.target.value)} placeholder={t("common:status.optional")} /></FormField>
             </>
           )}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={clearForm}>Clear</Button>
+            <Button type="button" variant="outline" onClick={clearForm}>{t("common:actions.clear")}</Button>
             <Button type="button" disabled={saving} onClick={save}>
-              {saving ? "Saving…" : editing ? "Save changes" : tab === "batch" ? "Add batch" : `Add ${serialLines.length || ""} serial${serialLines.length === 1 ? "" : "s"}`.replace("  ", " ")}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : tab === "batch" ? t("inventory:stock.serial.form.addBatch") : serialLines.length ? t("inventory:stock.serial.form.addSerials", { count: serialLines.length }) : t("inventory:stock.serial.form.addSerialsNone")}
             </Button>
           </div>
         </SectionCard>

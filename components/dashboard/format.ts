@@ -1,3 +1,9 @@
+import type { TFunction } from "i18next"
+import { localeTag } from "@/lib/i18n/config"
+
+/** `t` from useTranslation(["dashboard", "common"]); the label helpers below need it. */
+export type DashT = TFunction<["dashboard", "common"]>
+
 /** Currency symbol (e.g. ৳) taken from the app's own formatter, not the ISO code. */
 export function currencySymbol(format: (n: number) => string): string {
   return format(0).replace(/[\d.,\s-]/g, "") || ""
@@ -42,15 +48,15 @@ export function signedPct(value: number | null): string | null {
 }
 
 /** "4 days", "6 hrs", "12 min" — used for order and alert ages. */
-export function ageLabel(iso: string | null): string {
+export function ageLabel(iso: string | null, t: DashT): string {
   if (!iso) return "—"
   const ms = Date.now() - new Date(iso).getTime()
   const mins = Math.max(0, Math.floor(ms / 60000))
-  if (mins < 60) return `${mins} min`
+  if (mins < 60) return t("dashboard:age.min", { count: mins })
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs} hr${hrs === 1 ? "" : "s"}`
+  if (hrs < 24) return t("dashboard:age.hours", { count: hrs })
   const days = Math.floor(hrs / 24)
-  return `${days} day${days === 1 ? "" : "s"}`
+  return t("dashboard:age.days", { count: days })
 }
 
 export function ageDays(iso: string | null): number {
@@ -58,40 +64,53 @@ export function ageDays(iso: string | null): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
 }
 
-/** "14" -> "2pm" */
-export function hourLabel(key: string | number): string {
-  const h = Number(key)
-  return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+
+/** Month name in the staff member's language from an API label like "October 2026" (falls back to its first word). */
+export function monthName(label: string, lng: string): string {
+  const first = label.split(" ")[0] ?? ""
+  const idx = MONTHS.findIndex((m) => first.toLowerCase().startsWith(m.slice(0, 3)))
+  if (idx < 0) return first
+  return new Date(2000, idx, 1).toLocaleString(localeTag(lng), { month: "long" })
 }
 
-export function bucketLabel(key: string, bucket: "hour" | "day" | "month"): string {
-  if (bucket === "hour") return hourLabel(key)
+/** "14" -> "2pm" (Bangla: "দুপুর 2টা") */
+export function hourLabel(key: string | number, t: DashT): string {
+  const h = Number(key)
+  const h12 = h % 12 || 12
+  const part =
+    h < 4 ? "lateNight" : h < 6 ? "dawn" : h < 12 ? "morning" : h < 15 ? "noon" : h < 18 ? "afternoon" : h < 20 ? "evening" : "night"
+  return t(`dashboard:hour.${part}`, { h: h12 })
+}
+
+export function bucketLabel(key: string, bucket: "hour" | "day" | "month", t: DashT, lng: string): string {
+  if (bucket === "hour") return hourLabel(key, t)
   if (bucket === "month") {
     const [y, m] = key.split("-")
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-US", { month: "short" })
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleString(localeTag(lng), { month: "short" })
   }
   const d = new Date(`${key}T00:00:00`)
-  return d.toLocaleString("en-US", { day: "numeric", month: "short" })
+  return d.toLocaleString(localeTag(lng), { day: "numeric", month: "short" })
 }
 
-export function bucketLongLabel(key: string, bucket: "hour" | "day" | "month"): string {
-  if (bucket === "hour") return hourLabel(key)
+export function bucketLongLabel(key: string, bucket: "hour" | "day" | "month", t: DashT, lng: string): string {
+  if (bucket === "hour") return hourLabel(key, t)
   if (bucket === "month") {
     const [y, m] = key.split("-")
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" })
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleString(localeTag(lng), { month: "long", year: "numeric" })
   }
-  return new Date(`${key}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })
+  return new Date(`${key}T00:00:00`).toLocaleDateString(localeTag(lng), { day: "numeric", month: "long", year: "numeric" })
 }
 
-export function relativeTime(iso: string): string {
+export function relativeTime(iso: string, t: DashT, lng: string): string {
   const ms = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(ms / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins} min ago`
+  if (mins < 1) return t("dashboard:relative.justNow")
+  if (mins < 60) return t("dashboard:relative.minAgo", { count: mins })
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`
+  if (hrs < 24) return t("dashboard:relative.hoursAgo", { count: hrs })
   const days = Math.floor(hrs / 24)
-  if (days === 1) return "Yesterday"
-  if (days < 30) return `${days} days ago`
-  return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
+  if (days === 1) return t("common:time.yesterday")
+  if (days < 30) return t("dashboard:relative.daysAgo", { count: days })
+  return new Date(iso).toLocaleDateString(localeTag(lng), { day: "numeric", month: "short", year: "numeric" })
 }

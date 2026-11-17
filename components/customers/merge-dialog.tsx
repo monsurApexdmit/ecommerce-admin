@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { EmptyState } from "@/components/common/EmptyState"
 import { SectionTitle } from "@/components/common/SectionTitle"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "react-i18next"
 
 interface Props {
   open: boolean
@@ -28,7 +29,8 @@ interface Props {
 const best = (cs: CustomerResponse[]) =>
   [...cs].sort((a, b) => (b.totalOrders ?? 0) - (a.totalOrders ?? 0) || a.id - b.id)[0]?.id
 
-export function MergeDialog({ open, onOpenChange, groups, loading, title = "Review & merge duplicates", onMerged }: Props) {
+export function MergeDialog({ open, onOpenChange, groups, loading, title, onMerged }: Props) {
+  const { t } = useTranslation(["customers", "common"])
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const [local, setLocal] = useState<DuplicateGroup[]>([])
@@ -47,11 +49,11 @@ export function MergeDialog({ open, onOpenChange, groups, loading, title = "Revi
     setBusy(g.key)
     try {
       const r = await customerApi.merge(pid, others)
-      toast({ title: "Merged", description: `${r.merged} duplicate${r.merged === 1 ? "" : "s"} merged into ${r.customer?.name ?? "the primary record"}` })
+      toast({ title: t("customers:merge.merged"), description: t("customers:merge.mergedDesc", { count: r.merged, name: r.customer?.name ?? t("customers:merge.primaryFallback") }) })
       setLocal((prev) => prev.filter((x) => x.key !== g.key))
       onMerged()
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not merge", description: e?.response?.data?.message || e?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("customers:merge.failed"), description: e?.response?.data?.message || e?.message || t("common:extra.tryAgain") })
     } finally {
       setBusy(null)
     }
@@ -61,9 +63,9 @@ export function MergeDialog({ open, onOpenChange, groups, loading, title = "Revi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] w-[calc(100%-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px]">
         <DialogHeader className="px-6 py-4 text-left">
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{title ?? t("customers:merge.title")}</DialogTitle>
           <DialogDescription>
-            Pick the record to keep. Sales, payments, addresses and tags move to it, then the others are removed.
+            {t("customers:merge.description")}
           </DialogDescription>
         </DialogHeader>
         <Separator />
@@ -71,7 +73,7 @@ export function MergeDialog({ open, onOpenChange, groups, loading, title = "Revi
           {loading ? (
             [1, 2].map((i) => <Skeleton key={i} className="h-28" />)
           ) : local.length === 0 ? (
-            <EmptyState title="No duplicates found." className="p-4 md:p-6" />
+            <EmptyState title={t("customers:merge.empty")} className="p-4 md:p-6" />
           ) : (
             local.map((g) => (
               <Card key={g.key} className="gap-0 overflow-hidden py-0">
@@ -79,14 +81,14 @@ export function MergeDialog({ open, onOpenChange, groups, loading, title = "Revi
                   className="gap-3 px-4 py-2.5"
                   action={
                     <Button type="button" disabled={busy === g.key} onClick={() => merge(g)}>
-                      {busy === g.key ? "Merging…" : "Merge"}
+                      {busy === g.key ? t("customers:merge.merging") : t("customers:merge.merge")}
                     </Button>
                   }
                 >
-                  {g.reason === "phone" ? "Same phone number" : "Same name and email"} · {g.customers.length} records
+                  {t("customers:merge.groupTitle", { reason: g.reason === "phone" ? t("customers:merge.samePhone") : t("customers:merge.sameNameEmail"), count: g.customers.length })}
                 </SectionTitle>
                 <Separator />
-                <RadioGroup aria-label="Record to keep" className="flex flex-col gap-0"
+                <RadioGroup aria-label={t("customers:merge.recordToKeep")} className="flex flex-col gap-0"
                   value={primary[g.key] != null ? String(primary[g.key]) : undefined}
                   onValueChange={(v) => setPrimary((p) => ({ ...p, [g.key]: Number(v) }))}>
                   {g.customers.map((c) => {
@@ -97,11 +99,11 @@ export function MergeDialog({ open, onOpenChange, groups, loading, title = "Revi
                         className={cn("flex cursor-pointer items-center gap-3 border-b px-4 py-2.5 text-left font-normal last:border-b-0", on && "bg-muted/50")}>
                         <RadioGroupItem id={rid} value={String(c.id)} />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold">{c.name}{on && <Badge variant="secondary" className="ml-2">Keep</Badge>}</span>
-                          <span className="block truncate text-xs text-muted-foreground">{c.phone || "—"} · {c.email || "no email"}</span>
+                          <span className="block truncate text-sm font-semibold">{c.name}{on && <Badge variant="secondary" className="ml-2">{t("customers:merge.keep")}</Badge>}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{c.phone || "—"} · {c.email || t("customers:merge.noEmail")}</span>
                         </span>
                         <span className="shrink-0 text-right text-xs text-muted-foreground">
-                          {c.totalOrders ?? 0} orders · {formatCurrency(Number(c.totalSpent) || 0)}
+                          {t("common:count.orders", { count: c.totalOrders ?? 0 })} · {formatCurrency(Number(c.totalSpent) || 0)}
                         </span>
                       </Label>
                     )

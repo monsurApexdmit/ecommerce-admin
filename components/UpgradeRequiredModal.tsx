@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import {
   Dialog,
   DialogContent,
@@ -31,20 +32,23 @@ interface UpgradeRequiredModalProps {
 export function UpgradeRequiredModal({
   open,
   onOpenChange,
-  title = "Upgrade Required",
-  description = "You've reached the limit for your current plan.",
+  title,
+  description,
   limitType = "products",
   currentLimit,
   suggestedPlan = "Professional",
 }: UpgradeRequiredModalProps) {
   const router = useRouter()
+  const { t } = useTranslation(["ui", "common"])
   const [closing, setClosing] = useState(false)
 
   const getLimitMessage = () => {
+    // Without a known limit, fall back to the caller's description (or the generic line)
+    if (currentLimit == null) return description ?? t("ui:upgradeModal.description")
     const messages = {
-      products: `You've reached the ${currentLimit}-product limit on your current plan. Upgrade to Professional or Enterprise to add more.`,
-      users: `You've reached the ${currentLimit}-user limit on your current plan. Upgrade to Professional or Enterprise to add more team members.`,
-      warehouses: `You've reached the ${currentLimit}-warehouse limit on your current plan. Upgrade to Professional or Enterprise to manage multiple locations.`,
+      products: t("ui:upgradeModal.limitProducts", { limit: currentLimit }),
+      users: t("ui:upgradeModal.limitUsers", { limit: currentLimit }),
+      warehouses: t("ui:upgradeModal.limitWarehouses", { limit: currentLimit }),
     }
     return messages[limitType]
   }
@@ -67,7 +71,7 @@ export function UpgradeRequiredModal({
           <div className="flex items-center gap-3">
             <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0" />
             <div>
-              <DialogTitle>{title}</DialogTitle>
+              <DialogTitle>{title ?? t("ui:upgradeModal.title")}</DialogTitle>
             </div>
           </div>
           <DialogDescription className="mt-2">
@@ -76,27 +80,27 @@ export function UpgradeRequiredModal({
         </DialogHeader>
 
         <Alert>
-          <AlertTitle>Plan Comparison</AlertTitle>
+          <AlertTitle>{t("ui:upgradeModal.comparison")}</AlertTitle>
           <AlertDescription className="space-y-2">
             {limitType === "products" && (
               <>
-                <div>📦 Starter: 1,000 products</div>
-                <div>📦 Professional: 10,000 products</div>
-                <div>📦 Enterprise: Unlimited products</div>
+                <div>📦 {t("ui:upgradeModal.productsStarter")}</div>
+                <div>📦 {t("ui:upgradeModal.productsPro")}</div>
+                <div>📦 {t("ui:upgradeModal.productsEnterprise")}</div>
               </>
             )}
             {limitType === "users" && (
               <>
-                <div>👥 Starter: 2 team members</div>
-                <div>👥 Professional: 5 team members</div>
-                <div>👥 Enterprise: Unlimited team members</div>
+                <div>👥 {t("ui:upgradeModal.usersStarter")}</div>
+                <div>👥 {t("ui:upgradeModal.usersPro")}</div>
+                <div>👥 {t("ui:upgradeModal.usersEnterprise")}</div>
               </>
             )}
             {limitType === "warehouses" && (
               <>
-                <div>🏢 Starter: 1 warehouse</div>
-                <div>🏢 Professional: 5 warehouses</div>
-                <div>🏢 Enterprise: Unlimited warehouses</div>
+                <div>🏢 {t("ui:upgradeModal.warehousesStarter")}</div>
+                <div>🏢 {t("ui:upgradeModal.warehousesPro")}</div>
+                <div>🏢 {t("ui:upgradeModal.warehousesEnterprise")}</div>
               </>
             )}
           </AlertDescription>
@@ -104,10 +108,10 @@ export function UpgradeRequiredModal({
 
         <DialogFooter className="flex gap-3 justify-end pt-4">
           <Button variant="outline" onClick={handleClose}>
-            Keep Current Plan
+            {t("ui:upgradeModal.keepPlan")}
           </Button>
           <Button onClick={handleUpgrade}>
-            Browse Plans
+            {t("ui:upgradeModal.browsePlans")}
           </Button>
         </DialogFooter>
       </DialogContent>

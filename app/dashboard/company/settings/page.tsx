@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -32,17 +34,30 @@ const DEF_COL = { primaryColor: "#6B1A2A", accentColor: "#B8963E", backgroundCol
 const SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", INR: "₹", AUD: "A$", CAD: "C$", JPY: "¥", BDT: "৳" }
 
 type Opt = [string, string]
-const TAX_TYPES: Opt[] = [["gst", "GST (Goods & Services Tax)"], ["vat", "VAT (Value Added Tax)"], ["ein", "EIN (Employer ID Number)"], ["other", "Other"]]
-const CURRENCIES: Opt[] = [["USD", "USD - US Dollar"], ["EUR", "EUR - Euro"], ["GBP", "GBP - British Pound"], ["INR", "INR - Indian Rupee"], ["AUD", "AUD - Australian Dollar"], ["CAD", "CAD - Canadian Dollar"], ["JPY", "JPY - Japanese Yen"], ["BDT", "BDT - Bangladeshi Taka"]]
+type Key = ParseKeys<["store", "common"]>
+/** [saved value, label key] — labels translated at render */
+type KOpt = [string, Key]
+const TAX_TYPES: KOpt[] = [["gst", "store:company.tax.types.gst"], ["vat", "store:company.tax.types.vat"], ["ein", "store:company.tax.types.ein"], ["other", "store:company.tax.types.other"]]
+const CURRENCIES: KOpt[] = [
+  ["USD", "store:company.regional.currencies.USD"], ["EUR", "store:company.regional.currencies.EUR"], ["GBP", "store:company.regional.currencies.GBP"],
+  ["INR", "store:company.regional.currencies.INR"], ["AUD", "store:company.regional.currencies.AUD"], ["CAD", "store:company.regional.currencies.CAD"],
+  ["JPY", "store:company.regional.currencies.JPY"], ["BDT", "store:company.regional.currencies.BDT"],
+]
+// Language names are written in their own language (endonyms), so they are not translated
 const LANGUAGES: Opt[] = [["en", "English"], ["es", "Español (Spanish)"], ["fr", "Français (French)"], ["de", "Deutsch (German)"], ["it", "Italiano (Italian)"], ["pt", "Português (Portuguese)"], ["ja", "日本語 (Japanese)"], ["zh", "中文 (Chinese)"]]
-const SYMBOL_POS: Opt[] = [["before", "Before amount (e.g., $1,234.56)"], ["after", "After amount (e.g., 1,234.56 $)"]]
-const DEC_SEP: Opt[] = [[".", "Period (.)"], [",", "Comma (,)"]]
-const THOU_SEP: Opt[] = [[",", "Comma (,)"], [".", "Period (.)"], [" ", "Space"], ["", "None"]]
-const DEC_PLACES: Opt[] = [["0", "0 decimal places"], ["1", "1 decimal place"], ["2", "2 decimal places"]]
-const WEIGHT: Opt[] = [["kg", "Kilogram (kg)"], ["lb", "Pound (lb)"], ["g", "Gram (g)"], ["oz", "Ounce (oz)"]]
-const DIMENSION: Opt[] = [["cm", "Centimeter (cm)"], ["in", "Inch (in)"], ["mm", "Millimeter (mm)"]]
+const SYMBOL_POS: KOpt[] = [["before", "store:company.format.before"], ["after", "store:company.format.after"]]
+const DEC_SEP: KOpt[] = [[".", "store:company.format.period"], [",", "store:company.format.comma"]]
+const THOU_SEP: KOpt[] = [[",", "store:company.format.comma"], [".", "store:company.format.period"], [" ", "store:company.format.space"], ["", "store:company.format.none"]]
+const WEIGHT: KOpt[] = [["kg", "store:company.units.kg"], ["lb", "store:company.units.lb"], ["g", "store:company.units.g"], ["oz", "store:company.units.oz"]]
+const DIMENSION: KOpt[] = [["cm", "store:company.units.cm"], ["in", "store:company.units.in"], ["mm", "store:company.units.mm"]]
+// Format patterns are shown as-is
 const DATE_FMT: Opt[] = [["MM/DD/YYYY", "MM/DD/YYYY (01/15/2024)"], ["DD/MM/YYYY", "DD/MM/YYYY (15/01/2024)"], ["YYYY-MM-DD", "YYYY-MM-DD (2024-01-15)"]]
-const TIME_FMT: Opt[] = [["12h", "12-hour (2:30 PM)"], ["24h", "24-hour (14:30)"]]
+const TIME_FMT: KOpt[] = [["12h", "store:company.dateTime.h12"], ["24h", "store:company.dateTime.h24"]]
+const ACCENT_LABEL: Record<string, Key> = {
+  Blue: "store:company.appearance.accents.Blue", Emerald: "store:company.appearance.accents.Emerald", Indigo: "store:company.appearance.accents.Indigo",
+  Violet: "store:company.appearance.accents.Violet", Rose: "store:company.appearance.accents.Rose", Amber: "store:company.appearance.accents.Amber",
+  Sky: "store:company.appearance.accents.Sky",
+}
 
 interface Form {
   name: string; industry: string; website: string; phone: string; address: string
@@ -81,6 +96,8 @@ function Section({ title, sub, children }: { title: string; sub: string; childre
 /* ------------------------------------------------------------------ */
 
 export default function CompanySettingsPage() {
+  const { t } = useTranslation(["store", "common"])
+  const tOpts = (opts: KOpt[]): Opt[] => opts.map(([v, k]) => [v, t(k)])
   const blocked = useModuleGuard("Company Settings")
   const { canWrite } = useSaasAuth()
   const { refreshSettings } = useCompanySettings()
@@ -140,7 +157,7 @@ export default function CompanySettingsPage() {
       }
       setBase(form); setV(form); setErrs({})
     } catch (e: any) {
-      setErr(e?.response?.data?.message || "Failed to load company settings")
+      setErr(e?.response?.data?.message || t("store:company.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -167,20 +184,20 @@ export default function CompanySettingsPage() {
   const validate = (f: Form) => {
     const e: Partial<Record<K, string>> = {}
     const name = f.name.trim()
-    if (!name) e.name = "Company name is required."
-    else if (name.length > 80) e.name = "Company name must be 80 characters or fewer."
-    if (f.website.trim() && !/^https?:\/\/[^\s.]+\.[^\s]{2,}$/i.test(f.website.trim())) e.website = "Enter a valid URL starting with http:// or https://."
-    if (f.phone.trim() && !/^[+()\d][\d\s().\-+]{5,}$/.test(f.phone.trim())) e.phone = "Enter a valid phone number."
+    if (!name) e.name = t("store:company.errors.nameRequired")
+    else if (name.length > 80) e.name = t("store:company.errors.nameLong")
+    if (f.website.trim() && !/^https?:\/\/[^\s.]+\.[^\s]{2,}$/i.test(f.website.trim())) e.website = t("store:company.errors.website")
+    if (f.phone.trim() && !/^[+()\d][\d\s().\-+]{5,}$/.test(f.phone.trim())) e.phone = t("store:company.errors.phone")
     const tr = Number(f.taxRate)
-    if (f.taxRate === "" || isNaN(tr) || tr < 0 || tr > 100) e.taxRate = "Tax rate must be between 0 and 100."
-    COLOR_KEYS.forEach((k) => { if (!/^#[0-9a-fA-F]{6}$/.test(f[k].trim())) e[k] = "Use a hex colour like #6B1A2A." })
+    if (f.taxRate === "" || isNaN(tr) || tr < 0 || tr > 100) e.taxRate = t("store:company.errors.taxRate")
+    COLOR_KEYS.forEach((k) => { if (!/^#[0-9a-fA-F]{6}$/.test(f[k].trim())) e[k] = t("store:company.errors.hex") })
     const anyB = (["bEmail", "bPhone", "bAddress", "bCity", "bState", "bZip", "bCountry", "bTaxId"] as K[]).some((k) => f[k].trim())
     if (anyB) {
-      if (!f.bEmail.trim()) e.bEmail = "Email is required."
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.bEmail.trim())) e.bEmail = "Enter a valid email address."
-      if (!f.bPhone.trim()) e.bPhone = "Phone is required."
-      if (!f.bAddress.trim()) e.bAddress = "Street address is required."
-      if (!f.bCity.trim()) e.bCity = "City is required."
+      if (!f.bEmail.trim()) e.bEmail = t("store:company.errors.emailRequired")
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.bEmail.trim())) e.bEmail = t("store:company.errors.email")
+      if (!f.bPhone.trim()) e.bPhone = t("store:company.errors.phoneRequired")
+      if (!f.bAddress.trim()) e.bAddress = t("store:company.errors.street")
+      if (!f.bCity.trim()) e.bCity = t("store:company.errors.city")
     }
     return e
   }
@@ -188,14 +205,14 @@ export default function CompanySettingsPage() {
   const save = async () => {
     if (!v || !base) return
     const e = validate(v)
-    if (Object.keys(e).length) { setErrs(e); setErr("Please fix the highlighted fields before saving."); setOk(""); return }
+    if (Object.keys(e).length) { setErrs(e); setErr(t("store:company.fixFields")); setOk(""); return }
     const any = (ks: K[]) => ks.some((k) => changed.includes(k))
     setSaving(true); setErr(""); setOk("")
     const jobs: Promise<unknown>[] = []
     const tags: { name: string; keys: K[] }[] = []
     const run = (name: string, keys: K[], p: Promise<unknown>) => { jobs.push(p); tags.push({ name, keys }) }
     if (any(PROFILE_KEYS)) {
-      run("Company profile", PROFILE_KEYS, saasCompanyApi.updateProfile({
+      run(t("store:company.sectionNames.profile"), PROFILE_KEYS, saasCompanyApi.updateProfile({
         companyProfile: {
           name: v.name.trim(), industry: v.industry.trim(), website: v.website.trim(), phone: v.phone.trim(),
           address: v.address.trim(), city: v.city.trim(), state: v.state.trim(), zipCode: v.zipCode.trim(),
@@ -216,15 +233,15 @@ export default function CompanySettingsPage() {
         accentName: v.accentName,
         brandPrimaryColor: v.primaryColor.trim(), brandAccentColor: v.accentColor.trim(), brandBackgroundColor: v.backgroundColor.trim(),
       }
-      run("Regional, tax & appearance", SETTINGS_KEYS, saasCompanyApi.updateSettings(payload))
+      run(t("store:company.sectionNames.settings"), SETTINGS_KEYS, saasCompanyApi.updateSettings(payload))
     }
     if (any(COLOR_KEYS)) {
-      run("Storefront brand colours", COLOR_KEYS, settingsApi.updateGeneral({
+      run(t("store:company.sectionNames.colours"), COLOR_KEYS, settingsApi.updateGeneral({
         primaryColor: v.primaryColor.trim(), accentColor: v.accentColor.trim(), backgroundColor: v.backgroundColor.trim(),
       }))
     }
     if (any(BILLING_KEYS)) {
-      run("Billing contact", BILLING_KEYS, saasCompanyApi.updateBillingContact({
+      run(t("store:company.sectionNames.billing"), BILLING_KEYS, saasCompanyApi.updateBillingContact({
         email: v.bEmail.trim(), phone: v.bPhone.trim(), address: v.bAddress.trim(), city: v.bCity.trim(),
         state: v.bState.trim(), zipCode: v.bZip.trim(), country: v.bCountry.trim(),
         taxId: v.bTaxId.trim(), taxIdType: v.bTaxIdType as any,
@@ -238,7 +255,7 @@ export default function CompanySettingsPage() {
     const bad = results.map((r, i) => ({ r, t: tags[i] })).filter((x) => x.r.status === "rejected") as { r: PromiseRejectedResult; t: { name: string; keys: K[] } }[]
     if (bad.length) {
       const names = Array.from(new Set(bad.map((x) => x.t.name)))
-      const m = `Could not save: ${names.join(", ")}.${names.length < tags.length ? " Other sections were saved." : ""} ${(bad[0].r.reason as any)?.response?.data?.message ?? ""}`.trim()
+      const m = [t("store:shared.couldNotSave", { names: names.join(", ") }), names.length < tags.length ? t("store:shared.otherSectionsSaved") : "", (bad[0].r.reason as any)?.response?.data?.message ?? ""].filter(Boolean).join(" ")
       setErr(m); toast.error(m)
       const keep = new Set(bad.flatMap((x) => x.t.keys))
       const mine = v
@@ -250,8 +267,8 @@ export default function CompanySettingsPage() {
       setSaving(false)
       return
     }
-    setOk("Company settings updated successfully")
-    toast.success("Company settings saved")
+    setOk(t("store:company.updated"))
+    toast.success(t("store:company.saved"))
     setTimeout(() => setOk(""), 3000)
     await load()
     refreshSettings()
@@ -263,14 +280,14 @@ export default function CompanySettingsPage() {
     if (dirty) {
       const a = ACCENTS.find((x) => x.name === base?.accentName)
       if (a) { try { applyAccent(a.value) } catch { /* ignore */ } }
-      toast.success("Changes discarded")
+      toast.success(t("store:shared.changesDiscarded"))
     }
   }
 
   if (blocked) return blocked
 
   const wrapper = "flex flex-col gap-5"
-  const heading = <PageHeader title="Company Settings" description="Manage your company profile and general settings" />
+  const heading = <PageHeader title={t("store:company.title")} description={t("store:company.description")} />
 
   if (loading || !v || !base) {
     return (
@@ -301,7 +318,7 @@ export default function CompanySettingsPage() {
     )
   }
 
-  const barText = err ? err : dirty ? `${changed.length} unsaved change${changed.length === 1 ? "" : "s"}` : "All changes saved."
+  const barText = err ? err : dirty ? t("store:shared.unsavedCount", { count: changed.length }) : t("store:shared.allSaved")
 
   return (
     <div className={wrapper}>
@@ -310,13 +327,13 @@ export default function CompanySettingsPage() {
       {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
       {ok && <Alert role="status"><AlertDescription>✓ {ok}</AlertDescription></Alert>}
 
-      <Section title="Appearance" sub="Pick the accent colour used across the admin.">
-        <div role="group" aria-label="Accent color" className="flex flex-wrap gap-2">
+      <Section title={t("store:company.appearance.title")} sub={t("store:company.appearance.sub")}>
+        <div role="group" aria-label={t("store:company.appearance.group")} className="flex flex-wrap gap-2">
           {ACCENTS.map((a) => {
             const on = v.accentName === a.name
             return (
               <Button key={a.name} type="button" variant={on ? "default" : "outline"} aria-pressed={on} onClick={() => set("accentName", a.name)}>
-                <span className="size-5 rounded-full" style={{ background: a.value }} />{a.name}
+                <span className="size-5 rounded-full" style={{ background: a.value }} />{ACCENT_LABEL[a.name] ? t(ACCENT_LABEL[a.name]) : a.name}
               </Button>
             )
           })}
@@ -324,114 +341,114 @@ export default function CompanySettingsPage() {
         <Separator />
         <div className="flex flex-col gap-3">
           <div>
-            <h3 className="text-sm font-semibold">Storefront brand colors</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Used on your online store. Saved with the other changes.</p>
+            <h3 className="text-sm font-semibold">{t("store:company.appearance.brandTitle")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t("store:company.appearance.brandSub")}</p>
           </div>
           <div className={grid.replace("240px", "220px")}>
-            {([["primaryColor", "Primary Color"], ["accentColor", "Accent Color"], ["backgroundColor", "Background Color"]] as [K, string][]).map(([k, label]) => (
+            {([["primaryColor", t("store:shared.primaryColor")], ["accentColor", t("store:shared.accentColor")], ["backgroundColor", t("store:shared.backgroundColor")]] as [K, string][]).map(([k, label]) => (
               <FormField key={k} label={label} htmlFor={`cs-${k}`} error={errs[k]} className="min-w-0">
                 <span className="flex gap-2">
-                  <ColorPicker aria-label={`${label} picker`} value={/^#[0-9a-fA-F]{6}$/.test(v[k]) ? v[k] : "#000000"} onChange={(hex) => set(k, hex.toUpperCase())} />
-                  <Input id={`cs-${k}`} type="text" aria-label={`${label} hex`} aria-invalid={!!errs[k]} value={v[k]} onChange={(e) => set(k, e.target.value)} className="min-w-0 flex-1" />
+                  <ColorPicker aria-label={t("store:shared.colorPicker", { label })} value={/^#[0-9a-fA-F]{6}$/.test(v[k]) ? v[k] : "#000000"} onChange={(hex) => set(k, hex.toUpperCase())} />
+                  <Input id={`cs-${k}`} type="text" aria-label={t("store:shared.colorHex", { label })} aria-invalid={!!errs[k]} value={v[k]} onChange={(e) => set(k, e.target.value)} className="min-w-0 flex-1" />
                 </span>
               </FormField>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="flex h-9 w-[120px] items-center justify-center rounded-lg border text-xs font-bold" style={{ background: v.backgroundColor, color: v.primaryColor }}>Preview</span>
-            <span className="flex h-9 w-[120px] items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: v.accentColor }}>Accent</span>
-            <Button type="button" variant="outline" onClick={() => { setV((p) => (p ? { ...p, ...DEF_COL } : p)); setErrs({}); setOk("") }}>Reset to defaults</Button>
+            <span className="flex h-9 w-[120px] items-center justify-center rounded-lg border text-xs font-bold" style={{ background: v.backgroundColor, color: v.primaryColor }}>{t("store:company.appearance.preview")}</span>
+            <span className="flex h-9 w-[120px] items-center justify-center rounded-lg text-xs font-bold text-white" style={{ background: v.accentColor }}>{t("store:company.appearance.accent")}</span>
+            <Button type="button" variant="outline" onClick={() => { setV((p) => (p ? { ...p, ...DEF_COL } : p)); setErrs({}); setOk("") }}>{t("store:company.appearance.resetDefaults")}</Button>
           </div>
         </div>
       </Section>
 
-      <Section title="Company Profile" sub="Your business identity shown on documents.">
+      <Section title={t("store:company.profile.title")} sub={t("store:company.profile.sub")}>
         <div className="flex flex-wrap items-center gap-3.5">
-          <UserAvatar shape="square" name={v.name || "Company"} className="size-[72px]" fallback={<span className="text-2xl font-semibold">{getInitials(v.name || "Company")}</span>} />
+          <UserAvatar shape="square" name={v.name || t("store:company.profile.fallbackName")} className="size-[72px]" fallback={<span className="text-2xl font-semibold">{getInitials(v.name || t("store:company.profile.fallbackName"))}</span>} />
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Company logo</span>
-            <span className="text-xs text-muted-foreground">Upload the logo under Settings &gt; General. Initials are shown here.</span>
+            <span className="text-sm font-medium">{t("store:company.profile.logo")}</span>
+            <span className="text-xs text-muted-foreground">{t("store:company.profile.logoHint")}</span>
           </div>
         </div>
         <div className={grid}>
-          {text("Company Name *", "name", { ph: "Your company name" })}
-          {text("Industry", "industry", { ph: "e.g., Retail, Technology" })}
-          {text("Website", "website", { ph: "https://example.com", type: "url" })}
-          {text("Phone", "phone", { ph: "+1 (555) 000-0000", type: "tel" })}
-          {text("Street Address", "address", { ph: "123 Main Street", span: true })}
-          {text("City", "city", { ph: "New York" })}
-          {text("State", "state", { ph: "NY" })}
-          {text("Zip Code", "zipCode", { ph: "10001" })}
-          {text("Country", "country", { ph: "United States" })}
-          <FormField label="Description" htmlFor="cs-description" className="col-[1/-1] min-w-0">
-            <Textarea id="cs-description" rows={4} placeholder="Brief description of your company..." value={v.description} onChange={(e) => set("description", e.target.value)}
+          {text(t("store:company.profile.name"), "name", { ph: t("store:company.profile.namePh") })}
+          {text(t("store:company.profile.industry"), "industry", { ph: t("store:company.profile.industryPh") })}
+          {text(t("store:shared.website"), "website", { ph: "https://example.com", type: "url" })}
+          {text(t("store:company.profile.phone"), "phone", { ph: "+1 (555) 000-0000", type: "tel" })}
+          {text(t("store:company.profile.street"), "address", { ph: t("store:company.profile.streetPh"), span: true })}
+          {text(t("store:company.profile.city"), "city", { ph: t("store:company.profile.cityPh") })}
+          {text(t("store:company.profile.state"), "state", { ph: t("store:company.profile.statePh") })}
+          {text(t("store:company.profile.zip"), "zipCode", { ph: t("store:company.profile.zipPh") })}
+          {text(t("store:company.profile.country"), "country", { ph: t("store:company.profile.countryPh") })}
+          <FormField label={t("common:fields.description")} htmlFor="cs-description" className="col-[1/-1] min-w-0">
+            <Textarea id="cs-description" rows={4} placeholder={t("store:company.profile.descriptionPh")} value={v.description} onChange={(e) => set("description", e.target.value)}
               className="w-full" />
           </FormField>
         </div>
       </Section>
 
-      <Section title="Tax & Compliance" sub="Tax registration used on invoices.">
+      <Section title={t("store:company.tax.title")} sub={t("store:company.tax.sub")}>
         <div className={grid}>
-          {text("Tax ID", "taxId", { ph: "e.g., 12-3456789" })}
-          {select("Tax ID Type", "taxIdType", TAX_TYPES)}
-          {text("Tax Rate (%)", "taxRate", { ph: "18", type: "number", step: "0.1", min: "0", max: "100" })}
+          {text(t("store:company.tax.taxId"), "taxId", { ph: t("store:company.tax.taxIdPh") })}
+          {select(t("store:company.tax.taxIdType"), "taxIdType", tOpts(TAX_TYPES))}
+          {text(t("store:company.tax.taxRate"), "taxRate", { ph: "18", type: "number", step: "0.1", min: "0", max: "100" })}
         </div>
       </Section>
 
-      <Section title="Regional" sub="Currency and timezone.">
+      <Section title={t("store:company.regional.title")} sub={t("store:company.regional.sub")}>
         <div className={grid}>
-          {select("Currency", "currency", CURRENCIES)}
-          {select("Timezone", "timezone", TIMEZONES)}
+          {select(t("store:company.regional.currency"), "currency", tOpts(CURRENCIES))}
+          {select(t("store:company.regional.timezone"), "timezone", TIMEZONES)}
         </div>
       </Section>
 
-      <Section title="Localization" sub="Language of the admin.">
-        <div className={grid}>{select("Language", "language", LANGUAGES)}</div>
+      <Section title={t("store:company.localization.title")} sub={t("store:company.localization.sub")}>
+        <div className={grid}>{select(t("common:language.label"), "language", LANGUAGES)}</div>
       </Section>
 
-      <Section title="Currency Format" sub={`How amounts are written. Example: ${fmtSample(v)}`}>
+      <Section title={t("store:company.format.title")} sub={t("store:company.format.sub", { sample: fmtSample(v) })}>
         <div className={grid}>
-          {select("Symbol Position", "currencySymbolPosition", SYMBOL_POS)}
-          {select("Decimal Separator", "currencyDecimalSeparator", DEC_SEP)}
-          {select("Thousands Separator", "currencyThousandsSeparator", THOU_SEP)}
-          {select("Decimal Places", "currencyDecimalPlaces", DEC_PLACES)}
+          {select(t("store:company.format.symbolPos"), "currencySymbolPosition", tOpts(SYMBOL_POS))}
+          {select(t("store:company.format.decimalSep"), "currencyDecimalSeparator", tOpts(DEC_SEP))}
+          {select(t("store:company.format.thousandsSep"), "currencyThousandsSeparator", tOpts(THOU_SEP))}
+          {select(t("store:company.format.decimalPlaces"), "currencyDecimalPlaces", [0, 1, 2].map((n): Opt => [String(n), t("store:company.format.places", { count: n })]))}
         </div>
       </Section>
 
-      <Section title="Units of Measurement" sub="Used for product weight and size.">
+      <Section title={t("store:company.units.title")} sub={t("store:company.units.sub")}>
         <div className={grid}>
-          {select("Weight Unit", "weightUnit", WEIGHT)}
-          {select("Dimension Unit", "dimensionUnit", DIMENSION)}
+          {select(t("store:company.units.weight"), "weightUnit", tOpts(WEIGHT))}
+          {select(t("store:company.units.dimension"), "dimensionUnit", tOpts(DIMENSION))}
         </div>
       </Section>
 
-      <Section title="Date & Time Format" sub="How dates and times are displayed.">
+      <Section title={t("store:company.dateTime.title")} sub={t("store:company.dateTime.sub")}>
         <div className={grid}>
-          {select("Date Format", "dateFormat", DATE_FMT)}
-          {select("Time Format", "timeFormat", TIME_FMT)}
+          {select(t("store:company.dateTime.date"), "dateFormat", DATE_FMT)}
+          {select(t("store:company.dateTime.time"), "timeFormat", tOpts(TIME_FMT))}
         </div>
       </Section>
 
-      <Section title="Billing Contact" sub="Billing address and tax info for invoices and payments">
+      <Section title={t("store:company.billing.title")} sub={t("store:company.billing.sub")}>
         <div className={grid.replace("240px", "220px")}>
-          {text("Email", "bEmail", { ph: "billing@example.com", type: "email" })}
-          {text("Phone", "bPhone", { ph: "+1 (555) 000-0000", type: "tel" })}
-          {text("Street Address", "bAddress", { ph: "123 Main Street", span: true })}
-          {text("City", "bCity", { ph: "New York" })}
-          {text("State", "bState", { ph: "NY" })}
-          {text("Zip Code", "bZip", { ph: "10001" })}
-          {text("Country", "bCountry", { ph: "United States" })}
-          {text("Tax ID", "bTaxId", { ph: "e.g., 12-3456789" })}
-          {select("Tax ID Type", "bTaxIdType", TAX_TYPES)}
+          {text(t("common:fields.email"), "bEmail", { ph: t("store:company.billing.emailPh"), type: "email" })}
+          {text(t("store:company.profile.phone"), "bPhone", { ph: "+1 (555) 000-0000", type: "tel" })}
+          {text(t("store:company.profile.street"), "bAddress", { ph: t("store:company.profile.streetPh"), span: true })}
+          {text(t("store:company.profile.city"), "bCity", { ph: t("store:company.profile.cityPh") })}
+          {text(t("store:company.profile.state"), "bState", { ph: t("store:company.profile.statePh") })}
+          {text(t("store:company.profile.zip"), "bZip", { ph: t("store:company.profile.zipPh") })}
+          {text(t("store:company.profile.country"), "bCountry", { ph: t("store:company.profile.countryPh") })}
+          {text(t("store:company.tax.taxId"), "bTaxId", { ph: t("store:company.tax.taxIdPh") })}
+          {select(t("store:company.tax.taxIdType"), "bTaxIdType", tOpts(TAX_TYPES))}
         </div>
       </Section>
 
       <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3">
         <span className={cn("text-sm", err ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>{barText}</span>
         <div className="ml-auto flex gap-2">
-          <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>Discard</Button>
+          <Button type="button" variant="outline" onClick={discard} disabled={saving || !dirty}>{t("store:shared.discard")}</Button>
           <Button type="button" onClick={save} disabled={saving || !writable}>
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? t("common:actions.saving") : t("common:actions.saveChanges")}
           </Button>
         </div>
       </Card>

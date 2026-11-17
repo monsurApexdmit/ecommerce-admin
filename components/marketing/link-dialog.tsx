@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { Trans, useTranslation } from "react-i18next"
 import { ChevronDown, Layers, Package, QrCode as QrIcon, Store, Zap } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -14,8 +15,10 @@ import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
 import { FormField } from "@/components/common/FormField"
 import { SegmentedControl } from "@/components/common/SegmentedControl"
 import { AD_SOURCE_META } from "@/components/sales/ad-source"
+import { ORDERS_NS } from "@/components/sales/i18n"
+import { MARKETING_NS, type MarketingKey } from "@/components/marketing/i18n"
 import { CollectionPicker, ProductPicker, type PickedTarget } from "@/components/marketing/target-pickers"
-import { CopyField, QrCode, TARGET_LABEL, UTM_MEDIUM, buildCaption, shareUrl, slugify } from "@/components/marketing/link-ui"
+import { CopyField, QrCode, TARGET_LABEL, UTM_MEDIUM, buildCaption, channelLabel, shareUrl, slugify } from "@/components/marketing/link-ui"
 import {
   LINK_CHANNELS, campaignLinkApi, type CampaignLink, type CampaignLinkPayload, type LinkChannel, type LinkTargetType,
 } from "@/lib/campaignLinkApi"
@@ -23,11 +26,11 @@ import { apiErrorMessage, apiFieldErrors } from "@/lib/collectionApi"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
-const TARGETS: { value: LinkTargetType; icon: React.ReactNode; description: string }[] = [
-  { value: "quick_order", icon: <Zap className="size-4" aria-hidden />, description: "One-page order form for a product. Fastest for ads (COD, no login)." },
-  { value: "product", icon: <Package className="size-4" aria-hidden />, description: "The product page in your online store." },
-  { value: "collection", icon: <Layers className="size-4" aria-hidden />, description: "A collection, e.g. “Eid Panjabi”." },
-  { value: "store", icon: <Store className="size-4" aria-hidden />, description: "Your store's home page." },
+const TARGETS: { value: LinkTargetType; icon: React.ReactNode; description: MarketingKey }[] = [
+  { value: "quick_order", icon: <Zap className="size-4" aria-hidden />, description: "commerce:marketing.targetDesc.quickOrder" },
+  { value: "product", icon: <Package className="size-4" aria-hidden />, description: "commerce:marketing.targetDesc.product" },
+  { value: "collection", icon: <Layers className="size-4" aria-hidden />, description: "commerce:marketing.targetDesc.collection" },
+  { value: "store", icon: <Store className="size-4" aria-hidden />, description: "commerce:marketing.targetDesc.store" },
 ]
 
 type UtmKey = "utmSource" | "utmMedium" | "utmCampaign" | "utmContent"
@@ -82,6 +85,8 @@ interface LinkDialogProps {
 }
 
 export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved }: LinkDialogProps) {
+  const { t } = useTranslation(MARKETING_NS)
+  const { t: tOrders } = useTranslation(ORDERS_NS)
   const { toast } = useToast()
   const [f, setF] = React.useState<FormState>(emptyForm)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
@@ -103,13 +108,13 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
 
   const validate = () => {
     const e: Record<string, string> = {}
-    if (!f.name.trim()) e.name = "Give the link a name."
-    if (!f.channel) e.channel = "Choose a channel."
-    if (needsProduct && !f.target) e.targetId = "Choose a product."
-    if (f.targetType === "collection" && !f.target) e.targetId = "Choose a collection."
+    if (!f.name.trim()) e.name = t("commerce:marketing.validation.name")
+    if (!f.channel) e.channel = t("commerce:marketing.validation.channel")
+    if (needsProduct && !f.target) e.targetId = t("commerce:marketing.validation.product")
+    if (f.targetType === "collection" && !f.target) e.targetId = t("commerce:marketing.validation.collection")
     const code = f.code.trim()
-    if (code && !/^[A-Za-z0-9_-]{4,20}$/.test(code)) e.code = "The code may only contain letters, numbers, - and _ (4-20 characters)."
-    for (const [k] of UTM_FIELDS) if (utmValue(k).length > 100) e[k] = "UTM values may not be longer than 100 characters."
+    if (code && !/^[A-Za-z0-9_-]{4,20}$/.test(code)) e.code = t("commerce:marketing.validation.code")
+    for (const [k] of UTM_FIELDS) if (utmValue(k).length > 100) e[k] = t("commerce:marketing.validation.utm")
     return e
   }
 
@@ -139,12 +144,12 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
       const res = link ? await campaignLinkApi.update(link.id, body) : await campaignLinkApi.create(body)
       onSaved(res)
       setSaved(res)
-      toast({ title: link ? "Link updated" : "Link created", description: "Copy it into your post or ad." })
+      toast({ title: link ? t("commerce:marketing.toast.updated") : t("commerce:marketing.toast.created"), description: t("commerce:marketing.toast.savedDesc") })
     } catch (err) {
       const fe = apiFieldErrors(err)
       setErrors(fe)
       if (UTM_FIELDS.some(([k]) => fe[k])) setUtmOpen(true)
-      toast({ variant: "destructive", title: "Could not save the link", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("commerce:marketing.toast.saveFailed"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     } finally {
       setSaving(false)
     }
@@ -154,11 +159,11 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{saved ? saved.name : link ? "Edit order link" : "New order link"}</DialogTitle>
+          <DialogTitle>{saved ? saved.name : link ? t("commerce:marketing.dialog.editTitle") : t("commerce:marketing.dialog.newTitle")}</DialogTitle>
           <DialogDescription>
             {saved
-              ? "Post this link on Facebook, Instagram, WhatsApp or TikTok. Orders from it are tagged automatically."
-              : "One link per post or ad, so you can see which one brings orders."}
+              ? t("commerce:marketing.dialog.savedDesc")
+              : t("commerce:marketing.dialog.formDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -166,13 +171,13 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
           <SharePanel link={saved} storeName={storeName} />
         ) : (
           <div className="flex flex-col gap-5">
-            <FormField label="Link name" htmlFor="cl-name" required error={errors.name} description="Only you see this, e.g. “Eid Panjabi FB post”.">
-              <Input id="cl-name" value={f.name} maxLength={150} autoFocus placeholder="Eid Panjabi FB post"
+            <FormField label={t("commerce:marketing.dialog.name")} htmlFor="cl-name" required error={errors.name} description={t("commerce:marketing.dialog.nameHelp")}>
+              <Input id="cl-name" value={f.name} maxLength={150} autoFocus placeholder={t("commerce:marketing.dialog.namePlaceholder")}
                 aria-invalid={!!errors.name} onChange={(e) => patch({ name: e.target.value })} />
             </FormField>
 
-            <FormField label="Where will you post it?" required error={errors.channel}>
-              <ChoiceCardGroup aria-label="Channel" value={f.channel} onValueChange={(v) => patch({ channel: v as LinkChannel })}
+            <FormField label={t("commerce:marketing.dialog.where")} required error={errors.channel}>
+              <ChoiceCardGroup aria-label={t("commerce:marketing.table.channel")} value={f.channel} onValueChange={(v) => patch({ channel: v as LinkChannel })}
                 className="grid-cols-2 sm:grid-cols-4">
                 {LINK_CHANNELS.map((c) => {
                   const meta = AD_SOURCE_META[c]
@@ -180,14 +185,14 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
                   return (
                     <ChoiceCard key={c} value={c} className="p-3"
                       icon={<span className={cn("grid size-7 place-items-center rounded-md", meta.className)}><Icon className="size-4" aria-hidden /></span>}
-                      title={meta.label} />
+                      title={channelLabel(tOrders, c)} />
                   )
                 })}
               </ChoiceCardGroup>
             </FormField>
 
-            <FormField label="What does the link open?" required>
-              <ChoiceCardGroup aria-label="Link opens" value={f.targetType}
+            <FormField label={t("commerce:marketing.dialog.opens")} required>
+              <ChoiceCardGroup aria-label={t("commerce:marketing.dialog.opensAria")} value={f.targetType}
                 onValueChange={(v) => {
                   const next = v as LinkTargetType
                   const sameKind = (a: LinkTargetType, b: LinkTargetType) => (a === "product" || a === "quick_order") && (b === "product" || b === "quick_order")
@@ -195,19 +200,19 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
                   setErrors((e) => ({ ...e, targetId: "" }))
                 }}
                 className="sm:grid-cols-2">
-                {TARGETS.map((t) => (
-                  <ChoiceCard key={t.value} value={t.value} icon={t.icon} title={TARGET_LABEL[t.value]} description={t.description} />
+                {TARGETS.map((o) => (
+                  <ChoiceCard key={o.value} value={o.value} icon={o.icon} title={t(TARGET_LABEL[o.value])} description={t(o.description)} />
                 ))}
               </ChoiceCardGroup>
             </FormField>
 
             {needsProduct && (
-              <FormField label="Product" htmlFor="cl-product" required error={errors.targetId}>
+              <FormField label={t("common:fields.product")} htmlFor="cl-product" required error={errors.targetId}>
                 <ProductPicker id="cl-product" value={f.target} invalid={!!errors.targetId} onChange={(p) => { patch({ target: p }); setErrors((e) => ({ ...e, targetId: "" })) }} />
               </FormField>
             )}
             {f.targetType === "collection" && (
-              <FormField label="Collection" htmlFor="cl-collection" required error={errors.targetId}>
+              <FormField label={t("commerce:marketing.target.collection")} htmlFor="cl-collection" required error={errors.targetId}>
                 <CollectionPicker id="cl-collection" value={f.target} invalid={!!errors.targetId} onChange={(c) => { patch({ target: c }); setErrors((e) => ({ ...e, targetId: "" })) }} />
               </FormField>
             )}
@@ -216,9 +221,9 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
               <CollapsibleTrigger asChild>
                 <Button type="button" variant="ghost" className="h-auto w-full justify-between px-4 py-3 text-left">
                   <span className="flex flex-col items-start gap-0.5">
-                    <span className="font-medium">Tracking (UTM) and short code</span>
+                    <span className="font-medium">{t("commerce:marketing.dialog.utmTitle")}</span>
                     <span className="text-xs font-normal text-muted-foreground">
-                      {[utmValue("utmSource"), utmValue("utmMedium"), utmValue("utmCampaign")].filter(Boolean).join(" · ") || "Filled in automatically"}
+                      {[utmValue("utmSource"), utmValue("utmMedium"), utmValue("utmCampaign")].filter(Boolean).join(" · ") || t("commerce:marketing.dialog.utmAuto")}
                     </span>
                   </span>
                   <ChevronDown className={cn("size-4 transition-transform", utmOpen && "rotate-180")} aria-hidden />
@@ -230,29 +235,29 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
                     description={f.touched[k] ? (
                       <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs"
                         onClick={() => setF((cur) => ({ ...cur, touched: { ...cur.touched, [k]: false } }))}>
-                        Use automatic value
+                        {t("commerce:marketing.dialog.useAuto")}
                       </Button>
-                    ) : "Automatic"}>
+                    ) : t("commerce:marketing.dialog.automatic")}>
                     <Input id={`cl-${k}`} className="font-mono text-xs" maxLength={100} value={utmValue(k)} aria-invalid={!!errors[k]}
                       onChange={(e) => setF((cur) => ({ ...cur, utm: { ...cur.utm, [k]: e.target.value }, touched: { ...cur.touched, [k]: true } }))} />
                   </FormField>
                 ))}
-                <FormField label="Short code" htmlFor="cl-code" error={errors.code} className="sm:col-span-2"
-                  description="Leave empty for a random 6-character code. Custom: 4–20 letters, numbers, - or _.">
-                  <Input id="cl-code" className="font-mono" maxLength={20} value={f.code} placeholder="auto" aria-invalid={!!errors.code}
+                <FormField label={t("commerce:marketing.dialog.shortCode")} htmlFor="cl-code" error={errors.code} className="sm:col-span-2"
+                  description={t("commerce:marketing.dialog.shortCodeHelp")}>
+                  <Input id="cl-code" className="font-mono" maxLength={20} value={f.code} placeholder={t("commerce:marketing.dialog.autoPlaceholder")} aria-invalid={!!errors.code}
                     onChange={(e) => patch({ code: e.target.value.replace(/\s/g, "") })} />
                 </FormField>
               </CollapsibleContent>
             </Collapsible>
 
-            <FormField label="Notes" htmlFor="cl-notes" description="Optional, e.g. ad budget or audience.">
+            <FormField label={t("common:fields.notes")} htmlFor="cl-notes" description={t("commerce:marketing.dialog.notesHelp")}>
               <Textarea id="cl-notes" rows={2} maxLength={1000} value={f.notes} onChange={(e) => patch({ notes: e.target.value })} />
             </FormField>
 
             <div className="flex items-center gap-3">
               <Switch id="cl-active" checked={f.isActive} onCheckedChange={(v) => patch({ isActive: v })} />
               <label htmlFor="cl-active" className="text-sm">
-                Active <span className="text-muted-foreground">— inactive short links send shoppers to your home page</span>
+                {t("common:status.active")} <span className="text-muted-foreground">{t("commerce:marketing.dialog.activeHelp")}</span>
               </label>
             </div>
           </div>
@@ -261,13 +266,13 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
         <DialogFooter>
           {saved ? (
             <>
-              {shareOnly && link && <Button type="button" variant="outline" onClick={() => setSaved(null)}>Edit link</Button>}
-              <Button type="button" onClick={onClose}>Done</Button>
+              {shareOnly && link && <Button type="button" variant="outline" onClick={() => setSaved(null)}>{t("commerce:marketing.table.editLink")}</Button>}
+              <Button type="button" onClick={onClose}>{t("common:actions.done")}</Button>
             </>
           ) : (
             <>
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="button" disabled={saving} onClick={submit}>{saving ? "Saving…" : link ? "Save changes" : "Create link"}</Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t("common:actions.cancel")}</Button>
+              <Button type="button" disabled={saving} onClick={submit}>{saving ? t("common:actions.saving") : link ? t("common:actions.saveChanges") : t("commerce:marketing.dialog.create")}</Button>
             </>
           )}
         </DialogFooter>
@@ -278,12 +283,13 @@ export function LinkDialog({ open, link, shareOnly, storeName, onClose, onSaved 
 
 /** Full URL + short URL with copy, QR code and ready-to-post captions. */
 export function SharePanel({ link, storeName, compact }: { link: CampaignLink; storeName?: string; compact?: boolean }) {
+  const { t } = useTranslation(MARKETING_NS)
   const [captionKind, setCaptionKind] = React.useState<"facebook" | "whatsapp">(link.channel === "whatsapp" ? "whatsapp" : "facebook")
-  const [caption, setCaption] = React.useState(() => buildCaption(captionKind, link, storeName))
+  const [caption, setCaption] = React.useState(() => buildCaption(t, captionKind, link, storeName))
   const [showQr, setShowQr] = React.useState(!compact)
   const [copied, setCopied] = React.useState(false)
 
-  React.useEffect(() => { setCaption(buildCaption(captionKind, link, storeName)) }, [captionKind, link, storeName])
+  React.useEffect(() => { setCaption(buildCaption(t, captionKind, link, storeName)) }, [t, captionKind, link, storeName])
 
   const copyCaption = async () => {
     try { await navigator.clipboard.writeText(caption); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* blocked */ }
@@ -296,26 +302,26 @@ export function SharePanel({ link, storeName, compact }: { link: CampaignLink; s
       {!link.storeBaseUrl && (
         <Alert>
           <Store aria-hidden />
-          <AlertTitle>Store address not set</AlertTitle>
+          <AlertTitle>{t("commerce:marketing.share.noStoreTitle")}</AlertTitle>
           <AlertDescription>
-            <p>Add your store domain in <Link href="/dashboard/store" className="font-medium underline underline-offset-4">Online store settings</Link> to get a full link. Until then only the path is shown.</p>
+            <p><Trans t={t} i18nKey="commerce:marketing.share.noStoreDesc" components={{ link: <Link href="/dashboard/store" className="font-medium underline underline-offset-4" /> }} /></p>
           </AlertDescription>
         </Alert>
       )}
       <div className={cn("grid gap-4", !compact && hasAbsolute && "sm:grid-cols-[1fr_auto]")}>
         <div className="flex min-w-0 flex-col gap-3">
           {link.shortUrl && (
-            <FormField label="Short link (best for posts)" htmlFor={`cl-short-${link.id}`}>
-              <CopyField id={`cl-short-${link.id}`} label="Short link" value={link.shortUrl} />
+            <FormField label={t("commerce:marketing.share.shortLabel")} htmlFor={`cl-short-${link.id}`}>
+              <CopyField id={`cl-short-${link.id}`} label={t("commerce:marketing.share.short")} value={link.shortUrl} />
             </FormField>
           )}
-          <FormField label={link.fullUrl ? "Full link (with UTM tags)" : "Link path"} htmlFor={`cl-full-${link.id}`}
-            description="Use the full link in Ads Manager's Website URL if you prefer.">
-            <CopyField id={`cl-full-${link.id}`} label="Full link" value={link.fullUrl || link.targetPath} />
+          <FormField label={link.fullUrl ? t("commerce:marketing.share.fullLabel") : t("commerce:marketing.share.path")} htmlFor={`cl-full-${link.id}`}
+            description={t("commerce:marketing.share.fullHelp")}>
+            <CopyField id={`cl-full-${link.id}`} label={t("commerce:marketing.share.full")} value={link.fullUrl || link.targetPath} />
           </FormField>
           {compact && hasAbsolute && (
             <Button type="button" variant="outline" size="sm" className="w-fit" aria-expanded={showQr} onClick={() => setShowQr((v) => !v)}>
-              <QrIcon className="size-4" aria-hidden /> {showQr ? "Hide QR code" : "Show QR code"}
+              <QrIcon className="size-4" aria-hidden /> {showQr ? t("commerce:marketing.share.hideQr") : t("commerce:marketing.share.showQr")}
             </Button>
           )}
         </div>
@@ -324,21 +330,21 @@ export function SharePanel({ link, storeName, compact }: { link: CampaignLink; s
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-medium">Ready-to-post caption</p>
-          <SegmentedControl aria-label="Caption for" value={captionKind} onValueChange={(v) => setCaptionKind(v as "facebook" | "whatsapp")}
+          <p className="text-sm font-medium">{t("commerce:marketing.share.caption")}</p>
+          <SegmentedControl aria-label={t("commerce:marketing.share.captionFor")} value={captionKind} onValueChange={(v) => setCaptionKind(v as "facebook" | "whatsapp")}
             options={[{ value: "facebook", label: "Facebook / Instagram" }, { value: "whatsapp", label: "WhatsApp" }]} />
         </div>
-        <Textarea aria-label="Caption" rows={6} value={caption} onChange={(e) => setCaption(e.target.value)} />
+        <Textarea aria-label={t("commerce:marketing.share.captionAria")} rows={6} value={caption} onChange={(e) => setCaption(e.target.value)} />
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={copyCaption}>{copied ? "Copied" : "Copy caption"}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={copyCaption}>{copied ? t("common:actions.copied") : t("commerce:marketing.share.copyCaption")}</Button>
           {captionKind === "whatsapp" && (
             <Button asChild variant="outline" size="sm">
-              <a href={`https://wa.me/?text=${encodeURIComponent(caption)}`} target="_blank" rel="noopener noreferrer">Share on WhatsApp ↗</a>
+              <a href={`https://wa.me/?text=${encodeURIComponent(caption)}`} target="_blank" rel="noopener noreferrer">{t("commerce:marketing.share.shareWa")}</a>
             </Button>
           )}
           {captionKind === "facebook" && link.fullUrl && (
             <Button asChild variant="outline" size="sm">
-              <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer">Share on Facebook ↗</a>
+              <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`} target="_blank" rel="noopener noreferrer">{t("commerce:marketing.share.shareFb")}</a>
             </Button>
           )}
         </div>

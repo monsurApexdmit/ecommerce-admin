@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { Trans, useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
 import { Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -38,16 +40,14 @@ const TAX_RATE = 0.1
 const dialogCls = "max-h-[90vh] overflow-y-auto sm:max-w-md"
 
 const METHODS = [
-  { id: "card", label: "Credit / debit card" },
-  { id: "bkash", label: "bKash" },
-  { id: "bank", label: "Bank transfer" },
+  { id: "card", label: "account:billing.shared.methods.card" },
+  { id: "bkash", label: "account:billing.shared.methods.bkash" },
+  { id: "bank", label: "account:billing.shared.methods.bank" },
 ] as const
 type Method = (typeof METHODS)[number]["id"]
 type Period = "monthly" | "yearly"
 
-const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "")
 const featName = (f: unknown): string => (typeof f === "string" ? f : String((f as { name?: string })?.name ?? ""))
-const limitLabel = (v?: number | null) => (!v || v >= UNLIMITED ? "Unlimited" : v.toLocaleString("en-US"))
 
 interface CheckoutState { plan: Plan; period: Period; method: Method; email: string; terms: boolean; err: string; busy: boolean }
 interface EditState {
@@ -57,6 +57,9 @@ interface EditState {
 
 export default function PlansPage() {
   const blocked = useModuleGuard("Billing Plans")
+  const { t, i18n } = useTranslation(["account", "common"])
+  const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" }) : "")
+  const limitLabel = (v?: number | null) => (!v || v >= UNLIMITED ? t("account:billing.shared.unlimited") : v.toLocaleString("en-US"))
   const { formatCurrency } = useCompanySettings()
   const { user } = useSaasAuth()
   const isSuperAdmin = (user?.role as string | undefined) === "super_admin"
@@ -74,7 +77,7 @@ export default function PlansPage() {
     try {
       const res = await saasBillingApi.getPlans()
       setPlans(Array.isArray(res.data) ? res.data : [])
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to load plans") }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("account:billing.shared.loadPlansFailed")) }
     try {
       const s: any = (await saasBillingApi.getCurrentSubscription()).data
       const live: Subscription | null = s && s.status !== "none" && s.id ? s : null
@@ -82,7 +85,7 @@ export default function PlansPage() {
       if (live?.billingPeriod === "yearly") setPeriod("yearly")
     } catch { setSub(null) }
     try { setUsage((await saasBillingApi.getUsage()).data) } catch { setUsage(null) }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { (async () => { setLoading(true); await load(); setLoading(false) })() }, [load])
 
@@ -101,21 +104,22 @@ export default function PlansPage() {
 
   const banner = useMemo(() => {
     const dl = sub?.daysRemaining ?? 0
-    if (subStatus === "trial") return { danger: false, t: "Free trial active.", x: `${dl} day${dl === 1 ? "" : "s"} remaining • Select a plan below to upgrade.` }
-    if (subStatus === "cancelled") return { danger: false, t: "Subscription cancelled.", x: `Access continues until ${fmtD(periodEnd)}. Pick a plan to resubscribe.` }
-    if (subStatus === "expired") return { danger: true, t: "Subscription expired.", x: "Choose a plan to regain access." }
-    if (subStatus === "none") return { danger: false, t: "No active plan.", x: "Pick a plan below to get started." }
-    return { danger: false, t: "Active subscription.", x: `Current plan: ${curPlan?.name ?? sub?.planName ?? "No active plan"}${periodEnd ? ` • renews ${fmtD(sub?.nextBillingDate ?? periodEnd)}` : ""}` }
-  }, [sub, subStatus, periodEnd, curPlan])
+    if (subStatus === "trial") return { danger: false, t: t("account:billing.plans.trialActive"), x: t("account:billing.plans.trialRemaining", { count: dl }) }
+    if (subStatus === "cancelled") return { danger: false, t: t("account:billing.plans.cancelledTitle"), x: t("account:billing.plans.cancelledText", { date: fmtD(periodEnd) }) }
+    if (subStatus === "expired") return { danger: true, t: t("account:billing.plans.expiredTitle"), x: t("account:billing.plans.expiredText") }
+    if (subStatus === "none") return { danger: false, t: t("account:billing.shared.noPlanTitle"), x: t("account:billing.shared.noPlanText") }
+    const plan = curPlan?.name ?? sub?.planName ?? t("account:billing.plans.noActivePlan")
+    return { danger: false, t: t("account:billing.plans.activeTitle"), x: periodEnd ? t("account:billing.plans.activeTextRenews", { plan, date: fmtD(sub?.nextBillingDate ?? periodEnd) }) : t("account:billing.plans.activeText", { plan }) }
+  }, [sub, subStatus, periodEnd, curPlan, t, i18n.language]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- checkout ----
   const overLimits = (p: Plan): string[] => {
     if (!usage) return []
     const out: string[] = []
-    const chk = (label: string, used: number, limit?: number | null) => { if (limit && limit < UNLIMITED && used > limit) out.push(`${label} (${used.toLocaleString("en-US")} of ${limit.toLocaleString("en-US")})`) }
-    chk("team members", usage.teamMembers.used, p.maxUsers)
-    chk("products", usage.products.used, p.maxProducts)
-    chk("branches", usage.branches.used, p.maxBranches)
+    const chk = (label: string, used: number, limit?: number | null) => { if (limit && limit < UNLIMITED && used > limit) out.push(t("account:billing.co.overItem", { label, used: used.toLocaleString("en-US"), limit: limit.toLocaleString("en-US") })) }
+    chk(t("account:billing.co.overTeam"), usage.teamMembers.used, p.maxUsers)
+    chk(t("account:billing.co.overProducts"), usage.products.used, p.maxProducts)
+    chk(t("account:billing.co.overBranches"), usage.branches.used, p.maxBranches)
     return out
   }
 
@@ -132,8 +136,8 @@ export default function PlansPage() {
   const confirmCheckout = async () => {
     if (!co || co.busy) return
     const paid = !isFree(co.plan)
-    if (paid && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email.trim())) { setCo({ ...co, err: "Enter a valid billing email." }); return }
-    if (!co.terms) { setCo({ ...co, err: "Please accept the terms to continue." }); return }
+    if (paid && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(co.email.trim())) { setCo({ ...co, err: t("account:billing.co.invalidEmail") }); return }
+    if (!co.terms) { setCo({ ...co, err: t("account:billing.co.acceptTerms") }); return }
     setCo({ ...co, busy: true, err: "" })
     const payload = { planId: co.plan.id, billingPeriod: co.period, paymentMethod: co.method, billingEmail: co.email.trim() || undefined }
     try {
@@ -144,11 +148,11 @@ export default function PlansPage() {
       } else {
         await saasBillingApi.subscribeToPlan(payload)
       }
-      toast.success(isFree(co.plan) ? "Free trial started" : `Subscribed to ${co.plan.name}`)
+      toast.success(isFree(co.plan) ? t("account:billing.plans.trialStarted") : t("account:billing.plans.subscribed", { plan: co.plan.name }))
       setCo(null)
       await load()
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.response?.data?.error || "Payment failed. Please try again."
+      const msg = e?.response?.data?.message || e?.response?.data?.error || t("account:billing.co.paymentFailed")
       setCo((c) => (c ? { ...c, busy: false, err: msg } : c))
     }
   }
@@ -165,18 +169,18 @@ export default function PlansPage() {
     const name = ed.name.trim(), price = Number(ed.price)
     const ints = [ed.users, ed.products, ed.branches].map(Number)
     const fail = (err: string) => setEd({ ...ed, err })
-    if (!name) return fail("Plan name is required.")
-    if (plans.some((p) => p.id !== ed.id && p.name.toLowerCase() === name.toLowerCase())) return fail("Another plan already uses this name.")
-    if (ed.price === "" || !isFinite(price) || price < 0) return fail("Price must be zero or more.")
-    if (ints.some((n) => !Number.isInteger(n) || n < 0)) return fail("Limits must be whole numbers (0 or more).")
+    if (!name) return fail(t("account:billing.plans.nameRequired"))
+    if (plans.some((p) => p.id !== ed.id && p.name.toLowerCase() === name.toLowerCase())) return fail(t("account:billing.plans.nameTaken"))
+    if (ed.price === "" || !isFinite(price) || price < 0) return fail(t("account:billing.plans.priceInvalid"))
+    if (ints.some((n) => !Number.isInteger(n) || n < 0)) return fail(t("account:billing.plans.limitsInvalid"))
     setEd({ ...ed, saving: true, err: "" })
     const payload: UpdatePlanPayload = { name, description: ed.desc.trim(), price, maxUsers: ints[0], maxProducts: ints[1], maxBranches: ints[2], features: ed.feats, isFeatured: ed.featured }
     try {
       const res = await saasBillingApi.updatePlan(ed.id, payload)
       setPlans((ps) => ps.map((p) => (p.id === ed.id ? { ...p, ...(res.data as Plan) } : p)))
       setEd(null)
-      toast.success("Plan updated")
-    } catch (e: any) { setEd((x) => (x ? { ...x, saving: false, err: e?.response?.data?.message || "Failed to update plan" } : x)) }
+      toast.success(t("account:billing.plans.planUpdated"))
+    } catch (e: any) { setEd((x) => (x ? { ...x, saving: false, err: e?.response?.data?.message || t("account:billing.plans.updateFailed") } : x)) }
   }
 
   // ---- compare table ----
@@ -195,9 +199,9 @@ export default function PlansPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Choose your plan"
-        description={<span className="block max-w-2xl">Start with a free trial or pick a plan that scales with your business. All plans include a 30-day money-back guarantee.</span>}
-        actions={<Button asChild variant="outline"><Link href="/dashboard/billing/subscriptions">My subscription</Link></Button>}
+        title={t("account:billing.plans.title")}
+        description={<span className="block max-w-2xl">{t("account:billing.plans.description")}</span>}
+        actions={<Button asChild variant="outline"><Link href="/dashboard/billing/subscriptions">{t("account:billing.plans.mySubscription")}</Link></Button>}
       />
 
       {!loading && (
@@ -209,19 +213,19 @@ export default function PlansPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl
-          aria-label="Billing period"
+          aria-label={t("account:billing.shared.billingPeriod")}
           size="default"
           value={period}
           onValueChange={(id) => setPeriod(id as Period)}
-          options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly · 2 months free" }]}
+          options={[{ value: "monthly", label: t("account:billing.shared.monthly") }, { value: "yearly", label: t("account:billing.shared.yearlyPromo") }]}
         />
-        <span className="text-xs text-muted-foreground">Prices exclude {Math.round(TAX_RATE * 100)}% tax added at checkout.</span>
+        <span className="text-xs text-muted-foreground">{t("account:billing.plans.taxNote", { rate: Math.round(TAX_RATE * 100) })}</span>
       </div>
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-[440px]" />)}</div>
       ) : plans.length === 0 ? (
-        <EmptyState bordered title="No plans available" description="Please contact support for assistance." />
+        <EmptyState bordered title={t("account:billing.plans.noPlans")} description={t("account:billing.plans.contactSupport")} />
       ) : (
         <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           {plans.map((p) => {
@@ -232,44 +236,44 @@ export default function PlansPage() {
             const trialLocked = free && paidEver && !isCur
             const dis = isCur || trialLocked
             const price = free ? 0 : priceOf(p, period)
-            const cta = isCur ? "Current plan" : trialLocked ? "Trial already used" : free ? "Start free trial"
-              : subStatus === "expired" || subStatus === "none" ? "Get started" : rank(p.id) > rank(sub?.planId) ? "Upgrade" : "Switch plan"
+            const cta = isCur ? t("account:billing.shared.currentPlan") : trialLocked ? t("account:billing.plans.trialAlreadyUsed") : free ? t("account:billing.co.startTrial")
+              : subStatus === "expired" || subStatus === "none" ? t("account:billing.plans.getStarted") : rank(p.id) > rank(sub?.planId) ? t("account:billing.shared.upgrade") : t("account:billing.plans.switchPlan")
             return (
               <Card key={p.id} className={cn("relative gap-4 p-6", (popular || isCur) && "border-primary")}>
-                {popular && <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">MOST POPULAR</Badge>}
+                {popular && <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">{t("account:billing.plans.mostPopularBadge")}</Badge>}
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    {isCur && <Badge variant="secondary" className="mb-1.5">Current plan</Badge>}
+                    {isCur && <Badge variant="secondary" className="mb-1.5">{t("account:billing.shared.currentPlan")}</Badge>}
                     <h2 className="text-2xl font-bold">{p.name}</h2>
                   </div>
                   {isSuperAdmin && (
-                    <WithTooltip content={`Edit ${p.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${p.name}`} onClick={() => openEdit(p)}><Pencil className="size-4" /></Button></WithTooltip>
+                    <WithTooltip content={t("account:billing.plans.editName", { name: p.name })}><Button type="button" variant="outline" size="icon" aria-label={t("account:billing.plans.editName", { name: p.name })} onClick={() => openEdit(p)}><Pencil className="size-4" /></Button></WithTooltip>
                   )}
                 </div>
                 <p className="min-h-10 text-sm text-muted-foreground">{p.description}</p>
                 <div>
-                  <span className="text-4xl font-bold tabular-nums">{free ? "Free" : money(price)}</span>{" "}
-                  <span className="text-sm text-muted-foreground">{free ? "· 10-day trial" : period === "yearly" ? "/ year" : "/ month"}</span>
-                  {!free && period === "yearly" && <div className="text-xs font-semibold text-primary">Save {money(p.price * 12 - price)} vs monthly</div>}
+                  <span className="text-4xl font-bold tabular-nums">{free ? t("account:billing.shared.free") : money(price)}</span>{" "}
+                  <span className="text-sm text-muted-foreground">{free ? t("account:billing.shared.trialSuffix") : period === "yearly" ? t("account:billing.shared.perYear") : t("account:billing.shared.perMonth")}</span>
+                  {!free && period === "yearly" && <div className="text-xs font-semibold text-primary">{t("account:billing.plans.saveVsMonthly", { amount: money(p.price * 12 - price) })}</div>}
                 </div>
                 <Button type="button" disabled={dis} onClick={() => openCheckout(p)}
                   variant={popular ? "default" : "outline"}>{cta}</Button>
                 <div>
-                  <SectionTitle className="mb-2">Limits</SectionTitle>
+                  <SectionTitle className="mb-2">{t("account:billing.plans.limits")}</SectionTitle>
                   <div className="flex flex-col gap-1 text-sm">
-                    <span><strong>{limitLabel(p.maxUsers)}</strong> team members</span>
-                    <span><strong>{limitLabel(p.maxProducts)}</strong> products</span>
-                    <span><strong>{limitLabel(p.maxBranches)}</strong> branches</span>
+                    <span><Trans t={t} i18nKey="account:billing.plans.limitTeam" values={{ value: limitLabel(p.maxUsers) }} components={{ b: <strong /> }} /></span>
+                    <span><Trans t={t} i18nKey="account:billing.plans.limitProducts" values={{ value: limitLabel(p.maxProducts) }} components={{ b: <strong /> }} /></span>
+                    <span><Trans t={t} i18nKey="account:billing.plans.limitBranches" values={{ value: limitLabel(p.maxBranches) }} components={{ b: <strong /> }} /></span>
                   </div>
                 </div>
                 <div>
-                  <SectionTitle className="mb-2">Features</SectionTitle>
+                  <SectionTitle className="mb-2">{t("account:billing.plans.features")}</SectionTitle>
                   <ul className="flex flex-col gap-1.5 text-sm">
                     {shown.map((f, i) => <li key={`${f}-${i}`} className="flex gap-2"><span aria-hidden className="text-primary">&#10003;</span><span>{f}</span></li>)}
                   </ul>
                   {feats.length > 5 && (
                     <Button type="button" variant="link" size="sm" onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="mt-2">
-                      {open ? "Show less" : `+ ${feats.length - 5} more features`}
+                      {open ? t("account:billing.plans.showLess") : t("account:billing.plans.moreFeatures", { count: feats.length - 5 })}
                     </Button>
                   )}
                 </div>
@@ -280,25 +284,25 @@ export default function PlansPage() {
       )}
 
       {!loading && plans.length > 0 && (
-        <SectionCard title="Compare plans" contentClassName="px-0">
+        <SectionCard title={t("account:billing.shared.compare")} contentClassName="px-0">
           <div className="overflow-x-auto">
             <Table className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Feature</TableHead>
+                  <TableHead>{t("account:billing.plans.feature")}</TableHead>
                   {plans.map((p) => (
                     <TableHead key={p.id} className={cn("h-auto py-2", p.id === sub?.planId && "bg-muted/50")}>
                       <div>{p.name}</div>
-                      <div className="font-normal text-muted-foreground">{isFree(p) ? "Free" : `${money(priceOf(p, period))}${period === "yearly" ? "/yr" : "/mo"}`}</div>
+                      <div className="font-normal text-muted-foreground">{isFree(p) ? t("account:billing.shared.free") : `${money(priceOf(p, period))}${period === "yearly" ? t("account:billing.shared.perYearShort") : t("account:billing.shared.perMonthShort")}`}</div>
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {[
-                  ["Team members", (p: Plan) => limitLabel(p.maxUsers)],
-                  ["Products", (p: Plan) => limitLabel(p.maxProducts)],
-                  ["Branches", (p: Plan) => limitLabel(p.maxBranches)],
+                  [t("account:billing.shared.teamMembers"), (p: Plan) => limitLabel(p.maxUsers)],
+                  [t("account:billing.shared.products"), (p: Plan) => limitLabel(p.maxProducts)],
+                  [t("account:billing.shared.branches"), (p: Plan) => limitLabel(p.maxBranches)],
                   ...featUnion.map((f) => [f, (p: Plan) => ((p.features || []).map(featName).includes(f) ? "✓" : "—")] as [string, (p: Plan) => string]),
                 ].map(([name, fn]) => (
                   <TableRow key={name as string}>
@@ -325,44 +329,44 @@ export default function PlansPage() {
             const over = overLimits(co.plan)
             return (
               <>
-                <DialogTitle>{free ? "Start your free trial" : `Confirm ${co.plan.name} plan`}</DialogTitle>
-                <DialogDescription>Review your order, choose how you want to pay and confirm.</DialogDescription>
+                <DialogTitle>{free ? t("account:billing.co.trialTitle") : t("account:billing.co.confirmTitle", { plan: co.plan.name })}</DialogTitle>
+                <DialogDescription>{t("account:billing.co.description")}</DialogDescription>
                 <Card className="gap-1.5 bg-muted/50 p-4 shadow-none">
                   <InfoList className="gap-1.5">
-                    <InfoRow label={`${co.plan.name} (${free ? "10-day trial" : co.period === "yearly" ? "Yearly" : "Monthly"})`} value={<span className="tabular-nums">{money(sub0)}</span>} />
-                    <InfoRow label={`Tax (${Math.round(TAX_RATE * 100)}%)`} value={<span className="tabular-nums">{money(tax)}</span>} />
+                    <InfoRow label={t("account:billing.co.line", { plan: co.plan.name, period: free ? t("account:billing.co.trialPeriod") : co.period === "yearly" ? t("account:billing.shared.yearly") : t("account:billing.shared.monthly") })} value={<span className="tabular-nums">{money(sub0)}</span>} />
+                    <InfoRow label={t("account:billing.co.tax", { rate: Math.round(TAX_RATE * 100) })} value={<span className="tabular-nums">{money(tax)}</span>} />
                   </InfoList>
                   <Separator />
-                  <div className="flex justify-between text-sm font-bold"><span>Total</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
+                  <div className="flex justify-between text-sm font-bold"><span>{t("common:money.total")}</span><span className="tabular-nums">{money(sub0 + tax)}</span></div>
                 </Card>
                 {over.length > 0 && (
                   <Alert>
                     <AlertDescription>
-                      You currently exceed this plan&apos;s limits for {over.join(", ")}. Existing data is kept, but you will not be able to add more until you are within the limit.
+                      {t("account:billing.co.overLimits", { list: over.join(", ") })}
                     </AlertDescription>
                   </Alert>
                 )}
                 {!free && (
                   <div className="flex flex-col gap-3">
-                    <FormField label="Payment method" htmlFor="co-method">
+                    <FormField label={t("account:billing.co.paymentMethod")} htmlFor="co-method">
                       <Select value={String(co.method)} onValueChange={(val) => setCo({ ...co, method: val as Method, err: "" })}>
                         <SelectTrigger id="co-method" className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          {METHODS.map((m) => <SelectItem key={m.id} value={String(m.id)}>{m.label}</SelectItem>)}
+                          {METHODS.map((m) => <SelectItem key={m.id} value={String(m.id)}>{t(m.label)}</SelectItem>)}
                         </SelectContent>
                       </Select></FormField>
-                    <FormField label="Billing email *" htmlFor="co-email">
-                      <Input id="co-email" type="email" value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder="billing@yourshop.com" /></FormField>
+                    <FormField label={t("account:billing.co.billingEmail")} htmlFor="co-email">
+                      <Input id="co-email" type="email" value={co.email} onChange={(e) => setCo({ ...co, email: e.target.value, err: "" })} placeholder={t("account:billing.co.emailPlaceholder")} /></FormField>
                   </div>
                 )}
-                <FormField orientation="horizontal" label="I agree to the terms of service and the 30-day money-back policy." htmlFor="co-terms"
+                <FormField orientation="horizontal" label={t("account:billing.co.terms")} htmlFor="co-terms"
                   className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
                   <Checkbox id="co-terms" checked={co.terms} onCheckedChange={(c) => setCo({ ...co, terms: c === true, err: "" })} />
                 </FormField>
                 {co.err && <Alert variant="destructive"><AlertDescription>{co.err}</AlertDescription></Alert>}
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" disabled={co.busy} onClick={() => setCo(null)}>Cancel</Button>
-                  <Button type="button" disabled={co.busy} onClick={confirmCheckout}>{co.busy ? "Processing…" : free ? "Start free trial" : `Pay ${money(sub0 + tax)}`}</Button>
+                  <Button type="button" variant="outline" disabled={co.busy} onClick={() => setCo(null)}>{t("common:actions.cancel")}</Button>
+                  <Button type="button" disabled={co.busy} onClick={confirmCheckout}>{co.busy ? t("account:billing.co.processing") : free ? t("account:billing.co.startTrial") : t("account:billing.co.pay", { amount: money(sub0 + tax) })}</Button>
                 </div>
               </>
             )
@@ -375,44 +379,44 @@ export default function PlansPage() {
         <DialogContent className={dialogCls}>
           {ed && (
             <>
-              <DialogTitle>Edit plan: {plans.find((p) => p.id === ed.id)?.name}</DialogTitle>
-              <DialogDescription>Update plan details, pricing, limits, and features.</DialogDescription>
-              <FormField label="Plan name *" htmlFor="ed-name">
-                <Input id="ed-name" value={ed.name} onChange={(e) => setE({ name: e.target.value })} placeholder="e.g. Professional" /></FormField>
-              <FormField label="Description" htmlFor="ed-desc">
-                <Textarea id="ed-desc" rows={2} value={ed.desc} onChange={(e) => setE({ desc: e.target.value })} placeholder="Short description of the plan" /></FormField>
-              <FormField label="Price (per month)" htmlFor="ed-price" description="Yearly price is 10 times the monthly price (2 months free).">
-                <Input id="ed-price" type="number" step="0.01" min={0} value={ed.price} onChange={(e) => setE({ price: e.target.value })} placeholder="e.g. 149" /></FormField>
+              <DialogTitle>{t("account:billing.plans.edit.title", { name: plans.find((p) => p.id === ed.id)?.name ?? "" })}</DialogTitle>
+              <DialogDescription>{t("account:billing.plans.edit.description")}</DialogDescription>
+              <FormField label={t("account:billing.plans.edit.name")} htmlFor="ed-name">
+                <Input id="ed-name" value={ed.name} onChange={(e) => setE({ name: e.target.value })} placeholder={t("account:billing.plans.edit.namePlaceholder")} /></FormField>
+              <FormField label={t("common:fields.description")} htmlFor="ed-desc">
+                <Textarea id="ed-desc" rows={2} value={ed.desc} onChange={(e) => setE({ desc: e.target.value })} placeholder={t("account:billing.plans.edit.descPlaceholder")} /></FormField>
+              <FormField label={t("account:billing.plans.edit.price")} htmlFor="ed-price" description={t("account:billing.plans.edit.priceHelp")}>
+                <Input id="ed-price" type="number" step="0.01" min={0} value={ed.price} onChange={(e) => setE({ price: e.target.value })} placeholder={t("account:billing.plans.edit.pricePlaceholder")} /></FormField>
               <div className="grid grid-cols-3 gap-2.5">
-                <FormField label="Max team members" htmlFor="ed-users"><Input id="ed-users" type="number" min={0} value={ed.users} onChange={(e) => setE({ users: e.target.value })} /></FormField>
-                <FormField label="Max products" htmlFor="ed-products"><Input id="ed-products" type="number" min={0} value={ed.products} onChange={(e) => setE({ products: e.target.value })} /></FormField>
-                <FormField label="Max branches" htmlFor="ed-branches"><Input id="ed-branches" type="number" min={0} value={ed.branches} onChange={(e) => setE({ branches: e.target.value })} /></FormField>
+                <FormField label={t("account:billing.plans.edit.maxUsers")} htmlFor="ed-users"><Input id="ed-users" type="number" min={0} value={ed.users} onChange={(e) => setE({ users: e.target.value })} /></FormField>
+                <FormField label={t("account:billing.plans.edit.maxProducts")} htmlFor="ed-products"><Input id="ed-products" type="number" min={0} value={ed.products} onChange={(e) => setE({ products: e.target.value })} /></FormField>
+                <FormField label={t("account:billing.plans.edit.maxBranches")} htmlFor="ed-branches"><Input id="ed-branches" type="number" min={0} value={ed.branches} onChange={(e) => setE({ branches: e.target.value })} /></FormField>
               </div>
-              <span className="-mt-1 text-xs text-muted-foreground">999999 means unlimited.</span>
-              <FormField orientation="horizontal" label={<>Mark as &quot;Most popular&quot;</>} htmlFor="ed-featured"
+              <span className="-mt-1 text-xs text-muted-foreground">{t("account:billing.plans.edit.unlimitedHint")}</span>
+              <FormField orientation="horizontal" label={t("account:billing.plans.edit.featured")} htmlFor="ed-featured"
                 className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
                 <Checkbox id="ed-featured" checked={ed.featured} onCheckedChange={(c) => setE({ featured: c === true })} />
               </FormField>
               <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium">Features</span>
+                <span className="text-sm font-medium">{t("account:billing.plans.features")}</span>
                 {ed.feats.map((f, i) => (
                   <Item key={`${f}-${i}`} variant="muted" size="sm" className="py-2">
                     <ItemContent>{f}</ItemContent>
                     <ItemActions>
-                      <WithTooltip content="Remove feature"><Button type="button" variant="ghost" size="icon-sm" aria-label="Remove feature" onClick={() => setE({ feats: ed.feats.filter((_, j) => j !== i) })}>&times;</Button></WithTooltip>
+                      <WithTooltip content={t("account:billing.plans.edit.removeFeature")}><Button type="button" variant="ghost" size="icon-sm" aria-label={t("account:billing.plans.edit.removeFeature")} onClick={() => setE({ feats: ed.feats.filter((_, j) => j !== i) })}>&times;</Button></WithTooltip>
                     </ItemActions>
                   </Item>
                 ))}
                 <div className="flex gap-2">
-                  <Input value={ed.newFeat} onChange={(e) => setEd({ ...ed, newFeat: e.target.value })} placeholder="Add new feature..."
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const t = ed.newFeat.trim(); if (t) setE({ feats: [...ed.feats, t], newFeat: "" }) } }} />
-                  <Button type="button" variant="outline" onClick={() => { const t = ed.newFeat.trim(); if (t) setE({ feats: [...ed.feats, t], newFeat: "" }) }}>Add</Button>
+                  <Input value={ed.newFeat} onChange={(e) => setEd({ ...ed, newFeat: e.target.value })} placeholder={t("account:billing.plans.edit.newFeature")}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const nf = ed.newFeat.trim(); if (nf) setE({ feats: [...ed.feats, nf], newFeat: "" }) } }} />
+                  <Button type="button" variant="outline" onClick={() => { const nf = ed.newFeat.trim(); if (nf) setE({ feats: [...ed.feats, nf], newFeat: "" }) }}>{t("common:actions.add")}</Button>
                 </div>
               </div>
               {ed.err && <Alert variant="destructive"><AlertDescription>{ed.err}</AlertDescription></Alert>}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" disabled={ed.saving} onClick={() => setEd(null)}>Cancel</Button>
-                <Button type="button" disabled={ed.saving} onClick={saveEdit}>{ed.saving ? "Saving…" : "Save changes"}</Button>
+                <Button type="button" variant="outline" disabled={ed.saving} onClick={() => setEd(null)}>{t("common:actions.cancel")}</Button>
+                <Button type="button" disabled={ed.saving} onClick={saveEdit}>{ed.saving ? t("common:actions.saving") : t("common:actions.saveChanges")}</Button>
               </div>
             </>
           )}

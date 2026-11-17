@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { Printer, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,21 +30,23 @@ import {
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { cn } from "@/lib/utils"
+import { localeTag } from "@/lib/i18n"
+import { TAILOR_NS, dorjiStatusLabel, type TailorKey } from "@/components/tailor/i18n"
 
 type Tab = "all" | TailorWorkStatus
-const TABS: { value: Tab; label: string }[] = [
-  { value: "all", label: "All" }, { value: "assigned", label: "Assigned" }, { value: "in_progress", label: "In progress" },
-  { value: "completed", label: "Done" }, { value: "returned", label: "Returned" }, { value: "paid", label: "Paid" },
+const TABS: { value: Tab; label: TailorKey }[] = [
+  { value: "all", label: "common:status.all" }, { value: "assigned", label: "tailor:work.assigned" }, { value: "in_progress", label: "tailor:work.inProgress" },
+  { value: "completed", label: "tailor:work.completed" }, { value: "returned", label: "tailor:work.returnedShort" }, { value: "paid", label: "tailor:work.paid" },
 ]
-const DUE_FILTERS = [
-  { v: "any", label: "Expected back: Any" }, { v: "overdue", label: "Overdue" }, { v: "today", label: "Due today" },
-  { v: "week", label: "Next 7 days" },
+const DUE_FILTERS: { v: string; label: TailorKey }[] = [
+  { v: "any", label: "tailor:assign.expectedAny" }, { v: "overdue", label: "tailor:shared.overdue" }, { v: "today", label: "tailor:shared.dueToday" },
+  { v: "week", label: "tailor:shared.next7Days" },
 ]
 
 
 const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
 const todayIso = () => iso(new Date())
-const fmtD = (d?: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
+const fmtD = (d: string | null | undefined, lng: string) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString(localeTag(lng), { month: "short", day: "numeric", year: "numeric" }) : "—")
 const diffDays = (d: string) => Math.round((new Date(`${d.slice(0, 10)}T00:00:00Z`).getTime() - new Date(`${todayIso()}T00:00:00Z`).getTime()) / 86400000)
 const esc = (t: unknown) => String(t ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
@@ -53,6 +56,8 @@ const blank = (): FormState => ({ orderId: "", dorjiId: "", task: "", qty: "", r
 export default function AssignmentsPage() {
   const { canRead, canWrite } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
+  const { t, i18n } = useTranslation(TAILOR_NS)
+  const lng = i18n.language
 
   const [rows, setRows] = useState<AssignmentRow[]>([])
   const [stats, setStats] = useState<AssignmentStats | null>(null)
@@ -93,11 +98,11 @@ export default function AssignmentsPage() {
       })
       setRows(r.rows); setStats(r.stats); setPagination(r.pagination)
     } catch {
-      toast.error("Failed to load assignments")
+      toast.error(t("tailor:assign.failedLoad"))
     } finally {
       setLoading(false)
     }
-  }, [qD, dorjiF, tab, page, perPage, dueParams])
+  }, [qD, dorjiF, tab, page, perPage, dueParams, t])
   useEffect(() => { load() }, [load])
 
   const loadOptions = useCallback(async () => {
@@ -129,13 +134,13 @@ export default function AssignmentsPage() {
     const o = orders.find((x) => String(x.id) === form.orderId)
     const d = dorjis.find((x) => String(x.id) === form.dorjiId)
     const qty = Number(form.qty), rate = Number(form.rate)
-    if (!o) { setErr("Select an order."); return }
-    if (!d) { setErr("Select a dorji."); return }
-    if (d.status !== "active") { setErr(`${d.name} is not active.`); return }
-    if (!form.task.trim()) { setErr("Describe the task."); return }
-    if (!(qty > 0) || !Number.isInteger(qty)) { setErr("Pieces must be a whole number above 0."); return }
-    if (form.rate === "" || !isFinite(rate) || rate < 0) { setErr("Enter a valid rate per piece."); return }
-    if (form.given && form.back && form.back < form.given) { setErr("Expected back date cannot be before the assigned date."); return }
+    if (!o) { setErr(t("tailor:assign.selectOrderErr")); return }
+    if (!d) { setErr(t("tailor:assign.selectDorjiErr")); return }
+    if (d.status !== "active") { setErr(t("tailor:assign.notActive", { name: d.name })); return }
+    if (!form.task.trim()) { setErr(t("tailor:assign.describeTask")); return }
+    if (!(qty > 0) || !Number.isInteger(qty)) { setErr(t("tailor:assign.piecesWhole")); return }
+    if (form.rate === "" || !isFinite(rate) || rate < 0) { setErr(t("tailor:assign.validRate")); return }
+    if (form.given && form.back && form.back < form.given) { setErr(t("tailor:assign.backBeforeAssigned")); return }
     setSaving(true); setErr("")
     const payload = {
       orderId: o.id, dorjiId: d.id, task: form.task.trim(), pieces: qty, ratePerPiece: rate,
@@ -145,13 +150,13 @@ export default function AssignmentsPage() {
       try {
         await tailorWorkshopApi.assign(payload)
       } catch (e: any) {
-        if (e?.response?.status === 409 && window.confirm(e.response.data?.message || "This dorji is over capacity. Assign anyway?")) await tailorWorkshopApi.assign({ ...payload, force: true })
+        if (e?.response?.status === 409 && window.confirm(e.response.data?.message || t("tailor:assign.overCapacity"))) await tailorWorkshopApi.assign({ ...payload, force: true })
         else throw e
       }
-      toast.success(`Assigned to ${d.name}`)
+      toast.success(t("tailor:assign.assignedTo", { name: d.name }))
       setForm(blank()); refresh()
     } catch (e: any) {
-      if (e?.response?.status !== 409) setErr(e?.response?.data?.message || "Could not assign the work.")
+      if (e?.response?.status !== 409) setErr(e?.response?.data?.message || t("tailor:assign.couldNotAssign"))
     } finally {
       setSaving(false)
     }
@@ -161,13 +166,13 @@ export default function AssignmentsPage() {
     try {
       const res = await tailorWorkshopApi.patchAssignment(r.id, data)
       if (okMsg) toast.success(okMsg)
-      if (res.orderMovedBack) toast.success(`${r.orderNumber ?? "Order"} moved back to stitching`)
-      if (res.orderAllDone && res.orderId && window.confirm(`All jobs for ${res.orderNumber} are done. Mark the order as ready?`)) {
+      if (res.orderMovedBack) toast.success(t("tailor:assign.movedBack", { order: r.orderNumber ?? t("tailor:shared.order") }))
+      if (res.orderAllDone && res.orderId && window.confirm(t("tailor:assign.allDone", { order: res.orderNumber ?? "" }))) {
         await tailorApi.updateOrderStatus(res.orderId, "ready", "All dorji jobs finished")
-        toast.success("Order marked ready")
+        toast.success(t("tailor:assign.markedReady"))
       }
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Could not update the assignment")
+      toast.error(e?.response?.data?.message || t("tailor:assign.couldNotUpdate"))
     } finally {
       refresh()
     }
@@ -175,7 +180,7 @@ export default function AssignmentsPage() {
 
   const setStatus = (r: AssignmentRow, v: TailorWorkStatus) => {
     if (v === r.workStatus) return
-    if (v === "paid") { toast.error("Pay this job from Tailor payments."); return }
+    if (v === "paid") { toast.error(t("tailor:assign.payFromPayments")); return }
     patch(r, { workStatus: v })
   }
 
@@ -194,34 +199,34 @@ export default function AssignmentsPage() {
       }
       printCards(all)
     } catch {
-      toast.error("Could not load all assignments to print")
+      toast.error(t("tailor:assign.couldNotLoadPrint"))
     } finally {
       setPrinting(false)
     }
   }
 
   const remove = async (r: AssignmentRow) => {
-    if (!window.confirm(`Delete this assignment (${r.orderNumber ?? "order"} · ${r.task ?? "task"})?`)) return
+    if (!window.confirm(t("tailor:assign.deleteConfirm", { order: r.orderNumber ?? t("tailor:assign.orderWord"), task: r.task ?? t("tailor:assign.taskWord") }))) return
     try {
       await tailorWorkshopApi.deleteAssignment(r.id)
-      toast.success("Assignment deleted")
+      toast.success(t("tailor:assign.deleted"))
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Could not delete the assignment")
+      toast.error(e?.response?.data?.message || t("tailor:assign.couldNotDelete"))
     } finally {
       refresh()
     }
   }
 
   const printCards = (list: AssignmentRow[]) => {
-    if (!list.length) { toast.error("No assignments to print"); return }
+    if (!list.length) { toast.error(t("tailor:assign.noneToPrint")); return }
     const body = list.map((r) => `<div class="card"><h2>${esc(r.orderNumber ?? "—")} · ${esc(r.task ?? "")}</h2>
-      <table><tr><td>Customer</td><td>${esc(r.customerName ?? "—")}</td></tr><tr><td>Dorji</td><td>${esc(r.dorjiName ?? "—")}</td></tr>
-      <tr><td>Pieces</td><td>${r.pieces}</td></tr><tr><td>Given</td><td>${esc(fmtD(r.assignedDate))}</td></tr><tr><td>Due back</td><td>${esc(fmtD(r.dueDate))}</td></tr>
-      <tr><td>Rate per piece</td><td>${esc(formatCurrency(r.ratePerPiece))}</td></tr><tr><td>Dorji charge</td><td>${esc(formatCurrency(r.dorjiCharge))}</td></tr>
-      ${r.adminNotes ? `<tr><td>Notes</td><td>${esc(r.adminNotes)}</td></tr>` : ""}</table></div>`).join("")
+      <table><tr><td>${esc(t("common:fields.customer"))}</td><td>${esc(r.customerName ?? "—")}</td></tr><tr><td>${esc(t("tailor:shared.dorji"))}</td><td>${esc(r.dorjiName ?? "—")}</td></tr>
+      <tr><td>${esc(t("tailor:assign.pieces"))}</td><td>${r.pieces}</td></tr><tr><td>${esc(t("tailor:assign.colGiven"))}</td><td>${esc(fmtD(r.assignedDate, lng))}</td></tr><tr><td>${esc(t("tailor:assign.colDueBack"))}</td><td>${esc(fmtD(r.dueDate, lng))}</td></tr>
+      <tr><td>${esc(t("tailor:assign.ratePerPiece"))}</td><td>${esc(formatCurrency(r.ratePerPiece))}</td></tr><tr><td>${esc(t("tailor:assign.dorjiCharge"))}</td><td>${esc(formatCurrency(r.dorjiCharge))}</td></tr>
+      ${r.adminNotes ? `<tr><td>${esc(t("common:fields.notes"))}</td><td>${esc(r.adminNotes)}</td></tr>` : ""}</table></div>`).join("")
     const w = window.open("", "_blank")
-    if (!w) { toast.error("Allow pop-ups to print job cards"); return }
-    w.document.write(`<!doctype html><title>Job cards</title><style>body{font-family:sans-serif;padding:24px;color:#0E1525}.card{border:1px solid #D5DAE5;border-radius:8px;padding:12px 16px;margin-bottom:16px;page-break-inside:avoid}h2{margin:0 0 8px;font-size:16px}table{border-collapse:collapse;width:100%}td{padding:4px 8px;border-bottom:1px solid #EEF0F5;font-size:14px}td:first-child{color:#5B6478;width:140px}</style>${body}`)
+    if (!w) { toast.error(t("tailor:assign.allowPopups")); return }
+    w.document.write(`<!doctype html><html lang="${esc(lng)}"><meta charset="utf-8"><title>${esc(t("tailor:assign.printTitle"))}</title><style>body{font-family:sans-serif;padding:24px;color:#0E1525}.card{border:1px solid #D5DAE5;border-radius:8px;padding:12px 16px;margin-bottom:16px;page-break-inside:avoid}h2{margin:0 0 8px;font-size:16px}table{border-collapse:collapse;width:100%}td{padding:4px 8px;border-bottom:1px solid #EEF0F5;font-size:14px}td:first-child{color:#5B6478;width:140px}</style>${body}`)
     w.document.close(); w.focus(); w.print()
   }
 
@@ -233,59 +238,59 @@ export default function AssignmentsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Assignments"
-        description="Which dorji has which piece, when it is due back, and what you owe for it."
-        actions={<Button type="button" variant="outline" onClick={printAll} disabled={printing}><Printer className="size-4" aria-hidden /> {printing ? "Preparing…" : "Print all job cards"}</Button>}
+        title={t("tailor:assign.title")}
+        description={t("tailor:assign.description")}
+        actions={<Button type="button" variant="outline" onClick={printAll} disabled={printing}><Printer className="size-4" aria-hidden /> {printing ? t("tailor:assign.preparing") : t("tailor:assign.printAll")}</Button>}
       />
 
       {stats && stats.unassignedOrders > 0 && un && canWrite("TailorOrders") && (
         <Alert>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3 text-foreground">
-          <span><strong>{stats.unassignedOrders} {stats.unassignedOrders === 1 ? "order is" : "orders are"} not assigned yet:</strong>{" "}
-            {un.orderNumber} · {un.garments} for {un.customerName || "customer"}{un.deliveryDate ? `, due ${fmtD(un.deliveryDate)}` : ""}{stats.unassignedOrders > 1 ? ` and ${stats.unassignedOrders - 1} more.` : "."}</span>
-          <Button type="button" variant="outline" size="sm" onClick={pickUnassigned}>Assign now</Button>
+          <span><strong>{t("tailor:assign.unassignedHead", { count: stats.unassignedOrders })}</strong>{" "}
+            {t("tailor:assign.unassignedBody", { order: un.orderNumber, garments: un.garments, customer: un.customerName || t("tailor:assign.customerFallback") })}{un.deliveryDate ? t("tailor:assign.dueSuffix", { date: fmtD(un.deliveryDate, lng) }) : ""}{stats.unassignedOrders > 1 ? t("tailor:assign.moreSuffix", { count: stats.unassignedOrders - 1 }) : "."}</span>
+          <Button type="button" variant="outline" size="sm" onClick={pickUnassigned}>{t("tailor:assign.assignNow")}</Button>
           </AlertDescription>
         </Alert>
       )}
       {stats && (
         <Card className="flex-row flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
-          <span><strong>Dorji pay pending:</strong> {formatCurrency(stats.payPending)} <span className="text-muted-foreground">across {stats.payPendingJobs} finished job(s)</span></span>
-          <Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/payments">Go to payments</Link></Button>
+          <span><strong>{t("tailor:assign.payPending")}</strong> {formatCurrency(stats.payPending)} <span className="text-muted-foreground">{t("tailor:assign.acrossJobs", { count: stats.payPendingJobs })}</span></span>
+          <Button asChild variant="link" size="sm"><Link href="/dashboard/tailor/payments">{t("tailor:assign.goToPayments")}</Link></Button>
         </Card>
       )}
 
       {canWrite("TailorOrders") && (
-        <SectionCard aria-label="Assign order" title="Assign work" contentClassName="flex flex-col gap-3">
+        <SectionCard aria-label={t("tailor:assign.assignOrder")} title={t("tailor:assign.assignWork")} contentClassName="flex flex-col gap-3">
           {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <FormField className="min-w-0" label="Order" required htmlFor="assign-f1">
+            <FormField className="min-w-0" label={t("tailor:shared.order")} required htmlFor="assign-f1">
               <Select value={form.orderId || "__none"} onValueChange={(v) => pickOrder(v === "__none" ? "" : v)}>
                 <SelectTrigger id="assign-f1" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Select order…</SelectItem>
-                  {orders.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.orderNumber} · {o.customerName || "Customer"} · {o.garments}</SelectItem>)}
+                  <SelectItem value="__none">{t("tailor:assign.selectOrder")}</SelectItem>
+                  {orders.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.orderNumber} · {o.customerName || t("common:fields.customer")} · {o.garments}</SelectItem>)}
                 </SelectContent>
               </Select></FormField>
-            <FormField className="min-w-0" label="Dorji" required htmlFor="assign-f2">
+            <FormField className="min-w-0" label={t("tailor:shared.dorji")} required htmlFor="assign-f2">
               <Select value={form.dorjiId || "__none"} onValueChange={(v) => pickDorji(v === "__none" ? "" : v)}>
                 <SelectTrigger id="assign-f2" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Select dorji…</SelectItem>
+                  <SelectItem value="__none">{t("tailor:assign.selectDorji")}</SelectItem>
                   {activeDorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select></FormField>
-            <FormField className="min-w-0" label="Task" required htmlFor="assign-f3"><Input id="assign-f3" value={form.task} onChange={(e) => set("task", e.target.value)} placeholder="e.g. Blouse stitching" /></FormField>
-            <FormField className="min-w-0" label="Pieces" required htmlFor="assign-f4"><Input id="assign-f4" type="number" min="1" value={form.qty} onChange={(e) => set("qty", e.target.value)} /></FormField>
-            <FormField className="min-w-0" label="Rate per piece" required htmlFor="assign-f5"><Input id="assign-f5" type="number" min="0" value={form.rate} onChange={(e) => set("rate", e.target.value)} /></FormField>
-            <FormField className="min-w-0" label="Assigned on" htmlFor="assign-f6"><Input id="assign-f6" type="date" value={form.given} onChange={(e) => set("given", e.target.value)} /></FormField>
-            <FormField className="min-w-0" label="Expected back" htmlFor="assign-f7"><Input id="assign-f7" type="date" value={form.back} min={form.given || undefined} onChange={(e) => set("back", e.target.value)} /></FormField>
-            <FormField className="min-w-0" label="Dorji charge" htmlFor="assign-charge">
+            <FormField className="min-w-0" label={t("tailor:assign.task")} required htmlFor="assign-f3"><Input id="assign-f3" value={form.task} onChange={(e) => set("task", e.target.value)} placeholder={t("tailor:assign.taskPlaceholder")} /></FormField>
+            <FormField className="min-w-0" label={t("tailor:assign.pieces")} required htmlFor="assign-f4"><Input id="assign-f4" type="number" min="1" value={form.qty} onChange={(e) => set("qty", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label={t("tailor:assign.ratePerPiece")} required htmlFor="assign-f5"><Input id="assign-f5" type="number" min="0" value={form.rate} onChange={(e) => set("rate", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label={t("tailor:assign.assignedOn")} htmlFor="assign-f6"><Input id="assign-f6" type="date" value={form.given} onChange={(e) => set("given", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label={t("tailor:assign.expectedBack")} htmlFor="assign-f7"><Input id="assign-f7" type="date" value={form.back} min={form.given || undefined} onChange={(e) => set("back", e.target.value)} /></FormField>
+            <FormField className="min-w-0" label={t("tailor:assign.dorjiCharge")} htmlFor="assign-charge">
               <Input id="assign-charge" readOnly tabIndex={-1} value={formatCurrency(charge)} className="font-semibold tabular-nums" /></FormField>
-            <FormField className="min-w-0" label="Notes for dorji" htmlFor="assign-f8"><Input id="assign-f8" value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="e.g. Fix collar, use hidden stitch" /></FormField>
+            <FormField className="min-w-0" label={t("tailor:assign.notesForDorji")} htmlFor="assign-f8"><Input id="assign-f8" value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder={t("tailor:assign.notesPlaceholder")} /></FormField>
           </div>
           <div className="mt-1 flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => { setForm(blank()); setErr("") }}>Clear</Button>
-            <Button type="button" onClick={save} disabled={saving}>{saving ? "Assigning…" : "Assign"}</Button>
+            <Button type="button" variant="outline" onClick={() => { setForm(blank()); setErr("") }}>{t("common:actions.clear")}</Button>
+            <Button type="button" onClick={save} disabled={saving}>{saving ? t("tailor:assign.assigning") : t("tailor:assign.assign")}</Button>
           </div>
         </SectionCard>
       )}
@@ -293,20 +298,20 @@ export default function AssignmentsPage() {
       <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
-            tabs={TABS.map((t) => ({ value: t.value, label: t.label, count: stats?.counts[t.value] }))} />
+            tabs={TABS.map((x) => ({ value: x.value, label: t(x.label), count: stats?.counts[x.value] }))} />
         </div>
         <FilterBar className="gap-2.5 p-4">
           <InputGroup className="min-w-[220px] flex-1">
             <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-            <InputGroupInput type="search" aria-label="Search" placeholder="Search order or customer…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <InputGroupInput type="search" aria-label={t("common:actions.search")} placeholder={t("tailor:assign.searchPlaceholder")} value={q} onChange={(e) => setQ(e.target.value)} />
           </InputGroup>
           <Select value={dorjiF || "__all"} onValueChange={(v) => { setDorjiF(v === "__all" ? "" : v); setPage(1) }}>
-            <SelectTrigger aria-label="Dorji"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="__all">Dorji: All</SelectItem>{dorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger aria-label={t("tailor:shared.dorji")}><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="__all">{t("tailor:shared.dorjiAll")}</SelectItem>{dorjis.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={dueF} onValueChange={(v) => { setDueF(v); setPage(1) }}>
-            <SelectTrigger aria-label="Expected back"><SelectValue /></SelectTrigger>
-            <SelectContent>{DUE_FILTERS.map((f) => <SelectItem key={f.v} value={f.v}>{f.label}</SelectItem>)}</SelectContent>
+            <SelectTrigger aria-label={t("tailor:assign.expectedBack")}><SelectValue /></SelectTrigger>
+            <SelectContent>{DUE_FILTERS.map((f) => <SelectItem key={f.v} value={f.v}>{t(f.label)}</SelectItem>)}</SelectContent>
           </Select>
         </FilterBar>
 
@@ -314,50 +319,50 @@ export default function AssignmentsPage() {
           <Table className="min-w-[980px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Job</TableHead><TableHead>Dorji</TableHead><TableHead>Given</TableHead>
-                <TableHead>Due back</TableHead><TableHead>Work status</TableHead><TableHead>Dorji charge</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("tailor:assign.colJob")}</TableHead><TableHead>{t("tailor:shared.dorji")}</TableHead><TableHead>{t("tailor:assign.colGiven")}</TableHead>
+                <TableHead>{t("tailor:assign.colDueBack")}</TableHead><TableHead>{t("tailor:assign.colWorkStatus")}</TableHead><TableHead>{t("tailor:assign.dorjiCharge")}</TableHead>
+                <TableHead className="text-right">{t("common:fields.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-12" /></TableCell></TableRow>) :
                 rows.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="whitespace-normal"><EmptyState className="p-4 md:p-6" title="No assignments found" description={qD || dorjiF || tab !== "all" || dueF !== "any" ? "No assignments match these filters." : "No assignments yet. Assign an order to a dorji above."} /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="whitespace-normal"><EmptyState className="p-4 md:p-6" title={t("tailor:assign.noAssignments")} description={qD || dorjiF || tab !== "all" || dueF !== "any" ? t("tailor:assign.noMatch") : t("tailor:assign.noAssignmentsYet")} /></TableCell></TableRow>
                 ) : rows.map((r) => {
                   const finished = r.workStatus === "completed" || r.workStatus === "paid"
                   const days = r.dueDate ? diffDays(r.dueDate) : null
-                  const when = finished ? (r.workStatus === "paid" ? "Paid" : "Returned to shop") : days === null ? "" : days < 0 ? `Late ${-days}d` : days === 0 ? "Due today" : `In ${days}d`
-                  const payState = r.workStatus === "paid" ? "Paid" : r.workStatus === "completed" ? (r.paidAmount > 0 ? `Payable ${formatCurrency(r.payable)}` : "Payable") : r.workStatus === "returned" ? "Held until fixed" : "When done"
+                  const when = finished ? (r.workStatus === "paid" ? t("tailor:work.paid") : t("tailor:assign.returnedToShop")) : days === null ? "" : days < 0 ? t("tailor:when.late", { days: -days }) : days === 0 ? t("tailor:when.dueToday") : t("tailor:when.inDaysShort", { days })
+                  const payState = r.workStatus === "paid" ? t("tailor:work.paid") : r.workStatus === "completed" ? (r.paidAmount > 0 ? t("tailor:assign.payableAmount", { amount: formatCurrency(r.payable) }) : t("tailor:assign.payable")) : r.workStatus === "returned" ? t("tailor:assign.heldUntilFixed") : t("tailor:assign.whenDone")
                   const locked = r.workStatus === "paid" || !canWrite("TailorOrders")
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="align-top">
-                        <div className="font-semibold">{r.orderNumber ?? "—"} · {r.task}{r.pieces ? ` · ${r.pieces} pcs` : ""}</div>
+                        <div className="font-semibold">{r.orderNumber ?? "—"} · {r.task}{r.pieces ? ` · ${t("tailor:shared.pcs", { count: r.pieces })}` : ""}</div>
                         <div className="text-xs text-muted-foreground">{r.customerName ?? "—"}</div>
                         {r.adminNotes && <div className="mt-0.5 text-xs text-muted-foreground">{r.adminNotes}</div>}
                       </TableCell>
                       <TableCell className="align-top">
-                        <Select disabled={locked} value={String(r.dorjiId)} onValueChange={(v) => patch(r, { dorjiId: Number(v) }, "Reassigned")}>
-                          <SelectTrigger aria-label="Dorji" size="sm" className="max-w-[170px]"><SelectValue /></SelectTrigger>
+                        <Select disabled={locked} value={String(r.dorjiId)} onValueChange={(v) => patch(r, { dorjiId: Number(v) }, t("tailor:assign.reassigned"))}>
+                          <SelectTrigger aria-label={t("tailor:shared.dorji")} size="sm" className="max-w-[170px]"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {rowChoices(r).length === 0 || !rowChoices(r).some((d) => d.id === r.dorjiId) ? <SelectItem value={String(r.dorjiId)}>{r.dorjiName ?? "—"}</SelectItem> : null}
-                            {rowChoices(r).map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}{d.status === "active" ? "" : ` (${d.status.replace("_", " ")})`}</SelectItem>)}
+                            {rowChoices(r).map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}{d.status === "active" ? "" : ` (${dorjiStatusLabel(t, d.status)})`}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="align-top">{fmtD(r.assignedDate)}</TableCell>
+                      <TableCell className="align-top">{fmtD(r.assignedDate, lng)}</TableCell>
                       <TableCell className="align-top">
-                        <Input type="date" aria-label="Expected back" disabled={locked} defaultValue={r.dueDate ?? ""} key={`${r.id}-${r.dueDate}`}
+                        <Input type="date" aria-label={t("tailor:assign.expectedBack")} disabled={locked} defaultValue={r.dueDate ?? ""} key={`${r.id}-${r.dueDate}`}
                           onBlur={(e) => { if ((e.target.value || null) !== (r.expectedCompletion ?? r.dueDate)) patch(r, { expectedCompletion: e.target.value || null }) }}
                           className="w-auto" />
                         <div className={cn("mt-0.5 text-xs font-semibold", finished ? "text-dash-success-fg" : days !== null && days < 0 ? "text-destructive" : "text-muted-foreground")}>{when}</div>
                       </TableCell>
                       <TableCell className="align-top">
                         <Select disabled={locked} value={r.workStatus} onValueChange={(v) => setStatus(r, v as TailorWorkStatus)}>
-                          <SelectTrigger aria-label="Work status" size="sm"><SelectValue /></SelectTrigger>
+                          <SelectTrigger aria-label={t("tailor:assign.colWorkStatus")} size="sm"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="assigned">Assigned</SelectItem><SelectItem value="in_progress">In progress</SelectItem><SelectItem value="completed">Done</SelectItem>
-                            <SelectItem value="returned">Returned for fixing</SelectItem><SelectItem value="paid" disabled={r.workStatus !== "paid"}>Paid</SelectItem>
+                            <SelectItem value="assigned">{t("tailor:work.assigned")}</SelectItem><SelectItem value="in_progress">{t("tailor:work.inProgress")}</SelectItem><SelectItem value="completed">{t("tailor:work.completed")}</SelectItem>
+                            <SelectItem value="returned">{t("tailor:work.returned")}</SelectItem><SelectItem value="paid" disabled={r.workStatus !== "paid"}>{t("tailor:work.paid")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -367,12 +372,12 @@ export default function AssignmentsPage() {
                       </TableCell>
                       <TableCell className="align-top">
                         <div className="flex justify-end gap-1">
-                          <WithTooltip content="Print job card"><Button type="button" variant="outline" size="icon" aria-label="Print job card" onClick={() => printCards([r])}><Printer className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("tailor:shared.printJobCard")}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.printJobCard")} onClick={() => printCards([r])}><Printer className="size-4" /></Button></WithTooltip>
                           {canWrite("TailorOrders") && (
-                            <WithTooltip content={r.workStatus === "paid" ? "Paid jobs cannot be deleted." : "Delete"}>
+                            <WithTooltip content={r.workStatus === "paid" ? t("tailor:assign.paidNoDelete") : t("common:actions.delete")}>
                               {r.workStatus === "paid"
-                                ? <span tabIndex={0}><WithTooltip content="Delete assignment"><Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" disabled><Trash2 className="size-4" /></Button></WithTooltip></span>
-                                : <WithTooltip content="Delete assignment"><Button type="button" variant="destructive" size="icon" aria-label="Delete assignment" onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>}
+                                ? <span tabIndex={0}><WithTooltip content={t("tailor:assign.deleteAssignment")}><Button type="button" variant="destructive" size="icon" aria-label={t("tailor:assign.deleteAssignment")} disabled><Trash2 className="size-4" /></Button></WithTooltip></span>
+                                : <WithTooltip content={t("tailor:assign.deleteAssignment")}><Button type="button" variant="destructive" size="icon" aria-label={t("tailor:assign.deleteAssignment")} onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>}
                             </WithTooltip>
                           )}
                         </div>

@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import type React from "react"
 import { saasCompanyApi, type CompanySettings } from "@/lib/saasCompanyApi"
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
+export const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$", EUR: "€", GBP: "£", INR: "₹", AUD: "A$", CAD: "C$",
   JPY: "¥", CNY: "¥", BRL: "R$", MXN: "$", SGD: "S$", HKD: "HK$",
   SEK: "kr", NOK: "kr", DKK: "kr", CHF: "CHF", NZD: "NZ$",

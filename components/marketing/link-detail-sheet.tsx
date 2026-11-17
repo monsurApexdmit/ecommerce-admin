@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { ArrowRight, MousePointerClick, Percent, ShoppingCart, Banknote } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,7 +18,10 @@ import { StatTile } from "@/components/common/StatTile"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import { AdSourceBadge, OrderFlagBadges } from "@/components/sales/ad-source"
 import { SharePanel } from "@/components/marketing/link-dialog"
-import { ClicksOrdersChart, PERIODS, TARGET_LABEL, pct } from "@/components/marketing/link-ui"
+import { ClicksOrdersChart, TARGET_LABEL, pct, periodOptions } from "@/components/marketing/link-ui"
+import { MARKETING_NS } from "@/components/marketing/i18n"
+import { ORDERS_NS, orderStatusLabel } from "@/components/sales/i18n"
+import { localeTag } from "@/lib/i18n"
 import { campaignLinkApi, type CampaignLink, type LinkDetailStats, type LinkPeriod } from "@/lib/campaignLinkApi"
 import { apiErrorMessage } from "@/lib/collectionApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
@@ -34,6 +38,9 @@ interface LinkDetailSheetProps {
 
 export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }: LinkDetailSheetProps) {
   const { formatCurrency } = useCompanySettings()
+  const { t, i18n } = useTranslation(MARKETING_NS)
+  const { t: tOrders } = useTranslation(ORDERS_NS)
+  const tag = localeTag(i18n.language)
   const [period, setPeriod] = React.useState<LinkPeriod>("30d")
   const [data, setData] = React.useState<LinkDetailStats | null>(null)
   const [error, setError] = React.useState("")
@@ -47,9 +54,10 @@ export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }:
     setLoading(true); setError("")
     campaignLinkApi.stats(linkId, period)
       .then((d) => { if (live) setData(d) })
-      .catch((e) => { if (live) setError(apiErrorMessage(e, "Could not load this link")) })
+      .catch((e) => { if (live) setError(apiErrorMessage(e, t("commerce:marketing.detail.loadFailed"))) })
       .finally(() => { if (live) setLoading(false) })
     return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkId, period])
 
   const link = data?.link.id === linkId ? data.link : initial?.id === linkId ? initial : null
@@ -58,12 +66,12 @@ export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }:
     <Sheet open={linkId != null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader className="pr-10">
-          <SheetTitle>{link?.name ?? "Order link"}</SheetTitle>
+          <SheetTitle>{link?.name ?? t("commerce:marketing.detail.fallbackTitle")}</SheetTitle>
           <SheetDescription asChild>
             <div className="flex flex-wrap items-center gap-1.5">
               {link && <AdSourceBadge source={link.channel} />}
-              {link && <Badge variant="outline">{TARGET_LABEL[link.targetType]}{link.target ? `: ${link.target.name}` : ""}</Badge>}
-              {link && <StatusBadge status={link.isActive ? "Active" : "Inactive"} variant={link.isActive ? "default" : "outline"} />}
+              {link && <Badge variant="outline">{t(TARGET_LABEL[link.targetType])}{link.target ? `: ${link.target.name}` : ""}</Badge>}
+              {link && <StatusBadge status={link.isActive ? "Active" : "Inactive"} label={link.isActive ? t("common:status.active") : t("common:status.inactive")} variant={link.isActive ? "default" : "outline"} />}
               {link && <span className="font-mono text-xs text-muted-foreground">/{link.code}</span>}
             </div>
           </SheetDescription>
@@ -75,8 +83,8 @@ export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }:
           <Separator />
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <SectionTitle as="h2">Performance</SectionTitle>
-            <SegmentedControl aria-label="Period" value={period} onValueChange={(v) => setPeriod(v as LinkPeriod)} options={PERIODS} />
+            <SectionTitle as="h2">{t("commerce:marketing.detail.performance")}</SectionTitle>
+            <SegmentedControl aria-label={t("commerce:marketing.page.period")} value={period} onValueChange={(v) => setPeriod(v as LinkPeriod)} options={periodOptions(t)} />
           </div>
 
           {error ? (
@@ -86,39 +94,39 @@ export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }:
           ) : data ? (
             <>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile label="Clicks" value={data.clicks.toLocaleString()} icon={<MousePointerClick />} className="p-4" />
-                <StatTile label="Orders" value={data.orders.toLocaleString()} icon={<ShoppingCart />} className="p-4" />
-                <StatTile label="Revenue" value={formatCurrency(data.revenue)} icon={<Banknote />} className="p-4" hint="Excludes cancelled" />
-                <StatTile label="Conversion" value={pct(data.conversionRate)} icon={<Percent />} className="p-4" hint="Orders ÷ clicks" />
+                <StatTile label={t("commerce:marketing.chart.legendClicks")} value={data.clicks.toLocaleString()} icon={<MousePointerClick />} className="p-4" />
+                <StatTile label={t("commerce:marketing.chart.legendOrders")} value={data.orders.toLocaleString()} icon={<ShoppingCart />} className="p-4" />
+                <StatTile label={t("commerce:marketing.kpi.revenue")} value={formatCurrency(data.revenue)} icon={<Banknote />} className="p-4" hint={t("commerce:marketing.detail.excludesCancelled")} />
+                <StatTile label={t("commerce:marketing.kpi.conversion")} value={pct(data.conversionRate)} icon={<Percent />} className="p-4" hint={t("commerce:marketing.detail.ordersPerClick")} />
               </div>
               <InfoList className="grid-cols-2 gap-3 sm:grid-cols-4">
-                <InfoRow layout="stacked" label="Pending" value={<span className="tabular-nums">{data.pending}</span>} />
-                <InfoRow layout="stacked" label="Confirmed" value={<span className="tabular-nums">{data.confirmed}</span>} />
-                <InfoRow layout="stacked" label="Delivered" value={<span className="tabular-nums">{data.delivered}</span>} />
-                <InfoRow layout="stacked" label="Cancelled" value={<span className="tabular-nums">{data.cancelled}</span>} />
+                <InfoRow layout="stacked" label={t("common:orderStatus.pending")} value={<span className="tabular-nums">{data.pending}</span>} />
+                <InfoRow layout="stacked" label={t("common:orderStatus.confirmed")} value={<span className="tabular-nums">{data.confirmed}</span>} />
+                <InfoRow layout="stacked" label={t("common:orderStatus.delivered")} value={<span className="tabular-nums">{data.delivered}</span>} />
+                <InfoRow layout="stacked" label={t("common:orderStatus.cancelled")} value={<span className="tabular-nums">{data.cancelled}</span>} />
               </InfoList>
               <ClicksOrdersChart days={data.byDay} />
 
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <SectionTitle as="h2">Recent orders</SectionTitle>
+                  <SectionTitle as="h2">{t("commerce:marketing.detail.recentOrders")}</SectionTitle>
                   {data.orders > 0 && (
                     <Button asChild variant="link" size="sm" className="h-auto p-0">
-                      <Link href={`/dashboard/orders?campaignLinkId=${linkId}`}>All orders from this link <ArrowRight className="size-3.5" aria-hidden /></Link>
+                      <Link href={`/dashboard/orders?campaignLinkId=${linkId}`}>{t("commerce:marketing.detail.allOrders")} <ArrowRight className="size-3.5" aria-hidden /></Link>
                     </Button>
                   )}
                 </div>
                 {data.recentOrders.length === 0 ? (
-                  <EmptyState icon={ShoppingCart} title="No orders yet" description="Orders placed through this link show up here." bordered className="p-6" />
+                  <EmptyState icon={ShoppingCart} title={t("commerce:marketing.detail.noOrders")} description={t("commerce:marketing.detail.noOrdersDesc")} bordered className="p-6" />
                 ) : (
                   <div className="overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Order</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead>{t("commerce:marketing.detail.colOrder")}</TableHead>
+                          <TableHead>{t("common:fields.customer")}</TableHead>
+                          <TableHead>{t("common:fields.status")}</TableHead>
+                          <TableHead className="text-right">{t("common:money.amount")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -128,11 +136,11 @@ export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }:
                               <Link href={`/dashboard/orders?q=${encodeURIComponent(o.invoiceNo)}`} className="font-medium text-primary underline-offset-4 hover:underline">
                                 #{o.invoiceNo}
                               </Link>
-                              <div className="text-xs text-muted-foreground">{o.orderTime ? new Date(o.orderTime).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : ""}</div>
+                              <div className="text-xs text-muted-foreground">{o.orderTime ? new Date(o.orderTime).toLocaleString(tag, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : ""}</div>
                               <OrderFlagBadges order={o} className="mt-1" />
                             </TableCell>
                             <TableCell>{o.customerName || "—"}</TableCell>
-                            <TableCell><StatusBadge status={o.status} /></TableCell>
+                            <TableCell><StatusBadge status={o.status} label={orderStatusLabel(tOrders, o.status)} /></TableCell>
                             <TableCell className="text-right tabular-nums">{formatCurrency(o.amount)}</TableCell>
                           </TableRow>
                         ))}
@@ -152,11 +160,11 @@ export function LinkDetailSheet({ linkId, initial, storeName, onClose, onEdit }:
                 <InfoRow label="utm_medium" value={<span className="font-mono text-xs">{link.utmMedium || "—"}</span>} />
                 <InfoRow label="utm_campaign" value={<span className="break-all font-mono text-xs">{link.utmCampaign || "—"}</span>} />
                 <InfoRow label="utm_content" value={<span className="break-all font-mono text-xs">{link.utmContent || "—"}</span>} />
-                {link.notes && <InfoRow label="Notes" value={<span className="whitespace-pre-line font-normal">{link.notes}</span>} />}
-                <InfoRow label="Created" value={[link.createdAt ? new Date(link.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "", link.createdByName].filter(Boolean).join(" · ") || "—"} />
-                {link.lastClickedAt && <InfoRow label="Last click" value={new Date(link.lastClickedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} />}
+                {link.notes && <InfoRow label={t("common:fields.notes")} value={<span className="whitespace-pre-line font-normal">{link.notes}</span>} />}
+                <InfoRow label={t("common:fields.createdAt")} value={[link.createdAt ? new Date(link.createdAt).toLocaleDateString(tag, { day: "numeric", month: "short", year: "numeric" }) : "", link.createdByName].filter(Boolean).join(" · ") || "—"} />
+                {link.lastClickedAt && <InfoRow label={t("commerce:marketing.detail.lastClick")} value={new Date(link.lastClickedAt).toLocaleString(tag, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} />}
               </InfoList>
-              {onEdit && <Button type="button" variant="outline" className="w-fit" onClick={() => onEdit(link)}>Edit link</Button>}
+              {onEdit && <Button type="button" variant="outline" className="w-fit" onClick={() => onEdit(link)}>{t("commerce:marketing.table.editLink")}</Button>}
             </>
           )}
         </div>

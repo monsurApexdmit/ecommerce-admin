@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { AlertTriangle, Boxes, Coins, Download, Package, PackagePlus, PiggyBank, Search, Tag, X } from "lucide-react"
 import { toast } from "sonner"
 import financeApi, {
@@ -34,14 +35,12 @@ import { FilterBar } from "@/components/common/Toolbar"
 import { EmptyState } from "@/components/common/EmptyState"
 import { WithTooltip } from "@/components/common/WithTooltip"
 import { CurrencyTag, MixBars, SignedMoney, TileSkeletons, csvMoney, downloadCsv, useFinanceFormat } from "@/components/finance/finance-ui"
-import { AsOfNowLabel, FinanceFilters, useFinanceFilters } from "@/components/finance/finance-filters"
+import { AsOfNowLabel, FinanceFilters, channelLabel, useFinanceFilters } from "@/components/finance/finance-filters"
 import { OpeningStockDialog } from "@/components/finance/inventory-opening-stock"
+import { FIN_NS, MOVE_CODES, moveText } from "@/components/finance/i18n"
 import { ReconciliationCard } from "@/components/finance/inventory-reconciliation"
 
 const ALL = "all"
-const MOVE_TYPES: [string, string][] = [
-  ["opening", "Opening stock"], ["receive", "Received"], ["sell", "Sale"], ["return", "Return"], ["transfer", "Transfer"], ["adjustment", "Adjustment"], ["damage", "Damage"],
-]
 const pct = (v: number | null) => formatPct(v)
 
 type InvTab = "valuation" | "ledger" | "cogs" | "costs" | "reconciliation"
@@ -73,6 +72,7 @@ async function fetchAll<T>(get: (page: number) => Promise<{ rows: T[]; meta: { l
 
 export default function InventoryLedgerPage() {
   const blocked = useModuleGuard("Finance")
+  const { t } = useTranslation(FIN_NS)
   const fmt = useFinanceFormat()
   const money = fmt.money
   const { canWrite } = useSaasAuth()
@@ -97,7 +97,7 @@ export default function InventoryLedgerPage() {
     financeApi.getOpeningStock({ page: 1, perPage: 1 }).then(setOpening).catch(() => {})
     financeApi.getMissingSaleMovements().then(setMissing).catch(() => {})
     setReconErr("")
-    financeApi.getReconciliation().then(setRecon).catch((e) => setReconErr(financeError(e, "Could not load the stock reconciliation.")))
+    financeApi.getReconciliation().then(setRecon).catch((e) => setReconErr(financeError(e, t("finance:inventory.reconFailed"))))
   }, [])
   useEffect(() => { loadAttention() }, [loadAttention])
 
@@ -105,11 +105,11 @@ export default function InventoryLedgerPage() {
     setBackfilling(true)
     try {
       const r = await financeApi.backfillSaleMovements(false)
-      toast.success(r.created ? `${r.message}: ${formatNumber(r.created)}` : "No missing sale movements")
+      toast.success(r.created ? t("finance:inventory.backfilled", { count: r.created, n: formatNumber(r.created) }) : t("finance:inventory.noMissing"))
       setBackfillAsk(false)
       refreshAll()
     } catch (e) {
-      toast.error(financeError(e, "Could not create the missing sale movements"))
+      toast.error(financeError(e, t("finance:inventory.backfillFailed")))
     } finally {
       setBackfilling(false)
     }
@@ -144,7 +144,7 @@ export default function InventoryLedgerPage() {
   const loadVal = useCallback(async () => {
     setVLoading(true); setVErr("")
     try { setVal(await financeApi.getValuation(vParams(vPage, vPer))) }
-    catch (e) { setVErr(financeError(e, "Could not load stock valuation.")) }
+    catch (e) { setVErr(financeError(e, t("finance:inventory.valuationFailed"))) }
     finally { setVLoading(false) }
   }, [vParams, vPage, vPer])
   useEffect(() => { loadVal() }, [loadVal])
@@ -178,7 +178,7 @@ export default function InventoryLedgerPage() {
     if (!filters.ready || filters.incomplete) return
     setMLoading(true); setMErr("")
     try { setLed(await financeApi.getInventoryLedger(mParams(mPage, mPer))) }
-    catch (e) { setMErr(financeError(e, "Could not load stock movements.")) }
+    catch (e) { setMErr(financeError(e, t("finance:inventory.movementsFailed"))) }
     finally { setMLoading(false) }
   }, [mParams, mPage, mPer, filters.ready, filters.incomplete])
   useEffect(() => { if (tab === "ledger") loadLed() }, [loadLed, tab])
@@ -188,7 +188,7 @@ export default function InventoryLedgerPage() {
     if (tab !== "cogs" || !filters.ready || filters.incomplete) return
     setCogs(null)
     financeApi.getCogs({ ...filters.params, locationId: mLoc !== ALL ? Number(mLoc) : undefined })
-      .then(setCogs).catch((e) => toast.error(financeError(e, "Could not load cost of goods sold")))
+      .then(setCogs).catch((e) => toast.error(financeError(e, t("finance:inventory.cogsFailed"))))
   }, [tab, filters.key, filters.ready, filters.incomplete, mLoc, cogsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Products without cost (OV-1 "Set costs", ?tab=costs) ──
@@ -204,7 +204,7 @@ export default function InventoryLedgerPage() {
     if (tab !== "costs") return
     setCErr("")
     financeApi.getProductsWithoutCost({ preset: "all_time", search: cQD || undefined, page: cPage, perPage: cPer })
-      .then(setCosts).catch((e) => setCErr(financeError(e, "Could not load products without a cost.")))
+      .then(setCosts).catch((e) => setCErr(financeError(e, t("finance:setCosts.loadFailed"))))
   }, [tab, cQD, cPage, cPer])
 
   const refreshAll = () => { loadAttention(); loadVal(); if (tab === "ledger") loadLed(); if (tab === "cogs") setCogsKey((k) => k + 1) }
@@ -215,40 +215,40 @@ export default function InventoryLedgerPage() {
     try {
       if (tab === "valuation") {
         const rows = await fetchAll<ValuationRow>((p) => financeApi.getValuation(vParams(p, 100)))
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("stock-valuation", [
-          ["Product", (r) => r.name], ["SKU", (r) => r.sku], ["Category", (r) => r.categoryName], ["Units", (r) => r.units],
-          ["Unit cost", (r) => csvMoney(r.unitCost)], ["Unit price", (r) => csvMoney(r.unitPrice)], ["Cost value", (r) => csvMoney(r.costValue)],
-          ["Retail value", (r) => csvMoney(r.retailValue)], ["Potential profit", (r) => csvMoney(r.potentialProfit)],
+          [t("common:fields.product"), (r) => r.name], [t("common:fields.sku"), (r) => r.sku], [t("common:fields.category"), (r) => r.categoryName], [t("finance:col.units"), (r) => r.units],
+          [t("finance:col.unitCost"), (r) => csvMoney(r.unitCost)], [t("finance:col.unitPrice"), (r) => csvMoney(r.unitPrice)], [t("finance:inventory.costValue"), (r) => csvMoney(r.costValue)],
+          [t("finance:inventory.retailValue"), (r) => csvMoney(r.retailValue)], [t("finance:col.potentialProfit"), (r) => csvMoney(r.potentialProfit)],
         ], rows)
       } else if (tab === "ledger") {
         const rows = await fetchAll<InventoryMovement>((p) => financeApi.getInventoryLedger(mParams(p, 100)))
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("inventory-movements", [
-          ["Date", (r) => r.date], ["Product", (r) => r.productName], ["Variant", (r) => r.variantName], ["SKU", (r) => r.sku], ["Location", (r) => r.locationName],
-          ["Type", (r) => r.typeLabel], ["Qty in", (r) => r.qtyIn], ["Qty out", (r) => r.qtyOut], ["Unit cost", (r) => csvMoney(r.unitCost)], ["Value", (r) => csvMoney(r.value)],
-          ["Reference", (r) => r.reference?.label], ["Reason", (r) => r.reason], ["Backfilled", (r) => (r.backfilled ? "Yes" : "")], ...(product ? [["Running qty", (r: InventoryMovement) => r.runningQty ?? ""] as [string, (r: InventoryMovement) => string | number]] : []),
+          [t("common:fields.date"), (r) => r.date], [t("common:fields.product"), (r) => r.productName], [t("common:fields.variant"), (r) => r.variantName], [t("common:fields.sku"), (r) => r.sku], [t("common:fields.location"), (r) => r.locationName],
+          [t("common:fields.type"), (r) => moveText(t, r.type, r.typeLabel)], [t("finance:inventory.qtyIn"), (r) => r.qtyIn], [t("finance:inventory.qtyOut"), (r) => r.qtyOut], [t("finance:col.unitCost"), (r) => csvMoney(r.unitCost)], [t("finance:col.value"), (r) => csvMoney(r.value)],
+          [t("common:extra.reference"), (r) => r.reference?.label], [t("common:extra.reason"), (r) => r.reason], [t("finance:inventory.backfilledCol"), (r) => (r.backfilled ? t("common:actions.yes") : "")], ...(product ? [[t("finance:inventory.runningQty"), (r: InventoryMovement) => r.runningQty ?? ""] as [string, (r: InventoryMovement) => string | number]] : []),
         ], rows)
       } else if (tab === "costs") {
         const rows = await fetchAll<ProductWithoutCost>((p) => financeApi.getProductsWithoutCost({ preset: "all_time", search: cQD || undefined, page: p, perPage: 100 }))
-        if (!rows.length) { toast.error("Nothing to export."); return }
+        if (!rows.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("products-without-cost", [
-          ["Product", (r) => r.name], ["SKU", (r) => r.sku], ["Stock", (r) => r.stock], ["Units sold", (r) => r.unitsSold],
-          ["Uncosted sales", (r) => csvMoney(r.uncostedSales)], ["Price", (r) => csvMoney(r.price)],
+          [t("common:fields.product"), (r) => r.name], [t("common:fields.sku"), (r) => r.sku], [t("common:fields.stock"), (r) => r.stock], [t("finance:setCosts.unitsSold"), (r) => r.unitsSold],
+          [t("finance:overview.uncosted"), (r) => csvMoney(r.uncostedSales)], [t("common:money.price"), (r) => csvMoney(r.price)],
         ], rows)
       } else if (tab === "reconciliation") {
-        if (!recon?.lines.length) { toast.error("Nothing to export."); return }
+        if (!recon?.lines.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("stock-reconciliation", [
-          ["Product", (r) => r.name], ["Reason", (r) => r.label], ["Quantity", (r) => r.quantity], ["Value", (r) => csvMoney(r.value)], ["Explanation", (r) => r.explanation],
+          [t("common:fields.product"), (r) => r.name], [t("common:extra.reason"), (r) => r.label], [t("common:fields.quantity"), (r) => r.quantity], [t("finance:col.value"), (r) => csvMoney(r.value)], [t("finance:inventory.explanation"), (r) => r.explanation],
         ], recon.lines)
       } else if (cogs) {
-        if (!cogs.byCategory.length) { toast.error("Nothing to export."); return }
+        if (!cogs.byCategory.length) { toast.error(t("finance:actions.nothingToExport")); return }
         downloadCsv("cogs-by-category", [
-          ["Category", (r) => r.name], ["Units", (r) => r.units], ["Revenue", (r) => csvMoney(r.revenue)], ["COGS", (r) => csvMoney(r.cogs)], ["Gross profit", (r) => csvMoney(r.grossProfit)],
+          [t("common:fields.category"), (r) => r.name], [t("finance:col.units"), (r) => r.units], [t("finance:col.revenue"), (r) => csvMoney(r.revenue)], [t("finance:col.cogs"), (r) => csvMoney(r.cogs)], [t("finance:col.grossProfit"), (r) => csvMoney(r.grossProfit)],
         ], cogs.byCategory)
       }
     } catch (e) {
-      toast.error(financeError(e, "Export failed"))
+      toast.error(financeError(e, t("finance:actions.exportFailed")))
     } finally {
       setExporting(false)
     }
@@ -256,46 +256,46 @@ export default function InventoryLedgerPage() {
 
   if (blocked) return blocked
 
-  const t = val?.totals
+  const tot = val?.totals
   const groups = vGroup === "location" ? val?.byLocation ?? [] : val?.byCategory ?? []
 
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       <PageHeader
-        title="Inventory and ledger"
-        description="What your stock is worth at cost and at selling price, every stock movement with its value, and the cost of goods sold."
+        title={t("finance:inventory.title")}
+        description={t("finance:inventory.description")}
         actions={<>
           <CurrencyTag code={recon?.context.currency?.code ?? cogs?.context.currency?.code ?? led?.context.currency?.code} />
-          <Button asChild variant="outline"><Link href="/dashboard/inventory">Stock overview</Link></Button>
-          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? "Exporting…" : "Export CSV"}</Button>
+          <Button asChild variant="outline"><Link href="/dashboard/inventory">{t("finance:inventory.stockOverview")}</Link></Button>
+          <Button type="button" variant="outline" onClick={exportCsv} disabled={exporting}><Download className="size-4" aria-hidden /> {exporting ? t("finance:actions.exporting") : t("finance:actions.exportCsv")}</Button>
         </>}
       />
 
       {((opening && opening.totals.products > 0) || (missing && missing.lines > 0) || (recon && recon.difference !== 0)) && (
         <Alert className="border-amber-300 dark:border-amber-700">
           <AlertTriangle className="text-amber-600" aria-hidden />
-          <AlertTitle className="flex flex-wrap items-center gap-2">Needs attention <AsOfNowLabel /></AlertTitle>
+          <AlertTitle className="flex flex-wrap items-center gap-2">{t("finance:inventory.needsAttention")} <AsOfNowLabel /></AlertTitle>
           <AlertDescription>
             <ul className="flex w-full flex-col gap-2">
               {opening && opening.totals.products > 0 && (
                 <li className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    Opening stock for {formatNumber(opening.totals.products)} product{opening.totals.products === 1 ? " hasn't" : "s hasn't"} been moved in yet
-                    {opening.totals.value ? ` (${money(opening.totals.value)} at cost` : ""}{opening.totals.value && opening.totals.needsCost ? `, ${formatNumber(opening.totals.needsCost)} need a cost)` : opening.totals.value ? ")" : ""}.
+                    {t("finance:inventory.openingPending", { count: opening.totals.products, n: formatNumber(opening.totals.products) })}
+                    {opening.totals.value ? ` (${t("finance:inventory.atCost", { amount: money(opening.totals.value) })}${opening.totals.needsCost ? `, ${t("finance:inventory.needCost", { n: formatNumber(opening.totals.needsCost) })}` : ""})` : ""}.
                   </span>
-                  {writable && <Button type="button" size="sm" onClick={() => setWizard(true)}><PackagePlus className="size-4" aria-hidden /> Move in opening stock</Button>}
+                  {writable && <Button type="button" size="sm" onClick={() => setWizard(true)}><PackagePlus className="size-4" aria-hidden /> {t("finance:opening.title")}</Button>}
                 </li>
               )}
               {missing && missing.lines > 0 && (
                 <li className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{formatNumber(missing.lines)} sale line{missing.lines === 1 ? "" : "s"} on {formatNumber(missing.sales)} order{missing.sales === 1 ? "" : "s"} ({money(missing.value)} at cost) {missing.lines === 1 ? "has" : "have"} no stock movement, so History doesn&apos;t show them.</span>
-                  {writable && <Button type="button" size="sm" variant="outline" onClick={() => setBackfillAsk(true)}>Create missing sale movements</Button>}
+                  <span>{t("finance:inventory.missingLines", { count: missing.lines, n: formatNumber(missing.lines), orders: t("common:count.orders", { count: missing.sales }), amount: money(missing.value) })}</span>
+                  {writable && <Button type="button" size="sm" variant="outline" onClick={() => setBackfillAsk(true)}>{t("finance:inventory.createMissing")}</Button>}
                 </li>
               )}
               {recon && recon.difference !== 0 && (
                 <li className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{recon.text || `Stock value and movements are off by ${money(Math.abs(recon.difference))}.`}</span>
-                  <Button type="button" size="sm" variant="outline" onClick={() => setTab("reconciliation")}>Show the math</Button>
+                  <span>{recon.text || t("finance:inventory.offBy", { amount: money(Math.abs(recon.difference)) })}</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setTab("reconciliation")}>{t("finance:recon.showMath")}</Button>
                 </li>
               )}
             </ul>
@@ -304,51 +304,51 @@ export default function InventoryLedgerPage() {
       )}
 
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
-        <TabsList aria-label="View" className="h-auto flex-wrap">
-          <TabsTrigger value="valuation">Stock valuation</TabsTrigger>
-          <TabsTrigger value="ledger">History</TabsTrigger>
-          <TabsTrigger value="cogs">Cost of goods sold</TabsTrigger>
-          <TabsTrigger value="costs">Products without cost</TabsTrigger>
-          <TabsTrigger value="reconciliation">Stock vs movements</TabsTrigger>
+        <TabsList aria-label={t("finance:inventory.viewAria")} className="h-auto flex-wrap">
+          <TabsTrigger value="valuation">{t("finance:inventory.tabValuation")}</TabsTrigger>
+          <TabsTrigger value="ledger">{t("common:extra.history")}</TabsTrigger>
+          <TabsTrigger value="cogs">{t("finance:kpi.cogs")}</TabsTrigger>
+          <TabsTrigger value="costs">{t("finance:inventory.tabCosts")}</TabsTrigger>
+          <TabsTrigger value="reconciliation">{t("finance:inventory.tabRecon")}</TabsTrigger>
         </TabsList>
 
         {/* ── Valuation ── */}
         <TabsContent value="valuation" className="flex flex-col gap-5">
           <FilterBar>
             <Select value={vLoc} onValueChange={setVLoc}>
-              <SelectTrigger aria-label="Location" className="w-48"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>All locations</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:fields.location")} className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={ALL}>{t("finance:inventory.allLocations")}</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={vCat} onValueChange={setVCat}>
-              <SelectTrigger aria-label="Category" className="w-48"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>All categories</SelectItem>{categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:fields.category")} className="w-48"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={ALL}>{t("finance:inventory.allCategories")}</SelectItem>{categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
             </Select>
-            <span className="text-sm text-muted-foreground">Stock on hand today</span>
+            <span className="text-sm text-muted-foreground">{t("finance:inventory.onHandToday")}</span>
           </FilterBar>
           {vErr && <Alert variant="destructive"><AlertDescription>{vErr}</AlertDescription></Alert>}
 
-          <section aria-label="Valuation totals" className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-4", vLoading && val && "opacity-60")}>
-            {!t ? <TileSkeletons /> : <>
-              <StatTile label="Value at cost" icon={<Coins />} value={money(t.costValue)} hint="What the stock cost you" />
-              <StatTile label="Value at selling price" icon={<Tag />} value={money(t.retailValue)} hint="If everything sells at today's price" />
-              <StatTile label="Potential profit" icon={<PiggyBank />} value={<SignedMoney value={t.potentialProfit} format={money} positiveTone />} hint={`Margin ${pct(t.marginPct)}`} />
-              <StatTile label="Units in stock" icon={<Boxes />} value={formatNumber(t.units)} hint={`${formatNumber(t.productCount)} products`} />
+          <section aria-label={t("finance:inventory.valuationAria")} className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-4", vLoading && val && "opacity-60")}>
+            {!tot ? <TileSkeletons /> : <>
+              <StatTile label={t("finance:inventory.valueAtCost")} icon={<Coins />} value={money(tot.costValue)} hint={t("finance:inventory.valueAtCostHint")} />
+              <StatTile label={t("finance:inventory.valueAtPrice")} icon={<Tag />} value={money(tot.retailValue)} hint={t("finance:inventory.valueAtPriceHint")} />
+              <StatTile label={t("finance:col.potentialProfit")} icon={<PiggyBank />} value={<SignedMoney value={tot.potentialProfit} format={money} positiveTone />} hint={t("finance:kpi.margin", { pct: pct(tot.marginPct) })} />
+              <StatTile label={t("finance:inventory.unitsInStock")} icon={<Boxes />} value={formatNumber(tot.units)} hint={t("common:count.products", { count: tot.productCount })} />
             </>}
           </section>
 
           <SectionCard
-            title={vGroup === "location" ? "By location" : "By category"}
-            actions={<SegmentedControl aria-label="Group by" value={vGroup} onValueChange={(v) => setVGroup(v as typeof vGroup)} options={[{ value: "location", label: "Location" }, { value: "category", label: "Category" }]} />}
+            title={vGroup === "location" ? t("finance:inventory.byLocation") : t("finance:inventory.byCategory")}
+            actions={<SegmentedControl aria-label={t("finance:inventory.groupBy")} value={vGroup} onValueChange={(v) => setVGroup(v as typeof vGroup)} options={[{ value: "location", label: t("common:fields.location") }, { value: "category", label: t("common:fields.category") }]} />}
             contentClassName="grid gap-6 lg:grid-cols-[1fr_1.4fr]"
           >
-            {!val ? <Skeleton className="h-40 lg:col-span-2" /> : groups.length === 0 ? <p className="text-sm text-muted-foreground lg:col-span-2">No stock on hand.</p> : <>
+            {!val ? <Skeleton className="h-40 lg:col-span-2" /> : groups.length === 0 ? <p className="text-sm text-muted-foreground lg:col-span-2">{t("finance:inventory.noStock")}</p> : <>
               <MixBars items={groups.map((g) => ({ label: g.name, value: g.costValue }))} format={money} />
               <div className="overflow-x-auto">
                 <Table className="min-w-[480px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{vGroup === "location" ? "Location" : "Category"}</TableHead><TableHead className="text-right">Units</TableHead>
-                      <TableHead className="text-right">At cost</TableHead><TableHead className="text-right">At price</TableHead><TableHead className="text-right">Potential profit</TableHead>
+                      <TableHead>{vGroup === "location" ? t("common:fields.location") : t("common:fields.category")}</TableHead><TableHead className="text-right">{t("finance:col.units")}</TableHead>
+                      <TableHead className="text-right">{t("finance:inventory.atCostCol")}</TableHead><TableHead className="text-right">{t("finance:inventory.atPriceCol")}</TableHead><TableHead className="text-right">{t("finance:col.potentialProfit")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -362,14 +362,14 @@ export default function InventoryLedgerPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                  {t && (
+                  {tot && (
                     <TableFooter>
                       <TableRow>
-                        <TableCell className="font-bold">Total</TableCell>
-                        <TableCell className="text-right font-bold tabular-nums">{formatNumber(t.units)}</TableCell>
-                        <TableCell className="text-right font-bold tabular-nums">{money(t.costValue)}</TableCell>
-                        <TableCell className="text-right font-bold tabular-nums">{money(t.retailValue)}</TableCell>
-                        <TableCell className="text-right font-bold"><SignedMoney value={t.potentialProfit} format={money} /></TableCell>
+                        <TableCell className="font-bold">{t("common:money.total")}</TableCell>
+                        <TableCell className="text-right font-bold tabular-nums">{formatNumber(tot.units)}</TableCell>
+                        <TableCell className="text-right font-bold tabular-nums">{money(tot.costValue)}</TableCell>
+                        <TableCell className="text-right font-bold tabular-nums">{money(tot.retailValue)}</TableCell>
+                        <TableCell className="text-right font-bold"><SignedMoney value={tot.potentialProfit} format={money} /></TableCell>
                       </TableRow>
                     </TableFooter>
                   )}
@@ -378,45 +378,45 @@ export default function InventoryLedgerPage() {
             </>}
           </SectionCard>
 
-          <SectionCard title="Products" contentClassName="flex flex-col gap-4 px-2">
+          <SectionCard title={t("common:fields.products")} contentClassName="flex flex-col gap-4 px-2">
             <FilterBar className="px-2">
               <InputGroup className="w-full sm:w-64">
                 <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-                <InputGroupInput aria-label="Search products" placeholder="Product or SKU…" value={vQ} onChange={(e) => setVQ(e.target.value)} />
+                <InputGroupInput aria-label={t("finance:setCosts.search")} placeholder={t("finance:setCosts.searchPh")} value={vQ} onChange={(e) => setVQ(e.target.value)} />
               </InputGroup>
               <Select value={vSort} onValueChange={(v) => setVSort(v as typeof vSort)}>
-                <SelectTrigger aria-label="Sort" className="w-48"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label={t("finance:sort.label")} className="w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cost_desc">Highest cost value</SelectItem>
-                  <SelectItem value="retail_desc">Highest retail value</SelectItem>
-                  <SelectItem value="qty_desc">Most units</SelectItem>
-                  <SelectItem value="name_asc">Name A–Z</SelectItem>
+                  <SelectItem value="cost_desc">{t("finance:sort.costDesc")}</SelectItem>
+                  <SelectItem value="retail_desc">{t("finance:sort.retailDesc")}</SelectItem>
+                  <SelectItem value="qty_desc">{t("finance:sort.qtyDesc")}</SelectItem>
+                  <SelectItem value="name_asc">{t("finance:sort.nameAsc")}</SelectItem>
                 </SelectContent>
               </Select>
             </FilterBar>
             {!val ? <div className="flex flex-col gap-2 px-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11" />)}</div> : val.rows.length === 0 ? (
-              <EmptyState icon={Package} title="No products in stock" description="Nothing matches these filters." />
+              <EmptyState icon={Package} title={t("finance:inventory.noProductsTitle")} description={t("finance:ui.noMatchFilters")} />
             ) : (
               <div className={cn("overflow-x-auto", vLoading && "opacity-60")}>
                 <Table className="min-w-[820px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Product</TableHead><TableHead>Category</TableHead><TableHead className="text-right">Units</TableHead><TableHead className="text-right">Unit cost</TableHead>
-                      <TableHead className="text-right">Unit price</TableHead><TableHead className="text-right">At cost</TableHead><TableHead className="text-right">At price</TableHead><TableHead className="text-right">Potential profit</TableHead>
+                      <TableHead>{t("common:fields.product")}</TableHead><TableHead>{t("common:fields.category")}</TableHead><TableHead className="text-right">{t("finance:col.units")}</TableHead><TableHead className="text-right">{t("finance:col.unitCost")}</TableHead>
+                      <TableHead className="text-right">{t("finance:col.unitPrice")}</TableHead><TableHead className="text-right">{t("finance:inventory.atCostCol")}</TableHead><TableHead className="text-right">{t("finance:inventory.atPriceCol")}</TableHead><TableHead className="text-right">{t("finance:col.potentialProfit")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {val.rows.map((r) => (
                       <TableRow key={r.productId}>
                         <TableCell>
-                          <WithTooltip content="Show this product's movements">
+                          <WithTooltip content={t("finance:inventory.showMovements")}>
                             <Button type="button" variant="link" className="h-auto p-0 font-medium" onClick={() => { setProduct({ id: r.productId, name: r.name }); setTab("ledger") }}>{r.name}</Button>
                           </WithTooltip>
                           {r.sku && <div className="text-xs text-muted-foreground">{r.sku}</div>}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{r.categoryName ?? "Uncategorised"}</TableCell>
+                        <TableCell className="text-muted-foreground">{r.categoryName ?? t("finance:inventory.uncategorised")}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatNumber(r.units)}</TableCell>
-                        <TableCell className={cn("text-right tabular-nums", !r.unitCost && "text-amber-600")}>{r.unitCost ? money(r.unitCost) : "No cost"}</TableCell>
+                        <TableCell className={cn("text-right tabular-nums", !r.unitCost && "text-amber-600")}>{r.unitCost ? money(r.unitCost) : t("finance:inventory.noCost")}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(r.unitPrice)}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(r.costValue)}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(r.retailValue)}</TableCell>
@@ -439,53 +439,53 @@ export default function InventoryLedgerPage() {
           <FilterBar>
             <InputGroup className="w-full sm:w-60">
               <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-              <InputGroupInput aria-label="Search movements" placeholder="Product, SKU, reference…" value={mQ} onChange={(e) => setMQ(e.target.value)} />
+              <InputGroupInput aria-label={t("finance:inventory.searchMovements")} placeholder={t("finance:inventory.searchMovementsPh")} value={mQ} onChange={(e) => setMQ(e.target.value)} />
             </InputGroup>
             <FinanceFilters filters={filters} channel={false} idPrefix="inventory-history" />
             <Select value={mType} onValueChange={setMType}>
-              <SelectTrigger aria-label="Movement type" className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>All movements</SelectItem>{MOVE_TYPES.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("finance:inventory.movementType")} className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={ALL}>{t("finance:inventory.allMovements")}</SelectItem>{MOVE_CODES.map((v) => <SelectItem key={v} value={v}>{moveText(t, v)}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={mDir} onValueChange={setMDir}>
-              <SelectTrigger aria-label="Direction" className="w-32"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>In and out</SelectItem><SelectItem value="in">Stock in</SelectItem><SelectItem value="out">Stock out</SelectItem></SelectContent>
+              <SelectTrigger aria-label={t("finance:transactions.direction")} className="w-32"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={ALL}>{t("finance:transactions.inAndOut")}</SelectItem><SelectItem value="in">{t("finance:inventory.stockIn")}</SelectItem><SelectItem value="out">{t("finance:inventory.stockOut")}</SelectItem></SelectContent>
             </Select>
             <Select value={mLoc} onValueChange={setMLoc}>
-              <SelectTrigger aria-label="Location" className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>All locations</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:fields.location")} className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={ALL}>{t("finance:inventory.allLocations")}</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
             </Select>
             {product && (
               <Badge variant="secondary" className="h-8 gap-1.5 pl-3 pr-1 text-sm">
-                {product.name}{led?.product ? ` · ${formatNumber(led.product.currentQty)} in stock` : ""}
-                <WithTooltip content="Clear product filter">
-                  <Button type="button" variant="ghost" size="icon" className="size-6" aria-label="Clear product filter" onClick={() => setProduct(null)}><X className="size-3.5" aria-hidden /></Button>
+                {product.name}{led?.product ? ` · ${t("finance:inventory.inStockQty", { n: formatNumber(led.product.currentQty) })}` : ""}
+                <WithTooltip content={t("finance:inventory.clearProduct")}>
+                  <Button type="button" variant="ghost" size="icon" className="size-6" aria-label={t("finance:inventory.clearProduct")} onClick={() => setProduct(null)}><X className="size-3.5" aria-hidden /></Button>
                 </WithTooltip>
               </Badge>
             )}
           </FilterBar>
           {mErr && <Alert variant="destructive"><AlertDescription>{mErr}</AlertDescription></Alert>}
 
-          <section aria-label="Movement totals" className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-4", mLoading && led && "opacity-60")}>
+          <section aria-label={t("finance:inventory.movementTotalsAria")} className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-4", mLoading && led && "opacity-60")}>
             {!led ? <TileSkeletons /> : <>
-              <StatTile label="Units in" value={formatNumber(led.totals.qtyIn)} hint={`${money(led.totals.valueIn)} at cost`} />
-              <StatTile label="Units out" value={formatNumber(led.totals.qtyOut)} hint={`${money(led.totals.valueOut)} at cost`} />
-              <StatTile label="Net units" value={formatNumber(led.totals.qtyIn - led.totals.qtyOut)} hint={`${money(led.totals.valueIn - led.totals.valueOut)} net value`} />
-              <StatTile label="Movements" value={formatNumber(led.totals.count)} hint={filters.label} />
+              <StatTile label={t("finance:inventory.unitsIn")} value={formatNumber(led.totals.qtyIn)} hint={t("finance:inventory.atCost", { amount: money(led.totals.valueIn) })} />
+              <StatTile label={t("finance:inventory.unitsOut")} value={formatNumber(led.totals.qtyOut)} hint={t("finance:inventory.atCost", { amount: money(led.totals.valueOut) })} />
+              <StatTile label={t("finance:inventory.netUnits")} value={formatNumber(led.totals.qtyIn - led.totals.qtyOut)} hint={t("finance:inventory.netValue", { amount: money(led.totals.valueIn - led.totals.valueOut) })} />
+              <StatTile label={t("finance:inventory.movements")} value={formatNumber(led.totals.count)} hint={filters.label} />
             </>}
           </section>
 
           <SectionCard contentClassName="flex flex-col gap-4 px-2">
             {mLoading && !led ? <div className="flex flex-col gap-2 px-2">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-11" />)}</div> : !led || led.rows.length === 0 ? (
-              <EmptyState icon={Boxes} title="No stock movements" description="Nothing moved for these filters." />
+              <EmptyState icon={Boxes} title={t("finance:inventory.noMovementsTitle")} description={t("finance:inventory.noMovementsDesc")} />
             ) : (
               <div className={cn("overflow-x-auto", mLoading && "opacity-60")}>
                 <Table className="min-w-[960px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead><TableHead>Product</TableHead><TableHead>Location</TableHead><TableHead>Type</TableHead>
-                      <TableHead className="text-right">In</TableHead><TableHead className="text-right">Out</TableHead>
-                      <TableHead className="text-right">Unit cost</TableHead><TableHead className="text-right">Value</TableHead><TableHead>Reference</TableHead>
-                      {product && <TableHead className="text-right">Stock after</TableHead>}
+                      <TableHead>{t("common:fields.date")}</TableHead><TableHead>{t("common:fields.product")}</TableHead><TableHead>{t("common:fields.location")}</TableHead><TableHead>{t("common:fields.type")}</TableHead>
+                      <TableHead className="text-right">{t("finance:col.in")}</TableHead><TableHead className="text-right">{t("finance:col.out")}</TableHead>
+                      <TableHead className="text-right">{t("finance:col.unitCost")}</TableHead><TableHead className="text-right">{t("finance:col.value")}</TableHead><TableHead>{t("common:extra.reference")}</TableHead>
+                      {product && <TableHead className="text-right">{t("finance:inventory.stockAfter")}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -501,10 +501,10 @@ export default function InventoryLedgerPage() {
                         <TableCell className="text-muted-foreground">{r.locationName ?? "—"}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap items-center gap-1">
-                            <Badge variant={r.isOpening ? "default" : r.qtyIn > 0 ? "secondary" : "outline"}>{r.isOpening ? "Opening stock" : r.typeLabel}</Badge>
+                            <Badge variant={r.isOpening ? "default" : r.qtyIn > 0 ? "secondary" : "outline"}>{r.isOpening ? t("finance:moveType.opening") : moveText(t, r.type, r.typeLabel)}</Badge>
                             {r.backfilled && (
-                              <WithTooltip content="Created afterwards from the sale line, so History matches the cost of goods sold">
-                                <Badge variant="outline" tabIndex={0}>Backfilled</Badge>
+                              <WithTooltip content={t("finance:inventory.backfilledTip")}>
+                                <Badge variant="outline" tabIndex={0}>{t("finance:inventory.backfilledCol")}</Badge>
                               </WithTooltip>
                             )}
                           </div>
@@ -517,8 +517,8 @@ export default function InventoryLedgerPage() {
                           {r.reference ? ((r.reference.href || r.orderHref) ? <Link href={(r.reference.href || r.orderHref)!} className="font-medium text-primary hover:underline">{r.reference.label}</Link> : <span>{r.reference.label}</span>) : "—"}
                           {(r.orderHref || r.ledgerHref) && (
                             <div className="flex gap-2 text-xs">
-                              {r.orderHref && <Link href={r.orderHref} className="text-primary hover:underline">Order</Link>}
-                              {r.ledgerHref && <Link href={r.ledgerHref} className="text-primary hover:underline">Ledger</Link>}
+                              {r.orderHref && <Link href={r.orderHref} className="text-primary hover:underline">{t("finance:col.order")}</Link>}
+                              {r.ledgerHref && <Link href={r.ledgerHref} className="text-primary hover:underline">{t("finance:inventory.ledger")}</Link>}
                             </div>
                           )}
                           {r.reason && <div className="truncate text-xs text-muted-foreground">{r.reason}</div>}
@@ -542,30 +542,30 @@ export default function InventoryLedgerPage() {
           <FilterBar>
             <FinanceFilters filters={filters} idPrefix="inventory-cogs" />
             <Select value={mLoc} onValueChange={setMLoc}>
-              <SelectTrigger aria-label="Location" className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value={ALL}>All locations</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:fields.location")} className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value={ALL}>{t("finance:inventory.allLocations")}</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">
               {cogs?.period?.from ? `${fmt.date(cogs.period.from)} – ${fmt.date(cogs.period.to)}` : filters.label}
-              {cogs && cogs.context.channel !== "all" ? ` · ${cogs.context.channelLabel}` : ""}
+              {cogs && cogs.context.channel !== "all" ? ` · ${channelLabel(t, cogs.context.channel, cogs.context.channelLabel)}` : ""}
             </span>
           </FilterBar>
-          <section aria-label="COGS totals" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section aria-label={t("finance:inventory.cogsAria")} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {!cogs ? <TileSkeletons /> : <>
-              <StatTile label="Revenue" value={money(cogs.totals.revenue)} hint={`${formatNumber(cogs.totals.orders)} orders`} />
-              <StatTile label="Cost of goods sold" value={money(cogs.totals.cogs)} hint={`${formatNumber(cogs.totals.units)} units sold`} />
-              <StatTile label="Gross profit" value={<SignedMoney value={cogs.totals.grossProfit} format={money} positiveTone />} hint={`Margin ${pct(cogs.totals.marginPct)}`} />
-              <StatTile label="COGS share of revenue" value={cogs.totals.revenue ? pct((cogs.totals.cogs / cogs.totals.revenue) * 100) : "—"} />
+              <StatTile label={t("finance:kpi.revenue")} value={money(cogs.totals.revenue)} hint={t("common:count.orders", { count: cogs.totals.orders })} />
+              <StatTile label={t("finance:kpi.cogs")} value={money(cogs.totals.cogs)} hint={t("finance:inventory.unitsSold", { count: cogs.totals.units, n: formatNumber(cogs.totals.units) })} />
+              <StatTile label={t("finance:kpi.grossProfit")} value={<SignedMoney value={cogs.totals.grossProfit} format={money} positiveTone />} hint={t("finance:kpi.margin", { pct: pct(cogs.totals.marginPct) })} />
+              <StatTile label={t("finance:inventory.cogsShare")} value={cogs.totals.revenue ? pct((cogs.totals.cogs / cogs.totals.revenue) * 100) : "—"} />
             </>}
           </section>
           <div className="grid gap-5 lg:grid-cols-2">
-            {([["By category", cogs?.byCategory, "Category"], ["Top products", cogs?.topProducts, "Product"]] as const).map(([title, lines, col]) => (
-              <SectionCard key={title} title={title} contentClassName="px-2">
-                {!lines ? <Skeleton className="mx-2 h-40" /> : lines.length === 0 ? <p className="px-2 text-sm text-muted-foreground">No sales in this period.</p> : (
+            {([["byCategory", t("finance:inventory.byCategory"), cogs?.byCategory, t("common:fields.category")], ["top", t("finance:inventory.topProducts"), cogs?.topProducts, t("common:fields.product")]] as const).map(([id, title, lines, col]) => (
+              <SectionCard key={id} title={title} contentClassName="px-2">
+                {!lines ? <Skeleton className="mx-2 h-40" /> : lines.length === 0 ? <p className="px-2 text-sm text-muted-foreground">{t("finance:inventory.noSales")}</p> : (
                   <div className="overflow-x-auto">
                     <Table className="min-w-[480px]">
                       <TableHeader>
-                        <TableRow><TableHead>{col}</TableHead><TableHead className="text-right">Units</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">COGS</TableHead><TableHead className="text-right">Gross profit</TableHead></TableRow>
+                        <TableRow><TableHead>{col}</TableHead><TableHead className="text-right">{t("finance:col.units")}</TableHead><TableHead className="text-right">{t("finance:col.revenue")}</TableHead><TableHead className="text-right">{t("finance:col.cogs")}</TableHead><TableHead className="text-right">{t("finance:col.grossProfit")}</TableHead></TableRow>
                       </TableHeader>
                       <TableBody>
                         {lines.map((l) => (
@@ -588,29 +588,29 @@ export default function InventoryLedgerPage() {
 
         {/* ── Products without cost ── */}
         <TabsContent value="costs" className="flex flex-col gap-5">
-          <SectionCard title="Products without cost" contentClassName="flex flex-col gap-4 px-2"
-            description="Products with stock or sales but no cost price. Their sales show as uncosted on the Overview and their stock has no value until a cost is set."
+          <SectionCard title={t("finance:inventory.tabCosts")} contentClassName="flex flex-col gap-4 px-2"
+            description={t("finance:inventory.costsDesc")}
             actions={<AsOfNowLabel />}>
             <FilterBar className="px-2">
               <InputGroup className="w-full sm:w-64">
                 <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-                <InputGroupInput aria-label="Search products without cost" placeholder="Product or SKU…" value={cQ} onChange={(e) => setCQ(e.target.value)} />
+                <InputGroupInput aria-label={t("finance:inventory.searchCosts")} placeholder={t("finance:setCosts.searchPh")} value={cQ} onChange={(e) => setCQ(e.target.value)} />
               </InputGroup>
-              {costs && <span className="text-sm text-muted-foreground">{formatNumber(costs.totals.products)} products · {money(costs.totals.uncostedSales)} uncosted sales (all time)</span>}
+              {costs && <span className="text-sm text-muted-foreground">{t("finance:inventory.costsTotals", { count: costs.totals.products, n: formatNumber(costs.totals.products), amount: money(costs.totals.uncostedSales) })}</span>}
               {writable && opening && opening.totals.products > 0 && (
-                <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => setWizard(true)}>Set costs and move in opening stock</Button>
+                <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => setWizard(true)}>{t("finance:inventory.setCostsMoveIn")}</Button>
               )}
             </FilterBar>
             {cErr && <Alert variant="destructive"><AlertDescription>{cErr}</AlertDescription></Alert>}
             {!costs ? <div className="flex flex-col gap-2 px-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-11" />)}</div> : costs.rows.length === 0 ? (
-              <EmptyState icon={Tag} title="Every product has a cost" description={cQD ? "Nothing matches this search." : "Profit is worked out for all sales."} />
+              <EmptyState icon={Tag} title={t("finance:setCosts.allCostedTitle")} description={cQD ? t("finance:setCosts.noMatch") : t("finance:inventory.allCostedDesc")} />
             ) : (
               <div className="overflow-x-auto">
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Product</TableHead><TableHead className="text-right">Stock</TableHead><TableHead className="text-right">Units sold</TableHead>
-                      <TableHead className="text-right">Uncosted sales</TableHead><TableHead className="text-right">Price</TableHead><TableHead className="w-28"><span className="sr-only">Actions</span></TableHead>
+                      <TableHead>{t("common:fields.product")}</TableHead><TableHead className="text-right">{t("common:fields.stock")}</TableHead><TableHead className="text-right">{t("finance:setCosts.unitsSold")}</TableHead>
+                      <TableHead className="text-right">{t("finance:overview.uncosted")}</TableHead><TableHead className="text-right">{t("common:money.price")}</TableHead><TableHead className="w-28"><span className="sr-only">{t("common:fields.actions")}</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -622,7 +622,7 @@ export default function InventoryLedgerPage() {
                         <TableCell className="text-right tabular-nums">{money(r.uncostedSales)}</TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">{money(r.price)}</TableCell>
                         <TableCell className="text-right">
-                          <Button asChild size="sm" variant="outline"><Link href={r.editHref ?? `/dashboard/products/${r.productId}`}>Set cost</Link></Button>
+                          <Button asChild size="sm" variant="outline"><Link href={r.editHref ?? `/dashboard/products/${r.productId}`}>{t("finance:setCosts.setCost")}</Link></Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -648,15 +648,15 @@ export default function InventoryLedgerPage() {
       <AlertDialog open={backfillAsk} onOpenChange={(o) => !o && !backfilling && setBackfillAsk(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Create missing sale movements?</AlertDialogTitle>
+            <AlertDialogTitle>{t("finance:inventory.backfillQ")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {missing ? `${formatNumber(missing.lines)} sale line${missing.lines === 1 ? "" : "s"} (${money(missing.value)} at cost) get a stock movement dated at the order time. ` : ""}
-              Stock on hand doesn&apos;t change — the sales already took it out. Running it again is safe: lines that have a movement are skipped.
+              {missing ? `${t("finance:inventory.backfillLines", { count: missing.lines, n: formatNumber(missing.lines), amount: money(missing.value) })} ` : ""}
+              {t("finance:inventory.backfillDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={backfilling}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.preventDefault(); runBackfill() }} disabled={backfilling}>{backfilling ? "Creating…" : "Create movements"}</AlertDialogAction>
+            <AlertDialogCancel disabled={backfilling}>{t("common:actions.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); runBackfill() }} disabled={backfilling}>{backfilling ? t("finance:inventory.creating") : t("finance:inventory.createMovements")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

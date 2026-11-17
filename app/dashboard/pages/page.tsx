@@ -3,6 +3,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Bell, ChevronDown, Eye, FileText, Plus, Search, Trash2, X } from "lucide-react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import notificationApi, { type NotificationResponse } from "@/lib/notificationApi"
 import { settingsApi } from "@/lib/settingsApi"
@@ -40,20 +43,28 @@ import pageApi, {
 } from "@/lib/pageApi"
 
 type Tab = "all" | "published" | "draft"
+/** Translation key in the namespaces this file loads; module-level labels hold keys, translated at render */
+type K = ParseKeys<["catalog", "common"]>
 const ICONS = ["users", "truck", "award", "globe", "shield-check", "heart", "zap", "target", "star", "package"]
-const TYPES: { value: PageTemplate; label: string }[] = [
-  { value: "policy", label: "Policy" },
-  { value: "about", label: "About" },
-  { value: "faq", label: "FAQ" },
-  { value: "custom", label: "Custom" },
+// Icon codes are stored in the page content; these are their display labels
+const ICON_LABEL: Record<string, K> = {
+  users: "catalog:pages.icons.users", truck: "catalog:pages.icons.truck", award: "catalog:pages.icons.award", globe: "catalog:pages.icons.globe",
+  "shield-check": "catalog:pages.icons.shieldCheck", heart: "catalog:pages.icons.heart", zap: "catalog:pages.icons.zap",
+  target: "catalog:pages.icons.target", star: "catalog:pages.icons.star", package: "catalog:pages.icons.package",
+}
+const TYPES: { value: PageTemplate; label: K }[] = [
+  { value: "policy", label: "catalog:pages.types.policy" },
+  { value: "about", label: "catalog:pages.types.about" },
+  { value: "faq", label: "catalog:pages.types.faq" },
+  { value: "custom", label: "catalog:pages.types.custom" },
 ]
-const PLACES: { value: PagePlace; label: string }[] = [
-  { value: "footer", label: "Footer" },
-  { value: "header", label: "Header menu" },
-  { value: "checkout", label: "Checkout" },
-  { value: "none", label: "Nowhere (link only)" },
+const PLACES: { value: PagePlace; label: K }[] = [
+  { value: "footer", label: "catalog:pages.places.footer" },
+  { value: "header", label: "catalog:pages.places.header" },
+  { value: "checkout", label: "catalog:pages.places.checkout" },
+  { value: "none", label: "catalog:pages.places.none" },
 ]
-const TYPE_LABEL: Record<string, string> = { policy: "Policy", about: "About", faq: "FAQ", custom: "Custom" }
+const TYPE_LABEL: Record<string, K> = Object.fromEntries(TYPES.map((x) => [x.value, x.label]))
 
 // Standard storefront slugs that already count as a quick-start page.
 const PRESET_ALIASES: Record<string, string[]> = {
@@ -64,11 +75,11 @@ const PRESET_ALIASES: Record<string, string[]> = {
   privacy: ["privacy", "privacy-policy"],
 }
 
-// Starter templates (custom pages)
-const STARTERS: { label: string; slug: string; type: PageTemplate; summary: string; body: string }[] = [
-  { label: "Contact us", slug: "contact", type: "about", summary: "How to reach us.", body: "# Get in touch\nEmail us or call during business hours and we will reply within one working day." },
-  { label: "Size guide", slug: "size-guide", type: "custom", summary: "Find your size.", body: "# How to measure\nMeasure your chest, waist and hip and compare with the chart below." },
-  { label: "Blank page", slug: "", type: "custom", summary: "", body: "" },
+// Starter templates (custom pages). Label/summary/body are translation keys; the blank page starts empty.
+const STARTERS: { label: K; slug: string; type: PageTemplate; summary: K | null; body: K | null }[] = [
+  { label: "catalog:pages.starters.contact.label", slug: "contact", type: "about", summary: "catalog:pages.starters.contact.summary", body: "catalog:pages.starters.contact.body" },
+  { label: "catalog:pages.starters.sizeGuide.label", slug: "size-guide", type: "custom", summary: "catalog:pages.starters.sizeGuide.summary", body: "catalog:pages.starters.sizeGuide.body" },
+  { label: "catalog:pages.starters.blank.label", slug: "", type: "custom", summary: null, body: null },
 ]
 
 interface FormState {
@@ -122,12 +133,12 @@ function fromPreset(pr: PagePreset): FormState {
   })
 }
 
-/** Validate the form and turn it into an API payload. Returns an error string on failure. */
-function buildPayload(f: FormState): { error: string } | { payload: ContentPagePayload } {
+/** Validate the form and turn it into an API payload. Returns an error message key (+ values) on failure. */
+function buildPayload(f: FormState): { error: K; values?: Record<string, string | number> } | { payload: ContentPagePayload } {
   const title = f.title.trim()
   const slug = slugify(f.slug || f.title)
-  if (!title) return { error: "Page title is required." }
-  if (!slug) return { error: "Page address is required." }
+  if (!title) return { error: "catalog:pages.errors.titleRequired" }
+  if (!slug) return { error: "catalog:pages.errors.addressRequired" }
   const hero = { kicker: f.heroKicker.trim(), title: f.heroTitle.trim(), description: f.heroDesc.trim() }
   const seo = { title: f.seoTitle.trim(), description: f.seoDesc.trim() }
   let content: PageContent
@@ -138,11 +149,11 @@ function buildPayload(f: FormState): { error: string } | { payload: ContentPageP
     const values = f.values.filter((r) => r.title.trim() || r.description.trim())
     const team = f.team.filter((r) => r.name.trim() || r.role.trim() || r.bio.trim())
     let i = stats.findIndex((r) => !r.label.trim() || !r.value.trim())
-    if (i >= 0) return { error: `Stat ${i + 1} needs both a label and a value.` }
+    if (i >= 0) return { error: "catalog:pages.errors.stat", values: { n: i + 1 } }
     i = values.findIndex((r) => !r.title.trim())
-    if (i >= 0) return { error: `Value ${i + 1} needs a title.` }
+    if (i >= 0) return { error: "catalog:pages.errors.value", values: { n: i + 1 } }
     i = team.findIndex((r) => !r.name.trim())
-    if (i >= 0) return { error: `Team member ${i + 1} needs a name.` }
+    if (i >= 0) return { error: "catalog:pages.errors.member", values: { n: i + 1 } }
     content = {
       template: "about", hero, seo, valuesHeading: f.valuesHeading.trim(), teamHeading: f.teamHeading.trim(),
       stats: stats.map((r) => ({ label: r.label.trim(), value: r.value.trim(), icon: r.icon || "users" })),
@@ -152,9 +163,9 @@ function buildPayload(f: FormState): { error: string } | { payload: ContentPageP
   } else if (f.type === "faq") {
     const cats = f.faq.map((c) => ({ title: c.title.trim(), items: c.items.filter((x) => x.q.trim() || x.a.trim()) })).filter((c) => c.title || c.items.length)
     for (let i = 0; i < cats.length; i++) {
-      if (!cats[i].title) return { error: `Question category ${i + 1} needs a title.` }
+      if (!cats[i].title) return { error: "catalog:pages.errors.faqCat", values: { n: i + 1 } }
       const j = cats[i].items.findIndex((x) => !x.q.trim() || !x.a.trim())
-      if (j >= 0) return { error: `"${cats[i].title}", question ${j + 1} needs both a question and an answer.` }
+      if (j >= 0) return { error: "catalog:pages.errors.faqItem", values: { title: cats[i].title, n: j + 1 } }
     }
     content = { template: "faq", hero, seo, faqCategories: cats.map((c) => ({ title: c.title, items: c.items.map((x) => ({ question: x.q.trim(), answer: x.a.trim() })) })) }
     // Markdown copy of the structured content, kept in sync so the storefront can render `body`.
@@ -162,7 +173,7 @@ function buildPayload(f: FormState): { error: string } | { payload: ContentPageP
   } else if (f.type === "policy") {
     const secs = f.sections.map((x) => ({ title: x.title.trim(), paragraphs: paras(x.text) })).filter((x) => x.title || x.paragraphs.length)
     const i = secs.findIndex((x) => !x.title)
-    if (i >= 0) return { error: `Section ${i + 1} needs a title.` }
+    if (i >= 0) return { error: "catalog:pages.errors.section", values: { n: i + 1 } }
     content = { template: "policy", hero, seo, sections: secs }
     body = secs.map((x) => [`## ${x.title}`, ...x.paragraphs].join("\n\n")).join("\n\n")
   } else {
@@ -179,7 +190,7 @@ const mdBlocks = (txt: string): Block[] =>
     return { h: !!m, text: t }
   })
 
-function previewBlocks(f: FormState): Block[] {
+function previewBlocks(f: FormState, question: (text: string) => string): Block[] {
   const b: Block[] = []
   if (f.heroKicker.trim()) b.push({ h: false, text: f.heroKicker.trim().toUpperCase() })
   if (f.heroTitle.trim()) b.push({ h: true, text: f.heroTitle.trim() })
@@ -192,7 +203,7 @@ function previewBlocks(f: FormState): Block[] {
   } else if (f.type === "faq") {
     f.faq.forEach((c) => {
       if (c.title) b.push({ h: true, text: c.title })
-      c.items.forEach((i) => { if (i.q) b.push({ h: false, text: `Q. ${i.q}` }); if (i.a) b.push({ h: false, text: i.a }) })
+      c.items.forEach((i) => { if (i.q) b.push({ h: false, text: question(i.q) }); if (i.a) b.push({ h: false, text: i.a }) })
     })
   } else if (f.type === "policy") {
     f.sections.forEach((s) => { if (s.title) b.push({ h: true, text: s.title }); paras(s.text).forEach((t) => b.push({ h: false, text: t })) })
@@ -200,10 +211,10 @@ function previewBlocks(f: FormState): Block[] {
   return b
 }
 
-const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "")
-
 export default function PagesManagementPage() {
+  const { t, i18n } = useTranslation(["catalog", "common"])
   const blocked = useModuleGuard("Pages")
+  const fmtD = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" }) : "")
 
   const [pages, setPages] = useState<ContentPage[]>([])
   const [loading, setLoading] = useState(true)
@@ -231,11 +242,12 @@ export default function PagesManagementPage() {
       if (selectFirst && list[0]) { setSelId(list[0].id); setForm(fromPage(list[0])) }
       return list
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to load pages")
+      toast.error(e?.response?.data?.message || t("catalog:pages.toast.loadFailed"))
       return []
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadNotifs = useCallback(async () => {
@@ -294,7 +306,7 @@ export default function PagesManagementPage() {
   }, [pages])
 
   const f = form
-  const blocks = useMemo(() => (f ? previewBlocks(f) : []), [f])
+  const blocks = useMemo(() => (f ? previewBlocks(f, (text) => t("catalog:pages.previewQuestion", { text })) : []), [f, t])
   const words = blocks.reduce((n, b) => n + (b.text.trim() ? b.text.trim().split(/\s+/).length : 0), 0)
 
   if (blocked) return blocked
@@ -311,16 +323,16 @@ export default function PagesManagementPage() {
   const save = async () => {
     if (!f) return
     const r = buildPayload(f)
-    if ("error" in r) { setErr(r.error); return }
+    if ("error" in r) { setErr(t(r.error, r.values)); return }
     setSaving(true)
     try {
       const saved = rec ? await pageApi.update(rec.id, r.payload) : await pageApi.create(r.payload)
-      toast.success(rec ? "Page saved" : "Page created")
+      toast.success(rec ? t("catalog:pages.toast.saved") : t("catalog:pages.toast.created"))
       await load()
       setSelId(saved.id); setForm(fromPage(saved)); setDirty(false); setErr("")
     } catch (e: any) {
       const errs = e?.response?.data?.errors
-      const msg = errs?.slug?.[0] ? `Another page already uses the address "/${r.payload.slug}".` : (errs && (Object.values(errs)[0] as string[])?.[0]) || e?.response?.data?.message || "Failed to save page"
+      const msg = errs?.slug?.[0] ? t("catalog:pages.errors.addressTaken", { slug: r.payload.slug }) : (errs && (Object.values(errs)[0] as string[])?.[0]) || e?.response?.data?.message || t("catalog:pages.toast.saveFailed")
       setErr(msg)
     } finally { setSaving(false) }
   }
@@ -328,27 +340,27 @@ export default function PagesManagementPage() {
   const togglePublish = async () => {
     if (!f) return
     if (!rec) { patch({ isPublished: !f.isPublished }); return }
-    if (!rec.isPublished && !rec.title.trim()) { setErr("Add a title first."); return }
+    if (!rec.isPublished && !rec.title.trim()) { setErr(t("catalog:pages.errors.addTitleFirst")); return }
     setSaving(true)
     try {
       const saved = await pageApi.update(rec.id, { isPublished: !rec.isPublished })
-      toast.success(saved.isPublished ? "Page published" : "Page unpublished")
+      toast.success(saved.isPublished ? t("catalog:pages.toast.published") : t("catalog:pages.toast.unpublished"))
       await load()
       setForm((cur) => (cur ? { ...cur, isPublished: saved.isPublished } : cur))
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to update status") }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("catalog:pages.toast.statusFailed")) }
     finally { setSaving(false) }
   }
 
   const remove = async () => {
     if (!rec) { const first = sorted[0]; if (first) open(first); else { setForm(null); setSelId(null) } return }
-    if (!window.confirm(`Delete page "${rec.title}"?`)) return
+    if (!window.confirm(t("common:confirm.deleteTitle", { name: `"${rec.title}"` }))) return
     try {
       await pageApi.delete(rec.id)
-      toast.success("Page deleted")
+      toast.success(t("catalog:pages.toast.deleted"))
       const list = await load()
       const next = [...list].sort((a, b) => a.title.localeCompare(b.title)).find((p) => p.id !== rec.id)
       if (next) open(next); else { setSelId(null); setForm(null) }
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to delete page") }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("catalog:pages.toast.deleteFailed")) }
   }
 
   const createAll = async () => {
@@ -357,9 +369,9 @@ export default function PagesManagementPage() {
       for (const pr of missing) {
         await pageApi.create({ title: pr.title, slug: pr.slug, summary: pr.summary, type: pr.content.template, place: "footer", body: "", isPublished: true, content: pr.content })
       }
-      toast.success("Standard pages created and published")
+      toast.success(t("catalog:pages.toast.allCreated"))
       await load()
-    } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to create standard pages"); await load() }
+    } catch (e: any) { toast.error(e?.response?.data?.message || t("catalog:pages.toast.createAllFailed")); await load() }
     finally { setCreatingAll(false) }
   }
 
@@ -369,28 +381,28 @@ export default function PagesManagementPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Pages"
-        description="Policies and content pages for your Aura Shop storefront."
+        title={t("catalog:pages.title")}
+        description={t("catalog:pages.description")}
         actions={<>
           <Popover open={notifOpen} onOpenChange={(o) => { setNotifOpen(o); if (o) void loadNotifs() }}>
             <PopoverTrigger asChild>
-              <Button type="button" variant="outline" className="relative" aria-label="Notifications">
-                <Bell className="size-4" /> Notifications
+              <Button type="button" variant="outline" className="relative" aria-label={t("catalog:pages.notifications")}>
+                <Bell className="size-4" /> {t("catalog:pages.notifications")}
                 {unread > 0 && <Badge className="h-5 min-w-5 rounded-full px-1">{unread > 99 ? "99+" : unread}</Badge>}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[360px] p-0">
               <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-sm font-semibold">Notifications</span>
+                <span className="text-sm font-semibold">{t("catalog:pages.notifications")}</span>
                 <Button type="button" variant="link" size="sm" disabled={unread === 0}
-                  onClick={async () => { try { await notificationApi.markAllAsRead(); await loadNotifs() } catch (e: any) { toast.error(e?.response?.data?.message || "Failed to mark all read") } }}>
-                  Mark all read
+                  onClick={async () => { try { await notificationApi.markAllAsRead(); await loadNotifs() } catch (e: any) { toast.error(e?.response?.data?.message || t("catalog:pages.toast.markAllFailed")) } }}>
+                  {t("catalog:pages.markAllRead")}
                 </Button>
               </div>
               <Separator />
               <div className="max-h-[360px] overflow-y-auto">
                 {notifs.length === 0 ? (
-                  <EmptyState title="No notifications yet." className="p-6 md:p-6" />
+                  <EmptyState title={t("catalog:pages.noNotifs")} className="p-6 md:p-6" />
                 ) : (
                   <ItemGroup>
                     {notifs.map((n, i) => (
@@ -409,24 +421,24 @@ export default function PagesManagementPage() {
                 )}
               </div>
               <Separator />
-              <Button asChild variant="ghost" className="w-full rounded-none"><Link href="/dashboard/notifications">View all notifications</Link></Button>
+              <Button asChild variant="ghost" className="w-full rounded-none"><Link href="/dashboard/notifications">{t("catalog:pages.viewAllNotifs")}</Link></Button>
             </PopoverContent>
           </Popover>
           {storeUrl
-            ? <Button asChild variant="outline"><a href={storeUrl} target="_blank" rel="noopener noreferrer">View store ↗</a></Button>
-            : <WithTooltip content="Publish your store with a domain in Online store settings"><span tabIndex={0} className="inline-flex"><Button type="button" variant="outline" disabled>View store ↗</Button></span></WithTooltip>}
-          <Button type="button" onClick={() => startNew(blank())}><Plus className="size-4" /> New page</Button>
+            ? <Button asChild variant="outline"><a href={storeUrl} target="_blank" rel="noopener noreferrer">{t("catalog:pages.viewStore")}</a></Button>
+            : <WithTooltip content={t("catalog:pages.viewStoreTip")}><span tabIndex={0} className="inline-flex"><Button type="button" variant="outline" disabled>{t("catalog:pages.viewStore")}</Button></span></WithTooltip>}
+          <Button type="button" onClick={() => startNew(blank())}><Plus className="size-4" /> {t("catalog:pages.newPage")}</Button>
         </>}
       />
 
       {!loading && missing.length > 0 && (
-        <SectionCard title="Quick start pages" description="Create the standard storefront help and policy pages with ready-to-edit default content.">
+        <SectionCard title={t("catalog:pages.quickStart")} description={t("catalog:pages.quickStartDesc")}>
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={createAll} disabled={creatingAll}>
-              {creatingAll && <Spinner />} Create all standard pages
+              {creatingAll && <Spinner />} {t("catalog:pages.createAll")}
             </Button>
             {missing.map((pr) => (
-              <Button key={pr.slug} type="button" onClick={() => startNew({ ...fromPreset(pr), isPublished: true })} variant="outline">+ {pr.title}</Button>
+              <Button key={pr.slug} type="button" onClick={() => startNew({ ...fromPreset(pr), isPublished: true })} variant="outline">{t("catalog:pages.addItem", { name: pr.title })}</Button>
             ))}
           </div>
         </SectionCard>
@@ -435,16 +447,16 @@ export default function PagesManagementPage() {
       <div className="grid items-start gap-5 xl:grid-cols-[400px_minmax(0,1fr)]">
         {/* List */}
         <Card className="gap-3 p-4">
-          <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPageNo(1) }}
-            tabs={[{ value: "all", label: "All", count: counts.all }, { value: "published", label: "Published", count: counts.published }, { value: "draft", label: "Drafts", count: counts.draft }]} />
+          <StatusTabs value={tab} onChange={(v) => { setTab(v as Tab); setPageNo(1) }}
+            tabs={[{ value: "all", label: t("common:status.all"), count: counts.all }, { value: "published", label: t("common:status.published"), count: counts.published }, { value: "draft", label: t("catalog:pages.drafts"), count: counts.draft }]} />
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input type="search" value={q} onChange={(e) => { setQ(e.target.value); setPageNo(1) }} placeholder="Search pages…" aria-label="Search pages" className="pl-9" />
+            <Input type="search" value={q} onChange={(e) => { setQ(e.target.value); setPageNo(1) }} placeholder={t("catalog:pages.searchPlaceholder")} aria-label={t("catalog:pages.searchLabel")} className="pl-9" />
           </div>
           {loading ? (
             <div className="flex flex-col gap-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
           ) : rows.length === 0 ? (
-            <EmptyState title="No pages match." className="p-6 md:p-6" />
+            <EmptyState title={t("catalog:pages.noMatch")} className="p-6 md:p-6" />
           ) : (
             <div className="flex flex-col gap-2">
               {rows.map((p) => {
@@ -454,13 +466,18 @@ export default function PagesManagementPage() {
                     className="h-auto w-full flex-col items-stretch gap-1 whitespace-normal text-left font-normal">
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold">{p.title}</span>
-                      <StatusBadge className="shrink-0" status={p.isPublished ? "published" : "draft"} label={p.isPublished ? "Published" : "Draft"} />
+                      <StatusBadge className="shrink-0" status={p.isPublished ? "published" : "draft"} label={p.isPublished ? t("common:status.published") : t("common:status.draft")} />
                     </span>
                     <span className="text-xs text-muted-foreground">aura.shop/{p.slug}</span>
                     <span className="text-xs text-muted-foreground">
-                      {TYPE_LABEL[typeOf(p)] ?? "Custom"} · {typeOf(p)} · updated {fmtD(p.updatedAt || p.createdAt)} · {p.publishedAt ? `published ${fmtD(p.publishedAt)}` : "not published"}
+                      {t("catalog:pages.meta", {
+                        type: t(TYPE_LABEL[typeOf(p)] ?? "catalog:pages.types.custom"),
+                        code: typeOf(p),
+                        updated: fmtD(p.updatedAt || p.createdAt),
+                        published: p.publishedAt ? t("catalog:pages.publishedOn", { date: fmtD(p.publishedAt) }) : t("catalog:pages.notPublished"),
+                      })}
                     </span>
-                    <span className="line-clamp-2 text-xs text-muted-foreground">{p.summary || "No summary provided."}</span>
+                    <span className="line-clamp-2 text-xs text-muted-foreground">{p.summary || t("catalog:pages.noSummary")}</span>
                   </Button>
                 )
               })}
@@ -472,12 +489,13 @@ export default function PagesManagementPage() {
           )}
           <Separator />
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Start from a template</span>
-            <div role="group" aria-label="Templates" className="flex flex-wrap gap-2">
-              {STARTERS.map((t) => (
-                <Button key={t.label} type="button" variant="outline" size="sm" onClick={() => startNew({
-                  ...blank(), title: t.label === "Blank page" ? "" : t.label, slug: t.slug, type: t.type, summary: t.summary, body: t.body, slugTouched: !!t.slug,
-                })}>+ {t.label}</Button>
+            <span className="text-sm font-medium">{t("catalog:pages.startTemplate")}</span>
+            <div role="group" aria-label={t("catalog:pages.templates")} className="flex flex-wrap gap-2">
+              {STARTERS.map((s) => (
+                <Button key={s.label} type="button" variant="outline" size="sm" onClick={() => startNew({
+                  ...blank(), title: s.slug ? t(s.label) : "", slug: s.slug, type: s.type,
+                  summary: s.summary ? t(s.summary) : "", body: s.body ? t(s.body) : "", slugTouched: !!s.slug,
+                })}>{t("catalog:pages.addItem", { name: t(s.label) })}</Button>
               ))}
             </div>
           </div>
@@ -488,19 +506,21 @@ export default function PagesManagementPage() {
           {loading ? (
             <div className="flex flex-col gap-3 p-5"><Skeleton className="h-10 w-full" /><Skeleton className="h-[42px] w-full" /><Skeleton className="h-40 w-full" /></div>
           ) : !f ? (
-            <EmptyState icon={FileText} title="No page selected." description="Create a new page or pick one from the list." />
+            <EmptyState icon={FileText} title={t("catalog:pages.noSelection")} description={t("catalog:pages.noSelectionDesc")} />
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-3 p-4">
-                <StatusBadge status={published ? "published" : "draft"} label={published ? "Published" : "Draft"} />
+                <StatusBadge status={published ? "published" : "draft"} label={published ? t("common:status.published") : t("common:status.draft")} />
                 <span className="text-xs text-muted-foreground">
-                  {rec ? `Updated ${fmtD(rec.updatedAt || rec.createdAt)} · Published: ${rec.publishedAt ? fmtD(rec.publishedAt) : "not published"}` : "New page, not saved yet"}{dirty ? " · unsaved changes" : ""}
+                  {rec
+                    ? t("catalog:pages.editorMeta", { updated: fmtD(rec.updatedAt || rec.createdAt), published: rec.publishedAt ? fmtD(rec.publishedAt) : t("catalog:pages.notPublished") })
+                    : t("catalog:pages.newUnsaved")}{dirty ? ` ${t("catalog:pages.unsavedSuffix")}` : ""}
                 </span>
                 <div className="ml-auto flex flex-wrap gap-2">
-                  <Button type="button" onClick={() => setPreviewing((v) => !v)} aria-pressed={previewing} variant="outline"><Eye className="size-4" />{previewing ? "Back to editor" : "Preview"}</Button>
-                  <Button type="button" onClick={togglePublish} disabled={saving} variant="outline">{published ? "Unpublish" : "Publish"}</Button>
+                  <Button type="button" onClick={() => setPreviewing((v) => !v)} aria-pressed={previewing} variant="outline"><Eye className="size-4" />{previewing ? t("catalog:pages.backToEditor") : t("catalog:pages.preview")}</Button>
+                  <Button type="button" onClick={togglePublish} disabled={saving} variant="outline">{published ? t("catalog:shared.unpublish") : t("catalog:shared.publish")}</Button>
                   <Button type="button" onClick={save} disabled={saving}>
-                    {saving && <Spinner />}{!rec ? "Create page" : published ? "Update live page" : "Save draft"}
+                    {saving && <Spinner />}{!rec ? t("catalog:pages.createPage") : published ? t("catalog:pages.updateLive") : t("catalog:pages.saveDraft")}
                   </Button>
                 </div>
               </div>
@@ -508,40 +528,40 @@ export default function PagesManagementPage() {
 
               <div className="flex flex-col gap-4 p-5">
                 {err && <Alert variant="destructive" role="alert"><AlertDescription>{err}</AlertDescription></Alert>}
-                <Input type="text" value={f.title} placeholder="Page title" aria-label="Page title"
+                <Input type="text" value={f.title} placeholder={t("catalog:pages.pageTitle")} aria-label={t("catalog:pages.pageTitle")}
                   onChange={(e) => { const v = e.target.value; patch(rec || f.slugTouched ? { title: v } : { title: v, slug: slugify(v) }) }}
                   />
                 <div className="grid gap-3 md:grid-cols-3">
-                  <FormField label="Page address" htmlFor="page-slug">
+                  <FormField label={t("catalog:pages.address")} htmlFor="page-slug">
                     <InputGroup>
                       <InputGroupAddon><InputGroupText>aura.shop/</InputGroupText></InputGroupAddon>
                       <InputGroupInput id="page-slug" type="text" value={f.slug} onChange={(e) => patch({ slug: slugify(e.target.value), slugTouched: true })} />
                     </InputGroup>
                   </FormField>
-                  <FormField label="Type" htmlFor="page-type">
+                  <FormField label={t("common:fields.type")} htmlFor="page-type">
                     <Select value={f.type} onValueChange={(v) => patch({ type: v as PageTemplate })}>
                       <SelectTrigger id="page-type" className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>{TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                      <SelectContent>{TYPES.map((x) => <SelectItem key={x.value} value={x.value}>{t(x.label)}</SelectItem>)}</SelectContent>
                     </Select>
                   </FormField>
-                  <FormField label="Show link in" htmlFor="page-place">
+                  <FormField label={t("catalog:pages.showLinkIn")} htmlFor="page-place">
                     <Select value={f.place} onValueChange={(v) => patch({ place: v as PagePlace })}>
                       <SelectTrigger id="page-place" className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>{PLACES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                      <SelectContent>{PLACES.map((x) => <SelectItem key={x.value} value={x.value}>{t(x.label)}</SelectItem>)}</SelectContent>
                     </Select>
                   </FormField>
                 </div>
 
-                <SectionCard title="Page header and search listing" className="gap-3 py-4" contentClassName="flex flex-col gap-3 px-4">
-                  <FormField label="Summary (internal)" htmlFor="page-summary">
-                    <Textarea id="page-summary" rows={2} value={f.summary} onChange={(e) => patch({ summary: e.target.value })} placeholder="Short internal description for this content page" />
+                <SectionCard title={t("catalog:pages.headerCard")} className="gap-3 py-4" contentClassName="flex flex-col gap-3 px-4">
+                  <FormField label={t("catalog:pages.summaryInternal")} htmlFor="page-summary">
+                    <Textarea id="page-summary" rows={2} value={f.summary} onChange={(e) => patch({ summary: e.target.value })} placeholder={t("catalog:pages.summaryPlaceholder")} />
                   </FormField>
                   <div className="grid gap-3 md:grid-cols-3">
-                    <FormField label="Hero kicker" htmlFor="page-hero-kicker"><Input id="page-hero-kicker" type="text" value={f.heroKicker} onChange={(e) => patch({ heroKicker: e.target.value })} placeholder="Our story" /></FormField>
-                    <FormField label="Hero title" htmlFor="page-hero-title"><Input id="page-hero-title" type="text" value={f.heroTitle} onChange={(e) => patch({ heroTitle: e.target.value })} /></FormField>
-                    <FormField label="SEO title" htmlFor="page-seo-title"><Input id="page-seo-title" type="text" value={f.seoTitle} onChange={(e) => patch({ seoTitle: e.target.value })} placeholder="About us | Aura Shop" /></FormField>
+                    <FormField label={t("catalog:pages.heroKicker")} htmlFor="page-hero-kicker"><Input id="page-hero-kicker" type="text" value={f.heroKicker} onChange={(e) => patch({ heroKicker: e.target.value })} placeholder={t("catalog:pages.heroKickerPlaceholder")} /></FormField>
+                    <FormField label={t("catalog:pages.heroTitle")} htmlFor="page-hero-title"><Input id="page-hero-title" type="text" value={f.heroTitle} onChange={(e) => patch({ heroTitle: e.target.value })} /></FormField>
+                    <FormField label={t("catalog:shared.seoTitle")} htmlFor="page-seo-title"><Input id="page-seo-title" type="text" value={f.seoTitle} onChange={(e) => patch({ seoTitle: e.target.value })} placeholder="About us | Aura Shop" /></FormField>
                   </div>
-                  <FormField label="Hero description" htmlFor="page-hero-desc">
+                  <FormField label={t("catalog:pages.heroDesc")} htmlFor="page-hero-desc">
                     <Textarea id="page-hero-desc" rows={2} value={f.heroDesc} onChange={(e) => patch({ heroDesc: e.target.value })} />
                   </FormField>
                 </SectionCard>
@@ -551,108 +571,116 @@ export default function PagesManagementPage() {
                     {blocks.map((b, i) => b.h
                       ? <h3 key={i} className="text-lg font-semibold">{b.text}</h3>
                       : <p key={i} className="text-sm leading-relaxed">{b.text}</p>)}
-                    {blocks.length === 0 && <span className="text-sm text-muted-foreground">This page has no content yet.</span>}
+                    {blocks.length === 0 && <span className="text-sm text-muted-foreground">{t("catalog:pages.noContent")}</span>}
                   </Card>
                 ) : (
                   <>
                     {bodyEditable && (
                       <div className="flex flex-col gap-2">
-                        <div role="toolbar" aria-label="Formatting" className="flex flex-wrap gap-1.5">
-                          {([["Heading", "H", "# Heading"], ["Bold", "B", "**bold**"], ["Italic", "I", "_italic_"], ["Bulleted list", "•", "- Item"], ["Numbered list", "1.", "1. Item"], ["Link", "↗", "[link text](https://)"], ["Divider", "—", "---"]] as const).map(([label, glyph, txt]) => (
-                            <WithTooltip key={label} content={label}>
-                              <Button type="button" aria-label={label} variant="outline" size="icon"
-                                onClick={() => patch({ body: (f.body ? f.body.replace(/\s+$/, "") + "\n" : "") + txt })}>{glyph}</Button>
+                        <div role="toolbar" aria-label={t("catalog:pages.format.toolbar")} className="flex flex-wrap gap-1.5">
+                          {([
+                            ["catalog:pages.format.heading", "H", "catalog:pages.format.headingSample"],
+                            ["catalog:pages.format.bold", "B", "catalog:pages.format.boldSample"],
+                            ["catalog:pages.format.italic", "I", "catalog:pages.format.italicSample"],
+                            ["catalog:pages.format.bullets", "•", "catalog:pages.format.bulletSample"],
+                            ["catalog:pages.format.numbered", "1.", "catalog:pages.format.numberedSample"],
+                            ["catalog:pages.format.link", "↗", "catalog:pages.format.linkSample"],
+                            ["catalog:pages.format.divider", "—", null],
+                          ] as const).map(([label, glyph, sample]) => (
+                            <WithTooltip key={label} content={t(label)}>
+                              <Button type="button" aria-label={t(label)} variant="outline" size="icon"
+                                onClick={() => patch({ body: (f.body ? f.body.replace(/\s+$/, "") + "\n" : "") + (sample ? t(sample) : "---") })}>{glyph}</Button>
                             </WithTooltip>
                           ))}
                         </div>
-                        <Textarea rows={12} value={f.body} onChange={(e) => patch({ body: e.target.value })} aria-label={f.type === "about" ? "Story content" : "Page content"}
-                          placeholder={f.type === "about" ? "Write the story shown above the stats…" : "Write the page content…"} />
-                        <span className="text-xs text-muted-foreground">Start a line with # for a heading and - for a list item. Use Preview to see how it reads.</span>
+                        <Textarea rows={12} value={f.body} onChange={(e) => patch({ body: e.target.value })} aria-label={f.type === "about" ? t("catalog:pages.storyContent") : t("catalog:pages.pageContent")}
+                          placeholder={f.type === "about" ? t("catalog:pages.storyPlaceholder") : t("catalog:pages.contentPlaceholder")} />
+                        <span className="text-xs text-muted-foreground">{t("catalog:pages.markdownHelp")}</span>
                       </div>
                     )}
 
                     {f.type === "about" && (
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-2">
-                          <strong className="text-sm">Stats</strong>
-                          {f.stats.length === 0 && <span className="text-sm text-muted-foreground">No stats yet.</span>}
+                          <strong className="text-sm">{t("catalog:pages.about.stats")}</strong>
+                          {f.stats.length === 0 && <span className="text-sm text-muted-foreground">{t("catalog:pages.about.noStats")}</span>}
                           {f.stats.map((r, i) => (
                             <div key={i} className="flex flex-wrap gap-2">
-                              <Input type="text" value={r.label} onChange={(e) => upRow("stats", i, { label: e.target.value })} placeholder="Label, e.g. Happy customers" aria-label="Stat label" className="min-w-40 flex-1" />
-                              <Input type="text" value={r.value} onChange={(e) => upRow("stats", i, { value: e.target.value })} placeholder="Value, e.g. 50K+" aria-label="Stat value" className="min-w-32 flex-1" />
-                              <Select value={r.icon} onValueChange={(v) => upRow("stats", i, { icon: v })}><SelectTrigger aria-label="Stat icon" className="w-40"><SelectValue /></SelectTrigger><SelectContent>{ICONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
-                              <WithTooltip content="Remove stat"><Button type="button" onClick={() => delRow("stats", i)} aria-label="Remove stat" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
+                              <Input type="text" value={r.label} onChange={(e) => upRow("stats", i, { label: e.target.value })} placeholder={t("catalog:pages.about.statLabelPh")} aria-label={t("catalog:pages.about.statLabel")} className="min-w-40 flex-1" />
+                              <Input type="text" value={r.value} onChange={(e) => upRow("stats", i, { value: e.target.value })} placeholder={t("catalog:pages.about.statValuePh")} aria-label={t("catalog:pages.about.statValue")} className="min-w-32 flex-1" />
+                              <Select value={r.icon} onValueChange={(v) => upRow("stats", i, { icon: v })}><SelectTrigger aria-label={t("catalog:pages.about.statIcon")} className="w-40"><SelectValue /></SelectTrigger><SelectContent>{ICONS.map((o) => <SelectItem key={o} value={o}>{ICON_LABEL[o] ? t(ICON_LABEL[o]) : o}</SelectItem>)}</SelectContent></Select>
+                              <WithTooltip content={t("catalog:pages.about.removeStat")}><Button type="button" onClick={() => delRow("stats", i)} aria-label={t("catalog:pages.about.removeStat")} variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                           ))}
-                          <Button type="button" onClick={() => patch({ stats: [...f.stats, { label: "", value: "", icon: "users" }] })} variant="outline" size="sm" className="self-start">+ Add stat</Button>
+                          <Button type="button" onClick={() => patch({ stats: [...f.stats, { label: "", value: "", icon: "users" }] })} variant="outline" size="sm" className="self-start">{t("catalog:pages.about.addStat")}</Button>
                         </div>
                         <div className="flex flex-col gap-2">
-                          <FormField label="Values section heading" htmlFor="page-values-heading"><Input id="page-values-heading" type="text" value={f.valuesHeading} onChange={(e) => patch({ valuesHeading: e.target.value })} /></FormField>
-                          {f.values.length === 0 && <span className="text-sm text-muted-foreground">No values yet.</span>}
+                          <FormField label={t("catalog:pages.about.valuesHeading")} htmlFor="page-values-heading"><Input id="page-values-heading" type="text" value={f.valuesHeading} onChange={(e) => patch({ valuesHeading: e.target.value })} /></FormField>
+                          {f.values.length === 0 && <span className="text-sm text-muted-foreground">{t("catalog:pages.about.noValues")}</span>}
                           {f.values.map((r, i) => (
                             <div key={i} className="flex flex-wrap gap-2">
-                              <Input type="text" value={r.title} onChange={(e) => upRow("values", i, { title: e.target.value })} placeholder="Title" aria-label="Value title" className="min-w-40 flex-1" />
-                              <Input type="text" value={r.description} onChange={(e) => upRow("values", i, { description: e.target.value })} placeholder="Description" aria-label="Value description" className="min-w-48 flex-[2]" />
-                              <Select value={r.icon} onValueChange={(v) => upRow("values", i, { icon: v })}><SelectTrigger aria-label="Value icon" className="w-40"><SelectValue /></SelectTrigger><SelectContent>{ICONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
-                              <WithTooltip content="Remove value"><Button type="button" onClick={() => delRow("values", i)} aria-label="Remove value" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
+                              <Input type="text" value={r.title} onChange={(e) => upRow("values", i, { title: e.target.value })} placeholder={t("catalog:pages.about.titlePh")} aria-label={t("catalog:pages.about.valueTitle")} className="min-w-40 flex-1" />
+                              <Input type="text" value={r.description} onChange={(e) => upRow("values", i, { description: e.target.value })} placeholder={t("common:fields.description")} aria-label={t("catalog:pages.about.valueDesc")} className="min-w-48 flex-[2]" />
+                              <Select value={r.icon} onValueChange={(v) => upRow("values", i, { icon: v })}><SelectTrigger aria-label={t("catalog:pages.about.valueIcon")} className="w-40"><SelectValue /></SelectTrigger><SelectContent>{ICONS.map((o) => <SelectItem key={o} value={o}>{ICON_LABEL[o] ? t(ICON_LABEL[o]) : o}</SelectItem>)}</SelectContent></Select>
+                              <WithTooltip content={t("catalog:pages.about.removeValue")}><Button type="button" onClick={() => delRow("values", i)} aria-label={t("catalog:pages.about.removeValue")} variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                           ))}
-                          <Button type="button" onClick={() => patch({ values: [...f.values, { title: "", description: "", icon: "heart" }] })} variant="outline" size="sm" className="self-start">+ Add value</Button>
+                          <Button type="button" onClick={() => patch({ values: [...f.values, { title: "", description: "", icon: "heart" }] })} variant="outline" size="sm" className="self-start">{t("catalog:pages.about.addValue")}</Button>
                         </div>
                         <div className="flex flex-col gap-2">
-                          <FormField label="Team section heading" htmlFor="page-team-heading"><Input id="page-team-heading" type="text" value={f.teamHeading} onChange={(e) => patch({ teamHeading: e.target.value })} /></FormField>
-                          {f.team.length === 0 && <span className="text-sm text-muted-foreground">No team members yet.</span>}
+                          <FormField label={t("catalog:pages.about.teamHeading")} htmlFor="page-team-heading"><Input id="page-team-heading" type="text" value={f.teamHeading} onChange={(e) => patch({ teamHeading: e.target.value })} /></FormField>
+                          {f.team.length === 0 && <span className="text-sm text-muted-foreground">{t("catalog:pages.about.noTeam")}</span>}
                           {f.team.map((r, i) => (
                             <div key={i} className="flex flex-wrap gap-2">
-                              <Input type="text" value={r.name} onChange={(e) => upRow("team", i, { name: e.target.value })} placeholder="Name" aria-label="Team member name" className="min-w-36 flex-1" />
-                              <Input type="text" value={r.role} onChange={(e) => upRow("team", i, { role: e.target.value })} placeholder="Role" aria-label="Team member role" className="min-w-36 flex-1" />
-                              <Input type="text" value={r.bio} onChange={(e) => upRow("team", i, { bio: e.target.value })} placeholder="Short bio" aria-label="Team member bio" className="min-w-48 flex-[2]" />
-                              <WithTooltip content="Remove team member"><Button type="button" onClick={() => delRow("team", i)} aria-label="Remove team member" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
+                              <Input type="text" value={r.name} onChange={(e) => upRow("team", i, { name: e.target.value })} placeholder={t("common:fields.name")} aria-label={t("catalog:pages.about.memberName")} className="min-w-36 flex-1" />
+                              <Input type="text" value={r.role} onChange={(e) => upRow("team", i, { role: e.target.value })} placeholder={t("catalog:pages.about.rolePh")} aria-label={t("catalog:pages.about.memberRole")} className="min-w-36 flex-1" />
+                              <Input type="text" value={r.bio} onChange={(e) => upRow("team", i, { bio: e.target.value })} placeholder={t("catalog:pages.about.bioPh")} aria-label={t("catalog:pages.about.memberBio")} className="min-w-48 flex-[2]" />
+                              <WithTooltip content={t("catalog:pages.about.removeMember")}><Button type="button" onClick={() => delRow("team", i)} aria-label={t("catalog:pages.about.removeMember")} variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                           ))}
-                          <Button type="button" onClick={() => patch({ team: [...f.team, { name: "", role: "", bio: "" }] })} variant="outline" size="sm" className="self-start">+ Add team member</Button>
+                          <Button type="button" onClick={() => patch({ team: [...f.team, { name: "", role: "", bio: "" }] })} variant="outline" size="sm" className="self-start">{t("catalog:pages.about.addMember")}</Button>
                         </div>
                       </div>
                     )}
 
                     {f.type === "faq" && (
                       <div className="flex flex-col gap-3">
-                        {f.faq.length === 0 && <span className="text-sm text-muted-foreground">No question categories yet.</span>}
+                        {f.faq.length === 0 && <span className="text-sm text-muted-foreground">{t("catalog:pages.faq.noCats")}</span>}
                         {f.faq.map((c, ci) => (
                           <Card key={ci} className="gap-2 p-3 shadow-none">
                             <div className="flex gap-2">
-                              <Input type="text" value={c.title} onChange={(e) => upCat(ci, { title: e.target.value })} placeholder="Category title, e.g. Orders & delivery" aria-label="Category title" />
-                              <WithTooltip content="Remove category"><Button type="button" onClick={() => patch({ faq: f.faq.filter((_, j) => j !== ci) })} aria-label="Remove category" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
+                              <Input type="text" value={c.title} onChange={(e) => upCat(ci, { title: e.target.value })} placeholder={t("catalog:pages.faq.catTitlePh")} aria-label={t("catalog:pages.faq.catTitle")} />
+                              <WithTooltip content={t("catalog:pages.faq.removeCat")}><Button type="button" onClick={() => patch({ faq: f.faq.filter((_, j) => j !== ci) })} aria-label={t("catalog:pages.faq.removeCat")} variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                             </div>
                             {c.items.map((it, qi) => (
                               <div key={qi} className="flex gap-2">
                                 <div className="flex flex-1 flex-col gap-2">
-                                  <Input type="text" value={it.q} onChange={(e) => upCat(ci, { items: c.items.map((x, n) => (n === qi ? { ...x, q: e.target.value } : x)) })} placeholder="Question" aria-label="Question" />
-                                  <Textarea rows={2} value={it.a} onChange={(e) => upCat(ci, { items: c.items.map((x, n) => (n === qi ? { ...x, a: e.target.value } : x)) })} placeholder="Answer" aria-label="Answer" />
+                                  <Input type="text" value={it.q} onChange={(e) => upCat(ci, { items: c.items.map((x, n) => (n === qi ? { ...x, q: e.target.value } : x)) })} placeholder={t("catalog:pages.faq.question")} aria-label={t("catalog:pages.faq.question")} />
+                                  <Textarea rows={2} value={it.a} onChange={(e) => upCat(ci, { items: c.items.map((x, n) => (n === qi ? { ...x, a: e.target.value } : x)) })} placeholder={t("catalog:pages.faq.answer")} aria-label={t("catalog:pages.faq.answer")} />
                                 </div>
-                                <WithTooltip content="Remove question"><Button type="button" onClick={() => upCat(ci, { items: c.items.filter((_, n) => n !== qi) })} aria-label="Remove question" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
+                                <WithTooltip content={t("catalog:pages.faq.removeQuestion")}><Button type="button" onClick={() => upCat(ci, { items: c.items.filter((_, n) => n !== qi) })} aria-label={t("catalog:pages.faq.removeQuestion")} variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                               </div>
                             ))}
-                            <Button type="button" onClick={() => upCat(ci, { items: [...c.items, { q: "", a: "" }] })} variant="outline" size="sm" className="self-start">+ Add question</Button>
+                            <Button type="button" onClick={() => upCat(ci, { items: [...c.items, { q: "", a: "" }] })} variant="outline" size="sm" className="self-start">{t("catalog:pages.faq.addQuestion")}</Button>
                           </Card>
                         ))}
-                        <Button type="button" onClick={() => patch({ faq: [...f.faq, { title: "", items: [{ q: "", a: "" }] }] })} variant="outline" size="sm" className="self-start">+ Add category</Button>
+                        <Button type="button" onClick={() => patch({ faq: [...f.faq, { title: "", items: [{ q: "", a: "" }] }] })} variant="outline" size="sm" className="self-start">{t("catalog:pages.faq.addCat")}</Button>
                       </div>
                     )}
 
                     {f.type === "policy" && (
                       <div className="flex flex-col gap-3">
-                        {f.sections.length === 0 && <span className="text-sm text-muted-foreground">No sections yet.</span>}
+                        {f.sections.length === 0 && <span className="text-sm text-muted-foreground">{t("catalog:pages.policy.noSections")}</span>}
                         {f.sections.map((r, i) => (
                           <div key={i} className="flex gap-2">
                             <div className="flex flex-1 flex-col gap-2">
-                              <Input type="text" value={r.title} onChange={(e) => upRow("sections", i, { title: e.target.value })} placeholder="Section title" aria-label="Section title" />
-                              <Textarea rows={5} value={r.text} onChange={(e) => upRow("sections", i, { text: e.target.value })} placeholder="Paragraphs. Leave a blank line between paragraphs." aria-label="Section paragraphs" />
+                              <Input type="text" value={r.title} onChange={(e) => upRow("sections", i, { title: e.target.value })} placeholder={t("catalog:pages.policy.sectionTitle")} aria-label={t("catalog:pages.policy.sectionTitle")} />
+                              <Textarea rows={5} value={r.text} onChange={(e) => upRow("sections", i, { text: e.target.value })} placeholder={t("catalog:pages.policy.sectionParasPh")} aria-label={t("catalog:pages.policy.sectionParas")} />
                             </div>
-                            <WithTooltip content="Remove section"><Button type="button" onClick={() => delRow("sections", i)} aria-label="Remove section" variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("catalog:pages.policy.removeSection")}><Button type="button" onClick={() => delRow("sections", i)} aria-label={t("catalog:pages.policy.removeSection")} variant="outline" size="icon"><X className="size-4" /></Button></WithTooltip>
                           </div>
                         ))}
-                        <Button type="button" onClick={() => patch({ sections: [...f.sections, { title: "", text: "" }] })} variant="outline" size="sm" className="self-start">+ Add section</Button>
+                        <Button type="button" onClick={() => patch({ sections: [...f.sections, { title: "", text: "" }] })} variant="outline" size="sm" className="self-start">{t("catalog:pages.policy.addSection")}</Button>
                       </div>
                     )}
                   </>
@@ -662,7 +690,7 @@ export default function PagesManagementPage() {
                   <Card className="gap-0 py-0 shadow-none">
                     <CollapsibleTrigger asChild>
                       <Button type="button" variant="ghost" className="group w-full justify-between">
-                        Search engine listing
+                        {t("catalog:shared.seoListing")}
                         <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
                       </Button>
                     </CollapsibleTrigger>
@@ -674,7 +702,7 @@ export default function PagesManagementPage() {
                           <div className="text-sm font-semibold text-primary">{f.seoTitle.trim() || `${f.title} | Aura Shop`}</div>
                           <div className="text-xs text-muted-foreground">{f.seoDesc}</div>
                         </Card>
-                        <FormField label="Meta description" htmlFor="page-seo-desc" description={`${f.seoDesc.length} / 160 characters`}>
+                        <FormField label={t("catalog:pages.metaDesc")} htmlFor="page-seo-desc" description={t("catalog:pages.metaDescHelp", { count: f.seoDesc.length })}>
                           <Textarea id="page-seo-desc" rows={2} value={f.seoDesc} onChange={(e) => patch({ seoDesc: e.target.value.slice(0, 160) })} />
                         </FormField>
                       </div>
@@ -683,8 +711,8 @@ export default function PagesManagementPage() {
                 </Collapsible>
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Button type="button" variant="destructive" onClick={remove}><Trash2 className="size-4" />{rec ? "Delete page" : "Discard"}</Button>
-                  <span className="text-xs text-muted-foreground">{words} words · ~{Math.max(1, Math.round(words / 200))} min read</span>
+                  <Button type="button" variant="destructive" onClick={remove}><Trash2 className="size-4" />{rec ? t("catalog:pages.deletePage") : t("catalog:pages.discard")}</Button>
+                  <span className="text-xs text-muted-foreground">{t("catalog:pages.readTime", { count: words, min: Math.max(1, Math.round(words / 200)) })}</span>
                 </div>
               </div>
             </>

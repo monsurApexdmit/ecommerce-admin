@@ -12,8 +12,11 @@ import { Card } from "@/components/ui/card"
 import { Eye, EyeOff } from "lucide-react"
 import { saasAuthApi } from "@/lib/saasAuthApi"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { useTranslation } from "react-i18next"
+import { LanguageSwitcher } from "@/components/shell/language-switcher"
 
 export default function LoginPage() {
+  const { t } = useTranslation(["auth", "common"])
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -47,14 +50,17 @@ export default function LoginPage() {
       // Redirect to dashboard
       router.push("/dashboard")
     } catch (err: any) {
-      const message = err.response?.data?.message || "Invalid email or password"
+      const message = err.response?.data?.message || t("auth:login.invalidCredentials")
       setError(message)
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-md p-8 shadow-lg">
         <div className="mb-8 text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-4">
@@ -62,12 +68,12 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold">Inventory Admin</h1>
-          <p className="text-sm text-muted-foreground mt-2">Sign in to your account</p>
+          <h1 className="text-2xl font-bold">{t("auth:login.adminTitle")}</h1>
+          <p className="text-sm text-muted-foreground mt-2">{t("auth:login.subtitle")}</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          <FormField label="Email" htmlFor="email">
+          <FormField label={t("common:fields.email")} htmlFor="email">
             <Input
               id="email"
               type="email"
@@ -78,23 +84,23 @@ export default function LoginPage() {
             />
           </FormField>
 
-          <FormField label="Password" htmlFor="password">
+          <FormField label={t("auth:login.password")} htmlFor="password">
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
+                placeholder={t("auth:login.passwordPlaceholder")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="pr-10"
               />
-              <WithTooltip content={showPassword ? "Hide password" : "Show password"}><Button
+              <WithTooltip content={showPassword ? t("auth:password.hide") : t("auth:password.show")}><Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? t("auth:password.hide") : t("auth:password.show")}
                 className="absolute right-1 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -109,11 +115,11 @@ export default function LoginPage() {
           )}
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? t("auth:login.signingIn") : t("auth:login.signIn")}
           </Button>
 
           <div className="text-center text-sm text-muted-foreground">
-            <p>Demo credentials:</p>
+            <p>{t("auth:login.demoCredentials")}</p>
             <p className="font-mono text-xs mt-1">jane.smith@startup.io / StartupPass123!</p>
           </div>
         </form>

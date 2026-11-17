@@ -18,6 +18,15 @@ import {
   Search, AlertCircle, Building2, ChevronLeft, ChevronRight,
   CheckCircle2, Clock, XCircle, Eye,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
+
+const STATUS_LABEL: Record<string, "auth:platform.status.active" | "auth:platform.status.trial" | "auth:platform.status.inactive" | "auth:platform.status.suspended"> = {
+  active:    "auth:platform.status.active",
+  trial:     "auth:platform.status.trial",
+  inactive:  "auth:platform.status.inactive",
+  suspended: "auth:platform.status.suspended",
+}
 
 const STATUS_ICON: Record<string, any> = {
   active:    CheckCircle2,
@@ -27,6 +36,7 @@ const STATUS_ICON: Record<string, any> = {
 }
 
 export default function CompaniesPage() {
+  const { t, i18n } = useTranslation(["auth", "common"])
   const [companies, setCompanies] = useState<PlatformCompany[]>([])
   const [pagination, setPagination] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -49,7 +59,7 @@ export default function CompaniesPage() {
       setCompanies(res.data)
       setPagination(res.pagination)
     } catch {
-      setError("Failed to load companies")
+      setError(t("auth:platform.companies.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -64,7 +74,7 @@ export default function CompaniesPage() {
       await platformApi.updateCompanyStatus(company.id, next)
       setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, status: next } : c))
     } catch {
-      alert("Failed to update status")
+      alert(t("auth:platform.companies.updateFailed"))
     } finally {
       setTogglingId(null)
     }
@@ -72,7 +82,7 @@ export default function CompaniesPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <PageHeader title="Companies" description="All registered businesses on the platform." />
+      <PageHeader title={t("auth:platform.companies.title")} description={t("auth:platform.companies.description")} />
 
       {/* Filters */}
       <Toolbar>
@@ -80,7 +90,7 @@ export default function CompaniesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search by name or email…"
+            placeholder={t("auth:platform.companies.searchPlaceholder")}
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="pl-9 w-72"
@@ -94,11 +104,11 @@ export default function CompaniesPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">All statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="trial">Trial</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="__all">{t("auth:platform.status.allStatuses")}</SelectItem>
+            <SelectItem value="active">{t("auth:platform.status.active")}</SelectItem>
+            <SelectItem value="trial">{t("auth:platform.status.trial")}</SelectItem>
+            <SelectItem value="inactive">{t("auth:platform.status.inactive")}</SelectItem>
+            <SelectItem value="suspended">{t("auth:platform.status.suspended")}</SelectItem>
           </SelectContent>
         </Select>
       </Toolbar>
@@ -115,18 +125,18 @@ export default function CompaniesPage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : companies.length === 0 ? (
-          <EmptyState icon={Building2} title="No companies found" />
+          <EmptyState icon={Building2} title={t("auth:platform.companies.empty")} />
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("auth:platform.companies.company")}</TableHead>
+                  <TableHead>{t("common:fields.status")}</TableHead>
+                  <TableHead>{t("auth:platform.companies.plan")}</TableHead>
+                  <TableHead>{t("auth:platform.companies.users")}</TableHead>
+                  <TableHead>{t("auth:platform.companies.joined")}</TableHead>
+                  <TableHead className="text-right">{t("common:fields.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -141,7 +151,7 @@ export default function CompaniesPage() {
                       <TableCell>
                         <StatusBadge
                           status={c.status}
-                          label={<><StatusIcon />{c.status.charAt(0).toUpperCase() + c.status.slice(1)}</>}
+                          label={<><StatusIcon />{STATUS_LABEL[c.status] ? t(STATUS_LABEL[c.status]) : c.status.charAt(0).toUpperCase() + c.status.slice(1)}</>}
                         />
                       </TableCell>
                       <TableCell>
@@ -149,13 +159,13 @@ export default function CompaniesPage() {
                       </TableCell>
                       <TableCell>{c.usersCount}</TableCell>
                       <TableCell>
-                        {new Date(c.createdAt).toLocaleDateString()}
+                        {new Date(c.createdAt).toLocaleDateString(localeTag(i18n.language))}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
                           <Button asChild size="sm" variant="ghost">
                             <Link href={`/platform/companies/${c.id}`}>
-                              <Eye /> View
+                              <Eye /> {t("common:actions.view")}
                             </Link>
                           </Button>
                           <Button
@@ -164,7 +174,7 @@ export default function CompaniesPage() {
                             onClick={() => toggleStatus(c)}
                             disabled={togglingId === c.id}
                           >
-                            {togglingId === c.id ? "…" : (c.status === "inactive" || c.status === "suspended" ? "Activate" : "Deactivate")}
+                            {togglingId === c.id ? "…" : (c.status === "inactive" || c.status === "suspended" ? t("auth:platform.companies.activate") : t("auth:platform.companies.deactivate"))}
                           </Button>
                         </div>
                       </TableCell>
@@ -181,7 +191,7 @@ export default function CompaniesPage() {
       {pagination && pagination.last_page > 1 && (
         <div className="flex items-center justify-between text-sm">
           <p className="text-muted-foreground">
-            Showing {((page - 1) * 15) + 1}–{Math.min(page * 15, pagination.total)} of {pagination.total}
+            {t("common:table.showing", { from: ((page - 1) * 15) + 1, to: Math.min(page * 15, pagination.total), total: pagination.total })}
           </p>
           <div className="flex gap-2">
             <Button
@@ -190,7 +200,7 @@ export default function CompaniesPage() {
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
             >
-              <ChevronLeft className="w-4 h-4" /> Prev
+              <ChevronLeft className="w-4 h-4" /> {t("common:actions.previous")}
             </Button>
             <Button
               variant="outline"
@@ -198,7 +208,7 @@ export default function CompaniesPage() {
               onClick={() => setPage(p => Math.min(pagination.last_page, p + 1))}
               disabled={page === pagination.last_page}
             >
-              Next <ChevronRight className="w-4 h-4" />
+              {t("common:actions.next")} <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </div>

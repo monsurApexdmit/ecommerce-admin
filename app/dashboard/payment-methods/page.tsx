@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Banknote, Landmark, CreditCard, Wallet, QrCode, Smartphone, Pencil, Trash2, Plus } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -24,27 +26,30 @@ import { cn } from "@/lib/utils"
 import paymentMethodApi, { type PaymentGatewayType, type PaymentMethod } from "@/lib/paymentMethodApi"
 import { settingsApi, type PaymentSettings } from "@/lib/settingsApi"
 
-const ICONS = [
-  { value: "banknote", label: "Banknote (Cash)", Icon: Banknote },
-  { value: "landmark", label: "Landmark (Bank)", Icon: Landmark },
-  { value: "credit-card", label: "Credit Card", Icon: CreditCard },
-  { value: "wallet", label: "Wallet", Icon: Wallet },
-  { value: "qr-code", label: "QR Code", Icon: QrCode },
-  { value: "smartphone", label: "Mobile Pay", Icon: Smartphone },
+const NS = ["commerce", "common"] as const
+type Key = ParseKeys<typeof NS>
+
+const ICONS: { value: string; label: Key; Icon: typeof Banknote }[] = [
+  { value: "banknote", label: "commerce:paymentMethods.icon.banknote", Icon: Banknote },
+  { value: "landmark", label: "commerce:paymentMethods.icon.landmark", Icon: Landmark },
+  { value: "credit-card", label: "commerce:paymentMethods.icon.creditCard", Icon: CreditCard },
+  { value: "wallet", label: "commerce:paymentMethods.icon.wallet", Icon: Wallet },
+  { value: "qr-code", label: "commerce:paymentMethods.icon.qrCode", Icon: QrCode },
+  { value: "smartphone", label: "commerce:paymentMethods.icon.mobilePay", Icon: Smartphone },
 ]
 const iconOf = (v: string | null) => (ICONS.find((o) => o.value === v) ?? ICONS[0]).Icon
 
-const GATEWAYS: { value: PaymentGatewayType | string; label: string }[] = [
-  { value: "cod", label: "Cash on Delivery (manual)" },
-  { value: "sslcommerz", label: "SSLCommerz (bKash, Nagad, Rocket, Cards)" },
-  { value: "portwallet", label: "PortWallet (Cards, Mobile Banking)" },
-  { value: "stripe", label: "Stripe (Credit / Debit Card)" },
-  { value: "paypal", label: "PayPal" },
-  { value: "bkash", label: "bKash (Direct)" },
-  { value: "nagad", label: "Nagad (Direct)" },
-  { value: "manual", label: "Manual / Bank Transfer (offline)" },
+const GATEWAYS: { value: PaymentGatewayType | string; label: Key }[] = [
+  { value: "cod", label: "commerce:paymentMethods.gateway.cod" },
+  { value: "sslcommerz", label: "commerce:paymentMethods.gateway.sslcommerz" },
+  { value: "portwallet", label: "commerce:paymentMethods.gateway.portwallet" },
+  { value: "stripe", label: "commerce:paymentMethods.gateway.stripe" },
+  { value: "paypal", label: "commerce:paymentMethods.gateway.paypal" },
+  { value: "bkash", label: "commerce:paymentMethods.gateway.bkash" },
+  { value: "nagad", label: "commerce:paymentMethods.gateway.nagad" },
+  { value: "manual", label: "commerce:paymentMethods.gateway.manual" },
 ]
-const gatewayLabel = (g: string) => GATEWAYS.find((x) => x.value === g)?.label ?? g
+const gatewayKey = (g: string) => GATEWAYS.find((x) => x.value === g)?.label
 const NEEDS_KEYS = ["sslcommerz", "portwallet", "stripe", "paypal", "bkash", "nagad"]
 
 
@@ -54,15 +59,18 @@ function Switch({ on, label, onClick, disabled, id }: { on: boolean; label: stri
   )
 }
 
-type Fixed = { slug: string; name: string; ini: string; color: string; sub: string; where: string[]; gateway: boolean; fields: [string, string, string][] }
+// name: brand names (bKash, Nagad) stay as is; others are keys. where: channel codes "POS" / "Online" (lower-cased when saved).
+// fields: [settings key, label key, placeholder key or literal placeholder]
+type Fixed = { slug: string; name: Key | string; ini: string; color: string; sub: Key; where: string[]; gateway: boolean; fields: [string, Key, Key | string][] }
 const FIXED: Fixed[] = [
-  { slug: "cash", name: "Cash", ini: "$", color: "#0F766E", sub: "Cash at the counter", where: ["POS"], gateway: false, fields: [] },
-  { slug: "bkash", name: "bKash", ini: "bK", color: "#D12053", sub: "Mobile wallet — merchant or personal number", where: ["POS", "Online"], gateway: true, fields: [["account", "bKash number", "01XXXXXXXXX"], ["accountName", "Account name", "Merchant name"]] },
-  { slug: "nagad", name: "Nagad", ini: "Ng", color: "#E8590C", sub: "Mobile wallet — merchant or personal number", where: ["POS", "Online"], gateway: true, fields: [["account", "Nagad number", "01XXXXXXXXX"], ["accountName", "Account name", "Merchant name"]] },
-  { slug: "card", name: "Card", ini: "Cd", color: "#1F2F5C", sub: "Debit and credit cards via POS terminal", where: ["POS", "Online"], gateway: true, fields: [["account", "Terminal / merchant ID", "e.g. MID-1042"], ["accountName", "Acquirer / bank", "e.g. City Bank"]] },
-  { slug: "bank", name: "Bank transfer", ini: "Bk", color: "#3B4458", sub: "Direct deposit to your bank account", where: ["Online"], gateway: false, fields: [["account", "Account number", "0000000000"], ["accountName", "Account name", "Business name"], ["bankName", "Bank & branch", "e.g. Dutch-Bangla, Mirpur"]] },
-  { slug: "cod", name: "Cash on delivery", ini: "COD", color: "#6D28D9", sub: "Pay when the order arrives", where: ["Online"], gateway: false, fields: [] },
+  { slug: "cash", name: "commerce:paymentMethods.fixed.cash", ini: "$", color: "#0F766E", sub: "commerce:paymentMethods.fixed.cashSub", where: ["POS"], gateway: false, fields: [] },
+  { slug: "bkash", name: "bKash", ini: "bK", color: "#D12053", sub: "commerce:paymentMethods.fixed.walletSub", where: ["POS", "Online"], gateway: true, fields: [["account", "commerce:paymentMethods.field.bkashNumber", "01XXXXXXXXX"], ["accountName", "commerce:paymentMethods.field.accountName", "commerce:paymentMethods.field.merchantName"]] },
+  { slug: "nagad", name: "Nagad", ini: "Ng", color: "#E8590C", sub: "commerce:paymentMethods.fixed.walletSub", where: ["POS", "Online"], gateway: true, fields: [["account", "commerce:paymentMethods.field.nagadNumber", "01XXXXXXXXX"], ["accountName", "commerce:paymentMethods.field.accountName", "commerce:paymentMethods.field.merchantName"]] },
+  { slug: "card", name: "commerce:paymentMethods.fixed.card", ini: "Cd", color: "#1F2F5C", sub: "commerce:paymentMethods.fixed.cardSub", where: ["POS", "Online"], gateway: true, fields: [["account", "commerce:paymentMethods.field.terminalId", "commerce:paymentMethods.field.terminalExample"], ["accountName", "commerce:paymentMethods.field.acquirer", "commerce:paymentMethods.field.acquirerExample"]] },
+  { slug: "bank", name: "commerce:paymentMethods.fixed.bank", ini: "Bk", color: "#3B4458", sub: "commerce:paymentMethods.fixed.bankSub", where: ["Online"], gateway: false, fields: [["account", "commerce:paymentMethods.field.accountNumber", "0000000000"], ["accountName", "commerce:paymentMethods.field.accountName", "commerce:paymentMethods.field.businessName"], ["bankName", "commerce:paymentMethods.field.bankBranch", "commerce:paymentMethods.field.bankBranchExample"]] },
+  { slug: "cod", name: "commerce:paymentMethods.fixed.cod", ini: "COD", color: "#6D28D9", sub: "commerce:paymentMethods.fixed.codSub", where: ["Online"], gateway: false, fields: [] },
 ]
+const CHANNEL_KEY: Record<string, Key> = { POS: "commerce:paymentMethods.channel.pos", Online: "commerce:paymentMethods.channel.online" }
 type Channel = "pos" | "online"
 type MState = { enabled: boolean; test: boolean; fields: Record<string, string>; channels: Channel[] }
 type MMap = Record<string, MState>
@@ -81,9 +89,12 @@ const buildMethods = (p?: PaymentSettings | null): MMap => {
 }
 
 type Form = { id: number | null; name: string; desc: string; gateway: string; icon: string; sort: string; active: boolean }
-type Cod = { deposit: boolean; max: string; fee: string; verify: "new" | "always" | "never" }
+type Cod = { deposit: boolean; max: string; fee: string; verify: "new" | "always" | "never"; hold: string }
 
 export default function PaymentMethodsPage() {
+  const { t } = useTranslation(NS)
+  // FIXED names / placeholders are keys ("commerce:…") except brand names and literal samples
+  const tx = (s: string) => (s.startsWith("commerce:") || s.startsWith("common:") ? t(s as Key) : s)
   const blocked = useModuleGuard("Payment Methods")
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
@@ -97,7 +108,7 @@ export default function PaymentMethodsPage() {
   const [busyId, setBusyId] = useState<number | null>(null)
 
   const [payment, setPayment] = useState<PaymentSettings | null>(null)
-  const [base, setBase] = useState<Cod>({ deposit: false, max: "5000", fee: "0", verify: "new" })
+  const [base, setBase] = useState<Cod>({ deposit: false, max: "5000", fee: "0", verify: "new", hold: "15" })
   const [cod, setCod] = useState<Cod>(base)
   const [codErr, setCodErr] = useState("")
   const [codSaving, setCodSaving] = useState(false)
@@ -120,6 +131,7 @@ export default function PaymentMethodsPage() {
         max: String(p.cod_limit ?? 5000),
         fee: String(p.cod_fee ?? 0),
         verify: p.cod_phone_verify ?? "new",
+        hold: String(p.payment_hold_minutes ?? 15),
       }
       setBase(c)
       setCod(c)
@@ -127,7 +139,7 @@ export default function PaymentMethodsPage() {
       const d = p.default && m[p.default] ? p.default : "cash"
       setPmBase({ m, def: d }); setPm(m); setDef(d)
     } catch {
-      toast({ variant: "destructive", title: "Failed to load payment methods" })
+      toast({ variant: "destructive", title: t("commerce:paymentMethods.toast.loadFailed") })
     } finally {
       setLoading(false)
     }
@@ -139,18 +151,19 @@ export default function PaymentMethodsPage() {
   if (blocked) return blocked
 
   const fail = (title: string, e: any) =>
-    toast({ variant: "destructive", title, description: e?.response?.data?.message || "Please try again" })
+    toast({ variant: "destructive", title, description: e?.response?.data?.message || t("common:extra.tryAgain") })
 
   const onCount = FIXED.filter((f) => pm[f.slug].enabled).length
   const testCount = FIXED.filter((f) => f.gateway && pm[f.slug].enabled && pm[f.slug].test).length
-  const defName = FIXED.find((f) => f.slug === def)?.name ?? "none"
+  const defFixed = FIXED.find((f) => f.slug === def)
+  const defName = defFixed ? tx(defFixed.name) : t("commerce:paymentMethods.none")
   const setM = (slug: string, patch: Partial<MState>) => { setPm((p) => ({ ...p, [slug]: { ...p[slug], ...patch } })); setCodErr("") }
   const toggleOn = (slug: string) => {
-    if (def === slug && pm[slug].enabled) return toast({ variant: "destructive", title: "Choose another default method before turning this one off" })
+    if (def === slug && pm[slug].enabled) return toast({ variant: "destructive", title: t("commerce:paymentMethods.toast.defaultOff") })
     setM(slug, { enabled: !pm[slug].enabled })
   }
   const makeDefault = (slug: string) => {
-    if (!pm[slug].enabled) return toast({ variant: "destructive", title: "Turn this method on before making it the default" })
+    if (!pm[slug].enabled) return toast({ variant: "destructive", title: t("commerce:paymentMethods.toast.enableFirst") })
     setDef(slug); setCodErr("")
   }
   const openNew = () => { setForm({ id: null, name: "", desc: "", gateway: "cod", icon: "banknote", sort: String(methods.length + 1), active: true }); setFormErr("") }
@@ -163,21 +176,21 @@ export default function PaymentMethodsPage() {
   const saveMethod = async () => {
     if (!form) return
     const name = form.name.trim()
-    if (!name) return setFormErr("Name is required.")
-    if (methods.some((m) => m.id !== form.id && m.name.toLowerCase() === name.toLowerCase())) return setFormErr("A payment method with this name already exists.")
-    if (form.sort !== "" && (!Number.isInteger(Number(form.sort)) || Number(form.sort) < 0)) return setFormErr("Sort order must be a whole number, 0 or more.")
+    if (!name) return setFormErr(t("commerce:paymentMethods.validation.nameRequired"))
+    if (methods.some((m) => m.id !== form.id && m.name.toLowerCase() === name.toLowerCase())) return setFormErr(t("commerce:paymentMethods.validation.nameTaken"))
+    if (form.sort !== "" && (!Number.isInteger(Number(form.sort)) || Number(form.sort) < 0)) return setFormErr(t("commerce:paymentMethods.validation.sort"))
     const body = {
       name, description: form.desc.trim(), gateway_type: form.gateway as PaymentGatewayType, icon: form.icon,
       sort_order: form.sort === "" ? methods.length + 1 : Number(form.sort), is_active: form.active,
     }
     setSaving(true)
     try {
-      if (form.id) { await paymentMethodApi.update(form.id, body); toast({ title: "Payment method updated" }) }
-      else { await paymentMethodApi.create(body); toast({ title: "Payment method created" }) }
+      if (form.id) { await paymentMethodApi.update(form.id, body); toast({ title: t("commerce:paymentMethods.toast.updated") }) }
+      else { await paymentMethodApi.create(body); toast({ title: t("commerce:paymentMethods.toast.created") }) }
       setForm(null)
       await load()
     } catch (e: any) {
-      setFormErr(e?.response?.data?.message || "Could not save payment method")
+      setFormErr(e?.response?.data?.message || t("commerce:paymentMethods.validation.saveFailed"))
     } finally {
       setSaving(false)
     }
@@ -187,37 +200,38 @@ export default function PaymentMethodsPage() {
     setBusyId(m.id)
     setMethods((p) => p.map((x) => (x.id === m.id ? { ...x, isActive: !x.isActive } : x)))
     try { await paymentMethodApi.toggle(m.id) }
-    catch (e) { setMethods((p) => p.map((x) => (x.id === m.id ? { ...x, isActive: m.isActive } : x))); fail("Could not update status", e) }
+    catch (e) { setMethods((p) => p.map((x) => (x.id === m.id ? { ...x, isActive: m.isActive } : x))); fail(t("commerce:paymentMethods.toast.statusFailed"), e) }
     finally { setBusyId(null) }
   }
 
   const remove = async (m: PaymentMethod) => {
-    if (!window.confirm(`Delete payment method "${m.name}"? It will be removed from checkout immediately.`)) return
+    if (!window.confirm(t("commerce:paymentMethods.confirmDelete", { name: m.name }))) return
     setBusyId(m.id)
     try {
       await paymentMethodApi.delete(m.id)
-      toast({ title: "Payment method deleted" })
+      toast({ title: t("commerce:paymentMethods.toast.deleted") })
       if (form?.id === m.id) setForm(null)
       await load()
-    } catch (e) { fail("Could not delete payment method", e) }
+    } catch (e) { fail(t("commerce:paymentMethods.toast.deleteFailed"), e) }
     finally { setBusyId(null) }
   }
 
   const saveCod = async () => {
-    const mx = Number(cod.max), fee = Number(cod.fee)
+    const mx = Number(cod.max), fee = Number(cod.fee), hold = Number(cod.hold)
     let e = ""
     const onN = FIXED.filter((f) => pm[f.slug].enabled).length
-    if (!pm[def]?.enabled) e = "The default method must be turned on."
-    else if (onN === 0) e = "Enable at least one payment method."
+    if (!pm[def]?.enabled) e = t("commerce:paymentMethods.validation.defaultOn")
+    else if (onN === 0) e = t("commerce:paymentMethods.validation.enableOne")
     else {
       const bad = FIXED.find((f) => f.fields.length > 0 && pm[f.slug].enabled && !pm[f.slug].fields.account?.trim())
-      if (bad) { e = `${bad.name} needs an account number or ID.`; setOpenSlug(bad.slug) }
+      if (bad) { e = t("commerce:paymentMethods.validation.needsAccount", { name: tx(bad.name) }); setOpenSlug(bad.slug) }
     }
-    if (!e && (cod.max === "" || !isFinite(mx) || mx < 0)) e = "COD order limit must be 0 or more."
-    if (!e && (cod.fee === "" || !isFinite(fee) || fee < 0)) e = "COD fee must be 0 or more."
+    if (!e && (cod.max === "" || !isFinite(mx) || mx < 0)) e = t("commerce:paymentMethods.validation.codLimit")
+    if (!e && (cod.fee === "" || !isFinite(fee) || fee < 0)) e = t("commerce:paymentMethods.validation.codFee")
+    if (!e && (!Number.isInteger(hold) || hold < 5 || hold > 1440)) e = t("commerce:paymentMethods.validation.hold")
     if (!e) {
       const noCh = FIXED.find((f) => pm[f.slug].enabled && pm[f.slug].channels.length === 0)
-      if (noCh) { e = `${noCh.name} is on but not available in POS or Online. Pick at least one channel.`; setOpenSlug(noCh.slug) }
+      if (noCh) { e = t("commerce:paymentMethods.validation.noChannel", { name: tx(noCh.name) }); setOpenSlug(noCh.slug) }
     }
     if (e) { setCodErr(e); toast({ variant: "destructive", title: e }); return }
     setCodSaving(true)
@@ -227,29 +241,30 @@ export default function PaymentMethodsPage() {
         cod_limit: mx,
         cod_fee: fee,
         cod_phone_verify: cod.verify,
+        payment_hold_minutes: hold,
         methods: pm,
         default: def,
         cod_shipping_deposit: { gateway: "sslcommerz", custom_amount: 0, ...dep, enabled: cod.deposit },
       })
-      toast({ title: "Payment settings saved" })
+      toast({ title: t("commerce:paymentMethods.toast.saved") })
       setCodErr("")
       await load()
-    } catch (err) { fail("Could not save payment settings", err) }
+    } catch (err) { fail(t("commerce:paymentMethods.toast.saveFailed"), err) }
     finally { setCodSaving(false) }
   }
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Payments" description="How customers pay you — in the shop and online. One place for methods and gateway keys." />
+      <PageHeader title={t("commerce:paymentMethods.title")} description={t("commerce:paymentMethods.description")} />
 
       {!loading && (
         <Alert role="status">
-          <AlertTitle>{testCount ? `${testCount} gateway${testCount > 1 ? "s are" : " is"} in test mode.` : `${onCount} of ${FIXED.length} methods on.`}</AlertTitle>
-          <AlertDescription>{testCount ? `Switch them to live when you are ready to take real payments. Default: ${defName}.` : `Default method: ${defName}.`}</AlertDescription>
+          <AlertTitle>{testCount ? t("commerce:paymentMethods.summary.testMode", { count: testCount }) : t("commerce:paymentMethods.summary.onOf", { on: onCount, total: FIXED.length })}</AlertTitle>
+          <AlertDescription>{testCount ? t("commerce:paymentMethods.summary.switchLive", { name: defName }) : t("commerce:paymentMethods.summary.defaultIs", { name: defName })}</AlertDescription>
         </Alert>
       )}
 
-      <SectionCard title="Payment methods" description="Turn on the methods you accept and choose the default." contentClassName="px-0">
+      <SectionCard title={t("commerce:paymentMethods.methods.title")} description={t("commerce:paymentMethods.methods.description")} contentClassName="px-0">
         {loading ? (
           <div className="flex flex-col gap-2.5 px-6">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
         ) : FIXED.map((f, fi) => {
@@ -257,33 +272,35 @@ export default function PaymentMethodsPage() {
           const isDef = def === f.slug
           const open = openSlug === f.slug
           const status = !m.enabled ? "Off" : f.gateway && m.test ? "Test mode" : "Live"
+          const statusLabel = !m.enabled ? t("commerce:paymentMethods.methods.off") : f.gateway && m.test ? t("commerce:paymentMethods.methods.testMode") : t("commerce:paymentMethods.methods.live")
+          const fname = tx(f.name)
           return (
             <div key={f.slug}>
               {fi > 0 && <Separator />}
               <div className="flex flex-wrap items-center gap-3.5 px-6 py-3.5">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold text-white" style={{ background: f.color }}>{f.ini}</span>
                 <div className="min-w-0 flex-1 basis-48">
-                  <div className="font-medium">{f.name}</div>
-                  <div className="text-xs text-muted-foreground">{f.sub}</div>
+                  <div className="font-medium">{fname}</div>
+                  <div className="text-xs text-muted-foreground">{t(f.sub)}</div>
                 </div>
-                <StatusBadge status={status} variant={status === "Live" ? "default" : status === "Test mode" ? "secondary" : "outline"} />
+                <StatusBadge status={status} label={statusLabel} variant={status === "Live" ? "default" : status === "Test mode" ? "secondary" : "outline"} />
                 <Button type="button" size="sm" variant={isDef ? "default" : "outline"} aria-pressed={isDef} onClick={() => makeDefault(f.slug)}>
-                  {isDef ? "Default" : "Make default"}
+                  {isDef ? t("commerce:paymentMethods.methods.default") : t("commerce:paymentMethods.methods.makeDefault")}
                 </Button>
                 <span className="flex gap-1.5">{f.where.map((w) => {
                   const ch = w.toLowerCase() as Channel
                   const on = m.channels.includes(ch)
                   return (
-                    <WithTooltip key={w} content={`Available in ${w}`}>
+                    <WithTooltip key={w} content={t("commerce:paymentMethods.methods.availableIn", { channel: CHANNEL_KEY[w] ? t(CHANNEL_KEY[w]) : w })}>
                       <Button type="button" size="sm" variant={on ? "default" : "outline"} aria-pressed={on}
                         onClick={(ev) => { ev.stopPropagation(); setM(f.slug, { channels: on ? m.channels.filter((c) => c !== ch) : [...m.channels, ch] }) }}
-                        className={cn(!on && "line-through")}>{w}</Button>
+                        className={cn(!on && "line-through")}>{CHANNEL_KEY[w] ? t(CHANNEL_KEY[w]) : w}</Button>
                     </WithTooltip>
                   )
                 })}</span>
-                <Switch on={m.enabled} label={`${f.name} enabled`} onClick={() => toggleOn(f.slug)} />
+                <Switch on={m.enabled} label={t("commerce:paymentMethods.methods.enabledLabel", { name: fname })} onClick={() => toggleOn(f.slug)} />
                 <Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={() => setOpenSlug(open ? null : f.slug)}>
-                  {f.fields.length ? (open ? "Close" : "Edit details") : "Details"}
+                  {f.fields.length ? (open ? t("common:actions.close") : t("commerce:paymentMethods.methods.editDetails")) : t("commerce:paymentMethods.methods.details")}
                 </Button>
               </div>
               {open && (
@@ -291,24 +308,24 @@ export default function PaymentMethodsPage() {
                   {f.fields.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                       {f.fields.map(([k, label, ph]) => (
-                        <FormField key={k} label={label} htmlFor={`pm-${f.slug}-${k}`}>
-                          <Input id={`pm-${f.slug}-${k}`} className="font-mono" value={m.fields[k] ?? ""} placeholder={ph} onChange={(e) => setM(f.slug, { fields: { ...m.fields, [k]: e.target.value } })} />
+                        <FormField key={k} label={t(label)} htmlFor={`pm-${f.slug}-${k}`}>
+                          <Input id={`pm-${f.slug}-${k}`} className="font-mono" value={m.fields[k] ?? ""} placeholder={tx(ph)} onChange={(e) => setM(f.slug, { fields: { ...m.fields, [k]: e.target.value } })} />
                         </FormField>
                       ))}
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-3">
                     {f.gateway && (
-                      <FormField orientation="horizontal" label="Test mode" htmlFor={`pm-${f.slug}-test`} className="w-auto gap-2">
-                        <Switch id={`pm-${f.slug}-test`} on={m.test} label="Test mode" onClick={() => setM(f.slug, { test: !m.test })} />
+                      <FormField orientation="horizontal" label={t("commerce:paymentMethods.methods.testMode")} htmlFor={`pm-${f.slug}-test`} className="w-auto gap-2">
+                        <Switch id={`pm-${f.slug}-test`} on={m.test} label={t("commerce:paymentMethods.methods.testMode")} onClick={() => setM(f.slug, { test: !m.test })} />
                       </FormField>
                     )}
                     <span className="min-w-[200px] flex-1 text-xs text-muted-foreground">
-                      {f.fields.length ? "These details appear on invoices and checkout so customers know where to pay." : f.slug === "cod" ? "Limits and fees are set under Cash on delivery below." : "No account details needed."}
+                      {f.fields.length ? t("commerce:paymentMethods.methods.detailsHelp") : f.slug === "cod" ? t("commerce:paymentMethods.methods.codHelp") : t("commerce:paymentMethods.methods.noDetails")}
                     </span>
                   </div>
-                  {f.gateway && m.test && <span className="text-xs text-foreground">Test mode — use the sandbox credentials from the {f.name} developer portal. No real money moves.</span>}
-                  <span className="text-xs text-muted-foreground">Use the Save changes bar at the bottom of the page to apply.</span>
+                  {f.gateway && m.test && <span className="text-xs text-foreground">{t("commerce:paymentMethods.methods.testNote", { name: fname })}</span>}
+                  <span className="text-xs text-muted-foreground">{t("commerce:paymentMethods.methods.saveBarNote")}</span>
                 </Card>
               )}
             </div>
@@ -317,63 +334,63 @@ export default function PaymentMethodsPage() {
       </SectionCard>
 
       <SectionCard
-        title="Checkout payment methods"
-        description="Payment options shown to online customers at checkout. Changes here save instantly."
-        actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> Add method</Button>}
+        title={t("commerce:paymentMethods.checkout.title")}
+        description={t("commerce:paymentMethods.checkout.description")}
+        actions={<Button type="button" onClick={openNew}><Plus className="size-4" /> {t("commerce:paymentMethods.checkout.add")}</Button>}
       >
         {form && (
           <Card className="mb-3.5 gap-3 bg-muted/50 p-4 shadow-none">
-            <strong>{form.id ? "Edit payment method" : "Add payment method"}</strong>
+            <strong>{form.id ? t("commerce:paymentMethods.checkout.editTitle") : t("commerce:paymentMethods.checkout.addTitle")}</strong>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <FormField label="Name *" htmlFor="pm-form-name">
-                <Input id="pm-form-name" value={form.name} placeholder="Cash on Delivery" onChange={(e) => patch({ name: e.target.value })} />
+              <FormField label={t("commerce:paymentMethods.checkout.name")} htmlFor="pm-form-name">
+                <Input id="pm-form-name" value={form.name} placeholder={t("commerce:paymentMethods.checkout.namePlaceholder")} onChange={(e) => patch({ name: e.target.value })} />
               </FormField>
-              <FormField label="Description" htmlFor="pm-form-desc">
-                <Input id="pm-form-desc" value={form.desc} placeholder="Pay when your order arrives" onChange={(e) => patch({ desc: e.target.value })} />
+              <FormField label={t("common:fields.description")} htmlFor="pm-form-desc">
+                <Input id="pm-form-desc" value={form.desc} placeholder={t("commerce:paymentMethods.checkout.descPlaceholder")} onChange={(e) => patch({ desc: e.target.value })} />
               </FormField>
-              <FormField label="Gateway type" htmlFor="pm-form-gateway">
+              <FormField label={t("commerce:paymentMethods.checkout.gatewayType")} htmlFor="pm-form-gateway">
                 <Select value={String(form.gateway)} onValueChange={(val) => patch({ gateway: val })}>
                   <SelectTrigger id="pm-form-gateway" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {GATEWAYS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                    {GATEWAYS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{t(o.label)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Icon" htmlFor="pm-form-icon">
+              <FormField label={t("commerce:paymentMethods.checkout.iconLabel")} htmlFor="pm-form-icon">
                 <Select value={String(form.icon)} onValueChange={(val) => patch({ icon: val })}>
                   <SelectTrigger id="pm-form-icon" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ICONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                    {ICONS.map((o) => <SelectItem key={o.value} value={String(o.value)}>{t(o.label)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Sort order" htmlFor="pm-form-sort">
+              <FormField label={t("commerce:paymentMethods.checkout.sortOrder")} htmlFor="pm-form-sort">
                 <Input id="pm-form-sort" type="number" min={0} step={1} value={form.sort} onChange={(e) => patch({ sort: e.target.value })} />
               </FormField>
-              <FormField label="Status" htmlFor="pm-form-status">
+              <FormField label={t("common:fields.status")} htmlFor="pm-form-status">
                 <Select value={String(form.active ? "active" : "inactive")} onValueChange={(val) => patch({ active: val === "active" })}>
                   <SelectTrigger id="pm-form-status" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="active">{t("common:status.active")}</SelectItem>
+                    <SelectItem value="inactive">{t("common:status.inactive")}</SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
             </div>
             {NEEDS_KEYS.includes(form.gateway) && (
-              <Alert><AlertDescription>Credentials for this gateway are configured in Settings, General, Payment gateway credentials.</AlertDescription></Alert>
+              <Alert><AlertDescription>{t("commerce:paymentMethods.checkout.credentialsNote")}</AlertDescription></Alert>
             )}
             <Item variant="outline" size="sm" className="bg-card">
               {(() => { const I = iconOf(form.icon); return <ItemMedia variant="icon" className="size-10"><I className="size-5" /></ItemMedia> })()}
               <ItemContent className="min-w-0">
-                <ItemTitle className="truncate">{form.name.trim() || "Method name"}</ItemTitle>
-                <ItemDescription className="truncate">{form.desc.trim() || "Description"}</ItemDescription>
+                <ItemTitle className="truncate">{form.name.trim() || t("commerce:paymentMethods.checkout.previewName")}</ItemTitle>
+                <ItemDescription className="truncate">{form.desc.trim() || t("common:fields.description")}</ItemDescription>
               </ItemContent>
             </Item>
             {formErr && <p className="text-sm font-medium text-destructive">{formErr}</p>}
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
-              <Button type="button" onClick={saveMethod} disabled={saving}>{saving ? "Saving…" : form.id ? "Save changes" : "Add method"}</Button>
+              <Button type="button" variant="outline" onClick={() => setForm(null)}>{t("common:actions.cancel")}</Button>
+              <Button type="button" onClick={saveMethod} disabled={saving}>{saving ? t("common:actions.saving") : form.id ? t("common:actions.saveChanges") : t("commerce:paymentMethods.checkout.add")}</Button>
             </div>
           </Card>
         )}
@@ -381,7 +398,7 @@ export default function PaymentMethodsPage() {
         {loading ? (
           <div className="flex flex-col gap-2.5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[68px]" />)}</div>
         ) : methods.length === 0 ? (
-          <EmptyState bordered title="No payment methods yet." action={<Button type="button" variant="outline" onClick={openNew}>Add first method</Button>} />
+          <EmptyState bordered title={t("commerce:paymentMethods.checkout.empty")} action={<Button type="button" variant="outline" onClick={openNew}>{t("commerce:paymentMethods.checkout.addFirst")}</Button>} />
         ) : (
           <div className="flex flex-col gap-2.5">
             {methods.map((m) => {
@@ -392,14 +409,14 @@ export default function PaymentMethodsPage() {
                   <ItemContent className="min-w-0">
                     <ItemTitle className={cn("truncate", !m.isActive && "text-muted-foreground")}>{m.name}</ItemTitle>
                     {m.description && <ItemDescription className="truncate">{m.description}</ItemDescription>}
-                    <ItemDescription className="truncate">{gatewayLabel(m.gateway_type)} · Sort #{m.sortOrder}</ItemDescription>
+                    <ItemDescription className="truncate">{(() => { const k = gatewayKey(m.gateway_type); return k ? t(k) : m.gateway_type })()} · {t("commerce:paymentMethods.checkout.sortNo", { n: m.sortOrder })}</ItemDescription>
                   </ItemContent>
                   <ItemActions>
-                  <StatusBadge status={m.isActive ? "active" : "inactive"} label={m.isActive ? "Active" : "Inactive"} />
-                  <Switch on={m.isActive} label={m.isActive ? "Active, turn off" : "Inactive, turn on"} disabled={busyId === m.id} onClick={() => toggle(m)} />
+                  <StatusBadge status={m.isActive ? "active" : "inactive"} label={m.isActive ? t("common:status.active") : t("common:status.inactive")} />
+                  <Switch on={m.isActive} label={m.isActive ? t("commerce:paymentMethods.checkout.activeTurnOff") : t("commerce:paymentMethods.checkout.inactiveTurnOn")} disabled={busyId === m.id} onClick={() => toggle(m)} />
                   <div className="flex gap-1.5">
-                    <WithTooltip content={`Edit ${m.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${m.name}`} onClick={() => openEdit(m)}><Pencil className="size-4" /></Button></WithTooltip>
-                    <WithTooltip content={`Delete ${m.name}`}><Button type="button" variant="destructive" size="icon" aria-label={`Delete ${m.name}`} disabled={busyId === m.id} onClick={() => remove(m)}><Trash2 className="size-4" /></Button></WithTooltip>
+                    <WithTooltip content={t("commerce:paymentMethods.checkout.edit", { name: m.name })}><Button type="button" variant="outline" size="icon" aria-label={t("commerce:paymentMethods.checkout.edit", { name: m.name })} onClick={() => openEdit(m)}><Pencil className="size-4" /></Button></WithTooltip>
+                    <WithTooltip content={t("commerce:paymentMethods.checkout.delete", { name: m.name })}><Button type="button" variant="destructive" size="icon" aria-label={t("commerce:paymentMethods.checkout.delete", { name: m.name })} disabled={busyId === m.id} onClick={() => remove(m)}><Trash2 className="size-4" /></Button></WithTooltip>
                   </div>
                   </ItemActions>
                 </Item>
@@ -408,35 +425,35 @@ export default function PaymentMethodsPage() {
           </div>
         )}
         <Alert className="mt-3.5">
-          <AlertTitle>Display order.</AlertTitle>
-          <AlertDescription>Methods are shown to customers ordered by Sort order (lowest first). Set the number when adding or editing a method.</AlertDescription>
+          <AlertTitle>{t("commerce:paymentMethods.checkout.orderTitle")}</AlertTitle>
+          <AlertDescription>{t("commerce:paymentMethods.checkout.orderNote")}</AlertDescription>
         </Alert>
       </SectionCard>
 
-      <SectionCard title="Cash on delivery" description="Reduce fake COD orders.">
+      <SectionCard title={t("commerce:paymentMethods.cod.title")} description={t("commerce:paymentMethods.cod.description")}>
         {loading ? <Skeleton className="h-28" /> : (
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <span className="flex flex-col">
-                <span className="text-sm font-medium">Ask for delivery charge upfront</span>
-                <span className="text-xs text-muted-foreground">Customer pays shipping online; the rest is paid on delivery.</span>
+                <span className="text-sm font-medium">{t("commerce:paymentMethods.cod.deposit")}</span>
+                <span className="text-xs text-muted-foreground">{t("commerce:paymentMethods.cod.depositHelp")}</span>
               </span>
-              <Switch on={cod.deposit} label="Delivery charge upfront" onClick={() => setCod((c) => ({ ...c, deposit: !c.deposit }))} />
+              <Switch on={cod.deposit} label={t("commerce:paymentMethods.cod.depositLabel")} onClick={() => setCod((c) => ({ ...c, deposit: !c.deposit }))} />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <FormField label={`COD only for orders under (${cur})`} htmlFor="pm-cod-max" description="0 = no limit">
+              <FormField label={t("commerce:paymentMethods.cod.max", { cur })} htmlFor="pm-cod-max" description={t("commerce:paymentMethods.cod.noLimit")}>
                 <Input id="pm-cod-max" type="number" min={0} value={cod.max} onChange={(e) => { setCod({ ...cod, max: e.target.value }); setCodErr("") }} />
               </FormField>
-              <FormField label={`Extra COD fee (${cur})`} htmlFor="pm-cod-fee">
+              <FormField label={t("commerce:paymentMethods.cod.fee", { cur })} htmlFor="pm-cod-fee">
                 <Input id="pm-cod-fee" type="number" min={0} value={cod.fee} onChange={(e) => { setCod({ ...cod, fee: e.target.value }); setCodErr("") }} />
               </FormField>
-              <FormField label="Phone verification" htmlFor="pm-cod-verify">
+              <FormField label={t("commerce:paymentMethods.cod.verify")} htmlFor="pm-cod-verify">
                 <Select value={String(cod.verify)} onValueChange={(val) => setCod({ ...cod, verify: val as Cod["verify"] })}>
                   <SelectTrigger id="pm-cod-verify" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="new">OTP for new customers</SelectItem>
-                    <SelectItem value="always">Always</SelectItem>
-                    <SelectItem value="never">Never</SelectItem>
+                    <SelectItem value="new">{t("commerce:paymentMethods.cod.verifyNew")}</SelectItem>
+                    <SelectItem value="always">{t("commerce:paymentMethods.cod.verifyAlways")}</SelectItem>
+                    <SelectItem value="never">{t("commerce:paymentMethods.cod.verifyNever")}</SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
@@ -445,13 +462,23 @@ export default function PaymentMethodsPage() {
         )}
       </SectionCard>
 
+      <SectionCard title={t("commerce:paymentMethods.hold.title")} description={t("commerce:paymentMethods.hold.description")}>
+        {loading ? <Skeleton className="h-16" /> : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <FormField label={t("commerce:paymentMethods.hold.label")} htmlFor="pm-hold" description={t("commerce:paymentMethods.hold.help")}>
+              <Input id="pm-hold" type="number" min={5} max={1440} step={1} value={cod.hold} onChange={(e) => { setCod({ ...cod, hold: e.target.value }); setCodErr("") }} />
+            </FormField>
+          </div>
+        )}
+      </SectionCard>
+
       <Card className="sticky bottom-0 flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
         <span className={cn("text-sm", codErr ? "text-destructive" : dirty ? "text-foreground" : "text-muted-foreground")}>
-          {codErr || (dirty ? "You have unsaved changes." : "Saved methods apply to new sales.")}
+          {codErr || (dirty ? t("commerce:paymentMethods.footer.unsaved") : t("commerce:paymentMethods.footer.hint"))}
         </span>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => { setCod(base); setPm(pmBase.m); setDef(pmBase.def); setCodErr("") }} disabled={!dirty}>Discard</Button>
-          <Button type="button" onClick={saveCod} disabled={codSaving || !dirty}>{codSaving ? "Saving…" : "Save changes"}</Button>
+          <Button type="button" variant="outline" onClick={() => { setCod(base); setPm(pmBase.m); setDef(pmBase.def); setCodErr("") }} disabled={!dirty}>{t("commerce:paymentMethods.footer.discard")}</Button>
+          <Button type="button" onClick={saveCod} disabled={codSaving || !dirty}>{codSaving ? t("common:actions.saving") : t("common:actions.saveChanges")}</Button>
         </div>
       </Card>
     </div>

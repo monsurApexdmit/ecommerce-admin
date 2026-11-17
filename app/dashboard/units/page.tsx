@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Download, MoreHorizontal, Pencil, Plus, Ruler, Search, Upload, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -37,10 +38,19 @@ import { WithTooltip } from "@/components/common/WithTooltip"
 
 type UnitType = "Count" | "Weight" | "Volume" | "Length"
 const TYPES: UnitType[] = ["Count", "Weight", "Volume", "Length"]
+// Type codes stay as data; these are their display labels
+const TYPE_LABEL = {
+  Count: "catalog:units.types.count",
+  Weight: "catalog:units.types.weight",
+  Volume: "catalog:units.types.volume",
+  Length: "catalog:units.types.length",
+} as const satisfies Record<UnitType, string>
 const emptyForm = { unitName: "", symbol: "", status: true, type: "Count" as UnitType, convQty: "", convUnit: "" }
 
 export default function UnitsPage() {
+  const { t } = useTranslation(["catalog", "common"])
   const { toast } = useToast()
+  const typeLabel = (type?: string | null) => (type && type in TYPE_LABEL ? t(TYPE_LABEL[type as UnitType]) : type || t(TYPE_LABEL.Count))
   const [units, setUnits] = useState<UnitResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -57,7 +67,7 @@ export default function UnitsPage() {
   const load = useCallback(() => {
     unitApi.getAll({ limit: 200 })
       .then((r) => setUnits(r.data))
-      .catch(() => toast({ variant: "destructive", title: "Could not load units" }))
+      .catch(() => toast({ variant: "destructive", title: t("catalog:units.toast.loadFailed") }))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -92,22 +102,22 @@ export default function UnitsPage() {
 
   const save = async () => {
     if (!form.unitName.trim() || !form.symbol.trim()) {
-      toast({ variant: "destructive", title: "Missing details", description: "Unit name and symbol are required" })
+      toast({ variant: "destructive", title: t("catalog:units.toast.missing"), description: t("catalog:units.toast.missingDesc") })
       return
     }
     if (form.convUnit && !(Number(form.convQty) > 0)) {
-      toast({ variant: "destructive", title: "Conversion needs a quantity", description: "Enter how many of the other unit make 1" })
+      toast({ variant: "destructive", title: t("catalog:units.toast.convQty"), description: t("catalog:units.toast.convQtyDesc") })
       return
     }
     const nm = form.unitName.trim().toLowerCase()
     const sym = form.symbol.trim().toLowerCase()
     const others = units.filter((x) => x.id !== editing?.id)
     if (others.some((x) => x.unitName.trim().toLowerCase() === nm)) {
-      toast({ variant: "destructive", title: "Name already used", description: `A unit named "${form.unitName.trim()}" already exists` })
+      toast({ variant: "destructive", title: t("catalog:shared.nameUsed"), description: t("catalog:units.toast.nameUsedDesc", { name: form.unitName.trim() }) })
       return
     }
     if (others.some((x) => (x.symbol ?? "").trim().toLowerCase() === sym)) {
-      toast({ variant: "destructive", title: "Symbol already used", description: `"${form.symbol.trim()}" belongs to another unit` })
+      toast({ variant: "destructive", title: t("catalog:units.toast.symbolUsed"), description: t("catalog:units.toast.symbolUsedDesc", { symbol: form.symbol.trim() }) })
       return
     }
     setSaving(true)
@@ -119,11 +129,11 @@ export default function UnitsPage() {
       }
       if (editing) await unitApi.update(editing.id, payload)
       else await unitApi.create(payload)
-      toast({ title: editing ? "Unit updated" : "Unit added", description: payload.unitName })
+      toast({ title: editing ? t("catalog:units.toast.updated") : t("catalog:units.toast.added"), description: payload.unitName })
       setFormOpen(false)
       load()
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not save", description: err?.response?.data?.message || "Please try again" })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotSave"), description: err?.response?.data?.message || t("common:extra.tryAgain") })
     } finally {
       setSaving(false)
     }
@@ -132,7 +142,7 @@ export default function UnitsPage() {
   const setActive = async (list: UnitResponse[], status: boolean) => {
     const res = await Promise.allSettled(list.filter((u) => u.status !== status).map((u) => unitApi.update(u.id, { status })))
     const failed = res.filter((r) => r.status === "rejected").length
-    if (failed) toast({ variant: "destructive", title: "Some updates failed", description: `${failed} units could not be updated` })
+    if (failed) toast({ variant: "destructive", title: t("catalog:shared.someFailed"), description: t("catalog:units.toast.failedCount", { count: failed }) })
     load()
   }
 
@@ -141,13 +151,13 @@ export default function UnitsPage() {
     const errors: string[] = []
     let ok = 0
     for (const u of deleteTargets) {
-      try { await unitApi.delete(u.id); ok++ } catch (e: any) { errors.push(`${u.unitName}: ${e?.response?.data?.message || "failed"}`) }
+      try { await unitApi.delete(u.id); ok++ } catch (e: any) { errors.push(`${u.unitName}: ${e?.response?.data?.message || t("catalog:shared.failed")}`) }
     }
     setDeleting(false)
     setDeleteTargets([])
     setChecked(new Set())
-    if (errors.length) toast({ variant: "destructive", title: `${ok} deleted, ${errors.length} failed`, description: errors.join(", ") })
-    else toast({ title: "Deleted", description: `${ok} unit${ok === 1 ? "" : "s"} removed` })
+    if (errors.length) toast({ variant: "destructive", title: t("catalog:shared.deletedFailed", { deleted: ok, failed: errors.length }), description: errors.join(", ") })
+    else toast({ title: t("common:status.deleted"), description: t("catalog:units.toast.removedCount", { count: ok }) })
     load()
   }
 
@@ -155,10 +165,10 @@ export default function UnitsPage() {
     const byId = new Map(units.map((x) => [x.id, x]))
     exportToCSV(
       list.map((u) => {
-        const t = u.conversionUnitId ? byId.get(u.conversionUnitId) : undefined
+        const target = u.conversionUnitId ? byId.get(u.conversionUnitId) : undefined
         return {
           name: u.unitName, symbol: u.symbol ?? "", type: u.type ?? "Count",
-          conversion_qty: t ? u.conversionQty ?? "" : "", conversion_unit: t ? t.symbol || t.unitName : "",
+          conversion_qty: target ? u.conversionQty ?? "" : "", conversion_unit: target ? target.symbol || target.unitName : "",
           active: u.status ? "Yes" : "No",
         }
       }),
@@ -201,8 +211,8 @@ export default function UnitsPage() {
           }
         }
         toast({
-          title: `Imported ${created} unit${created === 1 ? "" : "s"}`,
-          description: convFailed ? `${convFailed} conversion${convFailed === 1 ? "" : "s"} skipped (unknown or different-type target)` : undefined,
+          title: t("catalog:units.toast.imported", { count: created }),
+          description: convFailed ? t("catalog:units.toast.convSkipped", { count: convFailed }) : undefined,
         })
         load()
       }
@@ -216,13 +226,13 @@ export default function UnitsPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Units"
-        description="How products are counted, weighed or measured."
+        title={t("catalog:units.title")}
+        description={t("catalog:units.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={doImport}><Upload className="size-4" aria-hidden /> Import</Button>
-          <Button type="button" variant="outline" onClick={() => doExport()}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" variant="outline" onClick={doImport}><Upload className="size-4" aria-hidden /> {t("common:actions.import")}</Button>
+          <Button type="button" variant="outline" onClick={() => doExport()}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
           <Button type="button" onClick={() => openForm(null)}>
-            <Plus className="size-4" aria-hidden /> Add unit
+            <Plus className="size-4" aria-hidden /> {t("catalog:units.add")}
           </Button>
         </>}
       />
@@ -230,51 +240,51 @@ export default function UnitsPage() {
       <Card className="gap-0 py-0">
         <div className="px-4">
           <StatusTabs value={tab} onChange={(v) => { setTab(v); setChecked(new Set()) }} tabs={[
-            { value: "all", label: "All", count: units.length },
-            { value: "active", label: "Active", count: activeCount },
-            { value: "inactive", label: "Inactive", count: units.length - activeCount },
+            { value: "all", label: t("common:status.all"), count: units.length },
+            { value: "active", label: t("common:status.active"), count: activeCount },
+            { value: "inactive", label: t("common:status.inactive"), count: units.length - activeCount },
           ]} />
         </div>
 
         <Toolbar className="p-4">
           <div className="relative min-w-[240px] flex-1">
-            <Label htmlFor="unit-search" className="sr-only">Search units</Label>
+            <Label htmlFor="unit-search" className="sr-only">{t("catalog:units.searchLabel")}</Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input id="unit-search" type="search" placeholder="Search units…" value={search} onChange={(e) => setSearch(e.target.value)}
+            <Input id="unit-search" type="search" placeholder={t("catalog:units.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)}
               className="pl-9" />
           </div>
-          <div role="group" aria-label="Filter by type" className="flex flex-wrap gap-1.5">
-            {(["All", ...TYPES] as const).map((t) => (
-              <Button key={t} type="button" size="sm" variant={typeFilter === t ? "default" : "outline"} aria-pressed={typeFilter === t}
-                onClick={() => { setTypeFilter(t); setChecked(new Set()) }}>
-                {t}
+          <div role="group" aria-label={t("catalog:units.filterByType")} className="flex flex-wrap gap-1.5">
+            {(["All", ...TYPES] as const).map((ty) => (
+              <Button key={ty} type="button" size="sm" variant={typeFilter === ty ? "default" : "outline"} aria-pressed={typeFilter === ty}
+                onClick={() => { setTypeFilter(ty); setChecked(new Set()) }}>
+                {ty === "All" ? t("common:status.all") : t(TYPE_LABEL[ty])}
               </Button>
             ))}
           </div>
           {(search || typeFilter !== "All") && (
             <Button type="button" variant="ghost" onClick={() => { setSearch(""); setTypeFilter("All") }}>
-              <X className="size-4" aria-hidden /> Clear
+              <X className="size-4" aria-hidden /> {t("common:actions.clear")}
             </Button>
           )}
         </Toolbar>
 
         <BulkBar count={checked.size} onClear={() => setChecked(new Set())} className="mx-4 mb-3">
-          <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, true)}>Mark active</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, false)}>Mark inactive</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => doExport(selected)}>Export selected</Button>
-          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>Delete</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, true)}>{t("catalog:shared.markActive")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setActive(selected, false)}>{t("catalog:shared.markInactive")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => doExport(selected)}>{t("catalog:shared.exportSelected")}</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteTargets(selected)}>{t("common:actions.delete")}</Button>
         </BulkBar>
 
         <Table className="min-w-[640px]">
           <TableHeader>
             <TableRow>
-              <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label="Select all units in this list" /></TableHead>
-              <TableHead scope="col">Unit</TableHead>
-              <TableHead scope="col">Type</TableHead>
-              <TableHead scope="col">Conversion</TableHead>
-              <TableHead scope="col" className="text-right">Used by</TableHead>
-              <TableHead scope="col">Active</TableHead>
-              <TableHead scope="col" className="pr-4 text-right">Actions</TableHead>
+              <TableHead scope="col" className="w-5 pl-4"><Checkbox checked={allChecked} onCheckedChange={toggleAll} aria-label={t("catalog:units.selectAll")} /></TableHead>
+              <TableHead scope="col">{t("common:extra.unit")}</TableHead>
+              <TableHead scope="col">{t("common:fields.type")}</TableHead>
+              <TableHead scope="col">{t("catalog:units.colConversion")}</TableHead>
+              <TableHead scope="col" className="text-right">{t("catalog:units.colUsedBy")}</TableHead>
+              <TableHead scope="col">{t("common:status.active")}</TableHead>
+              <TableHead scope="col" className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -284,8 +294,8 @@ export default function UnitsPage() {
               <TableRow>
                 <TableCell colSpan={7}>
                   <EmptyState icon={Ruler} className="p-4 md:p-6"
-                    title={units.length === 0 ? "No units yet" : "No units found"}
-                    description={units.length === 0 ? "Add a unit such as pcs or kg to use it on products." : "Try a different search or tab."} />
+                    title={units.length === 0 ? t("catalog:units.emptyTitle") : t("catalog:units.notFoundTitle")}
+                    description={units.length === 0 ? t("catalog:units.emptyDesc") : t("catalog:shared.noMatchHint")} />
                 </TableCell>
               </TableRow>
             ) : (
@@ -294,7 +304,7 @@ export default function UnitsPage() {
                 return (
                   <TableRow key={u.id} data-state={ck ? "selected" : undefined}>
                     <TableCell className="pl-4">
-                      <Checkbox checked={ck} onCheckedChange={() => toggleOne(u.id)} aria-label={`Select ${u.unitName}`} />
+                      <Checkbox checked={ck} onCheckedChange={() => toggleOne(u.id)} aria-label={t("common:extra.selectRow", { name: u.unitName })} />
                     </TableCell>
                     <TableCell>
                       <Button type="button" variant="ghost" onClick={() => openForm(u)} className="h-auto justify-start gap-2.5 p-0 text-left hover:bg-transparent">
@@ -303,27 +313,27 @@ export default function UnitsPage() {
                       </Button>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{u.type ?? "Count"}</Badge>
+                      <Badge variant="outline">{typeLabel(u.type)}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.conversion || "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {(u.usedBy ?? u.productsCount) ? `${u.usedBy ?? u.productsCount} product${(u.usedBy ?? u.productsCount) === 1 ? "" : "s"}` : "—"}
+                      {(u.usedBy ?? u.productsCount) ? t("common:count.products", { count: (u.usedBy ?? u.productsCount) as number }) : "—"}
                     </TableCell>
                     <TableCell>
-                      <Switch checked={u.status} aria-label={`Active: ${u.unitName}`} onCheckedChange={(v) => setActive([u], v)} />
+                      <Switch checked={u.status} aria-label={t("catalog:shared.activeName", { name: u.unitName })} onCheckedChange={(v) => setActive([u], v)} />
                     </TableCell>
                     <TableCell className="pr-4">
                       <div className="flex justify-end gap-1">
-                        <WithTooltip content={`Edit ${u.unitName}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${u.unitName}`} onClick={() => openForm(u)}><Pencil className="size-4" /></Button></WithTooltip>
+                        <WithTooltip content={t("catalog:shared.editName", { name: u.unitName })}><Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.editName", { name: u.unitName })} onClick={() => openForm(u)}><Pencil className="size-4" /></Button></WithTooltip>
                         <DropdownMenu>
-                          <WithTooltip content={`More actions for ${u.unitName}`}><DropdownMenuTrigger asChild>
-                            <Button type="button" variant="outline" size="icon" aria-label={`More actions for ${u.unitName}`}><MoreHorizontal className="size-4" /></Button>
+                          <WithTooltip content={t("catalog:shared.moreFor", { name: u.unitName })}><DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="icon" aria-label={t("catalog:shared.moreFor", { name: u.unitName })}><MoreHorizontal className="size-4" /></Button>
                           </DropdownMenuTrigger></WithTooltip>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openForm(u)}>Edit unit</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setActive([u], !u.status)}>{u.status ? "Mark inactive" : "Mark active"}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openForm(u)}>{t("catalog:units.edit")}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setActive([u], !u.status)}>{u.status ? t("catalog:shared.markInactive") : t("catalog:shared.markActive")}</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([u])}>Delete unit</DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleteTargets([u])}>{t("catalog:units.delete")}</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -344,38 +354,38 @@ export default function UnitsPage() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="flex max-h-[92vh] w-[calc(100%-2rem)] max-w-[480px] flex-col gap-0 overflow-hidden rounded-[18px] border-dash-border bg-dash-card p-0 font-dash-body text-dash-ink sm:max-w-[480px]">
           <DialogHeader className="border-b border-dash-border px-6 py-[18px] text-left">
-            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? `Edit ${editing.unitName}` : "New unit"}</DialogTitle>
-            <DialogDescription className="text-[13px] text-dash-muted">How you count, weigh or measure products.</DialogDescription>
+            <DialogTitle className="font-dash-display text-[22px] font-bold">{editing ? t("catalog:shared.editName", { name: editing.unitName }) : t("catalog:units.form.newTitle")}</DialogTitle>
+            <DialogDescription className="text-[13px] text-dash-muted">{t("catalog:units.form.desc")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label="Unit name" required htmlFor="unit-name" className="min-w-0">
-                <Input id="unit-name" placeholder="e.g. Kilogram" value={form.unitName} autoFocus
+              <FormField label={t("catalog:units.form.name")} required htmlFor="unit-name" className="min-w-0">
+                <Input id="unit-name" placeholder={t("catalog:units.form.namePlaceholder")} value={form.unitName} autoFocus
                   onChange={(e) => setForm({ ...form, unitName: e.target.value })} />
               </FormField>
-              <FormField label="Symbol" required htmlFor="unit-symbol" className="min-w-0">
-                <Input id="unit-symbol" placeholder="e.g. kg" value={form.symbol}
+              <FormField label={t("catalog:units.form.symbol")} required htmlFor="unit-symbol" className="min-w-0">
+                <Input id="unit-symbol" placeholder={t("catalog:units.form.symbolPlaceholder")} value={form.symbol}
                   onChange={(e) => setForm({ ...form, symbol: e.target.value })}
                   onKeyDown={(e) => { if (e.key === "Enter") save() }} />
               </FormField>
             </div>
-            <FormField label="Type" htmlFor="unit-type" className="min-w-0">
+            <FormField label={t("common:fields.type")} htmlFor="unit-type" className="min-w-0">
               <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as UnitType, convUnit: "", convQty: "" })}>
                 <SelectTrigger id="unit-type" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {TYPES.map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+                  {TYPES.map((x) => <SelectItem key={x} value={x}>{t(TYPE_LABEL[x])}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormField>
-            <FormField label="Conversion (optional, same type only)" htmlFor="unit-conv-qty">
+            <FormField label={t("catalog:units.form.conversion")} htmlFor="unit-conv-qty">
               <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-2 text-sm">
-                <span className="text-muted-foreground">1 {form.symbol || "unit"} =</span>
-                <Input id="unit-conv-qty" type="number" min={0} step="any" placeholder="e.g. 1000" value={form.convQty}
+                <span className="text-muted-foreground">{t("catalog:units.form.oneUnit", { symbol: form.symbol || t("catalog:units.form.unitFallback") })}</span>
+                <Input id="unit-conv-qty" type="number" min={0} step="any" placeholder={t("catalog:units.form.convPlaceholder")} value={form.convQty}
                   onChange={(e) => setForm({ ...form, convQty: e.target.value })} />
                 <Select value={form.convUnit || "__none"} onValueChange={(v) => setForm({ ...form, convUnit: v === "__none" ? "" : v })}>
-                  <SelectTrigger aria-label="Conversion unit" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("catalog:units.form.convUnit")} className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none">No conversion</SelectItem>
+                    <SelectItem value="__none">{t("catalog:units.form.noConversion")}</SelectItem>
                     {units.filter((x) => x.id !== editing?.id && (x.type ?? "Count") === form.type).map((x) => <SelectItem key={x.id} value={String(x.id)}>{x.unitName} ({x.symbol})</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -383,8 +393,8 @@ export default function UnitsPage() {
             </FormField>
             <Item variant="outline" size="sm">
               <ItemContent>
-                <ItemTitle id="unit-active-label">Active</ItemTitle>
-                <ItemDescription>Available when creating products</ItemDescription>
+                <ItemTitle id="unit-active-label">{t("common:status.active")}</ItemTitle>
+                <ItemDescription>{t("catalog:shared.availableForProducts")}</ItemDescription>
               </ItemContent>
               <ItemActions>
                 <Switch checked={form.status} onCheckedChange={(v) => setForm({ ...form, status: v })} aria-labelledby="unit-active-label" />
@@ -392,9 +402,9 @@ export default function UnitsPage() {
             </Item>
           </div>
           <DialogFooter className="flex flex-row flex-wrap justify-end gap-2 border-t border-dash-border px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{t("common:actions.cancel")}</Button>
             <Button type="button" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : editing ? "Save changes" : "Add unit"}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("catalog:units.add")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -403,13 +413,13 @@ export default function UnitsPage() {
       <AlertDialog open={deleteTargets.length > 0} onOpenChange={(o) => !o && setDeleteTargets([])}>
         <AlertDialogContent className="font-dash-body text-dash-ink">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTargets.length === 1 ? deleteTargets[0].unitName : `${deleteTargets.length} units`}?</AlertDialogTitle>
-            <AlertDialogDescription>A unit used by products, or set as another unit’s conversion target, can’t be deleted — change those first. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTargets.length === 1 ? deleteTargets[0].unitName : t("catalog:units.remove.many", { count: deleteTargets.length }) })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("catalog:units.remove.desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("catalog:shared.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -2,6 +2,9 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { Trans, useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Ban, CheckCircle2, ChevronDown, Clock, Download, Eye, Pencil, Search, Trash2, UserCheck, Users, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -37,21 +40,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group"
 
+type K = ParseKeys<["account", "common"]>
 type Tab = "all" | "Active" | "Invited" | "On leave" | "Inactive"
 const TABS: Tab[] = ["all", "Active", "Invited", "On leave", "Inactive"]
+// Values are sent to the backend as-is; the maps give their display labels.
 const PAY_METHODS = ["Cash", "bKash", "Bank transfer", "Check"]
 const STATUSES = ["Active", "Invited", "On leave", "Inactive"]
-
-const lastActive = (iso: string | null) => {
-  if (!iso) return "Never"
-  const t = new Date(iso), now = new Date()
-  if (now.getTime() - t.getTime() < 5 * 6e4) return "Online now"
-  const time = t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase()
-  const dayDiff = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime()) / 864e5)
-  if (dayDiff === 0) return `Today, ${time}`
-  if (dayDiff === 1) return `Yesterday, ${time}`
-  return `${t.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`
+const STATUS_KEY: Record<string, K> = {
+  Active: "account:staff.status.active", Invited: "account:staff.status.invited", "On leave": "account:staff.status.onLeave", Inactive: "account:staff.status.inactive",
 }
+const PAY_METHOD_KEY: Record<string, K> = {
+  Cash: "account:staff.payMethods.cash", bKash: "account:staff.payMethods.bkash", "Bank transfer": "account:staff.payMethods.bank", Check: "account:staff.payMethods.check",
+}
+const SALARY_STATUS_KEY: Record<string, K> = { paid: "common:payment.paid", pending: "common:orderStatus.pending" }
 const apiError = (e: any, fallback: string) => {
   const errs = e?.response?.data?.errors
   if (errs && typeof errs === "object") { const first = Object.values(errs).flat()[0]; if (first) return String(first) }
@@ -59,7 +60,6 @@ const apiError = (e: any, fallback: string) => {
 }
 const PHONE_RE = /^\+?[0-9][0-9\s\-()]{5,19}$/
 const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-const fmtD = (d?: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—")
 
 interface FormState {
   name: string; phone: string; roleId: string; loginMethod: "email" | "pin"; email: string; pin: string; locationIds: number[]
@@ -70,6 +70,21 @@ const blank = (): FormState => ({ name: "", phone: "", roleId: "", loginMethod: 
 export default function StaffPage() {
   const { formatCurrency } = useCompanySettings()
   const blocked = useModuleGuard("Staff")
+  const { t, i18n } = useTranslation(["account", "common"])
+  const lang = localeTag(i18n.language)
+  const fmtD = (d?: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString(lang, { month: "short", day: "numeric", year: "numeric" }) : "—")
+  const statusLabel = (s?: string | null) => (s && STATUS_KEY[s] ? t(STATUS_KEY[s]) : String(s ?? ""))
+  const methodLabel = (m?: string | null) => (m && PAY_METHOD_KEY[m] ? t(PAY_METHOD_KEY[m]) : String(m ?? ""))
+  const lastActive = (iso: string | null) => {
+    if (!iso) return t("account:staff.never")
+    const d = new Date(iso), now = new Date()
+    if (now.getTime() - d.getTime() < 5 * 6e4) return t("account:staff.onlineNow")
+    const time = d.toLocaleTimeString(lang, { hour: "numeric", minute: "2-digit" }).toLowerCase()
+    const dayDiff = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 864e5)
+    if (dayDiff === 0) return t("account:staff.todayAt", { time })
+    if (dayDiff === 1) return t("account:staff.yesterdayAt", { time })
+    return t("account:staff.dateAt", { date: d.toLocaleDateString(lang, { month: "short", day: "numeric" }), time })
+  }
 
   const [data, setData] = useState<StaffOverview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -91,7 +106,7 @@ export default function StaffPage() {
   const [payBusy, setPayBusy] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
 
-  useEffect(() => { const t = setTimeout(() => setQD(q.trim()), 250); return () => clearTimeout(t) }, [q])
+  useEffect(() => { const timer = setTimeout(() => setQD(q.trim()), 250); return () => clearTimeout(timer) }, [q])
 
   const load = useCallback(async () => {
     try {
@@ -101,11 +116,11 @@ export default function StaffPage() {
       }))
     } catch {
       setData(null)
-      toast.error("Failed to load staff")
+      toast.error(t("account:staff.loadFailed"))
     } finally {
       setLoading(false)
     }
-  }, [qD, tab, roleF, locF])
+  }, [qD, tab, roleF, locF]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [load])
 
   const rows = data?.rows ?? []
@@ -155,40 +170,40 @@ export default function StaffPage() {
   const payOne = async (paymentId: number) => {
     if (!viewing) return
     setPayBusy(true)
-    try { await staffUiApi.payPayment(paymentId); toast.success("Salary paid"); await reloadSalary(viewing.id) }
-    catch (e: any) { toast.error(apiError(e, "Could not pay this salary")) } finally { setPayBusy(false) }
+    try { await staffUiApi.payPayment(paymentId); toast.success(t("account:staff.salaryPaid")); await reloadSalary(viewing.id) }
+    catch (e: any) { toast.error(apiError(e, t("account:staff.payFailed"))) } finally { setPayBusy(false) }
   }
   const payAllDue = async () => {
     if (!viewing || !salary) return
     const due = salary.history.filter((h) => h.canPay)
-    if (!window.confirm(`Pay ${due.length} due salar${due.length === 1 ? "y" : "ies"} (${formatCurrency(due.reduce((a, h) => a + h.net, 0))}) to ${viewing.name}?`)) return
+    if (!window.confirm(t("account:staff.payAllConfirm", { count: due.length, amount: formatCurrency(due.reduce((a, h) => a + h.net, 0)), name: viewing.name }))) return
     setPayBusy(true)
     let failed = 0
     for (const h of due) { try { await staffUiApi.payPayment(h.id) } catch { failed++ } }
-    failed ? toast.error(`${failed} payment${failed === 1 ? "" : "s"} failed`) : toast.success("All due salaries paid")
+    failed ? toast.error(t("account:staff.paymentsFailed", { count: failed })) : toast.success(t("account:staff.allPaid"))
     await reloadSalary(viewing.id); setPayBusy(false)
   }
   const generateThisMonth = async () => {
     if (!viewing) return
     setPayBusy(true)
-    try { await staffUiApi.generatePayroll(monthKey()); toast.success(`${monthLabel} salary generated`); await reloadSalary(viewing.id) }
-    catch (e: any) { toast.error(apiError(e, "Could not generate salary")) } finally { setPayBusy(false) }
+    try { await staffUiApi.generatePayroll(monthKey()); toast.success(t("account:staff.salaryGenerated", { month: monthLabel })); await reloadSalary(viewing.id) }
+    catch (e: any) { toast.error(apiError(e, t("account:staff.generateFailed"))) } finally { setPayBusy(false) }
   }
-  const monthLabel = new Date().toLocaleDateString("en-US", { month: "long" })
+  const monthLabel = new Date().toLocaleDateString(lang, { month: "long" })
 
   const save = async () => {
-    if (atSeatLimit) { setErr(`Your plan allows ${stats?.seatLimit} team members. Upgrade your plan to add more.`); return }
-    if (!form.name.trim()) { setErr("Enter the person's full name."); return }
-    if (!form.phone.trim()) { setErr("Enter a phone number."); return }
-    if (!PHONE_RE.test(form.phone.trim())) { setErr("Enter a valid phone number (digits only, 6-20 characters)."); return }
+    if (atSeatLimit) { setErr(t("account:staff.seatLimit", { count: stats?.seatLimit ?? 0 })); return }
+    if (!form.name.trim()) { setErr(t("account:staff.nameRequired")); return }
+    if (!form.phone.trim()) { setErr(t("account:staff.phoneRequired")); return }
+    if (!PHONE_RE.test(form.phone.trim())) { setErr(t("account:staff.phoneInvalid")); return }
     const digits = (v?: string | null) => (v ?? "").replace(/\D+/g, "")
     const dupPhone = rows.some((r) => r.id !== editing?.id && digits(r.phone) && (digits(r.phone) === digits(form.phone) || digits(r.phone) === `880${digits(form.phone).replace(/^0/, "")}`))
-    if (dupPhone) { setErr("This phone number is already used by another team member."); return }
-    if (form.email.trim() && rows.some((r) => r.id !== editing?.id && r.email?.toLowerCase() === form.email.trim().toLowerCase())) { setErr("This email is already used by another team member."); return }
-    if (!form.roleId) { setErr("Pick a role."); return }
-    if (form.loginMethod === "email" && !/^\S+@\S+\.\S+$/.test(form.email.trim())) { setErr("Enter a valid email address."); return }
-    if (form.loginMethod === "pin" && !editing && !/^\d{4}$/.test(form.pin)) { setErr("The POS PIN must be exactly 4 digits."); return }
-    if (form.loginMethod === "pin" && form.pin && !/^\d{4}$/.test(form.pin)) { setErr("The POS PIN must be exactly 4 digits."); return }
+    if (dupPhone) { setErr(t("account:staff.phoneTaken")); return }
+    if (form.email.trim() && rows.some((r) => r.id !== editing?.id && r.email?.toLowerCase() === form.email.trim().toLowerCase())) { setErr(t("account:staff.emailTaken")); return }
+    if (!form.roleId) { setErr(t("account:staff.pickRole")); return }
+    if (form.loginMethod === "email" && !/^\S+@\S+\.\S+$/.test(form.email.trim())) { setErr(t("account:staff.emailInvalid")); return }
+    if (form.loginMethod === "pin" && !editing && !/^\d{4}$/.test(form.pin)) { setErr(t("account:staff.pinInvalid")); return }
+    if (form.loginMethod === "pin" && form.pin && !/^\d{4}$/.test(form.pin)) { setErr(t("account:staff.pinInvalid")); return }
     setSaving(true); setErr("")
     try {
       const body = {
@@ -200,32 +215,32 @@ export default function StaffPage() {
       }
       if (editing) await staffApi.update(editing.id, body as any)
       else await staffApi.create(body as any)
-      toast.success(editing ? "Staff member updated" : form.loginMethod === "email" ? "Staff member added — invite sent" : "Staff member added")
+      toast.success(editing ? t("account:staff.updated") : form.loginMethod === "email" ? t("account:staff.addedInvite") : t("account:staff.added"))
       startEdit(null)
       load()
     } catch (e: any) {
-      setErr(apiError(e, "Could not save the staff member."))
+      setErr(apiError(e, t("account:staff.saveFailed")))
     } finally {
       setSaving(false)
     }
   }
 
   const togglePublished = async (r: StaffRow) => {
-    try { await staffApi.update(r.id, { published: !r.published } as any); load() } catch (e: any) { toast.error(apiError(e, "Could not update")) }
+    try { await staffApi.update(r.id, { published: !r.published } as any); load() } catch (e: any) { toast.error(apiError(e, t("account:staff.updateFailed"))) }
   }
   const toggleActive = async (r: StaffRow) => {
     const next = r.status === "Inactive" ? "Active" : "Inactive"
-    if (next === "Inactive" && !window.confirm(`Deactivate ${r.name}? They will not be able to sign in.`)) return
-    try { await staffApi.update(r.id, { status: next } as any); toast.success(`${r.name} ${next === "Active" ? "reactivated" : "deactivated"}`); load() }
-    catch (e: any) { toast.error(apiError(e, "Could not update")) }
+    if (next === "Inactive" && !window.confirm(t("account:staff.deactivateConfirm", { name: r.name }))) return
+    try { await staffApi.update(r.id, { status: next } as any); toast.success(next === "Active" ? t("account:staff.reactivated", { name: r.name }) : t("account:staff.deactivated", { name: r.name })); load() }
+    catch (e: any) { toast.error(apiError(e, t("account:staff.updateFailed"))) }
   }
   const remove = async (r: StaffRow) => {
-    if (!window.confirm(`Delete ${r.name}? This cannot be undone.`)) return
-    try { await staffApi.delete(r.id); toast.success("Staff member deleted"); if (editing?.id === r.id) startEdit(null); load() }
-    catch (e: any) { toast.error(apiError(e, "Could not delete")) }
+    if (!window.confirm(t("account:staff.deleteConfirm", { name: r.name }))) return
+    try { await staffApi.delete(r.id); toast.success(t("account:staff.deleted")); if (editing?.id === r.id) startEdit(null); load() }
+    catch (e: any) { toast.error(apiError(e, t("account:staff.deleteFailed"))) }
   }
   const resend = async (r: StaffRow) => {
-    try { await staffUiApi.resendInvite(r.id); toast.success(`Invite sent to ${r.email}`) } catch (e: any) { toast.error(e?.response?.data?.message || "Could not resend the invite") }
+    try { await staffUiApi.resendInvite(r.id); toast.success(t("account:staff.inviteSent", { email: r.email })) } catch (e: any) { toast.error(e?.response?.data?.message || t("account:staff.resendFailed")) }
   }
 
   const handleExport = () => {
@@ -240,11 +255,11 @@ export default function StaffPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Staff"
-        description="Your team, what they can access, and where they work."
+        title={t("account:staff.title")}
+        description={t("account:staff.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={() => setActivityOpen(true)}>Activity log</Button>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
+          <Button type="button" variant="outline" onClick={() => setActivityOpen(true)}>{t("account:staff.activityLog")}</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
         </>}
       />
 
@@ -252,51 +267,51 @@ export default function StaffPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[110px]" />)}</div>
       ) : (
         <StatsCards stats={[
-          { label: "Team members", value: stats.total, icon: <Users className="size-4" />, color: "blue", hint: `${stats.owners} owner · ${stats.staffCount} staff` },
-          { label: "Active today", value: stats.activeToday, icon: <UserCheck className="size-4" />, color: "green", hint: stats.activeToday ? stats.activeTodayNames.join(", ") : "Nobody yet" },
-          { label: "Inactive", value: stats.inactive, icon: <Ban className="size-4" />, color: "red", hint: "Deactivated accounts", onClick: () => { setTab("Inactive"); setPage(1) }, active: tab === "Inactive" },
-          { label: "Invites pending", value: stats.invited, icon: <Clock className="size-4" />, color: "yellow", hint: stats.invited ? `${stats.firstInvitedName ?? "Someone"} hasn’t logged in` : "All invites accepted", onClick: () => { setTab("Invited"); setPage(1) }, active: tab === "Invited" },
-          { label: "Monthly payroll", value: formatCurrency(stats.monthlyPayroll), icon: <Wallet className="size-4" />, color: "purple", hint: "Active team salaries" },
+          { label: t("account:staff.stats.teamMembers"), value: stats.total, icon: <Users className="size-4" />, color: "blue", hint: t("account:staff.stats.teamHint", { owners: stats.owners, staff: stats.staffCount }) },
+          { label: t("account:staff.stats.activeToday"), value: stats.activeToday, icon: <UserCheck className="size-4" />, color: "green", hint: stats.activeToday ? stats.activeTodayNames.join(", ") : t("account:staff.stats.nobodyYet") },
+          { label: t("account:staff.stats.inactive"), value: stats.inactive, icon: <Ban className="size-4" />, color: "red", hint: t("account:staff.stats.inactiveHint"), onClick: () => { setTab("Inactive"); setPage(1) }, active: tab === "Inactive" },
+          { label: t("account:staff.stats.invitesPending"), value: stats.invited, icon: <Clock className="size-4" />, color: "yellow", hint: stats.invited ? t("account:staff.stats.notLoggedIn", { name: stats.firstInvitedName ?? t("account:staff.stats.someone") }) : t("account:staff.stats.allAccepted"), onClick: () => { setTab("Invited"); setPage(1) }, active: tab === "Invited" },
+          { label: t("account:staff.stats.monthlyPayroll"), value: formatCurrency(stats.monthlyPayroll), icon: <Wallet className="size-4" />, color: "purple", hint: t("account:staff.stats.payrollHint") },
         ]} />
       )}
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
-            <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }}
-              tabs={TABS.map((t) => ({ value: t, label: t === "all" ? "All" : t, count: data?.counts[t] }))} />
+            <StatusTabs value={tab} onChange={(v) => { setTab(v as Tab); setPage(1) }}
+              tabs={TABS.map((tb) => ({ value: tb, label: tb === "all" ? t("common:status.all") : statusLabel(tb), count: data?.counts[tb] }))} />
           </div>
           <Toolbar className="p-4">
             <div className="relative min-w-[220px] flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input type="search" aria-label="Search staff" placeholder="Search name, email or phone…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} className="pl-8" />
+              <Input type="search" aria-label={t("account:staff.searchAria")} placeholder={t("account:staff.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} className="pl-8" />
             </div>
             <Select value={roleF} onValueChange={(v) => { setRoleF(v); setPage(1) }}>
-              <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Role: All</SelectItem>{roles.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("account:staff.role")}><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t("account:staff.roleAll")}</SelectItem>{roles.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={locF} onValueChange={(v) => { setLocF(v); setPage(1) }}>
-              <SelectTrigger aria-label="Location"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Location: All</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:fields.location")}><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t("account:staff.locationAll")}</SelectItem>{locations.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>)}</SelectContent>
             </Select>
-            <Button type="button" variant="outline" onClick={() => { setQ(""); setRoleF("all"); setLocF("all"); setTab("all"); setPage(1) }}>Reset</Button>
+            <Button type="button" variant="outline" onClick={() => { setQ(""); setRoleF("all"); setLocF("all"); setTab("all"); setPage(1) }}>{t("common:actions.reset")}</Button>
           </Toolbar>
 
           <div className="overflow-x-auto">
             <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-4">Person</TableHead><TableHead>Role</TableHead><TableHead>Location</TableHead>
-                  <TableHead>Salary</TableHead><TableHead>Last active</TableHead><TableHead>Status</TableHead>
-                  <TableHead>Published</TableHead><TableHead className="pr-4 text-right">Actions</TableHead>
+                  <TableHead className="pl-4">{t("account:staff.person")}</TableHead><TableHead>{t("account:staff.role")}</TableHead><TableHead>{t("common:fields.location")}</TableHead>
+                  <TableHead>{t("account:staff.salary")}</TableHead><TableHead>{t("account:staff.lastActive")}</TableHead><TableHead>{t("common:fields.status")}</TableHead>
+                  <TableHead>{t("account:staff.published")}</TableHead><TableHead className="pr-4 text-right">{t("common:fields.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? [1, 2, 3, 4].map((i) => <TableRow key={i}><TableCell colSpan={8} className="px-4 py-3"><Skeleton className="h-12" /></TableCell></TableRow>) :
                   pageRows.length === 0 ? (
                     <TableRow><TableCell colSpan={8}>
-                      <EmptyState icon={Users} title="No staff found" className="p-4 md:p-6"
-                        description={qD || tab !== "all" || roleF !== "all" || locF !== "all" ? "Try clearing the filters." : "Add your first team member with the form."} />
+                      <EmptyState icon={Users} title={t("account:staff.empty")} className="p-4 md:p-6"
+                        description={qD || tab !== "all" || roleF !== "all" || locF !== "all" ? t("account:staff.emptyFiltered") : t("account:staff.emptyFirst")} />
                     </TableCell></TableRow>
                   ) : pageRows.map((r) => (
                     <TableRow key={r.id} data-state={editing?.id === r.id ? "selected" : undefined}>
@@ -306,31 +321,31 @@ export default function StaffPage() {
                           <span className="flex min-w-0 flex-col"><span className="font-semibold">{r.name}</span><span className="truncate text-xs text-muted-foreground">{[r.email, r.phone].filter(Boolean).join(" · ") || "—"}</span></span>
                         </div>
                       </TableCell>
-                      <TableCell><Badge variant="secondary">{r.roleName ?? "No role"}</Badge></TableCell>
-                      <TableCell>{r.locationNames.join(", ") || "All locations"}</TableCell>
-                      <TableCell><div className="tabular-nums">{r.salary ? formatCurrency(r.salary) : "—"}</div><div className="text-xs text-muted-foreground">{r.paymentMethod ?? ""}</div></TableCell>
+                      <TableCell><Badge variant="secondary">{r.roleName ?? t("account:staff.noRole")}</Badge></TableCell>
+                      <TableCell>{r.locationNames.join(", ") || t("account:staff.allLocations")}</TableCell>
+                      <TableCell><div className="tabular-nums">{r.salary ? formatCurrency(r.salary) : "—"}</div><div className="text-xs text-muted-foreground">{methodLabel(r.paymentMethod)}</div></TableCell>
                       <TableCell className="text-muted-foreground">{lastActive(r.lastActiveAt)}</TableCell>
                       <TableCell>
-                        <StatusBadge status={r.status} />
-                        {r.invited && r.email && <div><Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => resend(r)}>Resend invite</Button></div>}
+                        <StatusBadge status={r.status} label={statusLabel(r.status)} />
+                        {r.invited && r.email && <div><Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => resend(r)}>{t("account:staff.resendInvite")}</Button></div>}
                       </TableCell>
                       <TableCell>
-                        <Switch checked={r.published} aria-label={`Published: ${r.name}`} disabled={!!r.isOnlyOwner} onCheckedChange={() => togglePublished(r)} />
+                        <Switch checked={r.published} aria-label={t("account:staff.publishedAria", { name: r.name })} disabled={!!r.isOnlyOwner} onCheckedChange={() => togglePublished(r)} />
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex justify-end gap-1">
-                          <WithTooltip content={`View ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`View ${r.name}`} onClick={() => openView(r)}><Eye className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content={`Edit ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
-                          <WithTooltip content={r.isOnlyOwner ? "The only Owner cannot be deactivated" : r.status === "Inactive" ? "Reactivate" : "Deactivate"}>
+                          <WithTooltip content={t("account:staff.viewName", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("account:staff.viewName", { name: r.name })} onClick={() => openView(r)}><Eye className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={t("account:staff.editName", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("account:staff.editName", { name: r.name })} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
+                          <WithTooltip content={r.isOnlyOwner ? t("account:staff.onlyOwnerDeactivate") : r.status === "Inactive" ? t("account:staff.reactivate") : t("account:staff.deactivate")}>
                             <span tabIndex={r.isOnlyOwner ? 0 : undefined} className="inline-flex">
-                              <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={r.status === "Inactive" ? "Reactivate" : "Deactivate"} onClick={() => toggleActive(r)}>
+                              <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={r.status === "Inactive" ? t("account:staff.reactivate") : t("account:staff.deactivate")} onClick={() => toggleActive(r)}>
                                 {r.status === "Inactive" ? <CheckCircle2 className="size-4" /> : <Ban className="size-4" />}
                               </Button>
                             </span>
                           </WithTooltip>
-                          <WithTooltip content={r.isOnlyOwner ? "The only Owner cannot be removed" : undefined}>
+                          <WithTooltip content={r.isOnlyOwner ? t("account:staff.onlyOwnerRemove") : undefined}>
                             <span tabIndex={r.isOnlyOwner ? 0 : undefined} className="inline-flex">
-                              <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={`Delete ${r.name}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>
+                              <Button type="button" variant="outline" size="icon" disabled={!!r.isOnlyOwner} aria-label={t("account:staff.deleteName", { name: r.name })} onClick={() => remove(r)}><Trash2 className="size-4" /></Button>
                             </span>
                           </WithTooltip>
                         </div>
@@ -346,44 +361,44 @@ export default function StaffPage() {
           )}
           {stats && <>
             <Separator />
-            <div className="px-4 py-3 text-xs text-muted-foreground">{stats.seatsUsed} of {stats.seatLimit ?? "unlimited"} seats used{atSeatLimit ? " · limit reached" : ""}</div>
+            <div className="px-4 py-3 text-xs text-muted-foreground">{stats.seatLimit == null ? t("account:staff.seatsUsedUnlimited", { used: stats.seatsUsed }) : atSeatLimit ? t("account:staff.seatsUsedFull", { used: stats.seatsUsed, limit: stats.seatLimit }) : t("account:staff.seatsUsed", { used: stats.seatsUsed, limit: stats.seatLimit })}</div>
           </>}
         </Card>
 
         <Card role="complementary" className="w-full shrink-0 gap-3.5 p-5 xl:w-[400px]">
           {viewing && (
             <SectionCard
-              title="Staff details"
-              actions={<Button type="button" variant="ghost" size="sm" onClick={() => setViewing(null)}>Close</Button>}
+              title={t("account:staff.details.title")}
+              actions={<Button type="button" variant="ghost" size="sm" onClick={() => setViewing(null)}>{t("common:actions.close")}</Button>}
               className="gap-3 py-4"
               contentClassName="flex flex-col gap-2.5 px-4"
             >
               <div className="flex items-center gap-2.5">
                 <UserAvatar name={viewing.name} shape="square" className="size-11" />
-                <span className="flex flex-col"><span className="font-semibold">{viewing.name}</span><span className="text-xs text-muted-foreground">{viewing.roleName ?? "No role"}</span></span>
+                <span className="flex flex-col"><span className="font-semibold">{viewing.name}</span><span className="text-xs text-muted-foreground">{viewing.roleName ?? t("account:staff.noRole")}</span></span>
               </div>
               <InfoList>
-                {([["Email", viewing.email], ["Phone", viewing.phone], ["Sign in", viewing.loginMethod === "pin" ? "POS PIN" : "Email link"], ["Locations", viewing.locationNames.join(", ") || "All locations"],
-                  ["Joined", fmtD(viewing.joiningDate)], ["Pay", `${viewing.salary ? formatCurrency(viewing.salary) : "—"} · ${viewing.paymentMethod ?? ""}`], ["Account", viewing.account], ["NID", viewing.nid], ["Emergency contact", viewing.emergencyContact], ["Status", viewing.status], ["Published", viewing.published ? "Yes" : "No"], ["Last active", lastActive(viewing.lastActiveAt)]] as [string, string | null][]).map(([k, v]) => (
+                {([[t("common:fields.email"), viewing.email], [t("common:fields.phone"), viewing.phone], [t("account:staff.details.signIn"), viewing.loginMethod === "pin" ? t("account:staff.details.posPin") : t("account:staff.details.emailLink")], [t("account:staff.details.locations"), viewing.locationNames.join(", ") || t("account:staff.allLocations")],
+                  [t("account:staff.details.joined"), fmtD(viewing.joiningDate)], [t("account:staff.details.pay"), `${viewing.salary ? formatCurrency(viewing.salary) : "—"} · ${methodLabel(viewing.paymentMethod)}`], [t("account:staff.details.account"), viewing.account], [t("account:staff.details.nid"), viewing.nid], [t("account:staff.details.emergency"), viewing.emergencyContact], [t("common:fields.status"), statusLabel(viewing.status)], [t("account:staff.published"), viewing.published ? t("common:actions.yes") : t("common:actions.no")], [t("account:staff.lastActive"), lastActive(viewing.lastActiveAt)]] as [string, string | null][]).map(([k, v]) => (
                   <InfoRow key={k} label={k} value={v || "—"} />
                 ))}
               </InfoList>
               <Separator className="mt-1" />
               <div className="flex flex-col gap-2">
-                <SectionTitle action={<Button variant="link" size="sm" asChild className="h-auto p-0"><Link href={`/dashboard/staff/salary?staff=${viewing.id}`}>Open in Salary management →</Link></Button>}>Salary</SectionTitle>
+                <SectionTitle action={<Button variant="link" size="sm" asChild className="h-auto p-0"><Link href={`/dashboard/staff/salary?staff=${viewing.id}`}>{t("account:staff.details.openSalary")}</Link></Button>}>{t("account:staff.salary")}</SectionTitle>
                 {!salary ? <Skeleton className="h-16" /> : (
                   <>
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      {[["Monthly", salary.monthly], ["Paid this year", salary.paidThisYear], ["Due now", salary.dueNow]].map(([l, v]) => (
+                      {[[t("account:staff.details.monthly"), salary.monthly], [t("account:staff.details.paidThisYear"), salary.paidThisYear], [t("account:staff.details.dueNow"), salary.dueNow]].map(([l, v]) => (
                         <Card key={l as string} className="gap-0 px-2 py-1.5"><div className="text-xs text-muted-foreground">{l}</div><div className="text-sm font-bold tabular-nums">{formatCurrency(Number(v))}</div></Card>
                       ))}
                     </div>
-                    {salary.history.length === 0 ? <p className="text-xs text-muted-foreground">No salary records yet.</p> : salary.history.map((h) => (
+                    {salary.history.length === 0 ? <p className="text-xs text-muted-foreground">{t("account:staff.details.noSalary")}</p> : salary.history.map((h) => (
                       <div key={h.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="flex flex-col"><span className="font-semibold">{h.label}</span><span className="text-xs text-muted-foreground">{h.detail}</span></span>
+                        <span className="flex flex-col"><span className="font-semibold">{/^\d{4}-\d{2}$/.test(h.month ?? "") ? new Date(`${h.month}-01T12:00:00`).toLocaleDateString(lang, { month: "short", year: "numeric" }) : h.label}</span><span className="text-xs text-muted-foreground">{h.detail}</span></span>
                         <span className="flex items-center gap-2"><strong className="tabular-nums">{formatCurrency(h.net)}</strong>
-                          <StatusBadge status={h.status} variant={h.status === "paid" ? "default" : "secondary"} />
-                          {h.canPay && <Button type="button" size="sm" disabled={payBusy} onClick={() => payOne(h.id)}>Pay</Button>}</span>
+                          <StatusBadge status={h.status} variant={h.status === "paid" ? "default" : "secondary"} label={SALARY_STATUS_KEY[h.status] ? t(SALARY_STATUS_KEY[h.status]) : h.status} />
+                          {h.canPay && <Button type="button" size="sm" disabled={payBusy} onClick={() => payOne(h.id)}>{t("account:staff.details.payBtn")}</Button>}</span>
                       </div>
                     ))}
                     {(() => {
@@ -393,8 +408,8 @@ export default function StaffPage() {
                       if (!dueCount && !canGenerate) return null
                       return (
                         <div className="flex flex-wrap gap-2 pt-1">
-                          {canGenerate && <Button type="button" variant="outline" size="sm" disabled={payBusy} onClick={generateThisMonth}>Generate {monthLabel} salary</Button>}
-                          {dueCount > 0 && <Button type="button" size="sm" disabled={payBusy} onClick={payAllDue}>Pay all due{dueCount > 1 ? ` (${dueCount})` : ""}</Button>}
+                          {canGenerate && <Button type="button" variant="outline" size="sm" disabled={payBusy} onClick={generateThisMonth}>{t("account:staff.details.generate", { month: monthLabel })}</Button>}
+                          {dueCount > 0 && <Button type="button" size="sm" disabled={payBusy} onClick={payAllDue}>{dueCount > 1 ? t("account:staff.details.payAllDueCount", { count: dueCount }) : t("account:staff.details.payAllDue")}</Button>}
                         </div>
                       )
                     })()}
@@ -404,44 +419,44 @@ export default function StaffPage() {
             </SectionCard>
           )}
 
-          <div><h2 className="text-lg font-semibold">{editing ? `Edit ${editing.name}` : "Add team member"}</h2>
+          <div><h2 className="text-lg font-semibold">{editing ? t("account:staff.form.editTitle", { name: editing.name }) : t("account:staff.form.addTitle")}</h2>
             {err && <Alert variant="destructive" role="alert" className="mt-2"><AlertDescription>{err}</AlertDescription></Alert>}</div>
-          {atSeatLimit && <Alert role="alert"><AlertDescription><p>All {stats?.seatLimit} seats on your plan are used. <Link href="/dashboard/billing/plans" className="underline">Upgrade your plan</Link> to add more team members.</p></AlertDescription></Alert>}
-          {editing?.isOnlyOwner && <Alert><AlertDescription>You are the only Owner, so this role and status are locked. Make someone else an Owner first to change them.</AlertDescription></Alert>}
+          {atSeatLimit && <Alert role="alert"><AlertDescription><p><Trans t={t} i18nKey="account:staff.form.seatsFull" values={{ count: stats?.seatLimit ?? 0 }} components={{ link: <Link href="/dashboard/billing/plans" className="underline" /> }} /></p></AlertDescription></Alert>}
+          {editing?.isOnlyOwner && <Alert><AlertDescription>{t("account:staff.form.onlyOwner")}</AlertDescription></Alert>}
           <div className="grid grid-cols-2 gap-2.5">
-            <FormField label="Full name" required htmlFor="staff-name"><Input id="staff-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Rafiq Khan" /></FormField>
-            <FormField label="Phone" required htmlFor="staff-phone">
+            <FormField label={t("account:staff.form.fullName")} required htmlFor="staff-name"><Input id="staff-name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("account:staff.form.namePlaceholder")} /></FormField>
+            <FormField label={t("common:fields.phone")} required htmlFor="staff-phone">
               <InputGroup><InputGroupAddon><InputGroupText>+880</InputGroupText></InputGroupAddon>
                 <InputGroupInput id="staff-phone" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="17XX-XXXXXX" /></InputGroup></FormField>
           </div>
-          <FormField label="Role" required description={<Link href="/dashboard/staff/roles" className="underline-offset-4 hover:underline">See exactly what each role can do →</Link>}>
-            <ChoiceCardGroup aria-label="Role" className="grid-cols-2" disabled={!!editing?.isOnlyOwner} value={form.roleId}
+          <FormField label={t("account:staff.role")} required description={<Link href="/dashboard/staff/roles" className="underline-offset-4 hover:underline">{t("account:staff.form.roleHelp")}</Link>}>
+            <ChoiceCardGroup aria-label={t("account:staff.role")} className="grid-cols-2" disabled={!!editing?.isOnlyOwner} value={form.roleId}
               onValueChange={(id) => setForm((f) => ({ ...f, roleId: id, loginMethod: roleMethod(id) }))}>
               {pickableRoles.map((r) => (
                 <ChoiceCard key={r.id} value={String(r.id)} title={r.name} description={r.description || undefined}>
-                  <span className="text-xs font-normal text-muted-foreground">{r.memberCount} member{r.memberCount === 1 ? "" : "s"}</span>
+                  <span className="text-xs font-normal text-muted-foreground">{t("account:staff.form.members", { count: r.memberCount })}</span>
                 </ChoiceCard>
               ))}
             </ChoiceCardGroup>
           </FormField>
-          <FormField label="How they sign in">
-            <ChoiceCardGroup aria-label="Login method" className="grid-cols-2" value={form.loginMethod} onValueChange={(id) => set("loginMethod", id)}>
-              {([["email", "Email link", "They set their own password"], ["pin", "POS PIN", "Cashiers, no email needed"]] as const).map(([id, label, sub]) => (
-                <ChoiceCard key={id} value={id} title={label} description={sub} />
+          <FormField label={t("account:staff.form.signInHow")}>
+            <ChoiceCardGroup aria-label={t("account:staff.form.loginMethodAria")} className="grid-cols-2" value={form.loginMethod} onValueChange={(id) => set("loginMethod", id)}>
+              {([["email", "account:staff.details.emailLink", "account:staff.form.emailLinkDesc"], ["pin", "account:staff.details.posPin", "account:staff.form.posPinDesc"]] as const).map(([id, label, sub]) => (
+                <ChoiceCard key={id} value={id} title={t(label)} description={t(sub)} />
               ))}
             </ChoiceCardGroup>
           </FormField>
           {form.loginMethod === "email" ? (
-            <FormField label="Email" required htmlFor="staff-email" description="They get a link to set their own password. You never see it.">
+            <FormField label={t("common:fields.email")} required htmlFor="staff-email" description={t("account:staff.form.emailHelp")}>
               <Input id="staff-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="name@example.com" />
             </FormField>
           ) : (
-            <FormField label="4-digit POS PIN" htmlFor="staff-pin" description="For cashiers who only use the POS. No email needed.">
-              <Input id="staff-pin" inputMode="numeric" maxLength={4} value={form.pin} onChange={(e) => set("pin", e.target.value.replace(/\D/g, ""))} placeholder={editing?.hasPin ? "Leave blank to keep the current PIN" : "e.g. 4821"} />
+            <FormField label={t("account:staff.form.pin")} htmlFor="staff-pin" description={t("account:staff.form.pinHelp")}>
+              <Input id="staff-pin" inputMode="numeric" maxLength={4} value={form.pin} onChange={(e) => set("pin", e.target.value.replace(/\D/g, ""))} placeholder={editing?.hasPin ? t("account:staff.form.pinKeep") : t("account:staff.form.pinPlaceholder")} />
             </FormField>
           )}
-          <FormField label="Can work at">
-            <div role="group" aria-label="Locations" className="flex flex-wrap gap-1.5">
+          <FormField label={t("account:staff.form.canWorkAt")}>
+            <div role="group" aria-label={t("account:staff.form.locationsAria")} className="flex flex-wrap gap-1.5">
               {locations.map((l) => {
                 const on = form.locationIds.includes(l.id)
                 return <Button key={l.id} type="button" size="sm" variant={on ? "default" : "outline"} aria-pressed={on} onClick={() => set("locationIds", on ? form.locationIds.filter((x) => x !== l.id) : [...form.locationIds, l.id])}>{l.name}</Button>
@@ -452,29 +467,29 @@ export default function StaffPage() {
             <Card className="gap-0 py-0">
               <CollapsibleTrigger asChild>
                 <Button type="button" variant="ghost" className="group w-full justify-between">
-                  Pay &amp; employment
+                  {t("account:staff.form.payEmployment")}
                   <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-3 px-3.5 pb-3.5 pt-2">
                 <div className="grid grid-cols-2 gap-2.5">
-                  <FormField label="Joining date" htmlFor="staff-joined"><Input id="staff-joined" type="date" value={form.joined} onChange={(e) => set("joined", e.target.value)} /></FormField>
-                  <FormField label="Monthly salary (৳)" htmlFor="staff-salary"><Input id="staff-salary" type="number" min={0} value={form.salary} onChange={(e) => set("salary", e.target.value)} placeholder="0" /></FormField>
+                  <FormField label={t("account:staff.form.joiningDate")} htmlFor="staff-joined"><Input id="staff-joined" type="date" value={form.joined} onChange={(e) => set("joined", e.target.value)} /></FormField>
+                  <FormField label={t("account:staff.form.monthlySalary")} htmlFor="staff-salary"><Input id="staff-salary" type="number" min={0} value={form.salary} onChange={(e) => set("salary", e.target.value)} placeholder="0" /></FormField>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <FormField label="Paid by" htmlFor="staff-pay-method"><Select value={form.method} onValueChange={(v) => set("method", v)}><SelectTrigger id="staff-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormField>
-                  <FormField label="Account / wallet no." htmlFor="staff-account"><Input id="staff-account" value={form.account} onChange={(e) => set("account", e.target.value)} placeholder="Optional" /></FormField>
+                  <FormField label={t("account:staff.form.paidBy")} htmlFor="staff-pay-method"><Select value={form.method} onValueChange={(v) => set("method", v)}><SelectTrigger id="staff-pay-method" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{methodLabel(m)}</SelectItem>)}</SelectContent></Select></FormField>
+                  <FormField label={t("account:staff.form.account")} htmlFor="staff-account"><Input id="staff-account" value={form.account} onChange={(e) => set("account", e.target.value)} placeholder={t("common:status.optional")} /></FormField>
                 </div>
-                <FormField label="Status" htmlFor="staff-status"><Select disabled={!!editing?.isOnlyOwner} value={form.status} onValueChange={(v) => set("status", v)}><SelectTrigger id="staff-status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></FormField>
-                <FormField label="NID number" htmlFor="staff-nid"><Input id="staff-nid" value={form.nid} onChange={(e) => set("nid", e.target.value)} placeholder="Optional" /></FormField>
-                <FormField label="Emergency contact" htmlFor="staff-emergency"><Input id="staff-emergency" value={form.emergency} onChange={(e) => set("emergency", e.target.value)} placeholder="Name and phone (optional)" /></FormField>
+                <FormField label={t("common:fields.status")} htmlFor="staff-status"><Select disabled={!!editing?.isOnlyOwner} value={form.status} onValueChange={(v) => set("status", v)}><SelectTrigger id="staff-status" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>)}</SelectContent></Select></FormField>
+                <FormField label={t("account:staff.form.nid")} htmlFor="staff-nid"><Input id="staff-nid" value={form.nid} onChange={(e) => set("nid", e.target.value)} placeholder={t("common:status.optional")} /></FormField>
+                <FormField label={t("account:staff.form.emergency")} htmlFor="staff-emergency"><Input id="staff-emergency" value={form.emergency} onChange={(e) => set("emergency", e.target.value)} placeholder={t("account:staff.form.emergencyPlaceholder")} /></FormField>
               </CollapsibleContent>
             </Card>
           </Collapsible>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+            <Button type="button" variant="outline" onClick={() => startEdit(null)}>{t("common:actions.clear")}</Button>
             <Button type="button" disabled={saving || atSeatLimit} onClick={save}>
-              {saving ? "Saving…" : editing ? "Save changes" : form.loginMethod === "email" ? "Add & send invite" : "Add team member"}
+              {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : form.loginMethod === "email" ? t("account:staff.form.addInvite") : t("account:staff.form.add")}
             </Button>
           </div>
         </Card>
@@ -482,14 +497,14 @@ export default function StaffPage() {
 
       <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-          <DialogTitle>Activity log</DialogTitle>
-          <DialogDescription>When each team member was last active.</DialogDescription>
+          <DialogTitle>{t("account:staff.activityLog")}</DialogTitle>
+          <DialogDescription>{t("account:staff.activityDesc")}</DialogDescription>
           <ItemGroup>
             {[...rows].sort((a, b) => (b.lastActiveAt ?? "").localeCompare(a.lastActiveAt ?? "")).map((r, i) => (
               <Fragment key={r.id}>
                 {i > 0 && <ItemSeparator />}
                 <Item size="sm" className="px-0">
-                  <ItemContent><ItemTitle>{r.name}</ItemTitle><ItemDescription>{r.roleName ?? "No role"}</ItemDescription></ItemContent>
+                  <ItemContent><ItemTitle>{r.name}</ItemTitle><ItemDescription>{r.roleName ?? t("account:staff.noRole")}</ItemDescription></ItemContent>
                   <ItemActions className="text-sm text-muted-foreground">{lastActive(r.lastActiveAt)}</ItemActions>
                 </Item>
               </Fragment>

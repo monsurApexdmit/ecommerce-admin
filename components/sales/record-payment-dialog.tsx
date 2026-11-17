@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +12,7 @@ import { paymentApi } from "@/lib/paymentApi"
 import { type SellResponse } from "@/lib/sellsApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useToast } from "@/hooks/use-toast"
+import { ORDERS_NS, methodLabel } from "@/components/sales/i18n"
 
 export const PAYMENT_METHODS = ["Cash", "bKash", "Nagad", "Card", "Bank", "COD"] as const
 const NEEDS_REFERENCE = new Set(["bKash", "Nagad", "Bank", "Card"])
@@ -33,6 +35,7 @@ interface RecordPaymentDialogProps {
 export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDialogProps) {
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
+  const { t } = useTranslation(ORDERS_NS)
   const [method, setMethod] = useState<string>("Cash")
   const [amount, setAmount] = useState("")
   const [reference, setReference] = useState("")
@@ -53,9 +56,9 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
   const parsed = Number(amount)
   let error = ""
   if (single) {
-    if (!amount.trim() || !Number.isFinite(parsed) || parsed <= 0) error = "Enter an amount greater than 0"
-    else if (Math.round(parsed * 100) > Math.round(totalDue * 100)) error = `Amount exceeds the due of ${formatCurrency(totalDue)}`
-  } else if (totalDue <= 0) error = "Nothing is due on the selected sales"
+    if (!amount.trim() || !Number.isFinite(parsed) || parsed <= 0) error = t("orders:recordPayment.err.amountPositive")
+    else if (Math.round(parsed * 100) > Math.round(totalDue * 100)) error = t("orders:recordPayment.err.exceedsDue", { due: formatCurrency(totalDue) })
+  } else if (totalDue <= 0) error = t("orders:recordPayment.err.nothingDue")
 
   const submit = async () => {
     if (error) return
@@ -77,14 +80,16 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
     if (failed) {
       const first = results.find((r): r is PromiseRejectedResult => r.status === "rejected")
       const msg = (first?.reason as any)?.response?.data?.message
-      toast({ variant: "destructive", title: "Some payments failed", description: msg || `${failed} of ${payable.length} were not recorded` })
+      toast({ variant: "destructive", title: t("orders:recordPayment.toast.someFailed"), description: msg || t("orders:recordPayment.toast.notRecorded", { failed, total: payable.length }) })
     } else {
       const remaining = single ? Math.max(0, totalDue - parsed) : 0
       toast({
-        title: "Payment recorded",
+        title: t("orders:recordPayment.toast.recorded"),
         description: single
-          ? remaining > 0 ? `${formatCurrency(parsed)} received. ${formatCurrency(remaining)} still due.` : "Sale is fully paid"
-          : `${ok} sale${ok === 1 ? "" : "s"} marked as paid`,
+          ? remaining > 0
+            ? t("orders:recordPayment.toast.partialLeft", { paid: formatCurrency(parsed), remaining: formatCurrency(remaining) })
+            : t("orders:recordPayment.toast.fullyPaid")
+          : t("orders:recordPayment.toast.markedPaid", { count: ok }),
       })
     }
     setSaving(false)
@@ -96,17 +101,17 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Record payment</DialogTitle>
+          <DialogTitle>{t("orders:recordPayment.title")}</DialogTitle>
           <DialogDescription>
             {single
-              ? `Invoice #${sales[0]?.invoiceNo}. Enter less than the due to record a partial payment.`
-              : `Pays the full due of each of the ${sales.length} selected sales.`}
+              ? t("orders:recordPayment.descSingle", { invoice: sales[0]?.invoiceNo ?? "" })
+              : t("orders:recordPayment.descMany", { count: sales.length })}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <StatTile label="Total due" value={formatCurrency(totalDue)} className="p-3" />
+          <StatTile label={t("orders:recordPayment.totalDue")} value={formatCurrency(totalDue)} className="p-3" />
           {single ? (
-            <FormField label="Amount" htmlFor="record-payment-amount" error={error || undefined}>
+            <FormField label={t("common:money.amount")} htmlFor="record-payment-amount" error={error || undefined}>
               <Input
                 id="record-payment-amount"
                 type="number" inputMode="decimal" min="0" step="0.01" value={amount}
@@ -118,16 +123,16 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
           ) : error ? (
             <p className="text-xs font-medium text-destructive">{error}</p>
           ) : null}
-          <FormField label="Payment method" htmlFor="record-payment-method">
+          <FormField label={t("common:payment.method")} htmlFor="record-payment-method">
             <Select value={method} onValueChange={setMethod}>
               <SelectTrigger id="record-payment-method" className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{methodLabel(t, m)}</SelectItem>)}
               </SelectContent>
             </Select>
           </FormField>
           {NEEDS_REFERENCE.has(method) && (
-            <FormField label="Transaction ID (optional)" htmlFor="record-payment-reference">
+            <FormField label={t("orders:recordPayment.transactionIdOptional")} htmlFor="record-payment-reference">
               <Input
                 id="record-payment-reference"
                 value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100}
@@ -136,9 +141,9 @@ export function RecordPaymentDialog({ sales, onClose, onDone }: RecordPaymentDia
           )}
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={onClose}>{t("common:actions.cancel")}</Button>
           <Button type="button" onClick={submit} disabled={saving || !!error}>
-            {saving ? "Saving…" : "Record payment"}
+            {saving ? t("common:actions.saving") : t("orders:recordPayment.submit")}
           </Button>
         </DialogFooter>
       </DialogContent>

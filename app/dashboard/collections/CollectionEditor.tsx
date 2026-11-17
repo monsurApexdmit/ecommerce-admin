@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Trans, useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import {
   ArrowDown, ArrowUp, Hand, ImageOff, Layers, Loader2, Package, Plus, Search, Sparkles, Trash2, X,
 } from "lucide-react"
@@ -57,31 +59,35 @@ interface UiRule {
   days: string
 }
 
+/** Translation key in the namespaces this file loads */
+type K = ParseKeys<["catalog", "common"]>
+
+// Labels are translation keys, translated at render
 interface FieldMeta {
-  label: string
-  operators: { value: string; label: string }[]
-  hint?: string
+  label: K
+  operators: { value: string; label: K }[]
+  hint?: K
 }
 
-const IS = [{ value: "is", label: "is" }, { value: "is_not", label: "is not" }]
+const IS: FieldMeta["operators"] = [{ value: "is", label: "catalog:collections.rules.ops.is" }, { value: "is_not", label: "catalog:collections.rules.ops.isNot" }]
 const FIELDS: Record<CollectionRuleField, FieldMeta> = {
-  category: { label: "Category", operators: IS, hint: "Includes its sub-categories" },
-  brand: { label: "Brand", operators: IS },
-  tag: { label: "Tag", operators: [{ value: "equals", label: "equals" }, { value: "not_equals", label: "does not equal" }, { value: "contains", label: "contains" }] },
-  flag: { label: "Product flag", operators: IS },
-  price: { label: "Price", operators: [{ value: "greater_than", label: "greater than" }, { value: "less_than", label: "less than" }], hint: "Compares the price buyers pay now (sale and offer prices included)" },
-  on_offer: { label: "On offer", operators: [{ value: "is", label: "is" }], hint: "Products with a live offer price" },
-  new_arrivals: { label: "New arrivals", operators: [{ value: "within_days", label: "within" }] },
-  best_sellers: { label: "Best sellers", operators: [{ value: "top", label: "top" }], hint: "Products that sold nothing never qualify" },
-  in_stock: { label: "In stock", operators: [{ value: "is", label: "is" }], hint: "Always applied, even when matching any condition" },
+  category: { label: "catalog:collections.rules.fields.category", operators: IS, hint: "catalog:collections.rules.hints.category" },
+  brand: { label: "catalog:collections.rules.fields.brand", operators: IS },
+  tag: { label: "catalog:collections.rules.fields.tag", operators: [{ value: "equals", label: "catalog:collections.rules.ops.equals" }, { value: "not_equals", label: "catalog:collections.rules.ops.notEquals" }, { value: "contains", label: "catalog:collections.rules.ops.contains" }] },
+  flag: { label: "catalog:collections.rules.fields.flag", operators: IS },
+  price: { label: "catalog:collections.rules.fields.price", operators: [{ value: "greater_than", label: "catalog:collections.rules.ops.greaterThan" }, { value: "less_than", label: "catalog:collections.rules.ops.lessThan" }], hint: "catalog:collections.rules.hints.price" },
+  on_offer: { label: "catalog:collections.rules.fields.onOffer", operators: [{ value: "is", label: "catalog:collections.rules.ops.is" }], hint: "catalog:collections.rules.hints.onOffer" },
+  new_arrivals: { label: "catalog:collections.rules.fields.newArrivals", operators: [{ value: "within_days", label: "catalog:collections.rules.ops.within" }] },
+  best_sellers: { label: "catalog:collections.rules.fields.bestSellers", operators: [{ value: "top", label: "catalog:collections.rules.ops.top" }], hint: "catalog:collections.rules.hints.bestSellers" },
+  in_stock: { label: "catalog:collections.rules.fields.inStock", operators: [{ value: "is", label: "catalog:collections.rules.ops.is" }], hint: "catalog:collections.rules.hints.inStock" },
 }
 const FIELD_ORDER = Object.keys(FIELDS) as CollectionRuleField[]
 const SINGLE_OP = new Set<CollectionRuleField>(["on_offer", "new_arrivals", "best_sellers", "in_stock"])
 
-const FLAGS = [
-  { value: "best_seller", label: "Best seller" },
-  { value: "hot_deal", label: "Hot deal" },
-  { value: "featured", label: "Featured" },
+const FLAGS: { value: string; label: K }[] = [
+  { value: "best_seller", label: "catalog:collections.rules.flags.bestSeller" },
+  { value: "hot_deal", label: "catalog:collections.rules.flags.hotDeal" },
+  { value: "featured", label: "catalog:collections.rules.flags.featured" },
 ]
 
 const defaultRule = (field: CollectionRuleField): UiRule => {
@@ -107,17 +113,17 @@ const toUiRule = (r: CollectionRule): UiRule => {
 const isBlank = (v: string) => v.trim() === ""
 const isIntIn = (v: string, min: number, max: number) => !isBlank(v) && Number.isInteger(Number(v)) && Number(v) >= min && Number(v) <= max
 
-/** Returns an error message for an incomplete rule, or null. */
-const ruleError = (r: UiRule): string | null => {
+/** Returns the error message key for an incomplete rule, or null. */
+const ruleError = (r: UiRule): K | null => {
   switch (r.field) {
-    case "category": return isBlank(r.value) ? "Choose a category" : null
-    case "brand": return isBlank(r.value) ? "Choose a brand" : null
-    case "tag": return isBlank(r.value) ? "Enter a tag" : r.value.trim().length > 100 ? "Keep the tag under 100 characters" : null
-    case "flag": return isBlank(r.value) ? "Choose a flag" : null
-    case "price": return isBlank(r.value) || Number.isNaN(Number(r.value)) || Number(r.value) < 0 ? "Enter a price of 0 or more" : null
-    case "new_arrivals": return isIntIn(r.value, 1, 3650) ? null : "Days must be between 1 and 3650"
+    case "category": return isBlank(r.value) ? "catalog:collections.rules.errors.chooseCategory" : null
+    case "brand": return isBlank(r.value) ? "catalog:collections.rules.errors.chooseBrand" : null
+    case "tag": return isBlank(r.value) ? "catalog:collections.rules.errors.enterTag" : r.value.trim().length > 100 ? "catalog:collections.rules.errors.tagLong" : null
+    case "flag": return isBlank(r.value) ? "catalog:collections.rules.errors.chooseFlag" : null
+    case "price": return isBlank(r.value) || Number.isNaN(Number(r.value)) || Number(r.value) < 0 ? "catalog:collections.rules.errors.priceInvalid" : null
+    case "new_arrivals": return isIntIn(r.value, 1, 3650) ? null : "catalog:collections.rules.errors.daysRange"
     case "best_sellers":
-      return !isIntIn(r.value, 1, 500) ? "Top products must be between 1 and 500" : !isIntIn(r.days, 1, 3650) ? "Days must be between 1 and 3650" : null
+      return !isIntIn(r.value, 1, 500) ? "catalog:collections.rules.errors.topRange" : !isIntIn(r.days, 1, 3650) ? "catalog:collections.rules.errors.daysRange" : null
     default: return null
   }
 }
@@ -137,13 +143,13 @@ const toApiRule = (r: UiRule): CollectionRule => {
   }
 }
 
-const SORTS: { value: CollectionProductSort; label: string }[] = [
-  { value: "manual", label: "Manual order" },
-  { value: "best_selling", label: "Best selling" },
-  { value: "newest", label: "Newest first" },
-  { value: "price_asc", label: "Price: low to high" },
-  { value: "price_desc", label: "Price: high to low" },
-  { value: "name", label: "Name A–Z" },
+const SORTS: { value: CollectionProductSort; label: K }[] = [
+  { value: "manual", label: "catalog:collections.sorts.manual" },
+  { value: "best_selling", label: "catalog:collections.sorts.bestSelling" },
+  { value: "newest", label: "catalog:collections.sorts.newest" },
+  { value: "price_asc", label: "catalog:collections.sorts.priceAsc" },
+  { value: "price_desc", label: "catalog:collections.sorts.priceDesc" },
+  { value: "name", label: "catalog:collections.sorts.name" },
 ]
 
 const slugify = (s: string) =>
@@ -188,6 +194,7 @@ const emptyForm: FormState = {
 // ---------------------------------------------------------------- editor
 
 export function CollectionEditor({ collectionId }: { collectionId: number | null }) {
+  const { t } = useTranslation(["catalog", "common"])
   const router = useRouter()
   const { toast } = useToast()
   const { formatCurrency } = useCompanySettings()
@@ -236,7 +243,7 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
       .catch((err) => {
         if (!alive) return
         if (err?.response?.status === 404) setNotFound(true)
-        else toast({ variant: "destructive", title: "Could not load collection", description: apiErrorMessage(err) })
+        else toast({ variant: "destructive", title: t("catalog:collections.editor.loadFailed"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
       })
       .finally(() => alive && setLoading(false))
     return () => { alive = false }
@@ -269,13 +276,13 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
     if (completeRules.length === 0) { setPreview(null); setPreviewError(null); return }
     const ctrl = new AbortController()
     setPreviewLoading(true)
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       collectionApi.preview({ type: "automatic", match: form.match, rules: completeRules, productSort: form.productSort, limit: 12 }, ctrl.signal)
         .then((r) => { setPreview(r); setPreviewError(null) })
-        .catch((err) => { if (err?.name !== "CanceledError" && err?.code !== "ERR_CANCELED") setPreviewError(apiErrorMessage(err, "Could not load preview")) })
+        .catch((err) => { if (err?.name !== "CanceledError" && err?.code !== "ERR_CANCELED") setPreviewError(apiErrorMessage(err, t("catalog:collections.editor.previewFailed"))) })
         .finally(() => { if (!ctrl.signal.aborted) setPreviewLoading(false) })
     }, 450)
-    return () => { clearTimeout(t); ctrl.abort() }
+    return () => { clearTimeout(timer); ctrl.abort() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewKey, form.type, loading])
 
@@ -284,6 +291,7 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
 
   const canWrite = hasPermission("Collections", "write")
   const canDelete = hasPermission("Collections", "delete")
+  const ruleErrorText = (r: UiRule) => { const k = ruleError(r); return k ? t(k) : null }
 
   // ------------------------------------------------ rules helpers
   const clearRuleServerError = (i: number) =>
@@ -331,20 +339,20 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
   // ------------------------------------------------ save
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {}
-    if (!form.name.trim()) e.name = "Give the collection a name"
-    else if (form.name.trim().length > 150) e.name = "Keep the name under 150 characters"
+    if (!form.name.trim()) e.name = t("catalog:collections.editor.errors.nameRequired")
+    else if (form.name.trim().length > 150) e.name = t("catalog:collections.editor.errors.nameLong")
     const slug = form.slug.trim() || slugify(form.name)
-    if (!slug) e.slug = "Enter a slug"
-    else if (!SLUG_RE.test(slug)) e.slug = "Use lowercase letters, numbers and dashes only"
-    if (form.description.length > 5000) e.description = "Keep the description under 5000 characters"
+    if (!slug) e.slug = t("catalog:collections.editor.errors.slugRequired")
+    else if (!SLUG_RE.test(slug)) e.slug = t("catalog:collections.editor.errors.slugFormat")
+    if (form.description.length > 5000) e.description = t("catalog:collections.editor.errors.descLong")
     if (form.type === "automatic") {
-      if (form.rules.length === 0) e.rules = "Add at least one condition"
-      else if (form.rules.length > 20) e.rules = "A collection can have at most 20 conditions"
-      else if (form.rules.some((r) => ruleError(r))) e.rules = "Complete or remove the highlighted conditions"
+      if (form.rules.length === 0) e.rules = t("catalog:collections.editor.errors.rulesNone")
+      else if (form.rules.length > 20) e.rules = t("catalog:collections.editor.errors.rulesMax")
+      else if (form.rules.some((r) => ruleError(r))) e.rules = t("catalog:collections.editor.errors.rulesIncomplete")
     }
-    if (form.type === "manual" && form.products.length > 1000) e.products = "A collection can hold at most 1000 hand-picked products"
-    if (form.seoTitle.length > 255) e.seoTitle = "Keep the SEO title under 255 characters"
-    if (form.seoDescription.length > 500) e.seoDescription = "Keep the SEO description under 500 characters"
+    if (form.type === "manual" && form.products.length > 1000) e.products = t("catalog:collections.editor.errors.productsMax")
+    if (form.seoTitle.length > 255) e.seoTitle = t("catalog:collections.editor.errors.seoTitleLong")
+    if (form.seoDescription.length > 500) e.seoDescription = t("catalog:collections.editor.errors.seoDescLong")
     return e
   }
 
@@ -353,7 +361,7 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
     setErrors(e)
     setShowRuleErrors(true)
     if (Object.keys(e).length) {
-      toast({ variant: "destructive", title: "Check the form", description: Object.values(e)[0] })
+      toast({ variant: "destructive", title: t("catalog:collections.editor.checkForm"), description: Object.values(e)[0] })
       return
     }
     setSaving(true)
@@ -377,7 +385,7 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
       setRuleServerErrors({})
       // productIds in the body saves the manual products and their order in the same request
       const saved = isNew ? await collectionApi.create(payload) : await collectionApi.update(collectionId!, payload)
-      toast({ title: isNew ? "Collection created" : "Collection saved", description: payload.name })
+      toast({ title: isNew ? t("catalog:collections.editor.created") : t("catalog:collections.editor.saved"), description: payload.name })
       if (isNew) router.replace(`/dashboard/collections/${saved.id}`)
       else {
         setInitialName(saved.name || payload.name)
@@ -402,11 +410,11 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
           const key = k.startsWith("rules") ? "rules" : k.startsWith("productIds") ? "products" : k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
           if (!mapped[key]) mapped[key] = v
         })
-        if (Object.keys(perRule).length && !mapped.rules) mapped.rules = "Fix the highlighted conditions"
+        if (Object.keys(perRule).length && !mapped.rules) mapped.rules = t("catalog:collections.editor.errors.rulesFix")
         setRuleServerErrors(perRule)
         setErrors(mapped)
       }
-      toast({ variant: "destructive", title: "Could not save", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotSave"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
     } finally {
       setSaving(false)
     }
@@ -417,16 +425,16 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
     setDeleting(true)
     try {
       await collectionApi.delete(collectionId!)
-      toast({ title: "Collection deleted", description: initialName })
+      toast({ title: t("catalog:collections.list.deleted"), description: initialName })
       router.push("/dashboard/collections")
     } catch (err) {
-      toast({ variant: "destructive", title: "Could not delete", description: apiErrorMessage(err) })
+      toast({ variant: "destructive", title: t("catalog:shared.couldNotDelete"), description: apiErrorMessage(err, t("common:extra.tryAgain")) })
       setDeleting(false)
       setDeleteOpen(false)
     }
   }
 
-  const title = isNew ? "New collection" : initialName || "Collection"
+  const title = isNew ? t("catalog:collections.editor.newTitle") : initialName || t("catalog:collections.editor.fallbackTitle")
   const priceOf = (p: CollectionProduct) => {
     const sale = p.effectivePrice ?? p.salePrice ?? null
     const base = p.price ?? null
@@ -441,7 +449,7 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink asChild><Link href="/dashboard/collections">Collections</Link></BreadcrumbLink>
+              <BreadcrumbLink asChild><Link href="/dashboard/collections">{t("catalog:collections.list.title")}</Link></BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem><BreadcrumbPage>{title}</BreadcrumbPage></BreadcrumbItem>
@@ -449,17 +457,17 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
         </Breadcrumb>
         <PageHeader
           title={title}
-          description={isNew ? "Group products for your online store." : `/${form.slug}`}
+          description={isNew ? t("catalog:collections.editor.newDesc") : `/${form.slug}`}
           actions={!notFound && <>
             {!isNew && canDelete && (
               <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)} disabled={loading}>
-                <Trash2 className="size-4" aria-hidden /> Delete
+                <Trash2 className="size-4" aria-hidden /> {t("common:actions.delete")}
               </Button>
             )}
-            <Button type="button" variant="outline" asChild><Link href="/dashboard/collections">Cancel</Link></Button>
+            <Button type="button" variant="outline" asChild><Link href="/dashboard/collections">{t("common:actions.cancel")}</Link></Button>
             <Button type="button" onClick={save} disabled={saving || loading || !canWrite}>
               {saving && <Loader2 className="size-4 animate-spin" aria-hidden />}
-              {saving ? "Saving…" : isNew ? "Create collection" : "Save changes"}
+              {saving ? t("common:actions.saving") : isNew ? t("catalog:collections.editor.create") : t("common:actions.saveChanges")}
             </Button>
           </>}
         />
@@ -471,47 +479,48 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
           <div className="flex flex-col gap-5"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-56 rounded-xl" /></div>
         </div>
       ) : notFound ? (
-        <EmptyState icon={Layers} bordered title="Collection not found" description="It may have been deleted."
-          action={<Button asChild variant="link"><Link href="/dashboard/collections">Back to collections</Link></Button>} />
+        <EmptyState icon={Layers} bordered title={t("catalog:collections.editor.notFound")} description={t("catalog:collections.editor.notFoundDesc")}
+          action={<Button asChild variant="link"><Link href="/dashboard/collections">{t("catalog:collections.editor.back")}</Link></Button>} />
       ) : (
         <form className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]" onSubmit={(e) => { e.preventDefault(); save() }}>
           {/* -------------------------------------------------- main column */}
           <div className="flex min-w-0 flex-col gap-5">
-            <SectionCard title="Details" contentClassName="flex flex-col gap-4">
-              <FormField label="Name" required htmlFor="col-name" error={errors.name}>
-                <Input id="col-name" placeholder="e.g. Summer sale" value={form.name} autoFocus={isNew} aria-invalid={!!errors.name}
+            <SectionCard title={t("common:extra.details")} contentClassName="flex flex-col gap-4">
+              <FormField label={t("common:fields.name")} required htmlFor="col-name" error={errors.name}>
+                <Input id="col-name" placeholder={t("catalog:collections.editor.namePlaceholder")} value={form.name} autoFocus={isNew} aria-invalid={!!errors.name}
                   onChange={(e) => {
                     const name = e.target.value
                     setForm((f) => ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }))
                     setErrors((er) => { const n = { ...er }; delete n.name; if (!slugTouched) delete n.slug; return n })
                   }} />
               </FormField>
-              <FormField label="URL slug" htmlFor="col-slug" error={errors.slug}
-                description={<>Store address: <span className="font-mono">/collections/{form.slug || slugify(form.name) || "…"}</span></>}>
+              <FormField label={t("catalog:collections.editor.slug")} htmlFor="col-slug" error={errors.slug}
+                description={<Trans t={t} i18nKey="catalog:collections.editor.storeAddress" values={{ slug: form.slug || slugify(form.name) || "…" }}
+                  components={{ mono: <span className="font-mono" /> }} />}>
                 <div className="flex gap-2">
                   <Input id="col-slug" className="font-mono" placeholder="summer-sale" value={form.slug} aria-invalid={!!errors.slug}
                     onChange={(e) => { setSlugTouched(true); set("slug", e.target.value.toLowerCase().replace(/\s+/g, "-")) }}
                     onBlur={() => form.slug && set("slug", slugify(form.slug))} />
                   {slugTouched && (
                     <Button type="button" variant="outline" onClick={() => { setSlugTouched(false); set("slug", slugify(form.name)) }}>
-                      Reset
+                      {t("common:actions.reset")}
                     </Button>
                   )}
                 </div>
               </FormField>
-              <FormField label="Description" htmlFor="col-description" error={errors.description}>
-                <Textarea id="col-description" rows={3} placeholder="Shown at the top of the collection page" value={form.description}
+              <FormField label={t("common:fields.description")} htmlFor="col-description" error={errors.description}>
+                <Textarea id="col-description" rows={3} placeholder={t("catalog:collections.editor.descPlaceholder")} value={form.description}
                   onChange={(e) => set("description", e.target.value)} />
               </FormField>
             </SectionCard>
 
-            <SectionCard title="Collection type" description="Pick products yourself, or let rules keep the collection up to date."
+            <SectionCard title={t("catalog:collections.editor.typeTitle")} description={t("catalog:collections.editor.typeDesc")}
               contentClassName="flex flex-col gap-4">
-              <ChoiceCardGroup value={form.type} onValueChange={(v) => changeType(v as CollectionType)} aria-label="Collection type" className="sm:grid-cols-2">
-                <ChoiceCard value="manual" icon={<Hand className="size-4" aria-hidden />} title="Manual"
-                  description="Choose products one by one and set their order." />
-                <ChoiceCard value="automatic" icon={<Sparkles className="size-4" aria-hidden />} title="Automatic"
-                  description="Products that match your conditions are added and removed on their own." />
+              <ChoiceCardGroup value={form.type} onValueChange={(v) => changeType(v as CollectionType)} aria-label={t("catalog:collections.editor.typeTitle")} className="sm:grid-cols-2">
+                <ChoiceCard value="manual" icon={<Hand className="size-4" aria-hidden />} title={t("catalog:collections.type.manual")}
+                  description={t("catalog:collections.editor.manualDesc")} />
+                <ChoiceCard value="automatic" icon={<Sparkles className="size-4" aria-hidden />} title={t("catalog:collections.type.automatic")}
+                  description={t("catalog:collections.editor.automaticDesc")} />
               </ChoiceCardGroup>
             </SectionCard>
 
@@ -526,17 +535,17 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
               />
             ) : (
               <>
-                <SectionCard title="Conditions" contentClassName="flex flex-col gap-4"
-                  description="Products are added when they match these conditions.">
+                <SectionCard title={t("catalog:collections.editor.conditions")} contentClassName="flex flex-col gap-4"
+                  description={t("catalog:collections.editor.conditionsDesc")}>
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span>Products must match</span>
-                    <SegmentedControl aria-label="Products must match" value={form.match} onValueChange={(v) => set("match", v as CollectionMatch)}
-                      options={[{ value: "all", label: "All conditions" }, { value: "any", label: "Any condition" }]} />
+                    <span>{t("catalog:collections.editor.mustMatch")}</span>
+                    <SegmentedControl aria-label={t("catalog:collections.editor.mustMatch")} value={form.match} onValueChange={(v) => set("match", v as CollectionMatch)}
+                      options={[{ value: "all", label: t("catalog:collections.editor.allConditions") }, { value: "any", label: t("catalog:collections.editor.anyCondition") }]} />
                   </div>
                   <ul className="flex flex-col gap-2">
                     {form.rules.map((r, i) => (
                       <RuleRow key={i} index={i} rule={r} categories={categories} brands={brands}
-                        error={ruleServerErrors[i] ?? (showRuleErrors ? ruleError(r) : null)}
+                        error={ruleServerErrors[i] ?? (showRuleErrors ? ruleErrorText(r) : null)}
                         canRemove={form.rules.length > 1}
                         onField={(f) => changeField(i, f)}
                         onChange={(p) => updateRule(i, p)}
@@ -545,26 +554,26 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
                   </ul>
                   {errors.rules && <p role="alert" className="text-sm text-destructive">{errors.rules}</p>}
                   <div>
-                    <Button type="button" variant="outline" onClick={addRule}><Plus className="size-4" aria-hidden /> Add condition</Button>
+                    <Button type="button" variant="outline" onClick={addRule}><Plus className="size-4" aria-hidden /> {t("catalog:collections.editor.addCondition")}</Button>
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Matching products"
-                  description="Live preview. Only products that are published and visible online appear on the store."
+                <SectionCard title={t("catalog:collections.editor.matching")}
+                  description={t("catalog:collections.editor.matchingDesc")}
                   actions={
                     <span className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
                       {previewLoading && <Loader2 className="size-4 animate-spin" aria-hidden />}
-                      {preview && completeRules.length > 0 && <Badge variant="secondary" className="tabular-nums">{preview.total} product{preview.total === 1 ? "" : "s"}</Badge>}
+                      {preview && completeRules.length > 0 && <Badge variant="secondary" className="tabular-nums">{t("common:count.products", { count: preview.total })}</Badge>}
                     </span>
                   }>
                   {completeRules.length === 0 ? (
-                    <EmptyState icon={Sparkles} title="Add a condition" description="Matching products show up here as you build the rules." className="p-4 md:p-6" />
+                    <EmptyState icon={Sparkles} title={t("catalog:collections.editor.addConditionTitle")} description={t("catalog:collections.editor.addConditionDesc")} className="p-4 md:p-6" />
                   ) : previewError ? (
                     <p role="alert" className="text-sm text-destructive">{previewError}</p>
                   ) : !preview && previewLoading ? (
                     <div className="flex flex-col gap-2">{[1, 2, 3].map((k) => <Skeleton key={k} className="h-12 rounded-lg" />)}</div>
                   ) : preview && preview.products.length === 0 ? (
-                    <EmptyState icon={Package} title="No products match" description="Try loosening the conditions or switching to “Any condition”." className="p-4 md:p-6" />
+                    <EmptyState icon={Package} title={t("catalog:collections.editor.noMatch")} description={t("catalog:collections.editor.noMatchDesc")} className="p-4 md:p-6" />
                   ) : preview ? (
                     <div className={cn("flex flex-col gap-2 transition-opacity", previewLoading && "opacity-60")}>
                       <ul className="divide-y rounded-lg border">
@@ -574,35 +583,35 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium">{p.name}</div>
                               <div className="truncate text-xs text-muted-foreground tabular-nums">
-                                {[p.sku, p.categoryName, p.stock == null ? null : p.stock <= 0 ? "Out of stock" : `${p.stock} in stock`,
-                                  p.unitsSold ? `${p.unitsSold} sold` : null].filter(Boolean).join(" · ")}
+                                {[p.sku, p.categoryName, p.stock == null ? null : p.stock <= 0 ? t("common:extra.outOfStock") : t("catalog:collections.editor.inStockCount", { count: p.stock }),
+                                  p.unitsSold ? t("catalog:collections.editor.soldCount", { count: p.unitsSold }) : null].filter(Boolean).join(" · ")}
                               </div>
                             </div>
-                            {p.visibleOnStorefront === false && <Badge variant="outline">Hidden online</Badge>}
+                            {p.visibleOnStorefront === false && <Badge variant="outline">{t("catalog:collections.editor.hiddenOnline")}</Badge>}
                             <div className="text-right text-sm tabular-nums">{priceOf(p)}</div>
                           </li>
                         ))}
                       </ul>
                       {preview.total > preview.products.length && (
-                        <p className="text-xs text-muted-foreground">Showing the first {preview.products.length} of {preview.total}.</p>
+                        <p className="text-xs text-muted-foreground">{t("catalog:collections.editor.showingFirst", { shown: preview.products.length, total: preview.total })}</p>
                       )}
-                      {preview.hint && <p className="text-xs text-muted-foreground">{preview.hint} {preview.visibleTotal} will show on the store.</p>}
+                      {preview.hint && <p className="text-xs text-muted-foreground">{t("catalog:collections.editor.willShow", { hint: preview.hint, count: preview.visibleTotal })}</p>}
                     </div>
                   ) : null}
                 </SectionCard>
               </>
             )}
 
-            <SectionCard title="Search engine listing" description="How this collection appears in Google and when shared." contentClassName="flex flex-col gap-4">
-              <FormField label="SEO title" htmlFor="col-seo-title" error={errors.seoTitle}
-                description={`${form.seoTitle.length} characters (about 60 show in Google) · leave blank to use the collection name`}>
-                <Input id="col-seo-title" value={form.seoTitle} placeholder={form.name || "Collection name"} aria-invalid={!!errors.seoTitle}
+            <SectionCard title={t("catalog:shared.seoListing")} description={t("catalog:collections.editor.seoDesc")} contentClassName="flex flex-col gap-4">
+              <FormField label={t("catalog:shared.seoTitle")} htmlFor="col-seo-title" error={errors.seoTitle}
+                description={t("catalog:collections.editor.seoTitleHelp", { count: form.seoTitle.length })}>
+                <Input id="col-seo-title" value={form.seoTitle} placeholder={form.name || t("catalog:collections.editor.collectionName")} aria-invalid={!!errors.seoTitle}
                   onChange={(e) => set("seoTitle", e.target.value)} />
               </FormField>
-              <FormField label="SEO description" htmlFor="col-seo-description" error={errors.seoDescription}
-                description={`${form.seoDescription.length} characters (about 160 show in Google)`}>
+              <FormField label={t("catalog:collections.editor.seoDescription")} htmlFor="col-seo-description" error={errors.seoDescription}
+                description={t("catalog:collections.editor.seoDescHelp", { count: form.seoDescription.length })}>
                 <Textarea id="col-seo-description" rows={3} value={form.seoDescription} aria-invalid={!!errors.seoDescription}
-                  placeholder={form.description || "A short summary for search results"}
+                  placeholder={form.description || t("catalog:collections.editor.seoDescPlaceholder")}
                   onChange={(e) => set("seoDescription", e.target.value)} />
               </FormField>
             </SectionCard>
@@ -610,11 +619,11 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
 
           {/* -------------------------------------------------- side column */}
           <div className="flex min-w-0 flex-col gap-5">
-            <SectionCard title="Visibility" contentClassName="flex flex-col gap-3">
+            <SectionCard title={t("catalog:collections.editor.visibility")} contentClassName="flex flex-col gap-3">
               <Item variant="outline" size="sm">
                 <ItemContent>
-                  <ItemTitle id="col-pub-label">Published</ItemTitle>
-                  <ItemDescription>Visible on your online store</ItemDescription>
+                  <ItemTitle id="col-pub-label">{t("common:status.published")}</ItemTitle>
+                  <ItemDescription>{t("catalog:collections.editor.visibleOnStore")}</ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <Switch checked={form.isPublished} onCheckedChange={(v) => set("isPublished", v)} aria-labelledby="col-pub-label" />
@@ -622,8 +631,8 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
               </Item>
               <Item variant="outline" size="sm">
                 <ItemContent>
-                  <ItemTitle id="col-home-label">Show on homepage</ItemTitle>
-                  <ItemDescription>{form.isPublished ? "Feature it on the store homepage" : "Only shown once published"}</ItemDescription>
+                  <ItemTitle id="col-home-label">{t("catalog:collections.list.showOnHomepage")}</ItemTitle>
+                  <ItemDescription>{form.isPublished ? t("catalog:collections.editor.featureHome") : t("catalog:collections.editor.onlyOncePublished")}</ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <Switch checked={form.showOnHomepage} onCheckedChange={(v) => set("showOnHomepage", v)} aria-labelledby="col-home-label" />
@@ -631,20 +640,20 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
               </Item>
             </SectionCard>
 
-            <SectionCard title="Image" contentClassName="flex flex-col gap-3">
+            <SectionCard title={t("common:fields.image")} contentClassName="flex flex-col gap-3">
               <Button asChild variant="outline" className="h-auto min-h-36 w-full cursor-pointer flex-col gap-2 border-dashed p-3">
                 <Label htmlFor="col-image">
                   {imagePreview ? (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={imagePreview} alt="" className="aspect-[16/9] w-full rounded-md bg-muted object-cover" />
-                      <span className="max-w-full truncate text-xs text-muted-foreground">{form.imageFile?.name ?? "Click to replace"}</span>
+                      <span className="max-w-full truncate text-xs text-muted-foreground">{form.imageFile?.name ?? t("catalog:collections.editor.clickReplace")}</span>
                     </>
                   ) : (
                     <>
                       <ImageOff className="size-6 text-muted-foreground" aria-hidden />
-                      <span>Click to upload an image</span>
-                      <span className="text-xs font-normal text-muted-foreground">JPG, PNG, WebP or GIF · up to 5 MB</span>
+                      <span>{t("catalog:collections.editor.clickUpload")}</span>
+                      <span className="text-xs font-normal text-muted-foreground">{t("catalog:collections.editor.imageHint")}</span>
                     </>
                   )}
                 </Label>
@@ -654,41 +663,41 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
                   const file = e.target.files?.[0] ?? null
                   e.target.value = ""
                   if (!file) return
-                  if (file.size > 5 * 1024 * 1024) { toast({ variant: "destructive", title: "Image too large", description: "Choose an image under 5 MB" }); return }
+                  if (file.size > 5 * 1024 * 1024) { toast({ variant: "destructive", title: t("catalog:collections.editor.tooLarge"), description: t("catalog:collections.editor.tooLargeDesc") }); return }
                   setForm((f) => ({ ...f, imageFile: file, removeImage: false }))
                 }} />
               {errors.image && <p role="alert" className="text-sm text-destructive">{errors.image}</p>}
               {imagePreview && (
                 <Button type="button" variant="ghost" size="sm" className="self-start"
                   onClick={() => setForm((f) => ({ ...f, imageFile: null, removeImage: !!f.imageUrl }))}>
-                  <X className="size-4" aria-hidden /> Remove image
+                  <X className="size-4" aria-hidden /> {t("catalog:collections.editor.removeImage")}
                 </Button>
               )}
             </SectionCard>
 
-            <SectionCard title="Product order" contentClassName="flex flex-col gap-2">
-              <FormField label="Default sort on the collection page" htmlFor="col-sort">
+            <SectionCard title={t("catalog:collections.editor.productOrder")} contentClassName="flex flex-col gap-2">
+              <FormField label={t("catalog:collections.editor.defaultSort")} htmlFor="col-sort">
                 <Select value={form.productSort} onValueChange={(v) => { setSortTouched(true); set("productSort", v as CollectionProductSort) }}>
                   <SelectTrigger id="col-sort" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SORTS.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
-                        {s.value === "manual" && form.type === "automatic" ? "Default (newest, or best-seller rank)" : s.label}
+                        {s.value === "manual" && form.type === "automatic" ? t("catalog:collections.editor.sortDefaultAuto") : t(s.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FormField>
-              <p className="text-xs text-muted-foreground">Shoppers can still change the sort on the store.</p>
+              <p className="text-xs text-muted-foreground">{t("catalog:collections.editor.sortHint")}</p>
             </SectionCard>
 
             {!isNew && (
-              <SectionCard title="Summary" contentClassName="flex flex-col gap-1 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>{form.type === "manual" ? "Manual" : "Automatic"}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Products</span>
+              <SectionCard title={t("common:extra.summary")} contentClassName="flex flex-col gap-1 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">{t("common:fields.type")}</span><span>{form.type === "manual" ? t("catalog:collections.type.manual") : t("catalog:collections.type.automatic")}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t("common:fields.products")}</span>
                   <span className="tabular-nums">{form.type === "manual" ? form.products.length : preview?.total ?? "—"}</span></div>
                 <Separator className="my-1" />
-                <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span>{form.isPublished ? "Published" : "Hidden"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t("common:fields.status")}</span><span>{form.isPublished ? t("common:status.published") : t("catalog:shared.hidden")}</span></div>
               </SectionCard>
             )}
           </div>
@@ -698,13 +707,13 @@ export function CollectionEditor({ collectionId }: { collectionId: number | null
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="font-dash-body text-dash-ink">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {initialName || "this collection"}?</AlertDialogTitle>
-            <AlertDialogDescription>The collection is removed from your store. Its products are not deleted. This can’t be undone.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: initialName || t("catalog:collections.editor.thisCollection") })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("catalog:collections.list.deleteDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("catalog:shared.deleting") : t("common:actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -726,6 +735,7 @@ function RuleRow({ index, rule, categories, brands, error, canRemove, onField, o
   onChange: (patch: Partial<UiRule>) => void
   onRemove: () => void
 }) {
+  const { t } = useTranslation(["catalog", "common"])
   const meta = FIELDS[rule.field] ?? FIELDS.category
   const id = `rule-${index}`
   const n = index + 1
@@ -733,21 +743,21 @@ function RuleRow({ index, rule, categories, brands, error, canRemove, onField, o
   return (
     <li className={cn("flex flex-col gap-2 rounded-lg border p-3", error && "border-destructive")}>
       <div className="flex flex-wrap items-center gap-2">
-        <Label htmlFor={`${id}-field`} className="sr-only">Condition {n} field</Label>
+        <Label htmlFor={`${id}-field`} className="sr-only">{t("catalog:collections.rules.fieldLabel", { n })}</Label>
         <Select value={rule.field} onValueChange={(v) => onField(v as CollectionRuleField)}>
           <SelectTrigger id={`${id}-field`} className="w-[160px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {FIELD_ORDER.map((f) => <SelectItem key={f} value={f}>{FIELDS[f].label}</SelectItem>)}
+            {FIELD_ORDER.map((f) => <SelectItem key={f} value={f}>{t(FIELDS[f].label)}</SelectItem>)}
           </SelectContent>
         </Select>
 
         {!SINGLE_OP.has(rule.field) && (
           <>
-            <Label htmlFor={`${id}-op`} className="sr-only">Condition {n} operator</Label>
+            <Label htmlFor={`${id}-op`} className="sr-only">{t("catalog:collections.rules.opLabel", { n })}</Label>
             <Select value={rule.operator} onValueChange={(v) => onChange({ operator: v })}>
               <SelectTrigger id={`${id}-op`} className="w-[150px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {meta.operators.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                {meta.operators.map((o) => <SelectItem key={o.value} value={o.value}>{t(o.label)}</SelectItem>)}
               </SelectContent>
             </Select>
           </>
@@ -757,70 +767,70 @@ function RuleRow({ index, rule, categories, brands, error, canRemove, onField, o
           {rule.field === "category" && (
             <div className="min-w-[180px] flex-1">
               <SearchableSelect options={categories} value={rule.value} onChange={(v) => onChange({ value: v })}
-                placeholder="Choose a category" searchPlaceholder="Search categories…" emptyText="No categories found." />
+                placeholder={t("catalog:collections.rules.errors.chooseCategory")} searchPlaceholder={t("catalog:collections.rules.searchCategories")} emptyText={t("catalog:collections.rules.noCategories")} />
             </div>
           )}
           {rule.field === "brand" && (
             <div className="min-w-[180px] flex-1">
               <SearchableSelect options={brands} value={rule.value} onChange={(v) => onChange({ value: v })}
-                placeholder="Choose a brand" searchPlaceholder="Search brands…" emptyText="No brands found." />
+                placeholder={t("catalog:collections.rules.errors.chooseBrand")} searchPlaceholder={t("catalog:collections.rules.searchBrands")} emptyText={t("catalog:collections.rules.noBrands")} />
             </div>
           )}
           {rule.field === "tag" && (
             <>
-              <Label htmlFor={`${id}-value`} className="sr-only">Condition {n} tag</Label>
-              <Input id={`${id}-value`} className="min-w-[160px] flex-1" placeholder="e.g. summer" maxLength={100} value={rule.value}
+              <Label htmlFor={`${id}-value`} className="sr-only">{t("catalog:collections.rules.tagLabel", { n })}</Label>
+              <Input id={`${id}-value`} className="min-w-[160px] flex-1" placeholder={t("catalog:collections.rules.tagPlaceholder")} maxLength={100} value={rule.value}
                 aria-invalid={!!error} aria-describedby={errorId} onChange={(e) => onChange({ value: e.target.value })} />
             </>
           )}
           {rule.field === "flag" && (
             <>
-              <Label htmlFor={`${id}-value`} className="sr-only">Condition {n} flag</Label>
+              <Label htmlFor={`${id}-value`} className="sr-only">{t("catalog:collections.rules.flagLabel", { n })}</Label>
               <Select value={rule.value} onValueChange={(v) => onChange({ value: v })}>
-                <SelectTrigger id={`${id}-value`} className="w-[160px]"><SelectValue placeholder="Choose a flag" /></SelectTrigger>
+                <SelectTrigger id={`${id}-value`} className="w-[160px]"><SelectValue placeholder={t("catalog:collections.rules.errors.chooseFlag")} /></SelectTrigger>
                 <SelectContent>
-                  {FLAGS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                  {FLAGS.map((f) => <SelectItem key={f.value} value={f.value}>{t(f.label)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </>
           )}
           {rule.field === "price" && (
             <>
-              <Label htmlFor={`${id}-value`} className="sr-only">Condition {n} price</Label>
+              <Label htmlFor={`${id}-value`} className="sr-only">{t("catalog:collections.rules.priceLabel", { n })}</Label>
               <Input id={`${id}-value`} type="number" min={0} step="0.01" inputMode="decimal" className="w-[140px]" placeholder="0.00"
                 aria-invalid={!!error} aria-describedby={errorId} value={rule.value} onChange={(e) => onChange({ value: e.target.value })} />
             </>
           )}
           {rule.field === "new_arrivals" && (
             <>
-              <span className="text-sm text-muted-foreground">added in the last</span>
-              <Label htmlFor={`${id}-value`} className="sr-only">Condition {n} days</Label>
+              <span className="text-sm text-muted-foreground">{t("catalog:collections.rules.addedInLast")}</span>
+              <Label htmlFor={`${id}-value`} className="sr-only">{t("catalog:collections.rules.daysLabel", { n })}</Label>
               <Input id={`${id}-value`} type="number" min={1} max={3650} step={1} className="w-[90px]" value={rule.value}
                 aria-invalid={!!error} aria-describedby={errorId} onChange={(e) => onChange({ value: e.target.value })} />
-              <span className="text-sm text-muted-foreground">days</span>
+              <span className="text-sm text-muted-foreground">{t("catalog:collections.rules.days")}</span>
             </>
           )}
           {rule.field === "best_sellers" && (
             <>
-              <span className="text-sm text-muted-foreground">top</span>
-              <Label htmlFor={`${id}-value`} className="sr-only">Condition {n} number of products</Label>
+              <span className="text-sm text-muted-foreground">{t("catalog:collections.rules.top")}</span>
+              <Label htmlFor={`${id}-value`} className="sr-only">{t("catalog:collections.rules.countLabel", { n })}</Label>
               <Input id={`${id}-value`} type="number" min={1} max={500} step={1} className="w-[80px]" value={rule.value}
                 aria-invalid={!!error} aria-describedby={errorId} onChange={(e) => onChange({ value: e.target.value })} />
-              <span className="text-sm text-muted-foreground">by units sold in the last</span>
-              <Label htmlFor={`${id}-days`} className="sr-only">Condition {n} days</Label>
+              <span className="text-sm text-muted-foreground">{t("catalog:collections.rules.byUnitsSold")}</span>
+              <Label htmlFor={`${id}-days`} className="sr-only">{t("catalog:collections.rules.daysLabel", { n })}</Label>
               <Input id={`${id}-days`} type="number" min={1} max={3650} step={1} className="w-[80px]" value={rule.days}
                 aria-invalid={!!error} aria-describedby={errorId} onChange={(e) => onChange({ days: e.target.value })} />
-              <span className="text-sm text-muted-foreground">days</span>
+              <span className="text-sm text-muted-foreground">{t("catalog:collections.rules.days")}</span>
             </>
           )}
           {(rule.field === "on_offer" || rule.field === "in_stock") && (
-            <span className="text-sm text-muted-foreground">{meta.hint}</span>
+            <span className="text-sm text-muted-foreground">{meta.hint && t(meta.hint)}</span>
           )}
         </div>
 
-        <WithTooltip content={canRemove ? `Remove condition ${n}` : "An automatic collection needs at least one condition"}>
+        <WithTooltip content={canRemove ? t("catalog:collections.rules.remove", { n }) : t("catalog:collections.rules.needOne")}>
           <span tabIndex={canRemove ? -1 : 0} className="ml-auto">
-            <Button type="button" variant="ghost" size="icon" aria-label={`Remove condition ${n}`} disabled={!canRemove} onClick={onRemove}>
+            <Button type="button" variant="ghost" size="icon" aria-label={t("catalog:collections.rules.remove", { n })} disabled={!canRemove} onClick={onRemove}>
               <Trash2 className="size-4" />
             </Button>
           </span>
@@ -828,7 +838,7 @@ function RuleRow({ index, rule, categories, brands, error, canRemove, onField, o
       </div>
 
       {meta.hint && rule.field !== "on_offer" && rule.field !== "in_stock" && (
-        <p className="text-xs text-muted-foreground">{meta.hint}</p>
+        <p className="text-xs text-muted-foreground">{t(meta.hint)}</p>
       )}
       {error && <p id={errorId} className="text-xs text-destructive">{error}</p>}
     </li>
@@ -845,6 +855,7 @@ function ManualProducts({ products, error, onAdd, onRemove, onMove, priceOf }: {
   onMove: (index: number, dir: -1 | 1) => void
   priceOf: (p: CollectionProduct) => React.ReactNode
 }) {
+  const { t } = useTranslation(["catalog", "common"])
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<CollectionProduct[]>([])
   const [searching, setSearching] = useState(false)
@@ -856,25 +867,25 @@ function ManualProducts({ products, error, onAdd, onRemove, onMove, priceOf }: {
     if (!q) { setResults([]); setSearching(false); return }
     const my = ++reqId.current
     setSearching(true)
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       productApi.getAll({ search: q, limit: 12 })
         .then((r) => { if (my === reqId.current) setResults(r.data.map(fromProduct)) })
         .catch(() => { if (my === reqId.current) setResults([]) })
         .finally(() => { if (my === reqId.current) setSearching(false) })
     }, 300)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [query])
 
   const chosen = new Set(products.map((p) => p.id))
 
   return (
-    <SectionCard title="Products" description="Search and add products. The order here is the manual order on the store."
-      actions={<Badge variant="secondary" className="tabular-nums">{products.length} selected</Badge>}
+    <SectionCard title={t("common:fields.products")} description={t("catalog:collections.manual.desc")}
+      actions={<Badge variant="secondary" className="tabular-nums">{t("common:table.selected", { count: products.length })}</Badge>}
       contentClassName="flex flex-col gap-3">
       <div className="relative">
-        <Label htmlFor="col-product-search" className="sr-only">Search products to add</Label>
+        <Label htmlFor="col-product-search" className="sr-only">{t("catalog:collections.manual.searchLabel")}</Label>
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input id="col-product-search" type="search" className="pl-9" placeholder="Search products by name, SKU or barcode…"
+        <Input id="col-product-search" type="search" className="pl-9" placeholder={t("catalog:collections.manual.searchPlaceholder")}
           value={query} autoComplete="off"
           onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
@@ -885,9 +896,9 @@ function ManualProducts({ products, error, onAdd, onRemove, onMove, priceOf }: {
       {open && query.trim() && (
         <div className="rounded-lg border">
           {results.length === 0 ? (
-            <p className="p-3 text-sm text-muted-foreground">{searching ? "Searching…" : "No products found."}</p>
+            <p className="p-3 text-sm text-muted-foreground">{searching ? t("catalog:collections.manual.searching") : t("catalog:collections.manual.noProducts")}</p>
           ) : (
-            <ul className="max-h-72 divide-y overflow-y-auto" aria-label="Search results">
+            <ul className="max-h-72 divide-y overflow-y-auto" aria-label={t("catalog:collections.manual.results")}>
               {results.map((p) => {
                 const added = chosen.has(p.id)
                 return (
@@ -895,11 +906,11 @@ function ManualProducts({ products, error, onAdd, onRemove, onMove, priceOf }: {
                     <UserAvatar shape="square" src={p.imageUrl || null} alt="" name={p.name} className="size-9" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">{p.name}</div>
-                      <div className="text-xs text-muted-foreground tabular-nums">{p.sku ? `${p.sku} · ` : ""}{p.stock ?? 0} in stock</div>
+                      <div className="text-xs text-muted-foreground tabular-nums">{p.sku ? `${p.sku} · ` : ""}{t("catalog:collections.editor.inStockCount", { count: p.stock ?? 0 })}</div>
                     </div>
                     <div className="text-sm tabular-nums">{priceOf(p)}</div>
                     <Button type="button" size="sm" variant={added ? "ghost" : "outline"} disabled={added} onClick={() => onAdd(p)}>
-                      {added ? "Added" : <><Plus className="size-4" aria-hidden /> Add</>}
+                      {added ? t("catalog:collections.manual.added") : <><Plus className="size-4" aria-hidden /> {t("common:actions.add")}</>}
                     </Button>
                   </li>
                 )
@@ -912,7 +923,7 @@ function ManualProducts({ products, error, onAdd, onRemove, onMove, priceOf }: {
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
       {products.length === 0 ? (
-        <EmptyState icon={Package} bordered title="No products yet" description="Search above to add products to this collection." className="p-4 md:p-6" />
+        <EmptyState icon={Package} bordered title={t("catalog:collections.manual.emptyTitle")} description={t("catalog:collections.manual.emptyDesc")} className="p-4 md:p-6" />
       ) : (
         <ol className="divide-y rounded-lg border">
           {products.map((p, i) => (
@@ -924,29 +935,29 @@ function ManualProducts({ products, error, onAdd, onRemove, onMove, priceOf }: {
                 <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground tabular-nums">
                   {p.sku && <span>{p.sku}</span>}
                   <span className={cn(p.stock != null && p.stock <= 0 && "text-destructive")}>
-                    {p.stock == null ? "—" : p.stock <= 0 ? "Out of stock" : `${p.stock} in stock`}
+                    {p.stock == null ? "—" : p.stock <= 0 ? t("common:extra.outOfStock") : t("catalog:collections.editor.inStockCount", { count: p.stock })}
                   </span>
                 </div>
               </div>
               {(p.visibleOnStorefront === false || p.published === false) && (
-                <WithTooltip content="Not published or not visible online, so the store won’t show it">
-                  <Badge variant="outline" tabIndex={0}>Hidden online</Badge>
+                <WithTooltip content={t("catalog:collections.manual.hiddenTip")}>
+                  <Badge variant="outline" tabIndex={0}>{t("catalog:collections.editor.hiddenOnline")}</Badge>
                 </WithTooltip>
               )}
               <div className="hidden text-right text-sm tabular-nums sm:block">{priceOf(p)}</div>
               <div className="flex gap-1">
-                <WithTooltip content={`Move ${p.name} up`}>
-                  <Button type="button" variant="outline" size="icon-sm" aria-label={`Move ${p.name} up`} disabled={i === 0} onClick={() => onMove(i, -1)}>
+                <WithTooltip content={t("catalog:shared.moveUp", { name: p.name })}>
+                  <Button type="button" variant="outline" size="icon-sm" aria-label={t("catalog:shared.moveUp", { name: p.name })} disabled={i === 0} onClick={() => onMove(i, -1)}>
                     <ArrowUp className="size-4" />
                   </Button>
                 </WithTooltip>
-                <WithTooltip content={`Move ${p.name} down`}>
-                  <Button type="button" variant="outline" size="icon-sm" aria-label={`Move ${p.name} down`} disabled={i === products.length - 1} onClick={() => onMove(i, 1)}>
+                <WithTooltip content={t("catalog:shared.moveDown", { name: p.name })}>
+                  <Button type="button" variant="outline" size="icon-sm" aria-label={t("catalog:shared.moveDown", { name: p.name })} disabled={i === products.length - 1} onClick={() => onMove(i, 1)}>
                     <ArrowDown className="size-4" />
                   </Button>
                 </WithTooltip>
-                <WithTooltip content={`Remove ${p.name}`}>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${p.name}`} onClick={() => onRemove(p.id)}>
+                <WithTooltip content={t("common:extra.removeName", { name: p.name })}>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label={t("common:extra.removeName", { name: p.name })} onClick={() => onRemove(p.id)}>
                     <X className="size-4" />
                   </Button>
                 </WithTooltip>

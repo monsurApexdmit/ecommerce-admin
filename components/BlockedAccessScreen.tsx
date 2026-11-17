@@ -8,50 +8,56 @@ import { SectionTitle } from "@/components/common/SectionTitle"
 import { AlertCircle, Mail } from "lucide-react"
 import Link from "next/link"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
+import { Trans, useTranslation } from "react-i18next"
 
 interface BlockedAccessScreenProps {
   reason?: "trial_expired" | "subscription_expired" | "account_suspended"
 }
 
+const SUPPORT_EMAIL = "support@company.com"
+const HELP_URL = "https://help.company.com"
+
 export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessScreenProps) {
   const { logout } = useSaasAuth()
+  const { t } = useTranslation(["ui", "common"])
 
   const getContent = () => {
     switch (reason) {
       case "trial_expired":
         return {
           icon: "🎯",
-          title: "Trial Period Ended",
-          message:
-            "Your 10-day free trial has expired. To continue using the platform, please select a subscription plan.",
-          primaryButton: { label: "View Plans", href: "/dashboard/billing/plans" },
-          secondaryButton: { label: "Contact Support", href: "mailto:support@company.com" },
+          title: t("ui:blocked.trialTitle"),
+          message: t("ui:blocked.trialMessage"),
+          primaryButton: { label: t("ui:blocked.viewPlans"), href: "/dashboard/billing/plans" },
+          secondaryButton: { label: t("ui:blocked.contactSupport"), href: `mailto:${SUPPORT_EMAIL}` },
+          steps: [t("ui:blocked.trialStep1"), t("ui:blocked.trialStep2"), t("ui:blocked.trialStep3")],
         }
       case "subscription_expired":
         return {
           icon: "📅",
-          title: "Subscription Expired",
-          message:
-            "Your subscription has expired. Renew your subscription to regain access to all features.",
-          primaryButton: { label: "Renew Subscription", href: "/dashboard/billing/subscriptions" },
-          secondaryButton: { label: "View Plans", href: "/dashboard/billing/plans" },
+          title: t("ui:blocked.subTitle"),
+          message: t("ui:blocked.subMessage"),
+          primaryButton: { label: t("ui:blocked.renew"), href: "/dashboard/billing/subscriptions" },
+          secondaryButton: { label: t("ui:blocked.viewPlans"), href: "/dashboard/billing/plans" },
+          steps: [t("ui:blocked.subStep1"), t("ui:blocked.subStep2"), t("ui:blocked.subStep3")],
         }
       case "account_suspended":
         return {
           icon: "🚫",
-          title: "Account Suspended",
-          message:
-            "Your account has been suspended. Please contact our support team for assistance.",
-          primaryButton: { label: "Contact Support", href: "mailto:support@company.com" },
-          secondaryButton: { label: "View Help Center", href: "https://help.company.com" },
+          title: t("ui:blocked.suspendedTitle"),
+          message: t("ui:blocked.suspendedMessage"),
+          primaryButton: { label: t("ui:blocked.contactSupport"), href: `mailto:${SUPPORT_EMAIL}` },
+          secondaryButton: { label: t("ui:blocked.helpCenter"), href: HELP_URL },
+          steps: [t("ui:blocked.suspendedStep1"), t("ui:blocked.suspendedStep2"), t("ui:blocked.suspendedStep3")],
         }
       default:
         return {
           icon: "⚠️",
-          title: "Access Denied",
-          message: "You don't have access to the dashboard at the moment.",
-          primaryButton: { label: "Go Back", href: "/" },
-          secondaryButton: { label: "Contact Support", href: "mailto:support@company.com" },
+          title: t("ui:blocked.deniedTitle"),
+          message: t("ui:blocked.deniedMessage"),
+          primaryButton: { label: t("ui:blocked.goBack"), href: "/" },
+          secondaryButton: { label: t("ui:blocked.contactSupport"), href: `mailto:${SUPPORT_EMAIL}` },
+          steps: [] as string[],
         }
     }
   }
@@ -78,29 +84,11 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
 
           {/* Features List */}
           <Card className="gap-0 p-4 mb-6 text-left shadow-none bg-muted/50">
-            <SectionTitle as="p" className="mb-2">What you need to do:</SectionTitle>
+            <SectionTitle as="p" className="mb-2">{t("ui:blocked.todo")}</SectionTitle>
             <ul className="text-xs text-muted-foreground space-y-1">
-              {reason === "trial_expired" && (
-                <>
-                  <li>• Select a subscription plan that fits your needs</li>
-                  <li>• Add a payment method</li>
-                  <li>• Enjoy immediate access to all features</li>
-                </>
-              )}
-              {reason === "subscription_expired" && (
-                <>
-                  <li>• Visit your subscription page</li>
-                  <li>• Click "Renew Subscription"</li>
-                  <li>• Complete the payment process</li>
-                </>
-              )}
-              {reason === "account_suspended" && (
-                <>
-                  <li>• Review your account status</li>
-                  <li>• Check your email for details</li>
-                  <li>• Contact support to resolve the issue</li>
-                </>
-              )}
+              {content.steps.map((step) => (
+                <li key={step}>• {step}</li>
+              ))}
             </ul>
           </Card>
 
@@ -123,7 +111,7 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
               className="w-full"
               onClick={logout}
             >
-              Sign Out
+              {t("ui:blocked.signOut")}
             </Button>
           </div>
 
@@ -132,19 +120,22 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
           <div className="pt-6">
             <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center mb-2">
               <Mail className="w-4 h-4" />
-              <span>Need help?</span>
+              <span>{t("ui:blocked.needHelp")}</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Email us at{" "}
-              <a href="mailto:support@company.com" className="text-primary hover:underline font-medium">
-                support@company.com
-              </a>
+              <Trans
+                t={t}
+                i18nKey="ui:blocked.emailUs"
+                values={{ email: SUPPORT_EMAIL }}
+                components={{ a: <a href={`mailto:${SUPPORT_EMAIL}`} className="text-primary hover:underline font-medium" /> }}
+              />
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Or visit our{" "}
-              <a href="https://help.company.com" className="text-primary hover:underline font-medium">
-                help center
-              </a>
+              <Trans
+                t={t}
+                i18nKey="ui:blocked.visitHelp"
+                components={{ a: <a href={HELP_URL} className="text-primary hover:underline font-medium" /> }}
+              />
             </p>
           </div>
 
@@ -152,7 +143,7 @@ export function BlockedAccessScreen({ reason = "trial_expired" }: BlockedAccessS
           <Alert className="mt-6 text-left">
             <AlertDescription className="text-xs">
               <p>
-                <strong className="text-foreground">Did you know?</strong> Most plans offer a 30-day money-back guarantee. No questions asked.
+                <Trans t={t} i18nKey="ui:blocked.didYouKnow" components={{ b: <strong className="text-foreground" /> }} />
               </p>
             </AlertDescription>
           </Alert>

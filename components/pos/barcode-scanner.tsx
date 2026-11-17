@@ -10,6 +10,7 @@ import { Barcode, AlertCircle } from 'lucide-react'
 import { type Product, type Variant } from '@/contexts/product-context'
 import { useCompanySettings } from '@/contexts/company-settings-context'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
 interface BarcodeScannerProps {
   products: Product[]
@@ -24,6 +25,7 @@ export function BarcodeScanner({
   getAvailableStock,
   onProductScanned,
 }: BarcodeScannerProps) {
+  const { t } = useTranslation(['pos', 'common'])
   const { formatCurrency } = useCompanySettings()
   const inputRef = useRef<HTMLInputElement>(null)
   const [barcode, setBarcode] = useState('')
@@ -63,7 +65,7 @@ export function BarcodeScanner({
     }
 
     if (!foundProduct) {
-      toast.error('Barcode not found')
+      toast.error(t('pos:scanner.notFound'))
       setBarcode('')
       inputRef.current?.focus()
       return
@@ -81,7 +83,7 @@ export function BarcodeScanner({
 
     // Check available stock
     if (getAvailableStock(foundProduct, foundVariant || undefined) <= 0) {
-      toast.error('Not enough stock for this item')
+      toast.error(t('pos:scanner.noStockItem'))
       setBarcode('')
       inputRef.current?.focus()
       return
@@ -95,7 +97,7 @@ export function BarcodeScanner({
     setScannedProduct(null)
     setScannedVariant(null)
     inputRef.current?.focus()
-    toast.success(`Added "${foundProduct.name}" to cart`)
+    toast.success(t('pos:scanner.added', { name: foundProduct.name }))
   }
 
   const handleSelectVariant = (variant: Variant) => {
@@ -103,7 +105,7 @@ export function BarcodeScanner({
 
     // Check available stock
     if (getAvailableStock(scannedProduct, variant) <= 0) {
-      toast.error('Not enough stock for this variant')
+      toast.error(t('pos:scanner.noStockVariant'))
       return
     }
 
@@ -113,7 +115,7 @@ export function BarcodeScanner({
     setSelectingVariant(false)
     setBarcode('')
     inputRef.current?.focus()
-    toast.success(`Added "${scannedProduct.name} - ${variant.name}" to cart`)
+    toast.success(t('pos:scanner.addedVariant', { name: scannedProduct.name, variant: variant.name }))
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -138,7 +140,7 @@ export function BarcodeScanner({
         <InputGroupInput
           ref={inputRef}
           type="text"
-          placeholder="Scan barcode here... (or type barcode code)"
+          placeholder={t('pos:scanner.placeholder')}
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -159,10 +161,10 @@ export function BarcodeScanner({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="size-5 text-muted-foreground" />
-              Select Variant
+              {t('pos:scanner.selectVariant')}
             </DialogTitle>
             <DialogDescription>
-              This product has multiple variants. Select which one you want to add:
+              {t('pos:scanner.selectVariantDesc')}
             </DialogDescription>
           </DialogHeader>
 
@@ -170,7 +172,7 @@ export function BarcodeScanner({
             <div className="space-y-4">
               <Card className="gap-1 p-4">
                 <h3 className="font-semibold">{scannedProduct.name}</h3>
-                <p className="text-sm text-muted-foreground">SKU: {scannedProduct.sku}</p>
+                <p className="text-sm text-muted-foreground">{t('pos:scanner.sku', { sku: scannedProduct.sku })}</p>
               </Card>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -203,7 +205,7 @@ export function BarcodeScanner({
                         <Badge
                           variant={isOutOfStock ? 'destructive' : stock < 5 ? 'secondary' : 'default'}
                         >
-                          {stock} {stock === 1 ? 'unit' : 'units'}
+                          {t('pos:scanner.units', { count: stock })}
                         </Badge>
                       </div>
                     </Button>
@@ -221,7 +223,7 @@ export function BarcodeScanner({
                   inputRef.current?.focus()
                 }}
               >
-                Cancel (ESC)
+                {t('pos:scanner.cancelEsc')}
               </Button>
             </div>
           )}

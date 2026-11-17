@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { useOrder } from "@/contexts/order-context"
 import { useShippingAddress } from "@/contexts/shipping-address-context"
 import { useCustomer } from "@/contexts/customer-context"
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/dialog"
 
 export default function CheckoutPage() {
+  const { t } = useTranslation(["commerce", "common"])
   const { canRead } = useSaasAuth()
   const router = useRouter()
   const { cart, getCartTotal, removeFromCart, clearCart, createOrder } = useOrder()
@@ -69,7 +71,7 @@ export default function CheckoutPage() {
       }
 
       // Set customer name
-      const customer = customers.find(c => c.id === custId)
+      const customer = customers.find(c => String(c.id) === String(custId))
       if (customer) {
         setCustomerName(customer.name)
       }
@@ -88,17 +90,17 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     // Validation
     if (cart.length === 0) {
-      toast.error("Your cart is empty")
+      toast.error(t("commerce:checkout.toast.cartEmpty"))
       return
     }
 
     if (!customerName.trim()) {
-      toast.error("Please enter customer name")
+      toast.error(t("commerce:checkout.toast.nameRequired"))
       return
     }
 
     if (total <= 0) {
-      toast.error("Order total must be greater than 0")
+      toast.error(t("commerce:checkout.toast.totalPositive"))
       return
     }
 
@@ -143,18 +145,18 @@ export default function CheckoutPage() {
       const result = await createOrder(orderData)
 
       if (result.success) {
-        toast.success("Order placed successfully!", {
-          description: `Invoice: ${result.data?.invoiceNo || 'N/A'}`,
+        toast.success(t("commerce:checkout.toast.placed"), {
+          description: t("commerce:checkout.toast.invoice", { invoice: result.data?.invoiceNo || "—" }),
         })
         router.push("/dashboard/orders")
       } else {
-        toast.error("Failed to place order", {
-          description: result.error || "Please try again",
+        toast.error(t("commerce:checkout.toast.failed"), {
+          description: result.error || t("common:extra.tryAgain"),
         })
       }
     } catch (error) {
       console.error("Order error:", error)
-      toast.error("An error occurred while placing the order")
+      toast.error(t("commerce:checkout.toast.error"))
     } finally {
       setIsProcessing(false)
     }
@@ -165,12 +167,12 @@ export default function CheckoutPage() {
       <div className="max-w-2xl mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle>Your Cart is Empty</CardTitle>
-            <CardDescription>Add some products to your cart to checkout</CardDescription>
+            <CardTitle>{t("commerce:checkout.emptyTitle")}</CardTitle>
+            <CardDescription>{t("commerce:checkout.emptyDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild>
-              <Link href="/dashboard/products">Browse Products</Link>
+              <Link href="/dashboard/products">{t("commerce:checkout.browse")}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -182,14 +184,14 @@ export default function CheckoutPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <WithTooltip content="Back to orders">
+        <WithTooltip content={t("commerce:checkout.backToOrders")}>
           <Button asChild variant="ghost" size="icon">
-            <Link href="/dashboard/orders" aria-label="Back to orders">
+            <Link href="/dashboard/orders" aria-label={t("commerce:checkout.backToOrders")}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
         </WithTooltip>
-        <PageHeader title="Checkout" description="Complete your order" />
+        <PageHeader title={t("commerce:checkout.title")} description={t("commerce:checkout.description")} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -198,17 +200,17 @@ export default function CheckoutPage() {
           {/* Customer Information */}
           <Card>
             <CardHeader>
-              <CardTitle>Customer Information</CardTitle>
+              <CardTitle>{t("commerce:checkout.customerInfo")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Select Customer (Optional)" htmlFor="customer">
+                <FormField label={t("commerce:checkout.selectCustomer")} htmlFor="customer">
                   <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                     <SelectTrigger id="customer" className="w-full">
-                      <SelectValue placeholder="Guest checkout" />
+                      <SelectValue placeholder={t("commerce:checkout.guest")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="guest">Guest Checkout</SelectItem>
+                      <SelectItem value="guest">{t("commerce:checkout.guestCheckout")}</SelectItem>
                       {customers.map((customer) => (
                         <SelectItem key={customer.id} value={customer.id.toString()}>
                           {customer.name} - {customer.email}
@@ -218,12 +220,12 @@ export default function CheckoutPage() {
                   </Select>
                 </FormField>
 
-                <FormField label="Customer Name *" htmlFor="customerName">
+                <FormField label={t("commerce:checkout.customerName")} htmlFor="customerName">
                   <Input
                     id="customerName"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Enter customer name"
+                    placeholder={t("commerce:checkout.customerPlaceholder")}
                     required
                   />
                 </FormField>
@@ -237,9 +239,9 @@ export default function CheckoutPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Shipping Address</CardTitle>
+                    <CardTitle>{t("commerce:checkout.shippingAddress")}</CardTitle>
                     <CardDescription>
-                      {customerAddresses.length === 0 ? "No addresses found" : "Select delivery address"}
+                      {customerAddresses.length === 0 ? t("commerce:checkout.noAddresses") : t("commerce:checkout.selectAddress")}
                     </CardDescription>
                   </div>
                   <Button
@@ -248,7 +250,7 @@ export default function CheckoutPage() {
                     onClick={() => setShowAddressDialog(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Add New
+                    {t("commerce:checkout.addNew")}
                   </Button>
                 </div>
               </CardHeader>
@@ -262,7 +264,7 @@ export default function CheckoutPage() {
                         onCheckedChange={(v) => setUseDefaultAddress(v === true)}
                       />
                       <Label htmlFor="useDefault" className="cursor-pointer">
-                        Use my default address (auto-selected)
+                        {t("commerce:checkout.useDefault")}
                       </Label>
                     </div>
 
@@ -271,7 +273,7 @@ export default function CheckoutPage() {
                         value={selectedAddressId}
                         onValueChange={setSelectedAddressId}
                         className="gap-3"
-                        aria-label="Shipping address"
+                        aria-label={t("commerce:checkout.shippingAddress")}
                       >
                         {customerAddresses.map((address) => (
                           <ChoiceCard key={address.id} value={address.id} className="font-normal">
@@ -291,7 +293,7 @@ export default function CheckoutPage() {
                               {address.isDefault && (
                                 <Badge variant="secondary">
                                   <Check />
-                                  Default
+                                  {t("commerce:checkout.defaultBadge")}
                                 </Badge>
                               )}
                             </div>
@@ -301,7 +303,7 @@ export default function CheckoutPage() {
                     )}
                   </>
                 ) : (
-                  <EmptyState icon={MapPin} title="No shipping addresses found" description="Add an address to enable shipping" />
+                  <EmptyState icon={MapPin} title={t("commerce:checkout.noAddressTitle")} description={t("commerce:checkout.noAddressDesc")} />
                 )}
               </CardContent>
             </Card>
@@ -310,17 +312,17 @@ export default function CheckoutPage() {
           {/* Payment Method */}
           <Card>
             <CardHeader>
-              <CardTitle>Payment Method</CardTitle>
+              <CardTitle>{t("common:payment.method")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ChoiceCardGroup
                 value={paymentMethod}
                 onValueChange={(value) => setPaymentMethod(value as "Cash" | "Card" | "Online")}
-                aria-label="Payment method"
+                aria-label={t("common:payment.method")}
               >
-                <ChoiceCard value="Cash" title="Cash" className="p-3" />
-                <ChoiceCard value="Card" title="Card" className="p-3" />
-                <ChoiceCard value="Online" title="Online" className="p-3" />
+                <ChoiceCard value="Cash" title={t("common:payment.cash")} className="p-3" />
+                <ChoiceCard value="Card" title={t("common:payment.card")} className="p-3" />
+                <ChoiceCard value="Online" title={t("common:extra.online")} className="p-3" />
               </ChoiceCardGroup>
             </CardContent>
           </Card>
@@ -328,11 +330,11 @@ export default function CheckoutPage() {
           {/* Order Notes */}
           <Card>
             <CardHeader>
-              <CardTitle>Order Notes (Optional)</CardTitle>
+              <CardTitle>{t("commerce:checkout.notesTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               <Textarea
-                placeholder="Add any special instructions..."
+                placeholder={t("commerce:checkout.notesPlaceholder")}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
@@ -346,7 +348,7 @@ export default function CheckoutPage() {
           {/* Cart Items */}
           <Card>
             <CardHeader>
-              <CardTitle>Order Summary ({cart.length} items)</CardTitle>
+              <CardTitle>{t("commerce:checkout.summary", { items: t("common:count.items", { count: cart.length }) })}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -360,11 +362,11 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-sm">{formatCurrency(item.price * item.quantity)}</p>
-                      <WithTooltip content={`Remove ${item.productName}`}><Button
+                      <WithTooltip content={t("commerce:checkout.removeItem", { name: item.productName })}><Button
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        aria-label={`Remove ${item.productName}`}
+                        aria-label={t("commerce:checkout.removeItem", { name: item.productName })}
                         onClick={() => removeFromCart(item.productId)}
                       >
                         <Trash2 className="h-3 w-3" />
@@ -378,7 +380,7 @@ export default function CheckoutPage() {
 
               {/* Additional Charges */}
               <div className="space-y-3">
-                <FormField label="Shipping Cost" htmlFor="shipping">
+                <FormField label={t("commerce:checkout.shippingCost")} htmlFor="shipping">
                   <Input
                     id="shipping"
                     type="number"
@@ -390,7 +392,7 @@ export default function CheckoutPage() {
                   />
                 </FormField>
 
-                <FormField label="Discount" htmlFor="discount">
+                <FormField label={t("common:money.discount")} htmlFor="discount">
                   <Input
                     id="discount"
                     type="number"
@@ -408,24 +410,24 @@ export default function CheckoutPage() {
               {/* Total */}
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
+                  <span>{t("commerce:checkout.lineLabel", { label: t("common:money.subtotal") })}</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
                 {shippingCost > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span>Shipping:</span>
+                    <span>{t("commerce:checkout.lineLabel", { label: t("common:money.shipping") })}</span>
                     <span>{formatCurrency(shippingCost)}</span>
                   </div>
                 )}
                 {discount > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Discount:</span>
+                    <span>{t("commerce:checkout.lineLabel", { label: t("common:money.discount") })}</span>
                     <span>-{formatCurrency(discount)}</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between text-lg font-bold">
-                  <span>Total:</span>
+                  <span>{t("commerce:checkout.lineLabel", { label: t("common:money.total") })}</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
               </div>
@@ -436,20 +438,20 @@ export default function CheckoutPage() {
                 onClick={handlePlaceOrder}
                 disabled={isProcessing || cart.length === 0}
               >
-                {isProcessing ? "Processing..." : "Place Order"}
+                {isProcessing ? t("commerce:checkout.processing") : t("commerce:checkout.placeOrder")}
               </Button>
 
               <Button
                 variant="outline"
                 className="w-full"
                 onClick={() => {
-                  if (confirm("Are you sure you want to clear the cart?")) {
+                  if (confirm(t("commerce:checkout.confirmClear"))) {
                     clearCart()
-                    toast.success("Cart cleared")
+                    toast.success(t("commerce:checkout.toast.cleared"))
                   }
                 }}
               >
-                Clear Cart
+                {t("commerce:checkout.clearCart")}
               </Button>
             </CardContent>
           </Card>
@@ -460,19 +462,19 @@ export default function CheckoutPage() {
       <Dialog open={showAddressDialog} onOpenChange={setShowAddressDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Shipping Address</DialogTitle>
+            <DialogTitle>{t("commerce:checkout.addAddressTitle")}</DialogTitle>
             <DialogDescription>
-              Go to Shipping Addresses page to add a new address
+              {t("commerce:checkout.addAddressDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              You can manage customer shipping addresses from the Store menu.
+              {t("commerce:checkout.addAddressNote")}
             </p>
             <Button asChild className="w-full">
               <Link href="/dashboard/store/shipping-addresses" target="_blank">
                 <MapPin className="h-4 w-4" />
-                Manage Shipping Addresses
+                {t("commerce:checkout.manageAddresses")}
               </Link>
             </Button>
           </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { CheckCircle2, PackagePlus } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import financeApi, { financeError, type OpeningStockPreview, type OpeningStockResult, type OpeningStockRow } from "@/lib/financeApi"
 import { formatNumber } from "@/lib/finance-format"
 import { cn } from "@/lib/utils"
@@ -19,6 +20,10 @@ import { InfoList, InfoRow } from "@/components/common/InfoList"
 import { StatTile } from "@/components/common/StatTile"
 import { DatePicker } from "./date-picker"
 import { CurrencyTag, useFinanceFormat } from "./finance-ui"
+import { FIN_NS, type FinKey } from "./i18n"
+
+/** Skip reasons from the API → label keys (server label is the fallback). */
+const SKIP_KEY: Record<string, FinKey> = { needs_cost: "finance:opening.needsCost" }
 
 /** All preview pages (100 per page; capped at 20 pages = 2,000 products). */
 async function loadPreview(): Promise<OpeningStockPreview> {
@@ -38,6 +43,7 @@ async function loadPreview(): Promise<OpeningStockPreview> {
  */
 export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: boolean; onClose: () => void; onDone: () => void; writable: boolean }) {
   const fmt = useFinanceFormat()
+  const { t } = useTranslation(FIN_NS)
   const [preview, setPreview] = useState<OpeningStockPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState("")
@@ -57,7 +63,7 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
         setCosts(Object.fromEntries(p.rows.map((r) => [r.productId, r.unitCost != null ? String(r.unitCost) : ""])))
         setPicked(new Set(p.rows.filter((r) => r.unitCost != null && r.unitCost > 0).map((r) => r.productId)))
       })
-      .catch((e) => setErr(financeError(e, "Could not load the opening stock preview.")))
+      .catch((e) => setErr(financeError(e, t("finance:opening.loadFailed"))))
       .finally(() => setLoading(false))
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -80,9 +86,9 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
   const toggleAll = () => setPicked(allPicked ? new Set() : new Set(ready.map((r) => r.productId)))
 
   const post = async () => {
-    if (!cutover) { setErr("Choose a cutover date."); return }
-    if (cutover > fmt.today) { setErr("Cutover date cannot be in the future."); return }
-    if (chosen.length === 0) { setErr("Pick at least one product with a unit cost."); return }
+    if (!cutover) { setErr(t("finance:opening.chooseCutover")); return }
+    if (cutover > fmt.today) { setErr(t("finance:opening.cutoverFuture")); return }
+    if (chosen.length === 0) { setErr(t("finance:opening.pickOne")); return }
     setBusy(true); setErr("")
     try {
       const res = await financeApi.postOpeningStock({
@@ -92,10 +98,10 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
         setProductCost: true,
       })
       setResult(res)
-      toast.success(res.posted > 0 ? res.message : "Nothing new to move in")
+      toast.success(res.posted > 0 ? t("finance:opening.movedIn", { count: res.posted, n: formatNumber(res.posted) }) : t("finance:opening.nothingNew"))
       onDone()
     } catch (e) {
-      setErr(financeError(e, "Could not move in the opening stock."))
+      setErr(financeError(e, t("finance:opening.failed")))
     } finally {
       setBusy(false)
     }
@@ -105,28 +111,26 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Move in opening stock</DialogTitle>
-          <DialogDescription>
-            Records where stock you already had came from: one opening movement per product, valued at its unit cost. Stock on hand doesn&apos;t change.
-          </DialogDescription>
+          <DialogTitle>{t("finance:opening.title")}</DialogTitle>
+          <DialogDescription>{t("finance:opening.description")}</DialogDescription>
         </DialogHeader>
 
         {result ? (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-sm font-medium"><CheckCircle2 className="size-5 text-emerald-600" aria-hidden /> {result.posted > 0 ? result.message : "Nothing new was moved in"}</div>
+            <div className="flex items-center gap-2 text-sm font-medium"><CheckCircle2 className="size-5 text-emerald-600" aria-hidden /> {result.posted > 0 ? t("finance:opening.movedIn", { count: result.posted, n: formatNumber(result.posted) }) : t("finance:opening.nothingMoved")}</div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <StatTile label="Products moved in" value={formatNumber(result.posted)} className="p-3" />
-              <StatTile label="Units" value={formatNumber(result.quantity)} className="p-3" />
-              <StatTile label="Stock value added" value={fmt.money(result.value)} className="p-3" />
+              <StatTile label={t("finance:opening.productsMoved")} value={formatNumber(result.posted)} className="p-3" />
+              <StatTile label={t("finance:col.units")} value={formatNumber(result.quantity)} className="p-3" />
+              <StatTile label={t("finance:opening.valueAdded")} value={fmt.money(result.value)} className="p-3" />
             </div>
             {result.skipped.length > 0 && (
               <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">Skipped ({formatNumber(result.skipped.length)})</p>
+                <p className="text-sm font-medium">{t("finance:opening.skipped", { n: formatNumber(result.skipped.length) })}</p>
                 <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border text-sm">
                   {result.skipped.map((x) => (
                     <li key={`${x.productId}-${x.reason}`} className="flex items-center justify-between gap-3 px-3 py-2">
-                      <span className="truncate">{x.name || "Product"}</span>
-                      <Badge variant={x.reason === "needs_cost" ? "destructive" : "secondary"}>{x.label}</Badge>
+                      <span className="truncate">{x.name || t("common:fields.product")}</span>
+                      <Badge variant={x.reason === "needs_cost" ? "destructive" : "secondary"}>{SKIP_KEY[x.reason] ? t(SKIP_KEY[x.reason]) : x.label}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -134,41 +138,41 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
             )}
             <p className="text-sm text-muted-foreground">
               {result.remaining > 0
-                ? `${formatNumber(result.remaining)} product${result.remaining === 1 ? "" : "s"} still wait${result.remaining === 1 ? "s" : ""} — add a unit cost and run this again.`
-                : "Every product with stock is now moved in."}{" "}
-              Running it again is safe: products already moved in are skipped.
+                ? t("finance:opening.remaining", { count: result.remaining, n: formatNumber(result.remaining) })
+                : t("finance:opening.allMoved")}{" "}
+              {t("finance:opening.safe")}
             </p>
           </div>
         ) : loading ? (
           <div className="flex flex-col gap-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10" />)}</div>
         ) : rows.length === 0 && !err ? (
           <Alert><AlertDescription>
-            Nothing to move in: every product&apos;s stock is explained by its movements.
-            {preview && preview.alreadyMovedIn > 0 ? ` ${formatNumber(preview.alreadyMovedIn)} product${preview.alreadyMovedIn === 1 ? " was" : "s were"} moved in already.` : ""}
+            {t("finance:opening.nothingToMove")}
+            {preview && preview.alreadyMovedIn > 0 ? ` ${t("finance:opening.alreadyMoved", { count: preview.alreadyMovedIn, n: formatNumber(preview.alreadyMovedIn) })}` : ""}
           </AlertDescription></Alert>
         ) : (
           <div className="flex flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-[220px_1fr] sm:items-end">
-              <FormField label="Cutover date" htmlFor="opening-cutover" description={preview?.cutoverReason ?? undefined}>
+              <FormField label={t("finance:opening.cutover")} htmlFor="opening-cutover" description={preview?.cutoverReason ?? undefined}>
                 <DatePicker id="opening-cutover" value={cutover} onChange={setCutover} max="today" />
               </FormField>
               <InfoList className="sm:justify-self-end sm:text-right">
-                <InfoRow label="Ready to move in" value={`${formatNumber(chosen.length)} of ${formatNumber(rows.length)} products`} />
-                <InfoRow label="Value" value={<span className="tabular-nums">{fmt.money(totals.value)} <CurrencyTag code={preview?.context.currency?.code} /></span>} />
+                <InfoRow label={t("finance:opening.ready")} value={t("finance:opening.readyOf", { n: formatNumber(chosen.length), total: formatNumber(rows.length) })} />
+                <InfoRow label={t("finance:col.value")} value={<span className="tabular-nums">{fmt.money(totals.value)} <CurrencyTag code={preview?.context.currency?.code} /></span>} />
               </InfoList>
             </div>
             {preview && preview.alreadyMovedIn > 0 && (
-              <p className="text-xs text-muted-foreground">{formatNumber(preview.alreadyMovedIn)} product{preview.alreadyMovedIn === 1 ? " was" : "s were"} moved in before and {preview.alreadyMovedIn === 1 ? "is" : "are"} not listed.</p>
+              <p className="text-xs text-muted-foreground">{t("finance:opening.notListed", { count: preview.alreadyMovedIn, n: formatNumber(preview.alreadyMovedIn) })}</p>
             )}
             <div className="max-h-[45vh] overflow-auto rounded-lg border">
               <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"><Checkbox checked={allPicked} onCheckedChange={toggleAll} aria-label="Select every product with a cost" disabled={!ready.length} /></TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="w-40 text-right">Unit cost</TableHead>
-                    <TableHead className="text-right">Value</TableHead>
+                    <TableHead className="w-10"><Checkbox checked={allPicked} onCheckedChange={toggleAll} aria-label={t("finance:opening.selectAll")} disabled={!ready.length} /></TableHead>
+                    <TableHead>{t("common:fields.product")}</TableHead>
+                    <TableHead className="text-right">{t("common:fields.quantity")}</TableHead>
+                    <TableHead className="w-40 text-right">{t("finance:col.unitCost")}</TableHead>
+                    <TableHead className="text-right">{t("finance:col.value")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -176,14 +180,14 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
                     const c = costOf(r)
                     return (
                       <TableRow key={r.productId} data-state={picked.has(r.productId) && c > 0 ? "selected" : undefined}>
-                        <TableCell><Checkbox checked={picked.has(r.productId) && c > 0} disabled={c <= 0} onCheckedChange={() => toggle(r.productId)} aria-label={`Move in ${r.name}`} /></TableCell>
+                        <TableCell><Checkbox checked={picked.has(r.productId) && c > 0} disabled={c <= 0} onCheckedChange={() => toggle(r.productId)} aria-label={t("finance:opening.moveInName", { name: r.name })} /></TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2 font-medium">{r.name}{c <= 0 && <Badge variant="destructive">Needs cost</Badge>}</div>
+                          <div className="flex items-center gap-2 font-medium">{r.name}{c <= 0 && <Badge variant="destructive">{t("finance:opening.needsCost")}</Badge>}</div>
                           {r.sku && <div className="text-xs text-muted-foreground">{r.sku}</div>}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{formatNumber(r.quantity)}</TableCell>
                         <TableCell className="text-right">
-                          <Input type="number" inputMode="decimal" min="0" step="0.01" aria-label={`Unit cost of ${r.name}`} placeholder="0.00"
+                          <Input type="number" inputMode="decimal" min="0" step="0.01" aria-label={t("finance:opening.unitCostOf", { name: r.name })} placeholder="0.00"
                             className={cn("ml-auto h-8 w-32 text-right tabular-nums", c <= 0 && "border-destructive")} value={costs[r.productId] ?? ""}
                             onChange={(e) => setCost(r, e.target.value)} disabled={!writable} />
                         </TableCell>
@@ -194,17 +198,17 @@ export function OpeningStockDialog({ open, onClose, onDone, writable }: { open: 
                 </TableBody>
               </Table>
             </div>
-            <p className="text-xs text-muted-foreground">Products without a unit cost stay listed with &quot;Needs cost&quot; and are not posted. A cost you enter is also saved as the product&apos;s cost price.</p>
+            <p className="text-xs text-muted-foreground">{t("finance:opening.footnote")}</p>
           </div>
         )}
 
         {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>{result ? "Done" : "Cancel"}</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>{result ? t("common:actions.done") : t("common:actions.cancel")}</Button>
           {!result && writable && rows.length > 0 && (
             <Button type="button" onClick={post} disabled={busy || chosen.length === 0}>
-              <PackagePlus className="size-4" aria-hidden /> {busy ? "Moving in…" : `Move in ${formatNumber(chosen.length)} product${chosen.length === 1 ? "" : "s"}`}
+              <PackagePlus className="size-4" aria-hidden /> {busy ? t("finance:opening.moving") : t("finance:opening.moveInCount", { count: chosen.length, n: formatNumber(chosen.length) })}
             </Button>
           )}
         </DialogFooter>

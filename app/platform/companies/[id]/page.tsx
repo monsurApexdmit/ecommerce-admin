@@ -21,8 +21,21 @@ import {
   ArrowLeft, AlertCircle, Users, CreditCard, CheckCircle2,
   Clock, XCircle, Calendar, Globe, Phone, Mail,
 } from "lucide-react"
+import { Trans, useTranslation } from "react-i18next"
+import { localeTag } from "@/lib/i18n"
+
+const STATUS_LABEL: Record<string, "auth:platform.status.active" | "auth:platform.status.trial" | "auth:platform.status.inactive" | "auth:platform.status.suspended"> = {
+  active: "auth:platform.status.active",
+  trial: "auth:platform.status.trial",
+  inactive: "auth:platform.status.inactive",
+  suspended: "auth:platform.status.suspended",
+}
 
 export default function CompanyDetailPage() {
+  const { t, i18n } = useTranslation(["auth", "common"])
+  const dateTag = localeTag(i18n.language)
+  /** Known company/user statuses are translated; anything else from the API is shown as is */
+  const statusLabel = (status: string) => (STATUS_LABEL[status] ? t(STATUS_LABEL[status]) : status)
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const companyId = parseInt(id)
@@ -49,7 +62,7 @@ export default function CompanyDetailPage() {
       setCompany(c)
       setSubdomain(c.subdomain ?? "")
       setPlans(p)
-    }).catch(() => setError("Failed to load company"))
+    }).catch(() => setError(t("auth:platform.company.loadFailed")))
       .finally(() => setLoading(false))
   }, [companyId])
 
@@ -65,23 +78,23 @@ export default function CompanyDetailPage() {
       const sub = await platformApi.assignSubscription(companyId, Number(selectedPlanId), selectedMonths)
       setCompany(prev => prev ? { ...prev, status: "active", subscription: sub } : prev)
       setSelectedPlanId("")
-      flash("Subscription assigned successfully.")
+      flash(t("auth:platform.company.assigned"))
     } catch {
-      flash("Failed to assign subscription.")
+      flash(t("auth:platform.company.assignFailed"))
     } finally {
       setAssigning(false)
     }
   }
 
   const handleCancel = async () => {
-    if (!confirm("Cancel this company's subscription?")) return
+    if (!confirm(t("auth:platform.company.confirmCancel"))) return
     setCancelling(true)
     try {
       await platformApi.cancelSubscription(companyId)
       setCompany(prev => prev ? { ...prev, subscription: prev.subscription ? { ...prev.subscription, status: "cancelled" } : null } : prev)
-      flash("Subscription cancelled.")
+      flash(t("auth:platform.company.cancelled"))
     } catch {
-      flash("Failed to cancel subscription.")
+      flash(t("auth:platform.company.cancelFailed"))
     } finally {
       setCancelling(false)
     }
@@ -92,9 +105,9 @@ export default function CompanyDetailPage() {
     try {
       const updated = await platformApi.updateCompany(companyId, { subdomain: subdomain.trim() || undefined })
       setCompany(prev => prev ? { ...prev, subdomain: updated.subdomain } : prev)
-      flash("Store subdomain saved.")
+      flash(t("auth:platform.company.subdomainSaved"))
     } catch {
-      flash("Failed to save subdomain.")
+      flash(t("auth:platform.company.subdomainFailed"))
     } finally {
       setSavingSubdomain(false)
     }
@@ -103,14 +116,14 @@ export default function CompanyDetailPage() {
   const handleToggleStatus = async () => {
     if (!company) return
     const next = company.status === "inactive" || company.status === "suspended" ? "active" : "inactive"
-    if (!confirm(`${next === "inactive" ? "Deactivate" : "Activate"} this company?`)) return
+    if (!confirm(next === "inactive" ? t("auth:platform.company.confirmDeactivate") : t("auth:platform.company.confirmActivate"))) return
     setToggling(true)
     try {
       await platformApi.updateCompanyStatus(companyId, next)
       setCompany(prev => prev ? { ...prev, status: next } : prev)
-      flash(`Company ${next === "active" ? "activated" : "deactivated"}.`)
+      flash(next === "active" ? t("auth:platform.company.activated") : t("auth:platform.company.deactivated"))
     } catch {
-      flash("Failed to update status.")
+      flash(t("auth:platform.company.statusFailed"))
     } finally {
       setToggling(false)
     }
@@ -122,7 +135,7 @@ export default function CompanyDetailPage() {
   if (error || !company) return (
     <Alert variant="destructive">
       <AlertCircle />
-      <AlertDescription>{error || "Company not found"}</AlertDescription>
+      <AlertDescription>{error || t("auth:platform.company.notFound")}</AlertDescription>
     </Alert>
   )
 
@@ -134,12 +147,12 @@ export default function CompanyDetailPage() {
       <div className="flex items-center gap-3 flex-wrap">
         <Button asChild variant="ghost" size="sm">
           <Link href="/platform/companies">
-            <ArrowLeft /> Companies
+            <ArrowLeft /> {t("auth:platform.nav.companies")}
           </Link>
         </Button>
         <span className="text-muted-foreground">/</span>
         <h1 className="text-2xl font-bold">{company.name}</h1>
-        <StatusBadge status={company.status} />
+        <StatusBadge status={company.status} label={statusLabel(company.status)} />
       </div>
 
       {actionMsg && (
@@ -152,14 +165,14 @@ export default function CompanyDetailPage() {
         {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Company info */}
-          <SectionCard title="Company Info">
+          <SectionCard title={t("auth:platform.company.info")}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { icon: Mail, label: "Email", value: company.email },
-                { icon: Phone, label: "Phone", value: company.phone },
-                { icon: Globe, label: "Country", value: company.country },
-                { icon: Calendar, label: "Joined", value: new Date(company.createdAt).toLocaleDateString() },
-                { icon: Users, label: "Team Size", value: `${company.usersCount} users` },
+                { icon: Mail, label: t("common:fields.email"), value: company.email },
+                { icon: Phone, label: t("common:fields.phone"), value: company.phone },
+                { icon: Globe, label: t("auth:platform.company.country"), value: company.country },
+                { icon: Calendar, label: t("auth:platform.companies.joined"), value: new Date(company.createdAt).toLocaleDateString(dateTag) },
+                { icon: Users, label: t("auth:platform.company.teamSize"), value: t("auth:platform.company.usersCount", { count: company.usersCount }) },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-start gap-2">
                   <Icon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -174,8 +187,8 @@ export default function CompanyDetailPage() {
 
           {/* Store subdomain */}
           <SectionCard
-            title="Aura Store Subdomain"
-            description={<>Used to route <code className="bg-muted px-1 rounded">subdomain.yourstore.com</code> to this company's store.</>}
+            title={t("auth:platform.company.subdomainTitle")}
+            description={<Trans t={t} i18nKey="auth:platform.company.subdomainDesc" components={{ code: <code className="bg-muted px-1 rounded" /> }} />}
           >
             <div className="flex gap-2 items-center">
               <InputGroup className="flex-1">
@@ -183,7 +196,7 @@ export default function CompanyDetailPage() {
                   type="text"
                   value={subdomain}
                   onChange={e => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                  placeholder="e.g. acme"
+                  placeholder={t("auth:platform.company.subdomainPlaceholder")}
                 />
                 <InputGroupAddon align="inline-end">
                   <InputGroupText>.localhost:8080</InputGroupText>
@@ -193,33 +206,40 @@ export default function CompanyDetailPage() {
                 onClick={handleSaveSubdomain}
                 disabled={savingSubdomain}
               >
-                {savingSubdomain ? "Saving…" : "Save"}
+                {savingSubdomain ? t("common:actions.saving") : t("common:actions.save")}
               </Button>
             </div>
             {company.subdomain && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Current: <code className="bg-muted px-1 rounded text-foreground">{company.subdomain}.localhost:8080</code>
-                {" — add "}<code className="bg-muted px-1 rounded">127.0.0.1 {company.subdomain}.localhost</code>{" to /etc/hosts"}
+                <Trans
+                  t={t}
+                  i18nKey="auth:platform.company.currentSubdomain"
+                  values={{ host: `${company.subdomain}.localhost:8080`, hosts: `127.0.0.1 ${company.subdomain}.localhost` }}
+                  components={{
+                    host: <code className="bg-muted px-1 rounded text-foreground" />,
+                    hosts: <code className="bg-muted px-1 rounded" />,
+                  }}
+                />
               </p>
             )}
           </SectionCard>
 
           {/* Users table */}
           <SectionCard
-            title={<span className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" />Team Members</span>}
+            title={<span className="flex items-center gap-2"><Users className="w-4 h-4 text-muted-foreground" />{t("auth:platform.company.team")}</span>}
             actions={<Badge variant="secondary">{company.users?.length ?? 0}</Badge>}
             contentClassName="px-0"
           >
             {!company.users?.length ? (
-              <EmptyState title="No users found" className="p-4 md:p-6" />
+              <EmptyState title={t("auth:platform.company.noUsers")} className="p-4 md:p-6" />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last Login</TableHead>
+                    <TableHead>{t("common:fields.name")}</TableHead>
+                    <TableHead>{t("auth:platform.company.role")}</TableHead>
+                    <TableHead>{t("common:fields.status")}</TableHead>
+                    <TableHead>{t("auth:platform.company.lastLogin")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -233,10 +253,10 @@ export default function CompanyDetailPage() {
                         <Badge variant="secondary" className="capitalize">{u.role}</Badge>
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={u.status} />
+                        <StatusBadge status={u.status} label={statusLabel(u.status)} />
                       </TableCell>
                       <TableCell>
-                        {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : "Never"}
+                        {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString(dateTag) : t("auth:platform.company.never")}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -249,17 +269,17 @@ export default function CompanyDetailPage() {
         {/* Right column */}
         <div className="space-y-5">
           {/* Subscription card */}
-          <SectionCard title={<span className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-muted-foreground" />Subscription</span>}>
+          <SectionCard title={<span className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-muted-foreground" />{t("auth:platform.company.subscription")}</span>}>
             {activeSub ? (
               <div className="space-y-2">
                 <InfoList>
-                  <InfoRow label="Plan" value={activeSub.planName} />
-                  <InfoRow label="Price" value={`$${activeSub.planPrice}/mo`} />
+                  <InfoRow label={t("auth:platform.companies.plan")} value={activeSub.planName} />
+                  <InfoRow label={t("common:money.price")} value={t("auth:platform.company.priceMonthly", { price: activeSub.planPrice })} />
                   <InfoRow
-                    label="Expires"
-                    value={activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd).toLocaleDateString() : "—"}
+                    label={t("auth:platform.company.expires")}
+                    value={activeSub.currentPeriodEnd ? new Date(activeSub.currentPeriodEnd).toLocaleDateString(dateTag) : "—"}
                   />
-                  <InfoRow label="Status" value={<StatusBadge status="active" label="Active" />} />
+                  <InfoRow label={t("common:fields.status")} value={<StatusBadge status="active" label={t("auth:platform.status.active")} />} />
                 </InfoList>
                 <Button
                   variant="destructive"
@@ -268,33 +288,33 @@ export default function CompanyDetailPage() {
                   disabled={cancelling}
                   className="mt-3 w-full"
                 >
-                  {cancelling ? "Cancelling…" : "Cancel Subscription"}
+                  {cancelling ? t("auth:platform.company.cancelling") : t("auth:platform.company.cancelSub")}
                 </Button>
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground mb-3">No active subscription</p>
+                <p className="text-sm text-muted-foreground mb-3">{t("auth:platform.company.noActiveSub")}</p>
               </div>
             )}
           </SectionCard>
 
           {/* Assign plan */}
-          <SectionCard title={activeSub ? "Change Plan" : "Assign Plan"}>
+          <SectionCard title={activeSub ? t("auth:platform.company.changePlan") : t("auth:platform.company.assignPlan")}>
             <div className="space-y-3">
               <Select
                 value={selectedPlanId === "" ? "" : String(selectedPlanId)}
                 onValueChange={v => setSelectedPlanId(Number(v) || "")}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a plan…" />
+                  <SelectValue placeholder={t("auth:platform.company.selectPlan")} />
                 </SelectTrigger>
                 <SelectContent>
                   {plans.filter(p => p.isActive).map(p => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name} — ${p.price}/mo</SelectItem>
+                    <SelectItem key={p.id} value={String(p.id)}>{t("auth:platform.company.planOption", { name: p.name, price: p.price })}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <FormField label="Months" htmlFor="assign-months" orientation="horizontal">
+              <FormField label={t("auth:platform.company.months")} htmlFor="assign-months" orientation="horizontal">
                 <Input
                   id="assign-months"
                   type="number"
@@ -310,25 +330,25 @@ export default function CompanyDetailPage() {
                 disabled={!selectedPlanId || assigning}
                 className="w-full"
               >
-                {assigning ? "Assigning…" : activeSub ? "Change Plan" : "Assign & Activate"}
+                {assigning ? t("auth:platform.company.assigning") : activeSub ? t("auth:platform.company.changePlan") : t("auth:platform.company.assign")}
               </Button>
             </div>
           </SectionCard>
 
           {/* Danger zone */}
-          <SectionCard title={<span className="text-destructive">Danger Zone</span>} className="border-destructive/30">
+          <SectionCard title={<span className="text-destructive">{t("auth:platform.company.dangerZone")}</span>} className="border-destructive/30">
             <Button
               variant={company.status === "inactive" || company.status === "suspended" ? "default" : "destructive"}
               onClick={handleToggleStatus}
               disabled={toggling}
               className="w-full"
             >
-              {toggling ? "Updating…" : (company.status === "inactive" || company.status === "suspended" ? "Activate Company" : "Deactivate Company")}
+              {toggling ? t("auth:platform.company.updating") : (company.status === "inactive" || company.status === "suspended" ? t("auth:platform.company.activateCompany") : t("auth:platform.company.deactivateCompany"))}
             </Button>
             <p className="text-xs text-muted-foreground mt-2">
               {company.status === "inactive" || company.status === "suspended"
-                ? "Re-enables all users of this company."
-                : "Blocks all users from logging in."}
+                ? t("auth:platform.company.reenableHelp")
+                : t("auth:platform.company.blockHelp")}
             </p>
           </SectionCard>
         </div>

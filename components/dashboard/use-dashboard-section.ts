@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { fetchSection } from "@/lib/dashboard/api"
 import type { SectionKey, SectionMap } from "@/lib/dashboard/types"
 import { useDashboardFilters } from "./dashboard-context"
@@ -8,6 +9,7 @@ import { useDashboardFilters } from "./dashboard-context"
 interface State<T> {
   data: T | null
   loading: boolean
+  /** API message, "" when the API gave none (shown as a translated fallback), null when fine */
   error: string | null
 }
 
@@ -16,6 +18,7 @@ interface State<T> {
  * requests, and keeps its own error state so one failing section never breaks the page.
  */
 export function useDashboardSection<K extends SectionKey>(section: K, extra?: { limit?: number; to?: string }) {
+  const { t } = useTranslation(["dashboard", "common"])
   const { filters } = useDashboardFilters()
   const [state, setState] = useState<State<SectionMap[K]>>({ data: null, loading: true, error: null })
   const [attempt, setAttempt] = useState(0)
@@ -32,12 +35,13 @@ export function useDashboardSection<K extends SectionKey>(section: K, extra?: { 
         setState((s) => ({
           data: s.data,
           loading: false,
-          error: err?.response?.data?.message ?? "Could not load this section",
+          error: err?.response?.data?.message ?? "",
         }))
       })
     return () => controller.abort()
   }, [section, filters, limit, toOverride, attempt])
 
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
-  return { ...state, retry }
+  const error = state.error === null ? null : state.error || t("dashboard:errors.loadSection")
+  return { ...state, error, retry }
 }

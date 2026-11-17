@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
+import { localeTag } from "@/lib/i18n"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,12 +31,24 @@ import { EmptyState } from "@/components/common/EmptyState"
 import { InfoList, InfoRow } from "@/components/common/InfoList"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
+const NS = ["inventory", "common"] as const
+type K = ParseKeys<typeof NS>
+
+// Reason values are saved on the transfer as-is; only the shown label is translated
 const REASONS = ["Restock store", "Rebalance stock", "Customer order pickup", "Return to warehouse"]
+const REASON_KEY: Record<string, K> = {
+  "Restock store": "inventory:transfers.reason.restockStore",
+  "Rebalance stock": "inventory:transfers.reason.rebalance",
+  "Customer order pickup": "inventory:transfers.reason.pickup",
+  "Return to warehouse": "inventory:transfers.reason.returnToWarehouse",
+}
 
 
 interface Line { key: string; productId: number; variantId: number | null; name: string; avail: number; qty: number }
 
 export default function TransferPage() {
+  const { t, i18n } = useTranslation(NS)
+  const reasonLabel = (r?: string | null) => (r && REASON_KEY[r] ? t(REASON_KEY[r]) : r ?? "")
   const { warehouses } = useWarehouse()
   const { toast } = useToast()
   const blocked = useModuleGuard("Transfers")
@@ -66,12 +81,12 @@ export default function TransferPage() {
     if (warehouses.length === 0) return
     const def = warehouses.find((w) => w.isDefault) ?? warehouses[0]
     setFrom((f) => f || String(def.id))
-    setTo((t) => t || String((warehouses.find((w) => w.id !== def.id) ?? def).id))
+    setTo((cur) => cur || String((warehouses.find((w) => w.id !== def.id) ?? def).id))
   }, [warehouses])
 
   useEffect(() => {
-    const t = setTimeout(() => setHqDebounced(hq.trim()), 250)
-    return () => clearTimeout(t)
+    const id = setTimeout(() => setHqDebounced(hq.trim()), 250)
+    return () => clearTimeout(id)
   }, [hq])
 
   const loadStock = useCallback(async () => {
@@ -145,9 +160,9 @@ export default function TransferPage() {
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, qty: Math.max(1, Math.min(l.avail, Math.floor(v) || 1)) } : l)))
 
   const submit = async () => {
-    if (!from || !to) { setErr("Choose both locations."); return }
-    if (from === to) { setErr("From and To must be different locations."); return }
-    if (lines.length === 0) { setErr("Add at least one product."); return }
+    if (!from || !to) { setErr(t("inventory:transfers.validation.bothLocations")); return }
+    if (from === to) { setErr(t("inventory:transfers.validation.sameLocation")); return }
+    if (lines.length === 0) { setErr(t("inventory:transfers.validation.noProducts")); return }
     setBusy(true); setErr("")
     try {
       const doc = await transferApi.createDocument({
@@ -155,25 +170,25 @@ export default function TransferPage() {
         sentWith: sentWith.trim() || undefined, note: note.trim() || undefined,
         items: lines.map((l) => ({ productId: l.productId, variantId: l.variantId ?? undefined, quantity: l.qty })),
       })
-      toast({ title: `Transfer ${doc.transferNo} done`, description: `${units} units moved to ${nameOf(to)}` })
+      toast({ title: t("inventory:transfers.toast.done", { number: doc.transferNo }), description: t("inventory:transfers.toast.moved", { count: units, location: nameOf(to) }) })
       setLines([]); setSentWith(""); setNote("")
       setPage(1)
       await Promise.all([loadStock(), loadHistory()])
     } catch (e: any) {
-      setErr(e?.response?.data?.message || "Could not complete the transfer.")
+      setErr(e?.response?.data?.message || t("inventory:transfers.toast.failed"))
     } finally {
       setBusy(false)
     }
   }
 
-  const cancel = async (t: TransferDocument) => {
-    if (!window.confirm(`Cancel ${t.transferNo} and return ${t.units} units to ${t.from.name}?`)) return
+  const cancel = async (doc: TransferDocument) => {
+    if (!window.confirm(t("inventory:transfers.confirmCancel", { number: doc.transferNo, count: doc.units, location: doc.from.name }))) return
     try {
-      await transferApi.cancelDocument(t.id)
-      toast({ title: `${t.transferNo} cancelled`, description: "Stock returned to the source location" })
+      await transferApi.cancelDocument(doc.id)
+      toast({ title: t("inventory:transfers.toast.cancelled", { number: doc.transferNo }), description: t("inventory:transfers.toast.cancelledDesc") })
       await Promise.all([loadStock(), loadHistory()])
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not cancel", description: e?.response?.data?.message })
+      toast({ variant: "destructive", title: t("inventory:transfers.toast.cancelFailed"), description: e?.response?.data?.message })
     }
   }
 
@@ -184,15 +199,16 @@ export default function TransferPage() {
   }
 
   const handleExport = () => {
-    const rows = history.flatMap((t) => {
+    const rows = history.flatMap((d) => {
       const base = {
-        no: t.transferNo, date: t.createdAt, from: t.from.name, to: t.to.name,
-        reason: t.reason, sentWith: t.sentWith ?? "", status: t.isReversal ? "reversal" : t.status,
-        note: [t.reversedBy ? `Returned via ${t.reversedBy}` : "", t.note ?? ""].filter(Boolean).join(" · "), by: t.createdBy ?? "",
+        no: d.transferNo, date: d.createdAt, from: d.from.name, to: d.to.name,
+        reason: reasonLabel(d.reason), sentWith: d.sentWith ?? "",
+        status: d.isReversal ? t("inventory:transfers.status.reversal") : d.status === "completed" ? t("common:orderStatus.completed") : d.status === "cancelled" ? t("common:orderStatus.cancelled") : d.status,
+        note: [d.reversedBy ? t("inventory:transfers.returnedVia", { number: d.reversedBy }) : "", d.note ?? ""].filter(Boolean).join(" · "), by: d.createdBy ?? "",
       }
-      return t.lines.length
-        ? t.lines.map((l) => ({ ...base, product: l.name, quantity: l.quantity }))
-        : [{ ...base, product: "", quantity: t.units }]
+      return d.lines.length
+        ? d.lines.map((l) => ({ ...base, product: l.name, quantity: l.quantity }))
+        : [{ ...base, product: "", quantity: d.units }]
     })
     exportToCSV(rows, "stock-transfers", ["no", "date", "from", "to", "product", "quantity", "reason", "sentWith", "status", "note", "by"])
   }
@@ -202,20 +218,20 @@ export default function TransferPage() {
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Stock transfers"
-        description="Move stock between your warehouse and shops."
-        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>}
+        title={t("inventory:transfers.title")}
+        description={t("inventory:transfers.description")}
+        actions={<Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>}
       />
 
       <div className="flex flex-col items-start gap-5 xl:flex-row">
         <SectionCard
           className="w-full shrink-0 xl:w-[520px]"
-          title="New transfer"
-          description="Move stock between locations. Stock moves immediately and is logged in the history."
+          title={t("inventory:transfers.newTitle")}
+          description={t("inventory:transfers.newDescription")}
         >
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-              <FormField label="From" htmlFor="tr-from">
+              <FormField label={t("common:extra.from")} htmlFor="tr-from">
                 <Select value={from || undefined} onValueChange={changeFrom}>
                   <SelectTrigger id="tr-from" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -223,8 +239,8 @@ export default function TransferPage() {
                   </SelectContent>
                 </Select>
               </FormField>
-              <WithTooltip content="Swap locations"><Button type="button" variant="outline" size="icon" onClick={swap} aria-label="Swap locations">⇄</Button></WithTooltip>
-              <FormField label="To" htmlFor="tr-to">
+              <WithTooltip content={t("inventory:transfers.swap")}><Button type="button" variant="outline" size="icon" onClick={swap} aria-label={t("inventory:transfers.swap")}>⇄</Button></WithTooltip>
+              <FormField label={t("common:extra.to")} htmlFor="tr-to">
                 <Select value={to || undefined} onValueChange={(v) => { setTo(v); setErr("") }}>
                   <SelectTrigger id="tr-to" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -235,41 +251,41 @@ export default function TransferPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Products</p>
-              <Label htmlFor="tr-search" className="sr-only">Search products</Label>
-              <Input id="tr-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search or scan a product in ${fromName}…`} />
+              <p className="text-sm font-medium">{t("common:fields.products")}</p>
+              <Label htmlFor="tr-search" className="sr-only">{t("inventory:returns.supplier.form.searchProducts")}</Label>
+              <Input id="tr-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("inventory:transfers.searchPh", { location: fromName })} />
               {results.length > 0 && (
                 <Card className="gap-0 overflow-hidden py-0">
                   {results.map((r) => (
                     <Button key={`${r.type}-${r.id}`} type="button" variant="ghost" onClick={() => addLine(r)}
                       className="h-auto w-full justify-between gap-3 rounded-none text-left whitespace-normal">
                       <span className="text-sm font-semibold">{r.variantName ? `${r.productName} · ${r.variantName}` : r.productName}</span>
-                      <span className="text-xs text-muted-foreground">{r.stock} available</span>
+                      <span className="text-xs text-muted-foreground">{t("inventory:transfers.available", { count: r.stock })}</span>
                     </Button>
                   ))}
                 </Card>
               )}
-              {noResults && !stockLoading && <div className="text-xs text-muted-foreground">No matching product with stock in {fromName}.</div>}
+              {noResults && !stockLoading && <div className="text-xs text-muted-foreground">{t("inventory:transfers.noMatch", { location: fromName })}</div>}
 
               <Card className="gap-0 py-0">
                 {lines.length === 0 ? (
-                  <EmptyState title="Add products to move." className="p-4 md:p-6" />
+                  <EmptyState title={t("inventory:transfers.addProducts")} className="p-4 md:p-6" />
                 ) : lines.map((l, i) => (
                   <div key={l.key}>
                   {i > 0 && <ItemSeparator />}
                   <Item size="sm">
                     <ItemContent className="min-w-0">
                       <ItemTitle className="w-full truncate">{l.name}</ItemTitle>
-                      <ItemDescription>{l.avail} available in {fromName}</ItemDescription>
+                      <ItemDescription>{t("inventory:transfers.availableIn", { count: l.avail, location: fromName })}</ItemDescription>
                     </ItemContent>
                     <ItemActions>
                     <div className="flex items-center">
-                      <WithTooltip content="Decrease quantity"><Button type="button" variant="outline" size="icon" aria-label="Decrease quantity" onClick={() => setQty(l.key, l.qty - 1)}>−</Button></WithTooltip>
-                      <Input type="number" min={1} max={l.avail} aria-label="Quantity" value={l.qty} onChange={(e) => setQty(l.key, Number(e.target.value))}
+                      <WithTooltip content={t("inventory:returns.decreaseQty")}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:returns.decreaseQty")} onClick={() => setQty(l.key, l.qty - 1)}>−</Button></WithTooltip>
+                      <Input type="number" min={1} max={l.avail} aria-label={t("common:fields.quantity")} value={l.qty} onChange={(e) => setQty(l.key, Number(e.target.value))}
                         className="mx-1 w-16 text-center tabular-nums" />
-                      <WithTooltip content="Increase quantity"><Button type="button" variant="outline" size="icon" aria-label="Increase quantity" onClick={() => setQty(l.key, l.qty + 1)}>+</Button></WithTooltip>
+                      <WithTooltip content={t("inventory:returns.increaseQty")}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:returns.increaseQty")} onClick={() => setQty(l.key, l.qty + 1)}>+</Button></WithTooltip>
                     </div>
-                    <WithTooltip content="Remove"><Button type="button" variant="ghost" size="icon" aria-label="Remove" onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button></WithTooltip>
+                    <WithTooltip content={t("common:actions.remove")}><Button type="button" variant="ghost" size="icon" aria-label={t("common:actions.remove")} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>×</Button></WithTooltip>
                     </ItemActions>
                   </Item>
                   </div>
@@ -278,26 +294,26 @@ export default function TransferPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="Reason" htmlFor="tr-reason">
+              <FormField label={t("common:extra.reason")} htmlFor="tr-reason">
                 <Select value={reason} onValueChange={setReason}>
                   <SelectTrigger id="tr-reason" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                  <SelectContent>{REASONS.map((r) => <SelectItem key={r} value={r}>{reasonLabel(r)}</SelectItem>)}</SelectContent>
                 </Select>
               </FormField>
-              <FormField label="Sent with" htmlFor="tr-sent-with">
-                <Input id="tr-sent-with" className="w-full" value={sentWith} onChange={(e) => setSentWith(e.target.value)} placeholder="e.g. Rafiq / van" />
+              <FormField label={t("inventory:transfers.sentWith")} htmlFor="tr-sent-with">
+                <Input id="tr-sent-with" className="w-full" value={sentWith} onChange={(e) => setSentWith(e.target.value)} placeholder={t("inventory:transfers.sentWithPh")} />
               </FormField>
             </div>
-            <FormField label="Note" htmlFor="tr-note">
-              <Textarea id="tr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+            <FormField label={t("common:fields.note")} htmlFor="tr-note">
+              <Textarea id="tr-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("common:status.optional")} />
             </FormField>
 
             {err && <p role="alert" className="text-sm font-medium text-destructive">{err}</p>}
             <Separator />
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">{units} units · {fromName} → {nameOf(to)}</span>
+              <span className="text-sm text-muted-foreground">{t("inventory:purchases.units", { count: units })} · {fromName} → {nameOf(to)}</span>
               <Button type="button" disabled={lines.length === 0 || busy} onClick={submit}>
-                {busy ? "Moving…" : `Move ${units} units now`}
+                {busy ? t("inventory:transfers.moving") : t("inventory:transfers.moveNow", { count: units })}
               </Button>
             </div>
           </div>
@@ -305,62 +321,62 @@ export default function TransferPage() {
 
         <SectionCard
           className="w-full min-w-0 flex-1"
-          title="Transfer history"
+          title={t("inventory:transfers.history")}
           actions={
-            <Button type="button" variant="outline" onClick={cycleLoc} aria-label="Filter by location">
-              {locF === "all" ? "All locations" : nameOf(locF)} ▾
+            <Button type="button" variant="outline" onClick={cycleLoc} aria-label={t("inventory:transfers.filterLocation")}>
+              {locF === "all" ? t("inventory:transfers.allLocations") : nameOf(locF)} ▾
             </Button>
           }
         >
           <Toolbar className="mb-3">
             <div className="min-w-[200px] flex-1">
-              <Label htmlFor="tr-hist-search" className="sr-only">Search transfers</Label>
-              <Input id="tr-hist-search" type="search" value={hq} onChange={(e) => { setHq(e.target.value); setPage(1) }} placeholder="Search no. or product…" />
+              <Label htmlFor="tr-hist-search" className="sr-only">{t("inventory:transfers.searchLabel")}</Label>
+              <Input id="tr-hist-search" type="search" value={hq} onChange={(e) => { setHq(e.target.value); setPage(1) }} placeholder={t("inventory:transfers.searchHistPh")} />
             </div>
             <Select value={statusF} onValueChange={(v) => { setStatusF(v); setPage(1) }}>
-              <SelectTrigger aria-label="Status" className="w-[160px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={t("common:fields.status")} className="w-[160px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Status: All</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="all">{t("inventory:transfers.statusAll")}</SelectItem><SelectItem value="completed">{t("common:orderStatus.completed")}</SelectItem><SelectItem value="cancelled">{t("common:orderStatus.cancelled")}</SelectItem>
               </SelectContent>
             </Select>
           </Toolbar>
-          <div className="mb-3 text-sm text-muted-foreground">{stats.count} transfer{stats.count === 1 ? "" : "s"} · {stats.unitsMoved} units moved</div>
+          <div className="mb-3 text-sm text-muted-foreground">{t("inventory:transfers.statsCount", { count: stats.count })} · {t("inventory:transfers.unitsMoved", { count: stats.unitsMoved })}</div>
 
           {histLoading ? (
             <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
           ) : history.length === 0 ? (
-            <EmptyState title={hqDebounced || statusF !== "all" || locF !== "all" ? "No transfers match these filters." : "No transfers yet. Move stock with the form."} />
+            <EmptyState title={hqDebounced || statusF !== "all" || locF !== "all" ? t("inventory:transfers.empty.filtered") : t("inventory:transfers.empty.first")} />
           ) : (
             <div className="flex flex-col gap-3">
-              {history.map((t) => {
-                const isOpen = open.has(t.id)
+              {history.map((d) => {
+                const isOpen = open.has(d.id)
                 return (
-                  <Card key={t.id} className="gap-0 p-4">
+                  <Card key={d.id} className="gap-0 p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold">{t.transferNo}</span>
+                      <span className="text-sm font-bold">{d.transferNo}</span>
                       <StatusBadge
-                        status={t.status === "completed" ? "completed" : "cancelled"}
-                        label={t.status !== "completed" ? "Cancelled" : t.isReversal ? "Reversal" : "Completed"}
+                        status={d.status === "completed" ? "completed" : "cancelled"}
+                        label={d.status !== "completed" ? t("common:orderStatus.cancelled") : d.isReversal ? t("inventory:transfers.status.reversal") : t("common:orderStatus.completed")}
                       />
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-sm"><strong>{t.from.name}</strong><span aria-hidden>→</span><strong>{t.to.name}</strong></div>
-                    <div className="mt-0.5 text-sm text-muted-foreground">{t.itemsSummary}</div>
+                    <div className="mt-1 flex items-center gap-2 text-sm"><strong>{d.from.name}</strong><span aria-hidden>→</span><strong>{d.to.name}</strong></div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">{d.itemsSummary}</div>
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs text-muted-foreground">
-                        {new Date(t.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {[t.reason, t.sentWith && `sent with ${t.sentWith}`, t.reversedBy && `Returned via ${t.reversedBy}`, t.createdBy].filter(Boolean).join(" · ")}
+                        {new Date(d.createdAt).toLocaleDateString(localeTag(i18n.language), { month: "short", day: "numeric", year: "numeric" })} · {[reasonLabel(d.reason), d.sentWith && t("inventory:transfers.sentWithName", { name: d.sentWith }), d.reversedBy && t("inventory:transfers.returnedVia", { number: d.reversedBy }), d.createdBy].filter(Boolean).join(" · ")}
                       </span>
                       <div className="flex gap-2">
-                        {t.canCancel && <Button type="button" variant="destructive" size="sm" onClick={() => cancel(t)}>Cancel &amp; return stock</Button>}
-                        <Button type="button" variant="outline" size="sm" aria-expanded={isOpen} onClick={() => setOpen((p) => { const n = new Set(p); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n })}>{isOpen ? "Hide details" : "Details"}</Button>
+                        {d.canCancel && <Button type="button" variant="destructive" size="sm" onClick={() => cancel(d)}>{t("inventory:transfers.cancelReturn")}</Button>}
+                        <Button type="button" variant="outline" size="sm" aria-expanded={isOpen} onClick={() => setOpen((p) => { const n = new Set(p); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n })}>{isOpen ? t("inventory:transfers.hideDetails") : t("common:extra.details")}</Button>
                       </div>
                     </div>
                     {isOpen && (
                       <>
                       <Separator className="my-3" />
                       <InfoList className="gap-1">
-                        {t.lines.map((x, i) => <InfoRow key={i} label={x.name} value={`×${x.quantity}`} />)}
+                        {d.lines.map((x, i) => <InfoRow key={i} label={x.name} value={`×${x.quantity}`} />)}
                       </InfoList>
-                      <div className="mt-2 text-sm text-muted-foreground">{[t.sentWith && `Sent with ${t.sentWith}`, t.reversedBy && `Returned via ${t.reversedBy}`, t.note].filter(Boolean).join(" · ") || "No note."}</div>
+                      <div className="mt-2 text-sm text-muted-foreground">{[d.sentWith && t("inventory:transfers.sentWithName", { name: d.sentWith }), d.reversedBy && t("inventory:transfers.returnedVia", { number: d.reversedBy }), d.note].filter(Boolean).join(" · ") || t("inventory:transfers.noNote")}</div>
                       </>
                     )}
                   </Card>

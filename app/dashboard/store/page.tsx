@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { Globe, Heart, ImageUp, MapPin, Package, TrendingUp, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -14,7 +15,10 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { StatsCards } from "@/components/ui/stats-card"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { settingsApi, resolveStorageUrl, type AuraShopHeroSlide, type HomepageSections } from "@/lib/settingsApi"
-import { HomepageSectionsEditor, sectionsFromSettings, sectionsToSettings, validateSections, type LinkGroup, type SectionsForm } from "@/components/storefront-homepage-sections"
+import { StorefrontThemePicker, type BrandColors, type ColorSource } from "@/components/storefront-theme-picker"
+import { DEFAULT_STORE_THEME, TEMPLATE_HIDDEN_SECTIONS, isStoreThemeId, type StoreThemeId } from "@/lib/storeThemes"
+import { TemplateContentEditor, templateContentFromSettings, templateContentToSettings, validateTemplateContent, type TemplateContentForm } from "@/components/storefront-template-content"
+import { HomepageSectionsEditor, sectionsFromSettings, sectionsToSettings, validateSections, type LinkGroup, type SectionsForm, type StoreT } from "@/components/storefront-homepage-sections"
 import wishlistApi, { type WishlistAnalytics } from "@/lib/wishlistApi"
 import { productApi, type ProductResponse } from "@/lib/productApi"
 import { categoryApi, type CategoryResponse } from "@/lib/categoryApi"
@@ -23,6 +27,7 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useSaasAuth } from "@/contexts/saas-auth-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { cn } from "@/lib/utils"
+import { localeTag } from "@/lib/i18n"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -40,7 +45,12 @@ type Slide = Required<Pick<AuraShopHeroSlide, "id" | "imagePath" | "tag" | "titl
 interface Form {
   name: string
   slug: string
+  /** Accent colour hex, or "" for the theme's own */
   theme: string
+  themePreset: StoreThemeId
+  colorSource: ColorSource
+  /** Default storefront language; shoppers can switch */
+  language: "en" | "bn"
   published: boolean
   apiUrl: string
   companyId: string
@@ -57,32 +67,40 @@ interface Form {
   secs: string
   slides: Slide[]
   sections: SectionsForm
+  content: TemplateContentForm
 }
 
-const THEMES: [string, string][] = [["#2449E8", "Blue"], ["#0F766E", "Teal"], ["#6D28D9", "Violet"], ["#0E1525", "Ink"]]
+// Accent colours offered on top of a theme (saved as onlineStore.theme); labels translated at render
+const ACCENTS = [
+  ["#2449E8", "store:template.accents.blue"],
+  ["#0F766E", "store:template.accents.teal"],
+  ["#6D28D9", "store:template.accents.violet"],
+  ["#0E1525", "store:template.accents.ink"],
+] as const
+const HEX = /^#[0-9a-fA-F]{6}$/
 // Overlay presets share the exact gradient classes used by the Aura Shop settings page / storefront.
-const OVERLAYS: [string, string][] = [
-  ["Brand blue", "from-primary/80 via-primary/40 to-transparent"],
-  ["Teal", "from-accent/70 via-accent/30 to-transparent"],
-  ["Dark", "from-foreground/70 via-foreground/30 to-transparent"],
-]
+const OVERLAYS = [
+  ["store:store.hero.overlays.brandBlue", "from-primary/80 via-primary/40 to-transparent"],
+  ["store:store.hero.overlays.teal", "from-accent/70 via-accent/30 to-transparent"],
+  ["store:store.hero.overlays.dark", "from-foreground/70 via-foreground/30 to-transparent"],
+] as const
 // Customer-facing storefront destinations (routes of the online store).
-const PAGES: [string, string][] = [
-  ["/shop", "Shop (all products)"],
-  ["/deals", "Deals"],
-  ["/wishlist", "Wishlist"],
-  ["/about", "About us"],
-  ["/contact", "Contact"],
-  ["/faq", "FAQ"],
-  ["/returns", "Returns & refunds"],
-  ["/shipping", "Shipping policy"],
-  ["/privacy", "Privacy policy"],
-  ["/track-order", "Track order"],
-  ["/support", "Support"],
-  ["/login", "Login"],
-  ["/signup", "Sign up"],
-  ["/account", "My account"],
-]
+const PAGES = [
+  ["/shop", "store:store.links.page.shop"],
+  ["/deals", "store:store.links.page.deals"],
+  ["/wishlist", "store:store.links.page.wishlist"],
+  ["/about", "store:store.links.page.about"],
+  ["/contact", "store:store.links.page.contact"],
+  ["/faq", "store:store.links.page.faq"],
+  ["/returns", "store:store.links.page.returns"],
+  ["/shipping", "store:store.links.page.shipping"],
+  ["/privacy", "store:store.links.page.privacy"],
+  ["/track-order", "store:store.links.page.trackOrder"],
+  ["/support", "store:store.links.page.support"],
+  ["/login", "store:store.links.page.login"],
+  ["/signup", "store:store.links.page.signup"],
+  ["/account", "store:store.links.page.account"],
+] as const
 
 const URLRE = /^https?:\/\/[^\s/$.?#][^\s]*$/i
 
@@ -109,7 +127,11 @@ const normalize = (business: any): Form => {
   return {
     name: o.name != null ? S(o.name) : S(business?.businessName),
     slug: S(o.slug),
-    theme: THEMES.some(([c]) => c === o.theme) ? o.theme : THEMES[0][0],
+    theme: ACCENTS.some(([c]) => c === o.theme) ? o.theme : "",
+    themePreset: isStoreThemeId(o.themePreset) ? o.themePreset : DEFAULT_STORE_THEME,
+    // Stores saved before themes keep their brand colours until the owner picks theme colours
+    colorSource: o.colorSource === "theme" ? "theme" : "brand",
+    language: o.language === "bn" ? "bn" : "en",
     published: o.published === true,
     apiUrl: S(o.apiUrl),
     companyId: S(o.companyId),
@@ -126,6 +148,7 @@ const normalize = (business: any): Form => {
     secs: String(ms >= 2000 ? Math.round(ms / 1000) : 6),
     slides,
     sections: sectionsFromSettings(business?.homepageSections),
+    content: templateContentFromSettings(business?.templateContent),
   }
 }
 
@@ -154,8 +177,9 @@ function Bar({ pct }: { pct: number }) {
 }
 
 export default function OnlineStorePage() {
+  const { t, i18n } = useTranslation(["store", "common"])
   const blocked = useModuleGuard("Store")
-  const { canRead, canDelete } = useSaasAuth()
+  const { canRead, canDelete, company } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
   const canViewWishlist = canRead("Store Wishlist")
   const canClearWishlist = canDelete("Store Wishlist")
@@ -165,7 +189,10 @@ export default function OnlineStorePage() {
   const [uploading, setUploading] = useState(false)
   const [saved, setSaved] = useState<Form | null>(null)
   const [d, setD] = useState<Form | null>(null)
+  const [brand, setBrand] = useState<BrandColors | null>(null)
   const [err, setErr] = useState("")
+  // Field the last save error belongs to (shown under that field)
+  const [errField, setErrField] = useState<keyof Form | null>(null)
   const [cur, setCur] = useState(0)
   const [products, setProducts] = useState<ProductResponse[]>([])
   const [categories, setCategories] = useState<CategoryResponse[]>([])
@@ -178,10 +205,19 @@ export default function OnlineStorePage() {
       setLoading(true)
       const res = await settingsApi.getAll()
       const form = normalize(res.data.business || {})
+      const g = res.data.general ?? {}
+      // Never set up: start from the store name in General settings, else the company name
+      if (!form.name.trim()) form.name = S(g.storeName).trim() || company?.name?.trim() || ""
+      const brandHex = (v: unknown) => (typeof v === "string" && HEX.test(v.trim()) ? v.trim() : "")
+      setBrand(
+        [g.primaryColor, g.accentColor, g.backgroundColor].some(brandHex)
+          ? { primaryColor: brandHex(g.primaryColor) || "#1C1917", accentColor: brandHex(g.accentColor) || "#94234A", backgroundColor: brandHex(g.backgroundColor) || "#FFFFFF" }
+          : null,
+      )
       setSaved(form)
       setD(form)
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to load online store settings")
+      toast.error(e?.response?.data?.message || t("store:store.toast.loadFailed"))
     } finally {
       setLoading(false)
     }
@@ -197,22 +233,22 @@ export default function OnlineStorePage() {
     if (!canViewWishlist) { setWlLoading(false); return }
     wishlistApi.getAnalytics()
       .then(setWl)
-      .catch(() => setWlError("Failed to load wishlist analytics"))
+      .catch(() => setWlError(t("store:store.wishlist.loadFailed")))
       .finally(() => setWlLoading(false))
   }, [canViewWishlist])
 
   const [clearing, setClearing] = useState(false)
   const clearWishlist = async () => {
     const n = wl?.summary.totalItems ?? 0
-    if (!n) return toast.info("No wishlist data to clear")
-    if (!window.confirm(`Delete all ${n} wishlist entries? This cannot be undone.`)) return
+    if (!n) return toast.info(t("store:store.wishlist.nothingToClear"))
+    if (!window.confirm(t("store:store.wishlist.confirmClear", { count: n }))) return
     setClearing(true)
     try {
       await wishlistApi.clear()
       setWl(await wishlistApi.getAnalytics())
-      toast.success("Wishlist data cleared")
+      toast.success(t("store:store.wishlist.cleared"))
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Could not clear wishlist data")
+      toast.error(e?.response?.data?.message || t("store:store.wishlist.clearFailed"))
     } finally { setClearing(false) }
   }
 
@@ -225,10 +261,10 @@ export default function OnlineStorePage() {
   }, [categories, products])
   const knownLinks = useMemo(() => new Set([...PAGES.map(([v]) => v), ...linkOptions.cats.map((o) => o.v), ...linkOptions.prods.map((o) => o.v)]), [linkOptions])
   const linkGroups = useMemo<LinkGroup[]>(() => [
-    { label: "Pages", options: PAGES.map(([v, l]) => ({ value: v, label: `${l} (${v})` })) },
-    { label: "Category", options: linkOptions.cats.map((o) => ({ value: o.v, label: o.l })) },
-    { label: "Product", options: linkOptions.prods.map((o) => ({ value: o.v, label: o.l })) },
-  ], [linkOptions])
+    { label: t("store:store.links.pages"), options: PAGES.map(([v, l]) => ({ value: v, label: t("store:store.links.withPath", { label: t(l), path: v }) })) },
+    { label: t("store:store.links.category"), options: linkOptions.cats.map((o) => ({ value: o.v, label: o.l })) },
+    { label: t("store:store.links.product"), options: linkOptions.prods.map((o) => ({ value: o.v, label: o.l })) },
+  ], [linkOptions, t])
   const categoryChoices = useMemo(() => categories.filter((c) => c.status !== false).map((c) => ({ id: c.id, name: c.categoryName })), [categories])
 
   if (blocked) return blocked
@@ -236,8 +272,8 @@ export default function OnlineStorePage() {
   const shell = `${bricolage.variable} ${instrument.variable} font-dash-body flex flex-col gap-5 text-dash-ink`
   const header = (
     <PageHeader
-      title="Online store"
-      description="Your online storefront: locations, wishlist analytics, details, policies, homepage slider and homepage sections, with a live preview."
+      title={t("store:store.title")}
+      description={t("store:store.description")}
     />
   )
 
@@ -253,48 +289,55 @@ export default function OnlineStorePage() {
   }
 
   const dirty = JSON.stringify(d) !== JSON.stringify(saved)
-  const patch = (p: Partial<Form>) => { setD({ ...d, ...p }); setErr("") }
+  const patch = (p: Partial<Form>) => { setD({ ...d, ...p }); setErr(""); setErrField(null) }
   const idx = d.slides.length ? Math.min(cur, d.slides.length - 1) : -1
   const c = idx >= 0 ? d.slides[idx] : null
   const patchSlide = (p: Partial<Slide>) => patch({ slides: d.slides.map((x, i) => (i === idx ? { ...x, ...p } : x)) })
 
   const pv = c
-    ? { tag: c.tag, title: c.title || "(untitled)", sub: c.subtitle, cta: c.cta || "Learn more", bg: c.imagePath ? imgBg(c.imagePath) : "#2A3858", over: overlay(c.gradient), note: `PREVIEW${c.imagePath ? "" : " · no image yet"}` }
-    : { tag: "", title: "No slides yet", sub: "Add a slide to build your storefront hero.", cta: "Shop now", bg: "#2A3858", over: "none", note: "PREVIEW" }
+    ? { tag: c.tag, title: c.title || t("store:shared.untitled"), sub: c.subtitle, cta: c.cta || t("store:shared.learnMore"), bg: c.imagePath ? imgBg(c.imagePath) : "#2A3858", over: overlay(c.gradient), note: c.imagePath ? t("store:shared.preview") : t("store:store.hero.previewNoImage") }
+    : { tag: "", title: t("store:shared.noSlides"), sub: t("store:store.hero.noSlidesSub"), cta: t("store:store.hero.shopNow"), bg: "#2A3858", over: "none", note: t("store:shared.preview") }
 
-  const fail = (m: string, slideIdx?: number) => {
+  const fail = (m: string, slideIdx?: number, field?: keyof Form) => {
     setErr(m)
+    setErrField(field ?? null)
     if (slideIdx != null) setCur(slideIdx)
     toast.error(m)
+    // Take the owner to the field that needs fixing
+    if (field) {
+      const el = document.getElementById(`store-${field}`)
+      el?.scrollIntoView({ behavior: "smooth", block: "center" })
+      el?.focus({ preventScroll: true })
+    }
   }
 
   const upload = async (file?: File) => {
     if (!file || idx < 0) return
-    if (!/^image\//.test(file.type)) return toast.error("Please choose an image file (PNG, JPG, WEBP).")
-    if (file.size > 10 * 1024 * 1024) return toast.error("Image must be 10MB or smaller.")
+    if (!/^image\//.test(file.type)) return toast.error(t("store:shared.chooseImage"))
+    if (file.size > 10 * 1024 * 1024) return toast.error(t("store:shared.imageTooBig"))
     const at = idx
     try {
       setUploading(true)
       const res = await settingsApi.uploadStorefrontImage(file)
       setD((cd) => (cd ? { ...cd, slides: cd.slides.map((x, k) => (k === at ? { ...x, imagePath: res.data.imagePath } : x)) } : cd))
-      toast.success(`Slide ${at + 1} image uploaded`)
+      toast.success(t("store:shared.slideImageUploaded", { n: at + 1 }))
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to upload storefront image")
+      toast.error(e?.response?.data?.message || t("store:shared.uploadFailed"))
     } finally {
       setUploading(false)
     }
   }
 
   const uploadImage = async (file: File): Promise<string | null> => {
-    if (!/^image\//.test(file.type)) { toast.error("Please choose an image file (PNG, JPG, WEBP)."); return null }
-    if (file.size > 10 * 1024 * 1024) { toast.error("Image must be 10MB or smaller."); return null }
+    if (!/^image\//.test(file.type)) { toast.error(t("store:shared.chooseImage")); return null }
+    if (file.size > 10 * 1024 * 1024) { toast.error(t("store:shared.imageTooBig")); return null }
     try {
       setUploading(true)
       const res = await settingsApi.uploadStorefrontImage(file)
-      toast.success("Image uploaded")
+      toast.success(t("store:store.toast.imageUploaded"))
       return res.data.imagePath
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Failed to upload storefront image")
+      toast.error(e?.response?.data?.message || t("store:shared.uploadFailed"))
       return null
     } finally {
       setUploading(false)
@@ -303,33 +346,35 @@ export default function OnlineStorePage() {
 
   const save = async () => {
     const name = d.name.trim(), slug = d.slug.trim()
-    if (!name) return fail("Store name is required.")
-    if (slug && !/^[a-z0-9]+(?:[-.][a-z0-9]+)*$/.test(slug)) return fail("Domain / slug can use lowercase letters, numbers, dots and hyphens only.")
-    if (d.published && !slug) return fail("Add a domain or slug before publishing the store.")
-    if (d.apiUrl.trim() && !URLRE.test(d.apiUrl.trim())) return fail("API base URL must start with http:// or https://")
+    if (!name) return fail(t("store:store.errors.nameRequired"), undefined, "name")
+    if (slug && !/^[a-z0-9]+(?:[-.][a-z0-9]+)*$/.test(slug)) return fail(t("store:store.errors.slugFormat"), undefined, "slug")
+    if (d.published && !slug) return fail(t("store:store.errors.slugBeforePublish"), undefined, "slug")
+    if (d.apiUrl.trim() && !URLRE.test(d.apiUrl.trim())) return fail(t("store:store.errors.apiUrl"), undefined, "apiUrl")
     for (const [k, l] of [["facebook", "Facebook"], ["instagram", "Instagram"], ["youtube", "YouTube"]] as const) {
       const v = d[k].trim()
-      if (v && !URLRE.test(v)) return fail(`${l} link must be a full URL starting with http(s)://`)
+      if (v && !URLRE.test(v)) return fail(t("store:shared.socialUrl", { name: l }))
     }
     const wa = d.whatsapp.trim()
-    if (wa && !URLRE.test(wa) && !/^\+?[0-9][0-9\s-]{6,}$/.test(wa)) return fail("WhatsApp must be a phone number or a URL.")
+    if (wa && !URLRE.test(wa) && !/^\+?[0-9][0-9\s-]{6,}$/.test(wa)) return fail(t("store:store.errors.whatsapp"), undefined, "whatsapp")
     const fbPixel = d.facebookPixelId.trim(), ttPixel = d.tiktokPixelId.trim()
-    if (fbPixel && !/^\d{5,20}$/.test(fbPixel)) return fail("Facebook Pixel ID must be 5–20 digits (Events Manager → Data sources).")
-    if (ttPixel && !/^[A-Za-z0-9]{5,40}$/.test(ttPixel)) return fail("TikTok Pixel ID must be 5–40 letters or digits.")
+    if (fbPixel && !/^\d{5,20}$/.test(fbPixel)) return fail(t("store:store.errors.fbPixel"))
+    if (ttPixel && !/^[A-Za-z0-9]{5,40}$/.test(ttPixel)) return fail(t("store:store.errors.ttPixel"))
     const waNumber = d.whatsappNumber.replace(/[\s-]/g, "").replace(/^\+/, "")
-    if (waNumber && !/^\d{8,15}$/.test(waNumber)) return fail("WhatsApp order number must be a phone number with country code, e.g. 8801712345678.")
+    if (waNumber && !/^\d{8,15}$/.test(waNumber)) return fail(t("store:store.errors.waNumber"))
     const secs = Number(d.secs)
-    if (!(secs >= 2 && secs <= 60)) return fail("Slide timing must be between 2 and 60 seconds.")
+    if (!(secs >= 2 && secs <= 60)) return fail(t("store:store.errors.slideTiming"))
     for (let i = 0; i < d.slides.length; i++) {
-      if (!d.slides[i].title.trim()) return fail(`Slide ${i + 1} needs a headline.`, i)
+      if (!d.slides[i].title.trim()) return fail(t("store:store.errors.slideHeadline", { n: i + 1 }), i)
     }
-    const sectionsError = validateSections(d.sections)
+    const sectionsError = validateSections(d.sections, t as StoreT)
     if (sectionsError) return fail(sectionsError)
+    const contentError = validateTemplateContent(d.content, d.themePreset, t as StoreT)
+    if (contentError) return fail(contentError)
     try {
       setSaving(true)
       await settingsApi.updateBusiness({
         onlineStore: {
-          name, slug, theme: d.theme, published: d.published, apiUrl: d.apiUrl.trim(), companyId: d.companyId.trim(),
+          name, slug, theme: d.theme || null, themePreset: d.themePreset, colorSource: d.colorSource, language: d.language, published: d.published, apiUrl: d.apiUrl.trim(), companyId: d.companyId.trim(),
           policies: { returns: d.returns.trim(), shipping: d.shipping.trim(), privacy: d.privacy.trim() },
           social: { facebook: d.facebook.trim(), instagram: d.instagram.trim(), whatsapp: wa, youtube: d.youtube.trim() },
           facebookPixelId: fbPixel, tiktokPixelId: ttPixel, whatsappNumber: waNumber,
@@ -339,21 +384,22 @@ export default function OnlineStorePage() {
           slides: d.slides.map((x, i) => ({ ...x, id: x.id || `aura-slide-${i + 1}`, tag: x.tag.trim(), title: x.title.trim(), subtitle: x.subtitle.trim(), cta: x.cta.trim(), link: x.link.trim() || "/shop", gradient: x.gradient.trim() })),
         },
         homepageSections: sectionsToSettings(d.sections) as HomepageSections,
+        templateContent: templateContentToSettings(d.content),
       })
-      toast.success("Online store saved")
+      toast.success(t("store:store.toast.saved"))
       await load()
     } catch (e: any) {
       const errors = e?.response?.data?.errors
       const first = errors ? (Object.values(errors)[0] as string[])?.[0] : undefined
-      fail(first || e?.response?.data?.message || "Failed to save online store")
+      fail(first || e?.response?.data?.message || t("store:store.toast.saveFailed"))
     } finally {
       setSaving(false)
     }
   }
 
-  const text = (lbl: string, key: keyof Omit<Form, "slides" | "published" | "sections">, placeholder = "", transform?: (v: string) => string) => (
-    <FormField label={lbl} htmlFor={`store-${key}`} className="min-w-0">
-      <Input id={`store-${key}`} type="text" className="w-full" value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: transform ? transform(e.target.value) : e.target.value })} />
+  const text = (lbl: string, key: keyof Omit<Form, "slides" | "published" | "sections" | "content">, placeholder = "", transform?: (v: string) => string) => (
+    <FormField label={lbl} htmlFor={`store-${key}`} className="min-w-0" error={errField === key ? err : undefined}>
+      <Input id={`store-${key}`} type="text" className="w-full" aria-invalid={errField === key || undefined} value={d[key]} placeholder={placeholder} onChange={(e) => patch({ [key]: transform ? transform(e.target.value) : e.target.value })} />
     </FormField>
   )
 
@@ -364,37 +410,37 @@ export default function OnlineStorePage() {
   // Dotted slug = custom domain. Otherwise build from the storefront base URL (env), when configured.
   const shopBase = (process.env.NEXT_PUBLIC_AURA_SHOP_URL || "").replace(/\/+$/, "")
   const visitHref = !d.published || !host ? "" : host.includes(".") ? `https://${host}` : shopBase
-  const visitHint = !d.published ? "Publish the store to enable this link" : !host ? "Add a domain or slug first" : "Set NEXT_PUBLIC_AURA_SHOP_URL to link slug-only stores"
+  const visitHint = !d.published ? t("store:store.status.hintPublish") : !host ? t("store:store.status.hintSlug") : t("store:store.status.hintEnv")
   const copyEnv = async () => {
-    try { await navigator.clipboard.writeText(envLines.join("\n")); toast.success(".env copied") }
-    catch { toast.error("Could not copy to the clipboard") }
+    try { await navigator.clipboard.writeText(envLines.join("\n")); toast.success(t("store:shared.envCopied")) }
+    catch { toast.error(t("store:shared.copyFailed")) }
   }
 
   const maxP = wl?.topProducts[0]?.wishlistCount ?? 1
   const maxC = wl?.topCustomers[0]?.wishlistCount ?? 1
   const trend = wl ? [...wl.dailyTrend].sort((a, b) => b.date.localeCompare(a.date)) : []
   const maxD = Math.max(1, ...trend.map((t) => t.count))
-  const fmtDay = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
+  const fmtDay = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString(localeTag(i18n.language), { day: "numeric", month: "short", year: "numeric" })
   const wlHub = wl && wl.summary.totalItems
-    ? `${wl.summary.totalItems} wishlist item${wl.summary.totalItems > 1 ? "s" : ""} from ${wl.summary.uniqueCustomers} customer${wl.summary.uniqueCustomers > 1 ? "s" : ""}`
-    : "Customer wishlist activity and most-wanted products"
+    ? t("store:store.wishlist.hub", { count: wl.summary.totalItems, customers: t("store:store.wishlist.customers", { count: wl.summary.uniqueCustomers }) })
+    : t("store:store.wishlist.description")
 
   return (
     <div className={shell}>
       {header}
 
-      <nav aria-label="Store sections" className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
+      <nav aria-label={t("store:store.nav.label")} className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
         <Item asChild variant="outline">
           <Link href="/dashboard/store/locations">
             <ItemMedia variant="icon"><MapPin /></ItemMedia>
-            <ItemContent><ItemTitle>Locations</ItemTitle><ItemDescription>Manage your warehouses and physical stores</ItemDescription></ItemContent>
+            <ItemContent><ItemTitle>{t("store:store.nav.locations")}</ItemTitle><ItemDescription>{t("store:store.nav.locationsDesc")}</ItemDescription></ItemContent>
           </Link>
         </Item>
         {(
           <Item asChild variant="outline">
             <a href="#wishlist">
               <ItemMedia variant="icon"><Heart /></ItemMedia>
-              <ItemContent><ItemTitle>Wishlist analytics</ItemTitle><ItemDescription>{wlHub}</ItemDescription></ItemContent>
+              <ItemContent><ItemTitle>{t("store:store.nav.wishlist")}</ItemTitle><ItemDescription>{wlHub}</ItemDescription></ItemContent>
             </a>
           </Item>
         )}
@@ -404,54 +450,56 @@ export default function OnlineStorePage() {
         <section>
           <ItemMedia variant="icon"><Globe /></ItemMedia>
           <ItemContent className="min-w-[200px]">
-            <ItemTitle>{saved.published ? `${saved.name} is live` : configured ? `${saved.name} is not published` : "Online store is not set up"}</ItemTitle>
+            <ItemTitle>{saved.published ? t("store:store.status.live", { name: saved.name }) : configured ? t("store:store.status.notPublished", { name: saved.name }) : t("store:store.status.notSetUp")}</ItemTitle>
             <ItemDescription>
-              {configured ? `${saved.published ? "Published at " : "Will be served at "}${saved.slug}${saved.companyId ? ` · Company ID ${saved.companyId}` : ""}` : "Add a store name and domain below, then publish."}
+              {!configured
+                ? t("store:store.status.setupHint")
+                : saved.published
+                  ? (saved.companyId ? t("store:store.status.publishedAtCompany", { slug: saved.slug, id: saved.companyId }) : t("store:store.status.publishedAt", { slug: saved.slug }))
+                  : (saved.companyId ? t("store:store.status.willServeCompany", { slug: saved.slug, id: saved.companyId }) : t("store:store.status.willServe", { slug: saved.slug }))}
             </ItemDescription>
           </ItemContent>
           <ItemActions className="flex-wrap">
             <Card className="gap-0 px-3 py-2 font-mono text-xs leading-5 shadow-none">{envLines[0]}<br />{envLines[1]}</Card>
-            <Button type="button" variant="outline" onClick={copyEnv}>Copy .env</Button>
+            <Button type="button" variant="outline" onClick={copyEnv}>{t("store:shared.copyEnv")}</Button>
             {visitHref
-              ? <Button asChild variant="outline"><a href={visitHref} target="_blank" rel="noopener noreferrer">Visit store ↗</a></Button>
-              : <WithTooltip content={visitHint}><span tabIndex={0}><Button type="button" variant="outline" disabled>Visit store ↗</Button></span></WithTooltip>}
+              ? <Button asChild variant="outline"><a href={visitHref} target="_blank" rel="noopener noreferrer">{t("store:store.status.visit")}</a></Button>
+              : <WithTooltip content={visitHint}><span tabIndex={0}><Button type="button" variant="outline" disabled>{t("store:store.status.visit")}</Button></span></WithTooltip>}
           </ItemActions>
         </section>
       </Item>
 
       <SectionCard
-        aria-label="Store details"
-        title="Store details"
-        description="Name, address and visibility of your online store."
+        aria-label={t("store:store.details.title")}
+        title={t("store:store.details.title")}
+        description={t("store:store.details.description")}
         actions={
           <span className="flex items-center gap-2 text-sm font-medium">
-            {d.published ? "Published" : "Draft"}
-            <Switch on={d.published} label="Publish store" onClick={() => patch({ published: !d.published })} />
+            {d.published ? t("common:status.published") : t("common:status.draft")}
+            <Switch on={d.published} label={t("store:store.details.publish")} onClick={() => patch({ published: !d.published })} />
           </span>
         }
         contentClassName="flex flex-col gap-4"
       >
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
-          {text("Store name *", "name", "e.g. My Boutique")}
-          {text("Domain or store slug", "slug", "my-boutique or shop.example.com", (v) => v.toLowerCase())}
-          {text("API base URL", "apiUrl", "https://")}
-          {text("Company ID", "companyId", currentCompany ? String(currentCompany) : "")}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <p className="text-sm font-medium">Theme colour</p>
-          <div role="group" aria-label="Theme colour" className="flex flex-wrap gap-2">
-            {THEMES.map(([color, l]) => (
-              <Button key={color} type="button" size="sm" aria-pressed={d.theme === color} onClick={() => patch({ theme: color })}
-                variant={d.theme === color ? "default" : "outline"}>
-                <span className="size-4 rounded-full" style={{ background: color }} />{l}
-              </Button>
-            ))}
-          </div>
+          {text(t("store:store.details.name"), "name", t("store:store.details.namePh"))}
+          {text(t("store:store.details.slug"), "slug", t("store:store.details.slugPh"), (v) => v.toLowerCase())}
+          {text(t("store:store.details.apiUrl"), "apiUrl", "https://")}
+          {text(t("store:store.details.companyId"), "companyId", currentCompany ? String(currentCompany) : "")}
+          <FormField label={t("store:store.details.language")} htmlFor="store-language" description={t("store:store.details.languageHelp")} className="min-w-0">
+            <Select value={d.language} onValueChange={(v) => patch({ language: v === "bn" ? "bn" : "en" })}>
+              <SelectTrigger id="store-language" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en" lang="en">{t("common:language.en")}</SelectItem>
+                <SelectItem value="bn" lang="bn">{t("common:language.bn")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
-          <FormField label="Returns policy" htmlFor="store-returns" className="min-w-0"><Textarea id="store-returns" rows={3} className="w-full" value={d.returns} placeholder="What customers can return and within how many days" onChange={(e) => patch({ returns: e.target.value })} /></FormField>
-          <FormField label="Shipping policy" htmlFor="store-shipping" className="min-w-0"><Textarea id="store-shipping" rows={3} className="w-full" value={d.shipping} placeholder="Delivery areas, charges and timelines" onChange={(e) => patch({ shipping: e.target.value })} /></FormField>
-          <FormField label="Privacy policy" htmlFor="store-privacy" className="min-w-0"><Textarea id="store-privacy" rows={3} className="w-full" value={d.privacy} placeholder="How you handle customer data" onChange={(e) => patch({ privacy: e.target.value })} /></FormField>
+          <FormField label={t("store:store.details.returns")} htmlFor="store-returns" className="min-w-0"><Textarea id="store-returns" rows={3} className="w-full" value={d.returns} placeholder={t("store:store.details.returnsPh")} onChange={(e) => patch({ returns: e.target.value })} /></FormField>
+          <FormField label={t("store:store.details.shipping")} htmlFor="store-shipping" className="min-w-0"><Textarea id="store-shipping" rows={3} className="w-full" value={d.shipping} placeholder={t("store:store.details.shippingPh")} onChange={(e) => patch({ shipping: e.target.value })} /></FormField>
+          <FormField label={t("store:store.details.privacy")} htmlFor="store-privacy" className="min-w-0"><Textarea id="store-privacy" rows={3} className="w-full" value={d.privacy} placeholder={t("store:store.details.privacyPh")} onChange={(e) => patch({ privacy: e.target.value })} /></FormField>
         </div>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
           {text("Facebook", "facebook", "https://facebook.com/…")}
@@ -462,24 +510,50 @@ export default function OnlineStorePage() {
       </SectionCard>
 
       <SectionCard
-        aria-label="Ads and social selling"
-        title="Ads & social selling"
-        description="Track visits and purchases from your Facebook / TikTok ads, and let shoppers order on WhatsApp."
-        actions={<Button asChild variant="outline" size="sm"><Link href="/dashboard/marketing/links">Ad order links</Link></Button>}
+        aria-label={t("store:template.title")}
+        title={t("store:template.title")}
+        description={t("store:template.description")}
+      >
+        <StorefrontThemePicker
+          theme={d.themePreset}
+          onTheme={(id) => patch({ themePreset: id, colorSource: "theme" })}
+          colorSource={d.colorSource}
+          onColorSource={(v) => patch({ colorSource: v })}
+          accent={d.theme}
+          onAccent={(hex) => patch({ theme: hex })}
+          accents={ACCENTS.map(([hex, key]): [string, string] => [hex, t(key)])}
+          brand={brand}
+        />
+      </SectionCard>
+
+      <TemplateContentEditor
+        template={d.themePreset}
+        value={d.content}
+        onChange={(content) => patch({ content })}
+        linkGroups={linkGroups}
+        uploading={uploading}
+        uploadImage={uploadImage}
+      />
+
+      <SectionCard
+        aria-label={t("store:store.ads.aria")}
+        title={t("store:store.ads.title")}
+        description={t("store:store.ads.description")}
+        actions={<Button asChild variant="outline" size="sm"><Link href="/dashboard/marketing/links">{t("store:store.ads.adLinks")}</Link></Button>}
         contentClassName="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3"
       >
-        <FormField label="Facebook Pixel ID" htmlFor="store-facebookPixelId" className="min-w-0"
-          description="Meta Events Manager → Data sources. Sends PageView, ViewContent, InitiateCheckout and Purchase.">
-          <Input id="store-facebookPixelId" inputMode="numeric" className="w-full font-mono" value={d.facebookPixelId} placeholder="e.g. 123456789012345"
+        <FormField label={t("store:store.ads.fbPixel")} htmlFor="store-facebookPixelId" className="min-w-0"
+          description={t("store:store.ads.fbPixelHelp")}>
+          <Input id="store-facebookPixelId" inputMode="numeric" className="w-full font-mono" value={d.facebookPixelId} placeholder={t("store:store.ads.fbPixelPh")}
             onChange={(e) => patch({ facebookPixelId: e.target.value.trim() })} />
         </FormField>
-        <FormField label="TikTok Pixel ID" htmlFor="store-tiktokPixelId" className="min-w-0"
-          description="TikTok Ads Manager → Assets → Events → Web events.">
-          <Input id="store-tiktokPixelId" className="w-full font-mono" value={d.tiktokPixelId} placeholder="e.g. C9ABCDEF12345678"
+        <FormField label={t("store:store.ads.ttPixel")} htmlFor="store-tiktokPixelId" className="min-w-0"
+          description={t("store:store.ads.ttPixelHelp")}>
+          <Input id="store-tiktokPixelId" className="w-full font-mono" value={d.tiktokPixelId} placeholder={t("store:store.ads.ttPixelPh")}
             onChange={(e) => patch({ tiktokPixelId: e.target.value.trim() })} />
         </FormField>
-        <FormField label="WhatsApp order number" htmlFor="store-whatsappNumber" className="min-w-0"
-          description="Adds an “Order on WhatsApp” button on product pages. Include the country code.">
+        <FormField label={t("store:store.ads.waNumber")} htmlFor="store-whatsappNumber" className="min-w-0"
+          description={t("store:store.ads.waNumberHelp")}>
           <Input id="store-whatsappNumber" inputMode="tel" className="w-full" value={d.whatsappNumber} placeholder="8801712345678"
             onChange={(e) => patch({ whatsappNumber: e.target.value })} />
         </FormField>
@@ -487,20 +561,20 @@ export default function OnlineStorePage() {
 
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <SectionCard
-          aria-label="Homepage hero"
+          aria-label={t("store:store.hero.title")}
           className="min-w-0 flex-[3]"
-          title="Homepage hero"
-          description="The large slider on your store’s front page."
+          title={t("store:store.hero.title")}
+          description={t("store:store.hero.description")}
           actions={
             <Label className="flex items-center gap-2">
-              Change every
+              {t("store:store.hero.changeEvery")}
               <Input type="number" min={2} max={60} className="w-20" value={d.secs} onChange={(e) => patch({ secs: e.target.value })} />
-              seconds
+              {t("store:store.hero.seconds")}
             </Label>
           }
           contentClassName="flex flex-col gap-4"
         >
-          <div aria-label="Live preview" className="relative flex h-[220px] flex-col justify-center gap-2.5 overflow-hidden rounded-2xl px-9 text-white" style={{ background: pv.bg }}>
+          <div aria-label={t("store:shared.livePreview")} className="relative flex h-[220px] flex-col justify-center gap-2.5 overflow-hidden rounded-2xl px-9 text-white" style={{ background: pv.bg }}>
             <span className="absolute inset-0" style={{ background: pv.over }} />
             {pv.tag && <Badge variant="secondary" className="relative self-start">{pv.tag}</Badge>}
             <span className="relative max-w-[560px] text-[28px] font-bold leading-[1.1]">{pv.title}</span>
@@ -517,80 +591,80 @@ export default function OnlineStorePage() {
                 className="h-auto min-w-[150px] max-w-[220px] justify-start gap-2.5 p-2 text-left whitespace-normal">
                 <span className="size-10 shrink-0 rounded-md bg-muted" style={s.imagePath ? { background: imgBg(s.imagePath) } : { background: overlay(s.gradient) }} />
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-xs font-normal opacity-80">Slide {i + 1} · {s.enabled ? "Showing" : "Hidden"}</span>
-                  <span className="truncate">{s.title || "(untitled)"}</span>
+                  <span className="text-xs font-normal opacity-80">{s.enabled ? t("store:store.hero.slideShowing", { n: i + 1 }) : t("store:store.hero.slideHidden", { n: i + 1 })}</span>
+                  <span className="truncate">{s.title || t("store:shared.untitled")}</span>
                 </span>
               </Button>
             ))}
             <Button type="button" variant="outline" className="h-auto self-stretch"
               onClick={() => { patch({ slides: [...d.slides, { id: `aura-${Date.now().toString(36)}`, imagePath: "", tag: "", title: "New slide", subtitle: "", cta: "Shop now", link: "/shop", gradient: OVERLAYS[0][1], enabled: true }] }); setCur(d.slides.length) }}>
-              + Add slide
+              {t("store:shared.addSlide")}
             </Button>
           </div>
         </SectionCard>
 
         <aside className="min-w-0 flex-[2]">
         <SectionCard
-          title={c ? `Edit slide ${idx + 1}` : undefined}
-          actions={c ? <span className="flex items-center gap-2 text-sm font-medium">Showing<Switch on={c.enabled} label="Slide enabled" onClick={() => patchSlide({ enabled: !c.enabled })} /></span> : undefined}
+          title={c ? t("store:store.hero.editSlide", { n: idx + 1 }) : undefined}
+          actions={c ? <span className="flex items-center gap-2 text-sm font-medium">{t("store:store.hero.showing")}<Switch on={c.enabled} label={t("store:store.hero.slideEnabled")} onClick={() => patchSlide({ enabled: !c.enabled })} /></span> : undefined}
           contentClassName="flex flex-col gap-4"
         >
           {!c ? (
-            <EmptyState title="No slides yet" description="Use “+ Add slide” to create your first homepage slide." className="p-4 md:p-6" />
+            <EmptyState title={t("store:shared.noSlides")} description={t("store:store.hero.emptyHint")} className="p-4 md:p-6" />
           ) : (
             <>
               <div className="flex flex-col gap-1.5">
-                <p className="text-sm font-medium">Image</p>
+                <p className="text-sm font-medium">{t("store:store.hero.image")}</p>
                 <Input id="slide-image" type="file" accept="image/*" className="sr-only" disabled={uploading} onChange={(e) => { upload(e.target.files?.[0]); e.target.value = "" }} />
                 <EmptyState
                   bordered
                   icon={ImageUp}
-                  title={c.imagePath ? "Slide image set" : "No slide image"}
-                  description="PNG, JPG, WEBP · 1920×800 · 10 MB"
+                  title={c.imagePath ? t("store:store.hero.imageSet") : t("store:store.hero.noImage")}
+                  description={t("store:store.hero.imageSpec")}
                   className="border-dashed p-4 md:p-6"
                   action={
                     <div className="flex flex-wrap justify-center gap-2">
                       <Button asChild variant="outline" size="sm" aria-disabled={uploading || undefined} className={cn("cursor-pointer", uploading && "pointer-events-none opacity-50")}>
-                        <Label htmlFor="slide-image">{uploading ? "Uploading…" : c.imagePath ? "Change slide image" : "Click to upload"}</Label>
+                        <Label htmlFor="slide-image">{uploading ? t("store:shared.uploading") : c.imagePath ? t("store:shared.changeSlideImage") : t("store:store.hero.clickUpload")}</Label>
                       </Button>
-                      {c.imagePath && <Button type="button" variant="ghost" size="sm" onClick={() => patchSlide({ imagePath: "" })}>Remove image</Button>}
+                      {c.imagePath && <Button type="button" variant="ghost" size="sm" onClick={() => patchSlide({ imagePath: "" })}>{t("store:shared.removeImage")}</Button>}
                     </div>
                   }
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Badge" htmlFor="slide-tag" className="min-w-0"><Input id="slide-tag" type="text" className="w-full" value={c.tag} onChange={(e) => patchSlide({ tag: e.target.value })} /></FormField>
-                <FormField label="Button text" htmlFor="slide-cta" className="min-w-0"><Input id="slide-cta" type="text" className="w-full" value={c.cta} onChange={(e) => patchSlide({ cta: e.target.value })} /></FormField>
+                <FormField label={t("store:store.hero.badge")} htmlFor="slide-tag" className="min-w-0"><Input id="slide-tag" type="text" className="w-full" value={c.tag} onChange={(e) => patchSlide({ tag: e.target.value })} /></FormField>
+                <FormField label={t("store:store.hero.buttonText")} htmlFor="slide-cta" className="min-w-0"><Input id="slide-cta" type="text" className="w-full" value={c.cta} onChange={(e) => patchSlide({ cta: e.target.value })} /></FormField>
               </div>
-              <FormField label="Headline" htmlFor="slide-title"><Input id="slide-title" type="text" className="w-full" value={c.title} onChange={(e) => patchSlide({ title: e.target.value })} /></FormField>
-              <FormField label="Subtitle" htmlFor="slide-subtitle"><Textarea id="slide-subtitle" rows={2} className="w-full" value={c.subtitle} onChange={(e) => patchSlide({ subtitle: e.target.value })} /></FormField>
-              <FormField label="Button goes to" htmlFor="slide-link" className="min-w-0">
+              <FormField label={t("store:store.hero.headline")} htmlFor="slide-title"><Input id="slide-title" type="text" className="w-full" value={c.title} onChange={(e) => patchSlide({ title: e.target.value })} /></FormField>
+              <FormField label={t("store:store.hero.subtitle")} htmlFor="slide-subtitle"><Textarea id="slide-subtitle" rows={2} className="w-full" value={c.subtitle} onChange={(e) => patchSlide({ subtitle: e.target.value })} /></FormField>
+              <FormField label={t("store:store.hero.buttonGoesTo")} htmlFor="slide-link" className="min-w-0">
                 <Select value={c.link || undefined} onValueChange={(v) => patchSlide({ link: v })}>
                   <SelectTrigger id="slide-link" className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectGroup><SelectLabel>Pages</SelectLabel>{PAGES.map(([v, l]) => <SelectItem key={v} value={v}>{l} ({v})</SelectItem>)}</SelectGroup>
-                    {linkOptions.cats.length > 0 && <SelectGroup><SelectLabel>Category</SelectLabel>{linkOptions.cats.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectGroup>}
-                    {linkOptions.prods.length > 0 && <SelectGroup><SelectLabel>Product</SelectLabel>{linkOptions.prods.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectGroup>}
-                    {slideLink && !knownLinks.has(slideLink) && <SelectGroup><SelectLabel>Current</SelectLabel><SelectItem value={slideLink}>{slideLink}</SelectItem></SelectGroup>}
+                    <SelectGroup><SelectLabel>{t("store:store.links.pages")}</SelectLabel>{PAGES.map(([v, l]) => <SelectItem key={v} value={v}>{t("store:store.links.withPath", { label: t(l), path: v })}</SelectItem>)}</SelectGroup>
+                    {linkOptions.cats.length > 0 && <SelectGroup><SelectLabel>{t("store:store.links.category")}</SelectLabel>{linkOptions.cats.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectGroup>}
+                    {linkOptions.prods.length > 0 && <SelectGroup><SelectLabel>{t("store:store.links.product")}</SelectLabel>{linkOptions.prods.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectGroup>}
+                    {slideLink && !knownLinks.has(slideLink) && <SelectGroup><SelectLabel>{t("store:store.links.current")}</SelectLabel><SelectItem value={slideLink}>{slideLink}</SelectItem></SelectGroup>}
                   </SelectContent>
                 </Select>
               </FormField>
               <div className="flex flex-col gap-1.5">
-                <p className="text-sm font-medium">Overlay colour</p>
-                <div role="group" aria-label="Overlay" className="flex flex-wrap gap-1.5">
+                <p className="text-sm font-medium">{t("store:store.hero.overlay")}</p>
+                <div role="group" aria-label={t("store:store.hero.overlayGroup")} className="flex flex-wrap gap-1.5">
                   {OVERLAYS.map(([l, g]) => (
                     <Button key={l} type="button" size="sm" aria-pressed={c.gradient === g} onClick={() => patchSlide({ gradient: g })}
-                      variant={c.gradient === g ? "default" : "outline"}>{l}</Button>
+                      variant={c.gradient === g ? "default" : "outline"}>{t(l)}</Button>
                   ))}
                 </div>
               </div>
               <div className="flex justify-between gap-2">
                 <Button type="button" variant="destructive"
-                  onClick={() => { if (window.confirm(`Delete slide ${idx + 1}? Save changes to apply.`)) { patch({ slides: d.slides.filter((_, i) => i !== idx) }); setCur(0) } }}>
-                  Delete slide
+                  onClick={() => { if (window.confirm(t("store:store.hero.confirmDelete", { n: idx + 1 }))) { patch({ slides: d.slides.filter((_, i) => i !== idx) }); setCur(0) } }}>
+                  {t("store:store.hero.deleteSlide")}
                 </Button>
                 <Button type="button" variant="outline" disabled={idx === 0}
-                  onClick={() => { const a = d.slides.slice(); [a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; patch({ slides: a }); setCur(idx - 1) }}>Move earlier</Button>
+                  onClick={() => { const a = d.slides.slice(); [a[idx - 1], a[idx]] = [a[idx], a[idx - 1]]; patch({ slides: a }); setCur(idx - 1) }}>{t("store:store.hero.moveEarlier")}</Button>
               </div>
             </>
           )}
@@ -605,41 +679,42 @@ export default function OnlineStorePage() {
         categories={categoryChoices}
         uploading={uploading}
         uploadImage={uploadImage}
+        hide={TEMPLATE_HIDDEN_SECTIONS[d.themePreset]}
       />
 
       {(
         <SectionCard
           id="wishlist"
-          aria-label="Wishlist analytics"
+          aria-label={t("store:store.wishlist.title")}
           className="scroll-mt-4"
-          title="Wishlist analytics"
-          description="Customer wishlist activity and most-wanted products."
+          title={t("store:store.wishlist.title")}
+          description={t("store:store.wishlist.description")}
           actions={canClearWishlist ? (
             <Button type="button" variant="destructive" disabled={clearing || wlLoading} onClick={clearWishlist}>
-              {clearing ? "Clearing…" : "Clear wishlist data"}
+              {clearing ? t("store:store.wishlist.clearing") : t("store:store.wishlist.clear")}
             </Button>
           ) : (
-            <WithTooltip content="You do not have permission to clear wishlist data">
-              <span tabIndex={0}><Button type="button" variant="destructive" disabled>Clear wishlist data</Button></span>
+            <WithTooltip content={t("store:store.wishlist.noPermClear")}>
+              <span tabIndex={0}><Button type="button" variant="destructive" disabled>{t("store:store.wishlist.clear")}</Button></span>
             </WithTooltip>
           )}
           contentClassName="flex flex-col gap-4"
         >
-          {!canViewWishlist && <p className="text-sm text-muted-foreground">You do not have permission to view wishlist analytics.</p>}
+          {!canViewWishlist && <p className="text-sm text-muted-foreground">{t("store:store.wishlist.noPermView")}</p>}
           {canViewWishlist && wlError && <Alert variant="destructive"><AlertDescription>{wlError}</AlertDescription></Alert>}
           {wlLoading ? (
             <div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}</div>
           ) : wl ? (
             <>
               <StatsCards stats={[
-                { label: "Total wishlist items", value: wl.summary.totalItems.toLocaleString(), icon: <Heart className="size-4" />, color: "red" },
-                { label: "Customers with wishlists", value: wl.summary.uniqueCustomers.toLocaleString(), icon: <Users className="size-4" />, color: "blue" },
-                { label: "Unique products wishlisted", value: wl.summary.uniqueProducts.toLocaleString(), icon: <Package className="size-4" />, color: "purple" },
+                { label: t("store:store.wishlist.totalItems"), value: wl.summary.totalItems.toLocaleString(localeTag(i18n.language)), icon: <Heart className="size-4" />, color: "red" },
+                { label: t("store:store.wishlist.customersWith"), value: wl.summary.uniqueCustomers.toLocaleString(localeTag(i18n.language)), icon: <Users className="size-4" />, color: "blue" },
+                { label: t("store:store.wishlist.uniqueProducts"), value: wl.summary.uniqueProducts.toLocaleString(localeTag(i18n.language)), icon: <Package className="size-4" />, color: "purple" },
               ]} />
               <div className="grid gap-5 lg:grid-cols-2">
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-sm font-bold">Most wishlisted products</h3>
-                  {wl.topProducts.length === 0 && <p className="text-sm text-muted-foreground">No wishlist data yet.</p>}
+                  <h3 className="text-sm font-bold">{t("store:store.wishlist.topProducts")}</h3>
+                  {wl.topProducts.length === 0 && <p className="text-sm text-muted-foreground">{t("store:store.wishlist.noData")}</p>}
                   {wl.topProducts.map((p, i) => (
                     <div key={p.productId} className="flex items-center gap-3">
                       <span className="w-5 text-right text-sm text-muted-foreground">{i + 1}</span>
@@ -653,8 +728,8 @@ export default function OnlineStorePage() {
                   ))}
                 </div>
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-sm font-bold">Most active wishlist customers</h3>
-                  {wl.topCustomers.length === 0 && <p className="text-sm text-muted-foreground">No wishlist data yet.</p>}
+                  <h3 className="text-sm font-bold">{t("store:store.wishlist.topCustomers")}</h3>
+                  {wl.topCustomers.length === 0 && <p className="text-sm text-muted-foreground">{t("store:store.wishlist.noData")}</p>}
                   {wl.topCustomers.map((cu, i) => (
                     <div key={cu.customerId} className="flex items-center gap-3">
                       <span className="w-5 text-right text-sm text-muted-foreground">{i + 1}</span>
@@ -669,8 +744,8 @@ export default function OnlineStorePage() {
                 </div>
               </div>
               <div className="flex flex-col gap-2.5">
-                <h3 className="flex items-center gap-2 text-sm font-bold"><TrendingUp className="size-4 text-muted-foreground" />Daily wishlist adds, last 30 days</h3>
-                {trend.length === 0 && <p className="text-sm text-muted-foreground">No activity in the last 30 days.</p>}
+                <h3 className="flex items-center gap-2 text-sm font-bold"><TrendingUp className="size-4 text-muted-foreground" />{t("store:store.wishlist.daily")}</h3>
+                {trend.length === 0 && <p className="text-sm text-muted-foreground">{t("store:store.wishlist.noActivity")}</p>}
                 {trend.map((t) => (
                   <div key={t.date} className="flex items-center gap-3">
                     <span className="w-28 shrink-0 text-xs text-muted-foreground">{fmtDay(t.date)}</span>
@@ -685,11 +760,11 @@ export default function OnlineStorePage() {
       )}
 
       <Card className="sticky bottom-0 z-10 flex-row flex-wrap items-center gap-2.5 px-4 py-3.5">
-        <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>{err || (dirty ? "You have unsaved changes." : "All changes saved.")}</span>
+        <span className={cn("text-sm", err ? "text-destructive" : "text-muted-foreground")}>{err || (dirty ? t("store:shared.unsaved") : t("store:shared.allSaved"))}</span>
         <div className="ml-auto flex gap-2">
-          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(0); toast.success("Changes discarded") }}>Discard</Button>
+          <Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setD(saved); setErr(""); setCur(0); toast.success(t("store:shared.changesDiscarded")) }}>{t("store:shared.discard")}</Button>
           <Button type="button" disabled={!dirty || saving || uploading} onClick={save}>
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? t("common:actions.saving") : t("common:actions.saveChanges")}
           </Button>
         </div>
       </Card>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useTranslation } from "react-i18next"
 import { Sparkles } from "lucide-react"
 import { saasBillingApi } from "@/lib/saasBillingApi"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,7 @@ const TRIAL_LENGTH_DAYS = 10
  * stays in sync.
  */
 export function TrialCard() {
+  const { t } = useTranslation(["ui", "common"])
   const [daysLeft, setDaysLeft] = useState<number | null>(null)
   const [show, setShow] = useState(false)
   const [expired, setExpired] = useState(false)
@@ -68,25 +70,23 @@ export function TrialCard() {
     <Card
       className="gap-0 border-sidebar-border bg-sidebar-accent p-3 text-sidebar-accent-foreground shadow-none group-data-[collapsible=icon]:hidden"
       role="region"
-      aria-label="Trial status"
+      aria-label={t("ui:trialCard.region")}
     >
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-brand-fg shrink-0" />
         <p className="text-[13px] font-medium text-white">
-          {expired ? "Trial expired" : "Free trial"}
+          {expired ? t("ui:trialCard.expiredTitle") : t("ui:trialCard.title")}
         </p>
       </div>
 
       <p className="mt-1 text-xs text-[#8C96AD]">
-        {expired
-          ? "Upgrade to keep your data."
-          : `${remaining} ${remaining === 1 ? "day" : "days"} remaining`}
+        {expired ? t("ui:trialCard.expiredBody") : t("ui:trialCard.remaining", { count: remaining })}
       </p>
 
-      <Progress value={pct} aria-label="Trial elapsed" className="mt-2 h-1 bg-muted" />
+      <Progress value={pct} aria-label={t("ui:trialCard.elapsed")} className="mt-2 h-1 bg-muted" />
 
       <Button asChild size="sm" className="mt-3 w-full">
-        <Link href="/dashboard/billing/subscriptions">Upgrade plan</Link>
+        <Link href="/dashboard/billing/subscriptions">{t("ui:trialCard.upgrade")}</Link>
       </Button>
     </Card>
   )

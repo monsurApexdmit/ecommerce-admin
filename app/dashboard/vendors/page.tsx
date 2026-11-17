@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 import { Banknote, ChevronDown, ClipboardList, Clock, Download, Pencil, Plus, Search, Trash2, Truck, Upload, Wallet } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -44,26 +46,70 @@ import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { WithTooltip } from "@/components/common/WithTooltip"
+import { localeTag } from "@/lib/i18n"
 
 type Tab = "all" | "Active" | "owe" | "Inactive" | "Blocked"
 type Sort = "purchased" | "owed" | "name" | "recent"
 type Panel = "profile" | "form"
 
-const SORTS: { value: Sort; label: string }[] = [
-  { value: "purchased", label: "Sort: Most purchased" },
-  { value: "owed", label: "Sort: Most owed" },
-  { value: "name", label: "Sort: Name A–Z" },
-  { value: "recent", label: "Sort: Recently added" },
+const NS = ["inventory", "common"] as const
+type K = ParseKeys<typeof NS>
+
+const SORTS: { value: Sort; label: K }[] = [
+  { value: "purchased", label: "inventory:suppliers.sort.purchased" },
+  { value: "owed", label: "inventory:suppliers.sort.owed" },
+  { value: "name", label: "inventory:suppliers.sort.name" },
+  { value: "recent", label: "inventory:suppliers.sort.recent" },
 ]
 
+// Option values are saved as-is on the supplier; only the shown label is translated
 const TERMS = ["Pay on delivery", "Net 7 days", "Net 15 days", "Net 30 days", "Advance"]
 const PAY_TO = ["Bank transfer", "bKash merchant", "Nagad", "Cash"]
 const DISTRICTS = ["Dhaka", "Narayanganj", "Gazipur", "Chattogram"]
 const COUNTRIES = ["Bangladesh", "India", "China", "Other"]
 const PAY_METHODS = ["Cash", "Bank transfer", "bKash", "Nagad"]
 
-const PO_STATUS: Record<string, string> = { draft: "Draft", sent: "Ordered", partial: "Partly received", received: "Received", cancelled: "Cancelled" }
-const PAY_LABEL: Record<string, string> = { paid: "paid", partial: "partly paid", pending: "unpaid", unpaid: "unpaid" }
+/** Stored option / status value → label key (unknown values are shown as-is). */
+const OPTION_KEY: Record<string, K> = {
+  "Pay on delivery": "inventory:suppliers.terms.payOnDelivery",
+  "Net 7 days": "inventory:suppliers.terms.net7",
+  "Net 15 days": "inventory:suppliers.terms.net15",
+  "Net 30 days": "inventory:suppliers.terms.net30",
+  Advance: "inventory:suppliers.terms.advance",
+  "Bank transfer": "inventory:suppliers.payMethod.bankTransfer",
+  "bKash merchant": "inventory:suppliers.payMethod.bkashMerchant",
+  bKash: "inventory:suppliers.payMethod.bkash",
+  Nagad: "inventory:suppliers.payMethod.nagad",
+  Cash: "common:payment.cash",
+  Dhaka: "inventory:suppliers.district.dhaka",
+  Narayanganj: "inventory:suppliers.district.narayanganj",
+  Gazipur: "inventory:suppliers.district.gazipur",
+  Chattogram: "inventory:suppliers.district.chattogram",
+  Bangladesh: "inventory:suppliers.country.bangladesh",
+  India: "inventory:suppliers.country.india",
+  China: "inventory:suppliers.country.china",
+  Other: "common:extra.other",
+}
+
+const SUPPLIER_STATUS_KEY: Record<string, K> = {
+  Active: "common:status.active",
+  Inactive: "common:status.inactive",
+  Blocked: "inventory:suppliers.status.blocked",
+}
+
+const PO_STATUS: Record<string, K> = {
+  draft: "inventory:purchases.status.draft",
+  sent: "inventory:purchases.status.sent",
+  partial: "inventory:purchases.status.partial",
+  received: "inventory:purchases.status.received",
+  cancelled: "inventory:purchases.status.cancelled",
+}
+const PAY_LABEL: Record<string, K> = {
+  paid: "inventory:suppliers.payState.paid",
+  partial: "inventory:suppliers.payState.partial",
+  pending: "inventory:suppliers.payState.unpaid",
+  unpaid: "inventory:suppliers.payState.unpaid",
+}
 
 interface FormState {
   name: string; contactPerson: string; phone: string; email: string; address: string
@@ -82,6 +128,10 @@ const toSel = (v: string) => v || NONE
 const fromSel = (v: string) => (v === NONE ? "" : v)
 
 export default function SuppliersPage() {
+  const { t, i18n } = useTranslation(NS)
+  const tag = localeTag(i18n.language)
+  const opt = (v?: string | null) => (v && OPTION_KEY[v] ? t(OPTION_KEY[v]) : v ?? "")
+  const statusLabel = (v: string) => (SUPPLIER_STATUS_KEY[v] ? t(SUPPLIER_STATUS_KEY[v]) : v)
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const searchParams = useSearchParams()
@@ -204,12 +254,12 @@ export default function SuppliersPage() {
   const setSel = (k: keyof FormState) => (v: string) => setForm((f) => ({ ...f, [k]: fromSel(v) }))
 
   const save = async () => {
-    if (!form.name.trim()) { setFormError("Supplier name is required."); return }
+    if (!form.name.trim()) { setFormError(t("inventory:suppliers.validation.nameRequired")); return }
     const dupe = rows.find((r) => r.id !== editingId && r.name.trim().toLowerCase() === form.name.trim().toLowerCase())
-    if (dupe) { setFormError(`A supplier named "${dupe.name}" already exists.`); return }
-    if (form.leadTimeDays !== "" && (!Number.isInteger(Number(form.leadTimeDays)) || Number(form.leadTimeDays) < 0)) { setFormError("Lead time must be a whole number of days, zero or more."); return }
-    if (form.openingBalance !== "" && !(Number(form.openingBalance) >= 0)) { setFormError("Opening balance cannot be negative."); return }
-    if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email.trim())) { setFormError("Enter a valid email address."); return }
+    if (dupe) { setFormError(t("inventory:suppliers.validation.duplicate", { name: dupe.name })); return }
+    if (form.leadTimeDays !== "" && (!Number.isInteger(Number(form.leadTimeDays)) || Number(form.leadTimeDays) < 0)) { setFormError(t("inventory:suppliers.validation.leadTime")); return }
+    if (form.openingBalance !== "" && !(Number(form.openingBalance) >= 0)) { setFormError(t("inventory:suppliers.validation.openingBalance")); return }
+    if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email.trim())) { setFormError(t("inventory:suppliers.validation.email")); return }
     const body: CreateVendorData = {
       name: form.name.trim(),
       contactPerson: form.contactPerson.trim(),
@@ -233,17 +283,17 @@ export default function SuppliersPage() {
     try {
       if (editingId) {
         await vendorApi.update(editingId, body)
-        toast({ title: "Supplier updated", description: body.name })
+        toast({ title: t("inventory:suppliers.toast.updated"), description: body.name })
         await refresh(editingId)
         setPanel("profile")
       } else {
         const res = await vendorApi.create(body)
-        toast({ title: "Supplier added", description: body.name })
+        toast({ title: t("inventory:suppliers.toast.added"), description: body.name })
         await load()
         select(res.data.id)
       }
     } catch (e: any) {
-      setFormError(e?.response?.data?.message || "Could not save the supplier.")
+      setFormError(e?.response?.data?.message || t("inventory:suppliers.validation.couldNotSave"))
     } finally {
       setSaving(false)
     }
@@ -256,7 +306,7 @@ export default function SuppliersPage() {
       await vendorApi.update(r.id, { status: next })
       await refresh(r.id === selectedId ? r.id : selectedId)
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not change status", description: e?.response?.data?.message })
+      toast({ variant: "destructive", title: t("inventory:suppliers.toast.statusFailed"), description: e?.response?.data?.message })
     }
   }
 
@@ -264,13 +314,13 @@ export default function SuppliersPage() {
     if (!deleteTarget) return
     try {
       await vendorApi.delete(deleteTarget.id)
-      toast({ title: "Supplier deleted", description: deleteTarget.name })
+      toast({ title: t("inventory:suppliers.toast.deleted"), description: deleteTarget.name })
       const wasSelected = deleteTarget.id === selectedId
       setDeleteTarget(null)
       if (wasSelected) { setSelectedId(null); setProfile(null) }
       await load()
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not delete", description: e?.response?.data?.message })
+      toast({ variant: "destructive", title: t("inventory:suppliers.toast.deleteFailed"), description: e?.response?.data?.message })
       setDeleteTarget(null)
     }
   }
@@ -278,16 +328,16 @@ export default function SuppliersPage() {
   const savePayment = async () => {
     if (!selectedId || !profile) return
     const amount = Number(payAmount)
-    if (!(amount > 0)) { setPayError("Enter an amount above zero."); return }
-    if (amount > profile.owed + 0.005) { setPayError(`You only owe ${formatCurrency(profile.owed)} to this supplier.`); return }
+    if (!(amount > 0)) { setPayError(t("inventory:suppliers.pay.invalidAmount")); return }
+    if (amount > profile.owed + 0.005) { setPayError(t("inventory:suppliers.pay.tooMuch", { amount: formatCurrency(profile.owed) })); return }
     setPaying(true); setPayError("")
     try {
       setProfile(await vendorApi.recordPayment(selectedId, { amount, method: payMethod, note: payNote.trim() || undefined }))
       await load()
-      toast({ title: "Payment recorded", description: formatCurrency(amount) })
+      toast({ title: t("inventory:suppliers.pay.recorded"), description: formatCurrency(amount) })
       setPayOpen(false); setPayAmount(""); setPayNote("")
     } catch (e: any) {
-      setPayError(e?.response?.data?.message || "Could not record the payment.")
+      setPayError(e?.response?.data?.message || t("inventory:suppliers.pay.failed"))
     } finally {
       setPaying(false)
     }
@@ -304,7 +354,7 @@ export default function SuppliersPage() {
       purchased: r.purchased, owed: r.owed,
     }))
     exportToCSV(data, "suppliers", CSV_COLS)
-    toast({ title: `Exported ${data.length} suppliers` })
+    toast({ title: t("inventory:suppliers.toast.exported", { count: data.length }) })
   }
 
   const handleImport = () => {
@@ -341,12 +391,12 @@ export default function SuppliersPage() {
             } catch { failed++ }
           }
           toast({
-            title: `Imported ${created} supplier${created === 1 ? "" : "s"}`,
-            description: [skipped && `${skipped} duplicate${skipped === 1 ? "" : "s"} skipped`, failed && `${failed} row${failed === 1 ? "" : "s"} rejected`].filter(Boolean).join(", ") || undefined,
+            title: t("inventory:suppliers.toast.imported", { count: created }),
+            description: [skipped && t("inventory:suppliers.toast.skipped", { count: skipped }), failed && t("inventory:suppliers.toast.rejected", { count: failed })].filter(Boolean).join(", ") || undefined,
           })
           load()
         } catch {
-          toast({ variant: "destructive", title: "Could not read the CSV file" })
+          toast({ variant: "destructive", title: t("inventory:suppliers.toast.csvFailed") })
         }
       }
       reader.readAsText(file)
@@ -365,14 +415,14 @@ export default function SuppliersPage() {
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5")}>
       {/* Header */}
       <PageHeader
-        title="Suppliers"
-        description="Who you buy from, what you owe them, and what is on order."
+        title={t("inventory:suppliers.title")}
+        description={t("inventory:suppliers.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={handleImport}><Upload className="size-4" aria-hidden /> Import</Button>
-          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> Export</Button>
-          <Button asChild variant="outline"><Link href={poHref()}>New purchase order</Link></Button>
+          <Button type="button" variant="outline" onClick={handleImport}><Upload className="size-4" aria-hidden /> {t("common:actions.import")}</Button>
+          <Button type="button" variant="outline" onClick={handleExport}><Download className="size-4" aria-hidden /> {t("common:actions.export")}</Button>
+          <Button asChild variant="outline"><Link href={poHref()}>{t("inventory:suppliers.newPo")}</Link></Button>
           <Button type="button" onClick={openNew}>
-            <Plus className="size-4" aria-hidden /> Add supplier
+            <Plus className="size-4" aria-hidden /> {t("inventory:suppliers.addSupplier")}
           </Button>
         </>}
       />
@@ -383,13 +433,17 @@ export default function SuppliersPage() {
           <Clock aria-hidden />
           <AlertDescription className="flex flex-wrap items-center gap-3.5">
             <span className="min-w-[260px] flex-1">
-              <strong>You owe {owedSuppliers === 1 ? (rows.find((r) => r.owed > 0.005)?.name ?? "1 supplier") : `${owedSuppliers} suppliers`} {formatCurrency(stats.totalOwed)}.</strong>
+              <strong>
+                {owedSuppliers === 1 && rows.find((r) => r.owed > 0.005)
+                  ? t("inventory:suppliers.banner.oweOne", { name: rows.find((r) => r.owed > 0.005)?.name, amount: formatCurrency(stats.totalOwed) })
+                  : t("inventory:suppliers.banner.oweMany", { count: owedSuppliers, amount: formatCurrency(stats.totalOwed) })}
+              </strong>{" "}
               {stats.oldestOverdue
-                ? ` ${stats.oldestOverdue.poNumber} was expected on ${new Date(stats.oldestOverdue.expectedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} and is still unpaid.`
-                : " No purchase order is past its expected date."}
+                ? t("inventory:suppliers.banner.overdue", { po: stats.oldestOverdue.poNumber, date: new Date(stats.oldestOverdue.expectedDate).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" }) })
+                : t("inventory:suppliers.banner.noOverdue")}
             </span>
             <Button asChild variant="destructive" size="sm">
-              <Link href="/dashboard/vendors/purchase-orders">Open purchase order</Link>
+              <Link href="/dashboard/vendors/purchase-orders">{t("inventory:suppliers.banner.openPo")}</Link>
             </Button>
           </AlertDescription>
         </Alert>
@@ -397,23 +451,23 @@ export default function SuppliersPage() {
 
       {/* KPIs */}
       {loading || !stats ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           {[1, 2, 3, 4, 5, 6].map((i) => <Skeleton key={i} className="h-[118px]" />)}
         </div>
       ) : (
         <StatsCards stats={[
-          { label: "Suppliers", value: stats.total, icon: <Truck className="size-4" />, color: "blue", hint: `${stats.active} active · ${stats.blocked} blocked` },
-          { label: "You owe suppliers", value: formatCurrency(stats.totalOwed), icon: <Clock className="size-4" />, color: "red",
-            hint: `${stats.owedSuppliers} supplier${stats.owedSuppliers === 1 ? "" : "s"} · ${stats.overdueSuppliers} overdue`,
+          { label: t("inventory:suppliers.kpi.suppliers"), value: stats.total, icon: <Truck className="size-4" />, color: "blue", hint: t("inventory:suppliers.kpi.suppliersHint", { active: stats.active, blocked: stats.blocked }) },
+          { label: t("inventory:suppliers.kpi.youOwe"), value: formatCurrency(stats.totalOwed), icon: <Clock className="size-4" />, color: "red",
+            hint: t("inventory:suppliers.kpi.youOweHint", { count: stats.owedSuppliers, overdue: stats.overdueSuppliers }),
             onClick: () => { setTab("owe"); setPage(1) }, active: tab === "owe" },
-          { label: "Total purchased", value: formatCurrency(stats.totalPurchased), icon: <Banknote className="size-4" />, color: "green",
-            hint: `${stats.poCount} purchase order${stats.poCount === 1 ? "" : "s"} · ${stats.openPos} open` },
-          { label: "Paid to suppliers", value: formatCurrency(stats.totalPaid), icon: <Wallet className="size-4" />, color: "green",
-            hint: `${stats.paymentCount} payment${stats.paymentCount === 1 ? "" : "s"}` },
-          { label: "Open purchase orders", value: stats.openPos, icon: <ClipboardList className="size-4" />, color: "yellow",
-            hint: `${stats.draftPos} draft · ${stats.orderedPos} ordered` },
-          { label: "Avg lead time", value: stats.avgLeadDays ? `${Math.round(stats.avgLeadDays)} days` : "—", icon: <Truck className="size-4" />, color: "purple",
-            hint: "Order to delivery" },
+          { label: t("inventory:suppliers.kpi.totalPurchased"), value: formatCurrency(stats.totalPurchased), icon: <Banknote className="size-4" />, color: "green",
+            hint: t("inventory:suppliers.kpi.totalPurchasedHint", { count: stats.poCount, open: stats.openPos }) },
+          { label: t("inventory:suppliers.kpi.paid"), value: formatCurrency(stats.totalPaid), icon: <Wallet className="size-4" />, color: "green",
+            hint: t("inventory:suppliers.kpi.paidHint", { count: stats.paymentCount }) },
+          { label: t("inventory:suppliers.kpi.openPos"), value: stats.openPos, icon: <ClipboardList className="size-4" />, color: "yellow",
+            hint: t("inventory:suppliers.kpi.openPosHint", { draft: stats.draftPos, ordered: stats.orderedPos }) },
+          { label: t("inventory:suppliers.kpi.avgLead"), value: stats.avgLeadDays ? t("inventory:suppliers.days", { count: Math.round(stats.avgLeadDays) }) : "—", icon: <Truck className="size-4" />, color: "purple",
+            hint: t("inventory:suppliers.kpi.avgLeadHint") },
         ]} />
       )}
 
@@ -423,13 +477,13 @@ export default function SuppliersPage() {
           <div className="px-4">
             <StatusTabs
               value={tab}
-              onChange={(t) => { setTab(t as Tab); setPage(1) }}
+              onChange={(v) => { setTab(v as Tab); setPage(1) }}
               tabs={[
-                { value: "all", label: "All", count: counts.all },
-                { value: "Active", label: "Active", count: counts.Active },
-                { value: "owe", label: "You owe", count: counts.owe },
-                { value: "Inactive", label: "Inactive", count: counts.Inactive },
-                { value: "Blocked", label: "Blocked", count: counts.Blocked },
+                { value: "all", label: t("common:status.all"), count: counts.all },
+                { value: "Active", label: t("common:status.active"), count: counts.Active },
+                { value: "owe", label: t("inventory:suppliers.youOwe"), count: counts.owe },
+                { value: "Inactive", label: t("common:status.inactive"), count: counts.Inactive },
+                { value: "Blocked", label: t("inventory:suppliers.status.blocked"), count: counts.Blocked },
               ]}
             />
           </div>
@@ -438,15 +492,15 @@ export default function SuppliersPage() {
               <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
               <InputGroupInput
                 type="search"
-                aria-label="Search suppliers"
-                placeholder="Search supplier, contact, phone, TIN/BIN or description…"
+                aria-label={t("inventory:suppliers.searchLabel")}
+                placeholder={t("inventory:suppliers.searchPlaceholder")}
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               />
             </InputGroup>
             <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
-              <SelectTrigger aria-label="Sort" className="w-[200px]"><SelectValue /></SelectTrigger>
-              <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("inventory:suppliers.sort.label")} className="w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{t(s.label)}</SelectItem>)}</SelectContent>
             </Select>
           </Toolbar>
 
@@ -454,14 +508,14 @@ export default function SuppliersPage() {
             <Table className="min-w-[860px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead scope="col">Supplier</TableHead>
-                  <TableHead scope="col">Contact</TableHead>
-                  <TableHead scope="col">Supplies</TableHead>
-                  <TableHead scope="col" className="text-right">Purchased</TableHead>
-                  <TableHead scope="col" className="text-right">You owe</TableHead>
-                  <TableHead scope="col">Terms</TableHead>
-                  <TableHead scope="col">Active</TableHead>
-                  <TableHead scope="col" className="text-right">Actions</TableHead>
+                  <TableHead scope="col">{t("common:extra.supplier")}</TableHead>
+                  <TableHead scope="col">{t("inventory:suppliers.col.contact")}</TableHead>
+                  <TableHead scope="col">{t("inventory:suppliers.col.supplies")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("inventory:suppliers.col.purchased")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("inventory:suppliers.youOwe")}</TableHead>
+                  <TableHead scope="col">{t("inventory:suppliers.col.terms")}</TableHead>
+                  <TableHead scope="col">{t("common:status.active")}</TableHead>
+                  <TableHead scope="col" className="text-right">{t("common:fields.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -470,7 +524,7 @@ export default function SuppliersPage() {
                 ) : pageRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8}>
-                      <EmptyState icon={Truck} title="No suppliers found" description={search || tab !== "all" ? "Try clearing the search or tab." : "Add your first supplier to start buying stock."} className="p-4 md:p-6" />
+                      <EmptyState icon={Truck} title={t("inventory:suppliers.empty.title")} description={search || tab !== "all" ? t("inventory:suppliers.empty.filtered") : t("inventory:suppliers.empty.first")} className="p-4 md:p-6" />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -484,7 +538,7 @@ export default function SuppliersPage() {
                             <span className="flex flex-col">
                               <span className="font-medium">
                                 {r.name}
-                                {r.status !== "Active" && <StatusBadge status={r.status} className="ml-1.5" />}
+                                {r.status !== "Active" && <StatusBadge status={r.status} label={statusLabel(r.status)} className="ml-1.5" />}
                               </span>
                               <span className="text-xs font-normal text-muted-foreground">{place(r) || "—"}</span>
                             </span>
@@ -496,31 +550,31 @@ export default function SuppliersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="max-w-[200px] truncate">{r.itemsSummary || "—"}</div>
-                          <div className="text-xs text-muted-foreground">Lead time {r.leadTimeDays ? `${r.leadTimeDays} days` : "—"}</div>
+                          <div className="text-xs text-muted-foreground">{t("inventory:suppliers.leadTime", { value: r.leadTimeDays ? t("inventory:suppliers.days", { count: r.leadTimeDays }) : "—" })}</div>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {formatCurrency(r.purchased)}
-                          <div className="text-xs font-normal text-muted-foreground">{r.poCount} PO{r.poCount === 1 ? "" : "s"}</div>
+                          <div className="text-xs font-normal text-muted-foreground">{t("inventory:suppliers.poCount", { count: r.poCount })}</div>
                         </TableCell>
                         <TableCell className={cn("text-right tabular-nums", r.owed > 0.005 ? "text-destructive" : "text-muted-foreground")}>
                           {formatCurrency(r.owed)}
                         </TableCell>
                         <TableCell>
-                          {r.paymentTerms ? <Badge variant="secondary">{r.paymentTerms}</Badge> : <span className="text-muted-foreground">—</span>}
+                          {r.paymentTerms ? <Badge variant="secondary">{opt(r.paymentTerms)}</Badge> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell>
                           <Switch
-                            checked={r.status === "Active"} aria-label={`${r.name} active`}
+                            checked={r.status === "Active"} aria-label={t("inventory:suppliers.activeToggle", { name: r.name })}
                             onCheckedChange={() => toggleActive(r)}
                           />
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1">
-                            <Button asChild variant="link" size="sm" className="mr-1"><Link href={poHref(r.id)}>New PO</Link></Button>
-                            <WithTooltip content={`Record payment to ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Record payment to ${r.name}`}
+                            <Button asChild variant="link" size="sm" className="mr-1"><Link href={poHref(r.id)}>{t("inventory:suppliers.newPoShort")}</Link></Button>
+                            <WithTooltip content={t("inventory:suppliers.pay.title", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.pay.title", { name: r.name })}
                               onClick={() => { select(r.id); setPayOpen(true) }}><Banknote className="size-4" /></Button></WithTooltip>
-                            <WithTooltip content={`Edit ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => openEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
-                            <WithTooltip content={`Delete ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => setDeleteTarget(r)}><Trash2 className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("inventory:suppliers.editName", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.editName", { name: r.name })} onClick={() => openEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>
+                            <WithTooltip content={t("inventory:suppliers.deleteName", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("inventory:suppliers.deleteName", { name: r.name })} onClick={() => setDeleteTarget(r)}><Trash2 className="size-4" /></Button></WithTooltip>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -547,15 +601,15 @@ export default function SuppliersPage() {
             </>
           )}
           <Separator />
-          <div className="px-4 py-3 text-xs text-muted-foreground">Showing {visible.length} supplier{visible.length === 1 ? "" : "s"}</div>
+          <div className="px-4 py-3 text-xs text-muted-foreground">{t("inventory:suppliers.showing", { count: visible.length })}</div>
         </Card>
 
         {/* Side panel */}
-        <aside aria-label="Supplier" className="w-full shrink-0 xl:w-[400px]">
+        <aside aria-label={t("common:extra.supplier")} className="w-full shrink-0 xl:w-[400px]">
           <Card className="gap-4 p-4">
           <Tabs value={panel} onValueChange={() => { /* handled per trigger below */ }}>
-            <TabsList aria-label="Panel" className="w-full">
-              {([["profile", "Supplier details"], ["form", editingId ? "Edit supplier" : "+ New supplier"]] as const).map(([id, label]) => (
+            <TabsList aria-label={t("inventory:suppliers.panel.label")} className="w-full">
+              {([["profile", t("inventory:suppliers.panel.details")], ["form", editingId ? t("inventory:suppliers.panel.edit") : t("inventory:suppliers.panel.newTab")]] as const).map(([id, label]) => (
                 <TabsTrigger
                   key={id} value={id}
                   onClick={() => (id === "form" && panel !== "form" ? openNew() : setPanel("profile"))}
@@ -570,7 +624,7 @@ export default function SuppliersPage() {
             profileLoading && !profile ? (
               <div className="space-y-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14" />)}</div>
             ) : !profile || !selectedRow ? (
-              <EmptyState title={rows.length ? "Pick a supplier to see their details." : "No suppliers yet. Add one with the New supplier tab."} className="p-4 md:p-6" />
+              <EmptyState title={rows.length ? t("inventory:suppliers.panel.pick") : t("inventory:suppliers.panel.none")} className="p-4 md:p-6" />
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3">
@@ -578,7 +632,7 @@ export default function SuppliersPage() {
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold leading-tight">
                       {profile.vendor.name}{" "}
-                      <StatusBadge status={profile.vendor.status} className="align-middle" />
+                      <StatusBadge status={profile.vendor.status} label={statusLabel(profile.vendor.status)} className="align-middle" />
                     </h2>
                     <span className="text-sm text-muted-foreground">{place(profile.vendor) || "—"}</span>
                   </div>
@@ -586,12 +640,12 @@ export default function SuppliersPage() {
 
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    ["Purchased", formatCurrency(profile.purchased), false],
-                    ["Open POs", String(profile.openPos), false],
-                    ["You owe", formatCurrency(profile.owed), profile.owed > 0.005],
-                    ["Total paid", formatCurrency(profile.totalPaid), false],
-                    ["Products", String(profile.productCount), false],
-                    ["Stock value", formatCurrency(profile.stockValue), false],
+                    [t("inventory:suppliers.col.purchased"), formatCurrency(profile.purchased), false],
+                    [t("inventory:suppliers.profile.openPos"), String(profile.openPos), false],
+                    [t("inventory:suppliers.youOwe"), formatCurrency(profile.owed), profile.owed > 0.005],
+                    [t("inventory:suppliers.profile.totalPaid"), formatCurrency(profile.totalPaid), false],
+                    [t("common:fields.products"), String(profile.productCount), false],
+                    [t("inventory:suppliers.profile.stockValue"), formatCurrency(profile.stockValue), false],
                   ] as [string, string, boolean][]).map(([l, v, warn]) => (
                     <Item key={l} variant="muted" size="sm" className={cn("px-2.5 py-2", warn && "text-destructive")}>
                       <ItemContent className="gap-0">
@@ -603,27 +657,27 @@ export default function SuppliersPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button asChild className="flex-1"><Link href={poHref(profile.vendor.id)}>New purchase order</Link></Button>
-                  <Button type="button" variant="outline" onClick={() => { setPayOpen((v) => !v); setPayError("") }} className="flex-1">Pay supplier</Button>
+                  <Button asChild className="flex-1"><Link href={poHref(profile.vendor.id)}>{t("inventory:suppliers.newPo")}</Link></Button>
+                  <Button type="button" variant="outline" onClick={() => { setPayOpen((v) => !v); setPayError("") }} className="flex-1">{t("inventory:suppliers.profile.paySupplier")}</Button>
                 </div>
 
                 {payOpen && (
                   <Card className="gap-2.5 p-3.5">
-                    <CardTitle className="text-sm">Record payment to {profile.vendor.name}</CardTitle>
+                    <CardTitle className="text-sm">{t("inventory:suppliers.pay.title", { name: profile.vendor.name })}</CardTitle>
                     {payError && <Alert variant="destructive"><AlertDescription>{payError}</AlertDescription></Alert>}
                     <div className="grid grid-cols-2 gap-2.5">
-                      <FormField label="Amount" htmlFor="sup-pay-amount"><Input id="sup-pay-amount" type="number" min="0" step="any" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" /></FormField>
-                      <FormField label="Method" htmlFor="sup-pay-method">
+                      <FormField label={t("common:money.amount")} htmlFor="sup-pay-amount"><Input id="sup-pay-amount" type="number" min="0" step="any" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" /></FormField>
+                      <FormField label={t("inventory:suppliers.pay.method")} htmlFor="sup-pay-method">
                         <Select value={payMethod} onValueChange={(v) => setPayMethod(v)}>
                           <SelectTrigger id="sup-pay-method" className="w-full"><SelectValue /></SelectTrigger>
-                          <SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                          <SelectContent>{PAY_METHODS.map((m) => <SelectItem key={m} value={m}>{opt(m)}</SelectItem>)}</SelectContent>
                         </Select>
                       </FormField>
                     </div>
-                    <FormField label="Note" htmlFor="sup-pay-note"><Input id="sup-pay-note" type="text" value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Optional" /></FormField>
+                    <FormField label={t("common:fields.note")} htmlFor="sup-pay-note"><Input id="sup-pay-note" type="text" value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder={t("common:status.optional")} /></FormField>
                     <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
-                      <Button type="button" disabled={paying} onClick={savePayment}>{paying ? "Saving…" : "Save payment"}</Button>
+                      <Button type="button" variant="outline" onClick={() => setPayOpen(false)}>{t("common:actions.cancel")}</Button>
+                      <Button type="button" disabled={paying} onClick={savePayment}>{paying ? t("common:actions.saving") : t("inventory:suppliers.pay.save")}</Button>
                     </div>
                   </Card>
                 )}
@@ -631,17 +685,17 @@ export default function SuppliersPage() {
                 <Separator />
                 <InfoList>
                   {([
-                    ["Supplies", selectedRow.itemsSummary],
-                    ["Contact", profile.vendor.contactPerson],
-                    ["Phone", profile.vendor.phone],
-                    ["Email", profile.vendor.email],
-                    ["Address", [profile.vendor.address, place(profile.vendor)].filter(Boolean).join(", ")],
-                    ["Payment terms", profile.vendor.paymentTerms || "Not set"],
-                    ["Pay to", [profile.vendor.payTo, profile.vendor.accountNumber].filter(Boolean).join(" · ")],
-                    ["TIN / BIN", profile.vendor.tin],
-                    ["Opening balance", profile.vendor.openingBalance ? formatCurrency(profile.vendor.openingBalance) : ""],
-                    ["Description", profile.vendor.description],
-                    ["Supplier since", (profile.vendor.createdAt || profile.vendor.created_at) ? new Date((profile.vendor.createdAt || profile.vendor.created_at) as string).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : ""],
+                    [t("inventory:suppliers.col.supplies"), selectedRow.itemsSummary],
+                    [t("inventory:suppliers.col.contact"), profile.vendor.contactPerson],
+                    [t("common:fields.phone"), profile.vendor.phone],
+                    [t("common:fields.email"), profile.vendor.email],
+                    [t("common:fields.address"), [profile.vendor.address, place(profile.vendor)].filter(Boolean).join(", ")],
+                    [t("inventory:suppliers.form.paymentTerms"), profile.vendor.paymentTerms ? opt(profile.vendor.paymentTerms) : t("common:extra.notSet")],
+                    [t("inventory:suppliers.form.payTo"), [opt(profile.vendor.payTo), profile.vendor.accountNumber].filter(Boolean).join(" · ")],
+                    [t("inventory:suppliers.form.tin"), profile.vendor.tin],
+                    [t("inventory:suppliers.profile.openingBalance"), profile.vendor.openingBalance ? formatCurrency(profile.vendor.openingBalance) : ""],
+                    [t("common:fields.description"), profile.vendor.description],
+                    [t("inventory:suppliers.profile.since"), (profile.vendor.createdAt || profile.vendor.created_at) ? new Date((profile.vendor.createdAt || profile.vendor.created_at) as string).toLocaleDateString(tag, { month: "short", year: "numeric" }) : ""],
                   ] as [string, string | null | undefined][]).map(([k, v]) => (
                     <InfoRow key={k} label={k} value={v || "—"} />
                   ))}
@@ -649,8 +703,8 @@ export default function SuppliersPage() {
 
                 <Separator />
                 <section>
-                  <SectionTitle className="mb-2">Recent purchase orders</SectionTitle>
-                  {profile.recentPurchaseOrders.length === 0 ? <p className="text-sm text-muted-foreground">No purchase orders yet.</p> : (
+                  <SectionTitle className="mb-2">{t("inventory:suppliers.profile.recentPos")}</SectionTitle>
+                  {profile.recentPurchaseOrders.length === 0 ? <p className="text-sm text-muted-foreground">{t("inventory:suppliers.profile.noPos")}</p> : (
                     <ItemGroup>
                       {profile.recentPurchaseOrders.map((o, i) => (
                         <Fragment key={o.id}>
@@ -664,7 +718,7 @@ export default function SuppliersPage() {
                               <ItemActions className="flex-col items-end gap-0">
                                 <span className="text-sm font-semibold tabular-nums">{formatCurrency(o.total)}</span>
                                 <span className={cn("text-xs font-medium", o.isOverdue ? "text-destructive" : o.paymentStatus === "paid" ? "text-emerald-600" : "text-muted-foreground")}>
-                                  {PO_STATUS[o.status] ?? o.status} · {o.isOverdue ? "overdue" : PAY_LABEL[o.paymentStatus] ?? o.paymentStatus}
+                                  {PO_STATUS[o.status] ? t(PO_STATUS[o.status]) : o.status} · {o.isOverdue ? t("inventory:suppliers.payState.overdue") : PAY_LABEL[o.paymentStatus] ? t(PAY_LABEL[o.paymentStatus]) : o.paymentStatus}
                                 </span>
                               </ItemActions>
                             </Link>
@@ -677,8 +731,8 @@ export default function SuppliersPage() {
 
                 <Separator />
                 <section>
-                  <SectionTitle className="mb-2">Products supplied</SectionTitle>
-                  {profile.products.length === 0 ? <p className="text-sm text-muted-foreground">No products ordered from this supplier yet.</p> : (
+                  <SectionTitle className="mb-2">{t("inventory:suppliers.profile.productsSupplied")}</SectionTitle>
+                  {profile.products.length === 0 ? <p className="text-sm text-muted-foreground">{t("inventory:suppliers.profile.noProducts")}</p> : (
                     <ItemGroup>
                       {profile.products.map((g, i) => (
                         <Fragment key={g.productId}>
@@ -686,10 +740,10 @@ export default function SuppliersPage() {
                           <Item size="sm" className="px-1">
                             <ItemContent className="min-w-0">
                               <ItemTitle className="truncate">{g.name}</ItemTitle>
-                              <ItemDescription className="text-xs">Last cost {formatCurrency(g.lastCost)}</ItemDescription>
+                              <ItemDescription className="text-xs">{t("inventory:suppliers.profile.lastCost", { amount: formatCurrency(g.lastCost) })}</ItemDescription>
                             </ItemContent>
                             <ItemActions className="flex-col items-end gap-0">
-                              <span className="text-sm font-medium tabular-nums">{g.stock} in stock</span>
+                              <span className="text-sm font-medium tabular-nums">{t("inventory:suppliers.profile.inStock", { count: g.stock })}</span>
                               <span className="text-xs text-muted-foreground tabular-nums">{formatCurrency(g.stockValue)}</span>
                             </ItemActions>
                           </Item>
@@ -701,16 +755,16 @@ export default function SuppliersPage() {
 
                 <Separator />
                 <section>
-                  <SectionTitle className="mb-2">Payments made</SectionTitle>
-                  {profile.payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments recorded yet.</p> : (
+                  <SectionTitle className="mb-2">{t("inventory:suppliers.profile.payments")}</SectionTitle>
+                  {profile.payments.length === 0 ? <p className="text-sm text-muted-foreground">{t("inventory:suppliers.profile.noPayments")}</p> : (
                     <ItemGroup>
                       {profile.payments.map((y, i) => (
                         <Fragment key={y.id}>
                           {i > 0 && <ItemSeparator />}
                           <Item size="sm" className="px-1">
                             <ItemContent>
-                              <ItemTitle>{new Date(y.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</ItemTitle>
-                              <ItemDescription className="text-xs">{[y.method, y.poNumber, y.note].filter(Boolean).join(" · ")}</ItemDescription>
+                              <ItemTitle>{new Date(y.date).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" })}</ItemTitle>
+                              <ItemDescription className="text-xs">{[opt(y.method), y.poNumber, y.note].filter(Boolean).join(" · ")}</ItemDescription>
                             </ItemContent>
                             <ItemActions><span className="text-sm font-semibold tabular-nums">{formatCurrency(y.amount)}</span></ItemActions>
                           </Item>
@@ -724,33 +778,33 @@ export default function SuppliersPage() {
           ) : (
             <div className="flex flex-col gap-3.5">
               <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-semibold">{editingId ? "Edit supplier" : "New supplier"}</h2>
-                <p className="text-sm text-muted-foreground">Only the name is required.</p>
+                <h2 className="text-lg font-semibold">{editingId ? t("inventory:suppliers.panel.edit") : t("inventory:suppliers.panel.new")}</h2>
+                <p className="text-sm text-muted-foreground">{t("inventory:suppliers.form.onlyName")}</p>
                 {formError && <Alert variant="destructive" className="mt-2"><AlertDescription>{formError}</AlertDescription></Alert>}
               </div>
-              <FormField label="Supplier / company name *" htmlFor="sup-name"><Input id="sup-name" value={form.name} onChange={set("name")} placeholder="e.g. Dhaka Textiles Ltd." /></FormField>
+              <FormField label={t("inventory:suppliers.form.name")} htmlFor="sup-name"><Input id="sup-name" value={form.name} onChange={set("name")} placeholder={t("inventory:suppliers.form.namePh")} /></FormField>
               <div className="grid grid-cols-2 gap-2.5">
-                <FormField label="Contact person" htmlFor="sup-contact"><Input id="sup-contact" value={form.contactPerson} onChange={set("contactPerson")} placeholder="e.g. Md. Rafiq" /></FormField>
-                <FormField label="Phone" htmlFor="sup-phone">
+                <FormField label={t("inventory:suppliers.form.contactPerson")} htmlFor="sup-contact"><Input id="sup-contact" value={form.contactPerson} onChange={set("contactPerson")} placeholder={t("inventory:suppliers.form.contactPh")} /></FormField>
+                <FormField label={t("common:fields.phone")} htmlFor="sup-phone">
                   <InputGroup>
                     <InputGroupAddon><InputGroupText>+880</InputGroupText></InputGroupAddon>
                     <InputGroupInput id="sup-phone" type="tel" value={form.phone} onChange={set("phone")} placeholder="17XX-XXXXXX" />
                   </InputGroup>
                 </FormField>
               </div>
-              <FormField label="Email" htmlFor="sup-email"><Input id="sup-email" type="email" value={form.email} onChange={set("email")} placeholder="supplier@example.com" /></FormField>
-              <FormField label="Address" htmlFor="sup-address"><Input id="sup-address" value={form.address} onChange={set("address")} placeholder="Street, area" /></FormField>
+              <FormField label={t("common:fields.email")} htmlFor="sup-email"><Input id="sup-email" type="email" value={form.email} onChange={set("email")} placeholder="supplier@example.com" /></FormField>
+              <FormField label={t("common:fields.address")} htmlFor="sup-address"><Input id="sup-address" value={form.address} onChange={set("address")} placeholder={t("inventory:suppliers.form.addressPh")} /></FormField>
               <div className="grid grid-cols-2 gap-2.5">
-                <FormField label="District" htmlFor="sup-district">
+                <FormField label={t("inventory:suppliers.form.district")} htmlFor="sup-district">
                   <Select value={toSel(form.district)} onValueChange={setSel("district")}>
                     <SelectTrigger id="sup-district" className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value={NONE}>—</SelectItem>{DISTRICTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                    <SelectContent><SelectItem value={NONE}>—</SelectItem>{DISTRICTS.map((d) => <SelectItem key={d} value={d}>{opt(d)}</SelectItem>)}</SelectContent>
                   </Select>
                 </FormField>
-                <FormField label="Country" htmlFor="sup-country">
+                <FormField label={t("inventory:suppliers.form.country")} htmlFor="sup-country">
                   <Select value={toSel(form.country)} onValueChange={setSel("country")}>
                     <SelectTrigger id="sup-country" className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value={NONE}>—</SelectItem>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    <SelectContent><SelectItem value={NONE}>—</SelectItem>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{opt(c)}</SelectItem>)}</SelectContent>
                   </Select>
                 </FormField>
               </div>
@@ -758,48 +812,48 @@ export default function SuppliersPage() {
                 <Collapsible>
                   <CollapsibleTrigger asChild>
                     <Button type="button" variant="ghost" className="group w-full justify-between">
-                      Payment &amp; terms
+                      {t("inventory:suppliers.form.paymentSection")}
                       <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="flex flex-col gap-3 px-3.5 pt-1 pb-3.5">
                     <div className="grid grid-cols-2 gap-2.5">
-                      <FormField label="Payment terms" htmlFor="sup-terms">
+                      <FormField label={t("inventory:suppliers.form.paymentTerms")} htmlFor="sup-terms">
                         <Select value={toSel(form.paymentTerms)} onValueChange={setSel("paymentTerms")}>
                           <SelectTrigger id="sup-terms" className="w-full"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value={NONE}>Not set</SelectItem>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                          <SelectContent><SelectItem value={NONE}>{t("common:extra.notSet")}</SelectItem>{TERMS.map((v) => <SelectItem key={v} value={v}>{opt(v)}</SelectItem>)}</SelectContent>
                         </Select>
                       </FormField>
-                      <FormField label="Lead time (days)" htmlFor="sup-lead"><Input id="sup-lead" type="number" min="0" step="1" value={form.leadTimeDays} onChange={set("leadTimeDays")} placeholder="e.g. 5" /></FormField>
+                      <FormField label={t("inventory:suppliers.form.leadTime")} htmlFor="sup-lead"><Input id="sup-lead" type="number" min="0" step="1" value={form.leadTimeDays} onChange={set("leadTimeDays")} placeholder={t("inventory:suppliers.form.leadTimePh")} /></FormField>
                     </div>
                     <div className="grid grid-cols-2 gap-2.5">
-                      <FormField label="Opening balance (৳ you owe)" htmlFor="sup-opening"><Input id="sup-opening" type="number" min="0" value={form.openingBalance} onChange={set("openingBalance")} placeholder="0.00" /></FormField>
-                      <FormField label="TIN / BIN" htmlFor="sup-tin"><Input id="sup-tin" value={form.tin} onChange={set("tin")} placeholder="Optional" /></FormField>
+                      <FormField label={t("inventory:suppliers.form.openingBalance")} htmlFor="sup-opening"><Input id="sup-opening" type="number" min="0" value={form.openingBalance} onChange={set("openingBalance")} placeholder="0.00" /></FormField>
+                      <FormField label={t("inventory:suppliers.form.tin")} htmlFor="sup-tin"><Input id="sup-tin" value={form.tin} onChange={set("tin")} placeholder={t("common:status.optional")} /></FormField>
                     </div>
-                    <FormField label="Pay to" htmlFor="sup-payto">
+                    <FormField label={t("inventory:suppliers.form.payTo")} htmlFor="sup-payto">
                       <Select value={toSel(form.payTo)} onValueChange={setSel("payTo")}>
                         <SelectTrigger id="sup-payto" className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value={NONE}>—</SelectItem>{PAY_TO.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                        <SelectContent><SelectItem value={NONE}>—</SelectItem>{PAY_TO.map((p) => <SelectItem key={p} value={p}>{opt(p)}</SelectItem>)}</SelectContent>
                       </Select>
                     </FormField>
-                    <FormField label="Account / wallet number" htmlFor="sup-account"><Input id="sup-account" value={form.accountNumber} onChange={set("accountNumber")} placeholder="e.g. 01XXXXXXXXX" /></FormField>
+                    <FormField label={t("inventory:suppliers.form.account")} htmlFor="sup-account"><Input id="sup-account" value={form.accountNumber} onChange={set("accountNumber")} placeholder={t("inventory:suppliers.form.accountPh")} /></FormField>
                   </CollapsibleContent>
                 </Collapsible>
               </Card>
-              <FormField label="Description" htmlFor="sup-desc"><Input id="sup-desc" value={form.description} onChange={set("description")} placeholder="What they supply, in a line" /></FormField>
-              <FormField label="Notes" htmlFor="sup-notes">
-                <Textarea id="sup-notes" rows={2} value={form.notes} onChange={set("notes")} placeholder="Minimum order, delivery days…" />
+              <FormField label={t("common:fields.description")} htmlFor="sup-desc"><Input id="sup-desc" value={form.description} onChange={set("description")} placeholder={t("inventory:suppliers.form.descriptionPh")} /></FormField>
+              <FormField label={t("common:fields.notes")} htmlFor="sup-notes">
+                <Textarea id="sup-notes" rows={2} value={form.notes} onChange={set("notes")} placeholder={t("inventory:suppliers.form.notesPh")} />
               </FormField>
-              <FormField label="Status" htmlFor="sup-status" description="Only active suppliers can be picked on new purchase orders.">
+              <FormField label={t("common:fields.status")} htmlFor="sup-status" description={t("inventory:suppliers.form.statusHelp")}>
                 <Select value={form.status} onValueChange={setSel("status")}>
                   <SelectTrigger id="sup-status" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="Active">Active</SelectItem><SelectItem value="Inactive">Inactive</SelectItem><SelectItem value="Blocked">Blocked</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="Active">{t("common:status.active")}</SelectItem><SelectItem value="Inactive">{t("common:status.inactive")}</SelectItem><SelectItem value="Blocked">{t("inventory:suppliers.status.blocked")}</SelectItem></SelectContent>
                 </Select>
               </FormField>
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setPanel("profile")}>Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => setPanel("profile")}>{t("common:actions.cancel")}</Button>
                 <Button type="button" disabled={saving} onClick={save}>
-                  {saving ? "Saving…" : editingId ? "Save changes" : "Add supplier"}
+                  {saving ? t("common:actions.saving") : editingId ? t("common:actions.saveChanges") : t("inventory:suppliers.addSupplier")}
                 </Button>
               </div>
             </div>
@@ -811,14 +865,14 @@ export default function SuppliersPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>{t("common:confirm.deleteTitle", { name: deleteTarget?.name })}</AlertDialogTitle>
             <AlertDialogDescription>
-              The supplier is removed from your list. Past purchase orders stay on record.
+              {t("inventory:suppliers.deleteBody")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className={buttonVariants({ variant: "destructive" })}>Delete</AlertDialogAction>
+            <AlertDialogCancel>{t("common:actions.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className={buttonVariants({ variant: "destructive" })}>{t("common:actions.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

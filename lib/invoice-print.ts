@@ -2,6 +2,8 @@ import type { SellResponse, SellItem } from "@/lib/sellsApi"
 import { settingsApi } from "@/lib/settingsApi"
 import { saasCompanyApi } from "@/lib/saasCompanyApi"
 import { getCachedReceiptPrefs } from "@/lib/receipt-prefs"
+import type { TFunction } from "i18next"
+import { createI18n, isLang, localeTag } from "@/lib/i18n"
 
 /* ------------------------------------------------------------------ */
 /* Seller (company) details — loaded from settings + company profile   */
@@ -86,22 +88,54 @@ function spell(n: number): string {
   return String(n)
 }
 
-function amountInWords(amount: number): string {
-  const whole = Math.floor(Math.abs(amount))
-  const cents = Math.round((Math.abs(amount) - whole) * 100)
-  const words = spell(whole)
-  return words.charAt(0).toUpperCase() + words.slice(1) + (cents ? ` and ${String(cents).padStart(2, "0")}/100` : "") + " only"
+// Bangla number words 0–99 (irregular), then শত / হাজার / লক্ষ / কোটি (South Asian grouping)
+const BN_0_99 = ("শূন্য এক দুই তিন চার পাঁচ ছয় সাত আট নয় দশ এগারো বারো তেরো চৌদ্দ পনেরো ষোলো সতেরো আঠারো উনিশ " +
+  "বিশ একুশ বাইশ তেইশ চব্বিশ পঁচিশ ছাব্বিশ সাতাশ আঠাশ উনত্রিশ ত্রিশ একত্রিশ বত্রিশ তেত্রিশ চৌত্রিশ পঁয়ত্রিশ ছত্রিশ সাঁইত্রিশ আটত্রিশ উনচল্লিশ " +
+  "চল্লিশ একচল্লিশ বিয়াল্লিশ তেতাল্লিশ চুয়াল্লিশ পঁয়তাল্লিশ ছেচল্লিশ সাতচল্লিশ আটচল্লিশ উনপঞ্চাশ পঞ্চাশ একান্ন বাহান্ন তিপ্পান্ন চুয়ান্ন পঞ্চান্ন ছাপ্পান্ন সাতান্ন আটান্ন উনষাট " +
+  "ষাট একষট্টি বাষট্টি তেষট্টি চৌষট্টি পঁয়ষট্টি ছেষট্টি সাতষট্টি আটষট্টি উনসত্তর সত্তর একাত্তর বাহাত্তর তিয়াত্তর চুয়াত্তর পঁচাত্তর ছিয়াত্তর সাতাত্তর আটাত্তর উনআশি " +
+  "আশি একাশি বিরাশি তিরাশি চুরাশি পঁচাশি ছিয়াশি সাতাশি আটাশি উননব্বই নব্বই একানব্বই বিরানব্বই তিরানব্বই চুরানব্বই পঁচানব্বই ছিয়ানব্বই সাতানব্বই আটানব্বই নিরানব্বই").split(" ")
+
+function spellBn(n: number): string {
+  if (n < 100) return BN_0_99[n]
+  const parts: string[] = []
+  const unit = (div: number, word: string) => {
+    const q = Math.floor(n / div)
+    if (q) { parts.push(`${div === 1e7 ? spellBn(q) : BN_0_99[q]} ${word}`); n %= div }
+  }
+  unit(1e7, "কোটি"); unit(1e5, "লক্ষ"); unit(1e3, "হাজার"); unit(100, "শত")
+  if (n) parts.push(BN_0_99[n])
+  return parts.join(" ")
 }
 
-const PAY_LABEL: Record<string, { label: string; tone: "ok" | "warn" | "bad" }> = {
-  paid: { label: "Paid", tone: "ok" },
-  partially_paid: { label: "Partly paid", tone: "warn" },
-  partial: { label: "Partly paid", tone: "warn" },
-  pending: { label: "Unpaid", tone: "warn" },
-  pending_payment: { label: "Unpaid", tone: "warn" },
-  shipping_deposit_paid: { label: "Deposit paid", tone: "warn" },
-  failed: { label: "Failed", tone: "bad" },
-  cancelled: { label: "Cancelled", tone: "bad" },
+type PrintT = TFunction<["print", "common"]>
+
+function amountInWords(amount: number, t: PrintT, bn: boolean): string {
+  const whole = Math.floor(Math.abs(amount))
+  const cents = Math.round((Math.abs(amount) - whole) * 100)
+  const raw = bn ? spellBn(whole) : spell(whole)
+  const words = bn ? raw : raw.charAt(0).toUpperCase() + raw.slice(1)
+  return cents
+    ? t("print:invoice.wordsCents", { words, cents: String(cents).padStart(2, "0") })
+    : t("print:invoice.wordsOnly", { words })
+}
+
+type PayKey = "paid" | "partial" | "unpaid" | "deposit" | "failed" | "cancelled"
+const PAY_LABEL: Record<string, { key: PayKey; tone: "ok" | "warn" | "bad" }> = {
+  paid: { key: "paid", tone: "ok" },
+  partially_paid: { key: "partial", tone: "warn" },
+  partial: { key: "partial", tone: "warn" },
+  pending: { key: "unpaid", tone: "warn" },
+  pending_payment: { key: "unpaid", tone: "warn" },
+  shipping_deposit_paid: { key: "deposit", tone: "warn" },
+  failed: { key: "failed", tone: "bad" },
+  cancelled: { key: "cancelled", tone: "bad" },
+}
+
+/** Printed labels in `lng` (English when missing/unknown); a fresh instance per print. */
+function printT(lng?: string): { t: PrintT; lang: "en" | "bn" } {
+  const lang = isLang(lng) ? lng : "en"
+  const t: PrintT = createI18n(lang).getFixedT(lang, ["print", "common"])
+  return { t, lang }
 }
 
 interface PrintCtx {
@@ -113,7 +147,7 @@ interface PrintCtx {
 /* Invoice HTML                                                         */
 /* ------------------------------------------------------------------ */
 
-function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller): string {
+function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller, t: PrintT, lang: "en" | "bn"): string {
   const money = (n: number) => ctx.formatCurrency(n)
   const o = order as SellResponse & Record<string, any>
   const items = order.items ?? []
@@ -132,18 +166,19 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
   const paid = o.paidAmount != null ? num(o.paidAmount) : (order.paymentStatus === "paid" ? total : 0)
   const due = o.dueAmount != null ? num(o.dueAmount) : Math.max(0, total - paid)
   const cancelled = order.status === "Cancelled"
-  const pay = cancelled ? { label: "Cancelled", tone: "bad" as const }
+  const payKey = cancelled ? PAY_LABEL.cancelled
     : due <= 0.009 && total > 0 ? PAY_LABEL.paid
     : PAY_LABEL[order.paymentStatus ?? ""] ?? (paid > 0 ? PAY_LABEL.partially_paid : PAY_LABEL.pending)
+  const pay = { label: t(`print:invoice.pay.${payKey.key}`), tone: payKey.tone }
   const showLineDisc = lineDisc > 0.009
 
   // ---- dates ----
   const issued = new Date(order.orderTime || (o.createdAt as string) || Date.now())
-  const issuedDate = issued.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
-  const issuedTime = issued.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+  const issuedDate = issued.toLocaleDateString(localeTag(lang), { day: "numeric", month: "short", year: "numeric" })
+  const issuedTime = issued.toLocaleTimeString(localeTag(lang), { hour: "numeric", minute: "2-digit" })
 
   // ---- parties ----
-  const customerName = order.customerName || "Walk-in customer"
+  const customerName = order.customerName || t("print:invoice.walkIn")
   const receiver = order.shippingFullName || customerName
   const shipLines = [
     [order.shippingAddressLine1, order.shippingAddressLine2].filter(Boolean).join(", "),
@@ -169,8 +204,8 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
         <tr>
           <td class="c-no">${i + 1}</td>
           <td class="c-item">
-            <div class="item-name">${esc(item.productName)}${item.bundleItems?.length ? ' <span class="tag">Bundle</span>' : ""}</div>
-            ${variant || sku ? `<div class="item-sub">${[variant, sku ? `SKU ${sku}` : ""].filter(Boolean).map(esc).join(" &middot; ")}</div>` : ""}
+            <div class="item-name">${esc(item.productName)}${item.bundleItems?.length ? ` <span class="tag">${esc(t("print:invoice.bundle"))}</span>` : ""}</div>
+            ${variant || sku ? `<div class="item-sub">${[variant, sku ? t("print:invoice.sku", { sku }) : ""].filter(Boolean).map(esc).join(" &middot; ")}</div>` : ""}
             ${subs}
           </td>
           <td class="c-num">${item.quantity}</td>
@@ -179,24 +214,24 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
           <td class="c-num c-amt">${money(itemTotal(item))}</td>
         </tr>`
       }).join("")
-    : `<tr><td class="c-no">1</td><td class="c-item"><div class="item-name">Sale ${esc(order.invoiceNo)}</div></td>
+    : `<tr><td class="c-no">1</td><td class="c-item"><div class="item-name">${esc(t("print:invoice.sale", { no: order.invoiceNo }))}</div></td>
          <td class="c-num">1</td><td class="c-num">${money(total)}</td>${showLineDisc ? "<td></td>" : ""}<td class="c-num c-amt">${money(total)}</td></tr>`
 
   const totalRow = (label: string, value: string, cls = "") =>
     `<tr class="${cls}"><td>${label}</td><td class="c-num">${value}</td></tr>`
 
   const totals = [
-    totalRow("Subtotal", money(subtotal)),
-    discount > 0.009 ? totalRow(`Discount${order.couponCode ? ` (${esc(order.couponCode)})` : ""}`, "&minus;" + money(discount)) : "",
-    tax > 0.009 || (taxRate ?? 0) > 0 ? totalRow(`Tax${taxRate ? ` (${taxRate}%)` : ""}`, money(tax)) : "",
-    delivery > 0.009 ? totalRow("Delivery", money(delivery)) : "",
-    totalRow("Total", money(total), "grand"),
-    totalRow("Paid", money(paid)),
-    totalRow("Balance due", money(due), due > 0.009 ? "due" : "due settled"),
+    totalRow(esc(t("print:invoice.subtotal")), money(subtotal)),
+    discount > 0.009 ? totalRow(esc(order.couponCode ? t("print:invoice.discountCode", { code: order.couponCode }) : t("print:invoice.discount")), "&minus;" + money(discount)) : "",
+    tax > 0.009 || (taxRate ?? 0) > 0 ? totalRow(esc(taxRate ? t("print:invoice.taxRate", { rate: taxRate }) : t("print:invoice.tax")), money(tax)) : "",
+    delivery > 0.009 ? totalRow(esc(t("print:invoice.delivery")), money(delivery)) : "",
+    totalRow(esc(t("print:invoice.total")), money(total), "grand"),
+    totalRow(esc(t("print:invoice.paid")), money(paid)),
+    totalRow(esc(t("print:invoice.balanceDue")), money(due), due > 0.009 ? "due" : "due settled"),
   ].join("")
 
   const notes = [
-    o.deliveryNote ? `<p><b>Delivery note:</b> ${esc(o.deliveryNote)}</p>` : "",
+    o.deliveryNote ? `<p><b>${esc(t("print:invoice.deliveryNote"))}</b> ${esc(o.deliveryNote)}</p>` : "",
     order.notes ? `<p>${esc(order.notes).replace(/\n/g, "<br />")}</p>` : "",
   ].join("")
 
@@ -207,13 +242,13 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
     [seller.phone, seller.email].filter(Boolean).map(esc).join(" &middot; "),
     seller.website ? esc(seller.website) : "",
   ].filter(Boolean).join("<br />")
-  const regs = [taxId ? `BIN/VAT: ${esc(taxId)}` : "", seller.licence ? `Trade licence: ${esc(seller.licence)}` : ""].filter(Boolean).join(" &middot; ")
+  const regs = [taxId ? esc(t("print:invoice.binVat", { value: taxId })) : "", seller.licence ? esc(t("print:invoice.tradeLicence", { value: seller.licence })) : ""].filter(Boolean).join(" &middot; ")
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8" />
-<title>Invoice ${esc(order.invoiceNo)} — ${esc(seller.name)}</title>
+<title>${esc(t("print:invoice.docTitle", { no: order.invoiceNo }))} — ${esc(seller.name)}</title>
 <style>
   @page { size: A4; margin: 14mm 14mm 16mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -294,12 +329,12 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
       </div>
     </div>
     <div class="doc">
-      <h1>INVOICE</h1>
+      <h1>${esc(t("print:invoice.title"))}</h1>
       <table>
-        <tr><td>Invoice no.</td><td>${esc(order.invoiceNo)}</td></tr>
-        <tr><td>Date</td><td>${esc(issuedDate)}, ${esc(issuedTime)}</td></tr>
-        <tr><td>Status</td><td><span class="pill ${pay.tone}">${pay.label}</span></td></tr>
-        ${location ? `<tr><td>Location</td><td>${esc(location)}</td></tr>` : ""}
+        <tr><td>${esc(t("print:invoice.invoiceNo"))}</td><td>${esc(order.invoiceNo)}</td></tr>
+        <tr><td>${esc(t("print:invoice.date"))}</td><td>${esc(issuedDate)}, ${esc(issuedTime)}</td></tr>
+        <tr><td>${esc(t("print:invoice.status"))}</td><td><span class="pill ${pay.tone}">${esc(pay.label)}</span></td></tr>
+        ${location ? `<tr><td>${esc(t("print:invoice.location"))}</td><td>${esc(location)}</td></tr>` : ""}
       </table>
     </div>
   </div>
@@ -308,20 +343,20 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
 
   <div class="parties">
     <div class="party">
-      <div class="lbl">Bill to</div>
+      <div class="lbl">${esc(t("print:invoice.billTo"))}</div>
       <div class="name">${esc(customerName)}</div>
-      <div class="lines">${[...(hasShipping ? [] : contact)].map(esc).join("<br />") || (order.customerId ? "" : "Point of sale")}</div>
+      <div class="lines">${[...(hasShipping ? [] : contact)].map(esc).join("<br />") || (order.customerId ? "" : esc(t("print:invoice.pointOfSale")))}</div>
     </div>
     <div class="party">
-      <div class="lbl">Ship to</div>
+      <div class="lbl">${esc(t("print:invoice.shipTo"))}</div>
       ${hasShipping
         ? `<div class="name">${esc(receiver)}</div><div class="lines">${[...shipLines, ...contact].map(esc).join("<br />")}</div>`
-        : `<div class="lines">Collected in store</div>`}
+        : `<div class="lines">${esc(t("print:invoice.collected"))}</div>`}
     </div>
     <div class="party">
-      <div class="lbl">Payment</div>
+      <div class="lbl">${esc(t("print:invoice.payment"))}</div>
       <div class="name">${esc(order.method || "—")}</div>
-      <div class="lines">${[txn ? `Txn: ${esc(txn)}` : "", courier ? `Courier: ${esc(courier)}` : "", zone ? `Zone: ${esc(zone)}` : ""].filter(Boolean).join("<br />")}</div>
+      <div class="lines">${[txn ? esc(t("print:invoice.txn", { value: txn })) : "", courier ? esc(t("print:invoice.courier", { value: courier })) : "", zone ? esc(t("print:invoice.zone", { value: zone })) : ""].filter(Boolean).join("<br />")}</div>
     </div>
   </div>
 
@@ -329,11 +364,11 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
     <thead>
       <tr>
         <th class="c-no">#</th>
-        <th>Item</th>
-        <th class="c-num">Qty</th>
-        <th class="c-num">Unit price</th>
-        ${showLineDisc ? '<th class="c-num">Discount</th>' : ""}
-        <th class="c-num">Amount</th>
+        <th>${esc(t("print:invoice.item"))}</th>
+        <th class="c-num">${esc(t("print:invoice.qty"))}</th>
+        <th class="c-num">${esc(t("print:invoice.unitPrice"))}</th>
+        ${showLineDisc ? `<th class="c-num">${esc(t("print:invoice.discount"))}</th>` : ""}
+        <th class="c-num">${esc(t("print:invoice.amount"))}</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -341,22 +376,22 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
 
   <div class="bottom">
     <div class="words">
-      <div class="lbl">Amount in words</div>
-      <p>${esc(amountInWords(total))}</p>
-      ${notes ? `<div class="lbl">Notes</div>${notes}` : ""}
-      ${showLineDisc ? `<p class="item-sub">Line discounts: &minus;${money(lineDisc)} (gross ${money(lineGross)})</p>` : ""}
+      <div class="lbl">${esc(t("print:invoice.amountInWords"))}</div>
+      <p>${esc(amountInWords(total, t, lang === "bn"))}</p>
+      ${notes ? `<div class="lbl">${esc(t("print:invoice.notes"))}</div>${notes}` : ""}
+      ${showLineDisc ? `<p class="item-sub">${esc(t("print:invoice.lineDiscounts", { discount: "\u2212" + money(lineDisc), gross: money(lineGross) }))}</p>` : ""}
     </div>
     <table class="totals">${totals}</table>
   </div>
 
   <div class="sign">
-    <div>Customer signature</div>
-    <div>Authorised signature</div>
+    <div>${esc(t("print:invoice.customerSignature"))}</div>
+    <div>${esc(t("print:invoice.authorisedSignature"))}</div>
   </div>
 
   <div class="foot">
-    <div class="msg">${esc(footerMsg || "Thank you for your business.")}</div>
-    Goods once sold are subject to our return policy. This is a computer-generated invoice.
+    <div class="msg">${esc(footerMsg || t("print:invoice.thanks"))}</div>
+    ${esc(t("print:invoice.policy"))}
   </div>
 </div>
 </body>
@@ -368,17 +403,19 @@ function invoiceHtml(order: SellResponse, ctx: PrintCtx, seller: InvoiceSeller):
  * Shared by the Orders and Sales pages and the New sale form.
  * The window opens immediately (so popup blockers allow it), then fills in once
  * the company details are loaded (cached after the first print).
+ * `lng` ("en" | "bn", e.g. the caller's `i18n.language`) sets the printed labels; English when omitted.
  */
-export function printSaleInvoice(order: SellResponse, ctx: PrintCtx): void {
+export function printSaleInvoice(order: SellResponse, ctx: PrintCtx, lng?: string): void {
+  const { t, lang } = printT(lng)
   const w = window.open("", "_blank")
   if (!w) return
-  w.document.write(`<!DOCTYPE html><title>Invoice ${esc(order.invoiceNo)}</title><p style="font-family:sans-serif;padding:24px;color:#6b7280">Preparing invoice…</p>`)
+  w.document.write(`<!DOCTYPE html><title>${esc(t("print:invoice.docTitle", { no: order.invoiceNo }))}</title><p style="font-family:sans-serif;padding:24px;color:#6b7280">${esc(t("print:invoice.preparing"))}</p>`)
 
   void loadInvoiceSeller()
-    .catch((): InvoiceSeller => ({ name: "Your business", addressLines: [] }))
+    .catch((): InvoiceSeller => ({ name: t("print:invoice.yourBusiness"), addressLines: [] }))
     .then((seller) => {
       w.document.open()
-      w.document.write(invoiceHtml(order, ctx, seller))
+      w.document.write(invoiceHtml(order, ctx, seller, t, lang))
       w.document.close()
       w.focus()
       // wait for the logo before printing so it isn't missing on paper

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -15,6 +16,7 @@ import { AlertCircle, CheckCircle2, Save, MapPin } from "lucide-react"
  * live inside Company Settings.
  */
 export function BillingContactForm() {
+  const { t } = useTranslation(["account", "common"])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [successMessage, setSuccessMessage] = useState("")
@@ -40,16 +42,16 @@ export function BillingContactForm() {
           taxIdType: (response.data.taxIdType as "vat" | "ein" | "gst" | "other") || "gst",
         })
       })
-      .catch((err: any) => setError(err.response?.data?.message || "Failed to load billing contact"))
+      .catch((err: any) => setError(err.response?.data?.message || t("account:billing.contact.loadFailed")))
       .finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = (field: keyof BillingContactPayload, value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }))
 
   const handleSave = async () => {
     if (!formData.email || !formData.phone || !formData.address || !formData.city) {
-      setError("Please fill in all required fields")
+      setError(t("account:billing.contact.required"))
       return
     }
     setSaving(true)
@@ -57,10 +59,10 @@ export function BillingContactForm() {
     setSuccessMessage("")
     try {
       await saasCompanyApi.updateBillingContact(formData)
-      setSuccessMessage("Billing contact updated successfully")
+      setSuccessMessage(t("account:billing.contact.updated"))
       setTimeout(() => setSuccessMessage(""), 3000)
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to update billing contact")
+      setError(err.response?.data?.message || t("account:billing.contact.updateFailed"))
     } finally {
       setSaving(false)
     }
@@ -93,32 +95,32 @@ export function BillingContactForm() {
       <div>
         <div className="flex items-center gap-3 mb-4">
           <MapPin className="w-5 h-5 text-brand-fg" />
-          <h3 className="text-lg font-semibold text-foreground">Billing Address</h3>
+          <h3 className="text-lg font-semibold text-foreground">{t("account:billing.contact.address")}</h3>
         </div>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Email" required htmlFor="billing-email">
-              <Input id="billing-email" type="email" value={formData.email || ""} onChange={(e) => handleChange("email", e.target.value)} placeholder="billing@example.com" />
+            <FormField label={t("common:fields.email")} required htmlFor="billing-email">
+              <Input id="billing-email" type="email" value={formData.email || ""} onChange={(e) => handleChange("email", e.target.value)} placeholder={t("account:billing.contact.emailPlaceholder")} />
             </FormField>
-            <FormField label="Phone" required htmlFor="billing-phone">
-              <Input id="billing-phone" type="tel" value={formData.phone || ""} onChange={(e) => handleChange("phone", e.target.value)} placeholder="+1 (555) 000-0000" />
+            <FormField label={t("common:fields.phone")} required htmlFor="billing-phone">
+              <Input id="billing-phone" type="tel" value={formData.phone || ""} onChange={(e) => handleChange("phone", e.target.value)} placeholder={t("account:billing.contact.phonePlaceholder")} />
             </FormField>
           </div>
-          <FormField label="Street Address" required htmlFor="billing-address">
-            <Input id="billing-address" value={formData.address || ""} onChange={(e) => handleChange("address", e.target.value)} placeholder="123 Main Street" />
+          <FormField label={t("account:billing.contact.street")} required htmlFor="billing-address">
+            <Input id="billing-address" value={formData.address || ""} onChange={(e) => handleChange("address", e.target.value)} placeholder={t("account:billing.contact.streetPlaceholder")} />
           </FormField>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <FormField label="City" required htmlFor="billing-city">
-              <Input id="billing-city" value={formData.city || ""} onChange={(e) => handleChange("city", e.target.value)} placeholder="New York" />
+            <FormField label={t("account:billing.contact.city")} required htmlFor="billing-city">
+              <Input id="billing-city" value={formData.city || ""} onChange={(e) => handleChange("city", e.target.value)} placeholder={t("account:billing.contact.cityPlaceholder")} />
             </FormField>
-            <FormField label="State" htmlFor="billing-state">
-              <Input id="billing-state" value={formData.state || ""} onChange={(e) => handleChange("state", e.target.value)} placeholder="NY" />
+            <FormField label={t("account:billing.contact.state")} htmlFor="billing-state">
+              <Input id="billing-state" value={formData.state || ""} onChange={(e) => handleChange("state", e.target.value)} placeholder={t("account:billing.contact.statePlaceholder")} />
             </FormField>
-            <FormField label="Zip Code" htmlFor="billing-zipCode">
-              <Input id="billing-zipCode" value={formData.zipCode || ""} onChange={(e) => handleChange("zipCode", e.target.value)} placeholder="10001" />
+            <FormField label={t("account:billing.contact.zip")} htmlFor="billing-zipCode">
+              <Input id="billing-zipCode" value={formData.zipCode || ""} onChange={(e) => handleChange("zipCode", e.target.value)} placeholder={t("account:billing.contact.zipPlaceholder")} />
             </FormField>
-            <FormField label="Country" htmlFor="billing-country">
-              <Input id="billing-country" value={formData.country || ""} onChange={(e) => handleChange("country", e.target.value)} placeholder="United States" />
+            <FormField label={t("account:billing.contact.country")} htmlFor="billing-country">
+              <Input id="billing-country" value={formData.country || ""} onChange={(e) => handleChange("country", e.target.value)} placeholder={t("account:billing.contact.countryPlaceholder")} />
             </FormField>
           </div>
         </div>
@@ -126,7 +128,7 @@ export function BillingContactForm() {
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? <><Spinner />Saving...</> : <><Save />Save billing contact</>}
+          {saving ? <><Spinner />{t("common:actions.saving")}</> : <><Save />{t("account:billing.contact.save")}</>}
         </Button>
       </div>
     </div>

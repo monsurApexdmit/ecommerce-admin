@@ -12,8 +12,10 @@ import { Spinner } from "@/components/ui/spinner"
 import { FormField } from "@/components/common/FormField"
 import { saasAuthApi } from "@/lib/saasAuthApi"
 import { AlertCircle, Mail, ArrowLeft } from "lucide-react"
+import { Trans, useTranslation } from "react-i18next"
 
 export default function ForgotPasswordPage() {
+  const { t } = useTranslation(["auth", "common"])
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
@@ -24,7 +26,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
 
     if (!email) {
-      setError("Please enter your email address")
+      setError(t("auth:login.emailRequired"))
       return
     }
 
@@ -37,7 +39,7 @@ export default function ForgotPasswordPage() {
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-          "Failed to send reset email. Please try again."
+          t("auth:password.forgot.failed")
       )
     } finally {
       setLoading(false)
@@ -52,40 +54,39 @@ export default function ForgotPasswordPage() {
             <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Mail className="w-6 h-6 text-emerald-600" />
             </div>
-            <h1 className="text-2xl font-bold">Check Your Email</h1>
+            <h1 className="text-2xl font-bold">{t("auth:password.forgot.sentTitle")}</h1>
             <p className="text-muted-foreground mt-2">
-              We've sent a password reset link to <strong>{email}</strong>
+              <Trans t={t} i18nKey="auth:password.forgot.sentTo" values={{ email }} components={{ b: <strong /> }} />
             </p>
           </div>
 
           <Alert className="mb-6">
             <AlertDescription>
               <p>
-                💡 <strong>Tip:</strong> If you don't see the email in a few minutes, check your spam
-                or junk folder.
+                💡 <Trans t={t} i18nKey="auth:password.forgot.tip" components={{ b: <strong /> }} />
               </p>
             </AlertDescription>
           </Alert>
 
           <div className="space-y-4">
             <div>
-              <h3 className="font-semibold mb-3">What's next?</h3>
+              <h3 className="font-semibold mb-3">{t("auth:password.forgot.nextTitle")}</h3>
               <ol className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">1.</span>
-                  <span>Check your email for the password reset link</span>
+                  <span>{t("auth:password.forgot.step1")}</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">2.</span>
-                  <span>Click the link to verify your email address</span>
+                  <span>{t("auth:password.forgot.step2")}</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">3.</span>
-                  <span>Create a new password and confirm it</span>
+                  <span>{t("auth:password.forgot.step3")}</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">4.</span>
-                  <span>Sign in with your new password</span>
+                  <span>{t("auth:password.forgot.step4")}</span>
                 </li>
               </ol>
             </div>
@@ -93,21 +94,26 @@ export default function ForgotPasswordPage() {
             <Separator />
             <div>
               <p className="text-sm text-muted-foreground mb-4">
-                Didn't receive the email? You can{" "}
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={() => setSuccess(false)}
-                  className="h-auto p-0"
-                >
-                  try again
-                </Button>
+                <Trans
+                  t={t}
+                  i18nKey="auth:password.forgot.notReceived"
+                  components={{
+                    retry: (
+                      <Button
+                        type="button"
+                        variant="link"
+                        onClick={() => setSuccess(false)}
+                        className="h-auto p-0"
+                      />
+                    ),
+                  }}
+                />
               </p>
 
               <Button asChild variant="outline" className="w-full">
                 <Link href="/auth/login">
                   <ArrowLeft className="w-4 h-4" />
-                  Back to Login
+                  {t("auth:login.backToLogin")}
                 </Link>
               </Button>
             </div>
@@ -124,13 +130,13 @@ export default function ForgotPasswordPage() {
           <Button asChild variant="link" className="mb-6 px-0">
             <Link href="/auth/login">
               <ArrowLeft className="w-4 h-4" />
-              Back to Login
+              {t("auth:login.backToLogin")}
             </Link>
           </Button>
 
-          <h1 className="text-3xl font-bold mb-2">Forgot Password?</h1>
+          <h1 className="text-3xl font-bold mb-2">{t("auth:password.forgot.title")}</h1>
           <p className="text-muted-foreground">
-            No worries, we'll send you a link to reset your password.
+            {t("auth:password.forgot.subtitle")}
           </p>
         </div>
 
@@ -142,13 +148,13 @@ export default function ForgotPasswordPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <FormField label="Email Address" htmlFor="email">
+          <FormField label={t("auth:login.emailAddress")} htmlFor="email">
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t("auth:password.forgot.emailPlaceholder")}
               disabled={loading}
             />
           </FormField>
@@ -161,12 +167,12 @@ export default function ForgotPasswordPage() {
             {loading ? (
               <>
                 <Spinner />
-                Sending...
+                {t("auth:password.forgot.sending")}
               </>
             ) : (
               <>
                 <Mail className="w-4 h-4" />
-                Send Reset Link
+                {t("auth:password.forgot.send")}
               </>
             )}
           </Button>
@@ -175,9 +181,9 @@ export default function ForgotPasswordPage() {
         <Separator className="mt-6" />
         <div className="pt-6">
           <p className="text-sm text-muted-foreground text-center">
-            Remember your password?{" "}
+            {t("auth:login.rememberPassword")}{" "}
             <Link href="/auth/login" className="text-primary hover:underline font-medium">
-              Sign in here
+              {t("auth:login.signInHere")}
             </Link>
           </p>
         </div>
@@ -186,8 +192,7 @@ export default function ForgotPasswordPage() {
         <Alert className="mt-6">
           <AlertDescription className="text-xs">
             <p>
-              🔒 <strong>Security:</strong> For your security, password reset links expire after 1 hour.
-              If your link has expired, you can request a new one.
+              🔒 <Trans t={t} i18nKey="auth:password.forgot.security" components={{ b: <strong /> }} />
             </p>
           </AlertDescription>
         </Alert>

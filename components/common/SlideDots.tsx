@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { cva } from "class-variance-authority"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -35,7 +36,9 @@ interface SlideDotsProps {
 }
 
 /** Carousel pager dots built from Button; active dot is wider. Replaces raw `<button style={{ width }}>` dots. */
-export function SlideDots({ count = 0, indices, current, onSelect, tone = "default", label = "Show slide", className }: SlideDotsProps) {
+export function SlideDots({ count = 0, indices, current, onSelect, tone = "default", label, className }: SlideDotsProps) {
+  const { t } = useTranslation(["ui", "common"])
+  const prefix = label ?? t("ui:slideDots.showSlide")
   const list = indices ?? Array.from({ length: count }, (_, i) => i)
   return (
     <div className={cn("flex items-center gap-1.5", className)}>
@@ -45,7 +48,7 @@ export function SlideDots({ count = 0, indices, current, onSelect, tone = "defau
           type="button"
           variant="ghost"
           size="sm"
-          aria-label={`${label} ${i + 1}`}
+          aria-label={t("ui:slideDots.slideN", { label: prefix, n: i + 1 })}
           aria-current={i === current ? "true" : undefined}
           onClick={() => onSelect(i)}
           className={dotVariants({ tone, active: i === current })}

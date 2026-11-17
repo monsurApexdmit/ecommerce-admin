@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -23,6 +24,7 @@ import { AlertCircle, Lock, Check } from "lucide-react"
 export default function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslation(["account", "common"])
   const { user } = useSaasAuth()
   const { formatCurrency } = useCompanySettings()
 
@@ -57,20 +59,20 @@ export default function CheckoutPage() {
         const selectedPlan = response.data.plans.find((p: { id: number }) => p.id === parseInt(planId))
 
         if (!selectedPlan) {
-          setError("Plan not found")
+          setError(t("account:billing.checkout.planNotFound"))
           return
         }
 
         setPlan(selectedPlan)
       } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to load plan")
+        setError(err.response?.data?.message || t("account:billing.checkout.loadFailed"))
       } finally {
         setLoading(false)
       }
     }
 
     loadPlan()
-  }, [planId, router])
+  }, [planId, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -92,23 +94,23 @@ export default function CheckoutPage() {
 
   const validateForm = (): boolean => {
     if (!formData.cardName.trim()) {
-      setError("Cardholder name is required")
+      setError(t("account:billing.checkout.nameRequired"))
       return false
     }
     if (formData.cardNumber.replace(/\s/g, "").length !== 16) {
-      setError("Valid card number required (16 digits)")
+      setError(t("account:billing.checkout.cardInvalid"))
       return false
     }
     if (!formData.expiry || formData.expiry.length !== 5) {
-      setError("Valid expiry date required (MM/YY)")
+      setError(t("account:billing.checkout.expiryInvalid"))
       return false
     }
     if (formData.cvc.length !== 3 && formData.cvc.length !== 4) {
-      setError("Valid CVC required (3-4 digits)")
+      setError(t("account:billing.checkout.cvcInvalid"))
       return false
     }
     if (!formData.billingEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      setError("Valid billing email required")
+      setError(t("account:billing.checkout.emailInvalid"))
       return false
     }
     return true
@@ -144,7 +146,7 @@ export default function CheckoutPage() {
       setError(
         err.response?.data?.message ||
           err.response?.data?.errors?.payment?.[0] ||
-          "Payment failed. Please try again."
+          t("account:billing.co.paymentFailed")
       )
       setProcessing(false)
     }
@@ -155,7 +157,7 @@ export default function CheckoutPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3 text-center">
           <Spinner className="size-8" />
-          <p className="text-muted-foreground">Loading checkout...</p>
+          <p className="text-muted-foreground">{t("account:billing.checkout.loading")}</p>
         </div>
       </div>
     )
@@ -166,10 +168,10 @@ export default function CheckoutPage() {
       <div className="mx-auto flex max-w-2xl flex-col gap-4">
         <Alert variant="destructive">
           <AlertCircle />
-          <AlertDescription>{error || "Plan not found"}</AlertDescription>
+          <AlertDescription>{error || t("account:billing.checkout.planNotFound")}</AlertDescription>
         </Alert>
         <Button onClick={() => router.push("/dashboard/billing/plans")} className="self-start">
-          Back to Plans
+          {t("account:billing.checkout.backToPlans")}
         </Button>
       </div>
     )
@@ -182,7 +184,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-8">
-      <PageHeader title="Complete Your Purchase" />
+      <PageHeader title={t("account:billing.checkout.title")} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left: Payment Form */}
@@ -190,25 +192,25 @@ export default function CheckoutPage() {
           <Card className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Billing Period Selection */}
-              <FormField label="Billing Period">
+              <FormField label={t("account:billing.checkout.period")}>
                 <div className="flex flex-wrap items-center gap-3">
                   <SegmentedControl
-                    aria-label="Billing Period"
+                    aria-label={t("account:billing.checkout.period")}
                     size="default"
                     value={billingPeriod}
                     onValueChange={(v) => setBillingPeriod(v as "monthly" | "yearly")}
-                    options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly" }]}
+                    options={[{ value: "monthly", label: t("account:billing.shared.monthly") }, { value: "yearly", label: t("account:billing.shared.yearly") }]}
                   />
-                  <Badge>Save 20%</Badge>
+                  <Badge>{t("account:billing.checkout.save20")}</Badge>
                 </div>
               </FormField>
 
               <Separator />
               <div>
-                <h3 className="font-semibold mb-4">Billing Information</h3>
+                <h3 className="font-semibold mb-4">{t("account:billing.checkout.billingInfo")}</h3>
 
                 {/* Email */}
-                <FormField label="Billing Email" htmlFor="billingEmail">
+                <FormField label={t("account:billing.checkout.billingEmail")} htmlFor="billingEmail">
                   <Input
                     id="billingEmail"
                     name="billingEmail"
@@ -224,16 +226,16 @@ export default function CheckoutPage() {
               <div className="flex flex-col gap-4">
                 <h3 className="font-semibold flex items-center gap-2">
                   <Lock className="size-5 text-muted-foreground" />
-                  Payment Method
+                  {t("account:billing.checkout.paymentMethod")}
                 </h3>
 
                 {/* Cardholder Name */}
-                <FormField label="Cardholder Name" htmlFor="cardName">
+                <FormField label={t("account:billing.checkout.cardName")} htmlFor="cardName">
                   <Input
                     id="cardName"
                     name="cardName"
                     type="text"
-                    placeholder="John Smith"
+                    placeholder={t("account:billing.checkout.cardNamePlaceholder")}
                     value={formData.cardName}
                     onChange={handleInputChange}
                     disabled={processing}
@@ -241,7 +243,7 @@ export default function CheckoutPage() {
                 </FormField>
 
                 {/* Card Number */}
-                <FormField label="Card Number" htmlFor="cardNumber" description="Test card: 4242 4242 4242 4242 | Exp: 12/25 | CVC: 123">
+                <FormField label={t("account:billing.checkout.cardNumber")} htmlFor="cardNumber" description={t("account:billing.checkout.testCard")}>
                   <Input
                     id="cardNumber"
                     name="cardNumber"
@@ -256,7 +258,7 @@ export default function CheckoutPage() {
 
                 {/* Expiry & CVC */}
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField label="Expiry (MM/YY)" htmlFor="expiry">
+                  <FormField label={t("account:billing.checkout.expiry")} htmlFor="expiry">
                     <Input
                       id="expiry"
                       name="expiry"
@@ -267,7 +269,7 @@ export default function CheckoutPage() {
                       disabled={processing}
                     />
                   </FormField>
-                  <FormField label="CVC" htmlFor="cvc">
+                  <FormField label={t("account:billing.checkout.cvc")} htmlFor="cvc">
                     <Input
                       id="cvc"
                       name="cvc"
@@ -283,7 +285,7 @@ export default function CheckoutPage() {
 
               {/* Auto-renew Checkbox */}
               <Separator />
-              <FormField orientation="horizontal" label="Automatically renew my subscription when it expires" htmlFor="autoRenew" className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
+              <FormField orientation="horizontal" label={t("account:billing.checkout.autoRenew")} htmlFor="autoRenew" className="flex-row-reverse justify-end [&>[data-slot=field-label]]:flex-none">
                 <Checkbox
                   id="autoRenew"
                   checked={autoRenew}
@@ -311,16 +313,16 @@ export default function CheckoutPage() {
                 {processing ? (
                   <>
                     <Spinner />
-                    Processing...
+                    {t("account:billing.co.processing")}
                   </>
                 ) : (
-                  `Pay ${formatCurrency(finalAmount / 100)}`
+                  t("account:billing.co.pay", { amount: formatCurrency(finalAmount / 100) })
                 )}
               </Button>
 
               {/* Security Info */}
               <p className="text-xs text-muted-foreground text-center">
-                🔒 Your payment information is encrypted and secure. We never store your full card details.
+                {t("account:billing.checkout.secure")}
               </p>
             </form>
           </Card>
@@ -328,10 +330,10 @@ export default function CheckoutPage() {
 
         {/* Right: Order Summary */}
         <div>
-          <SectionCard title="Order Summary" className="sticky top-20" contentClassName="flex flex-col gap-4">
+          <SectionCard title={t("account:billing.checkout.summary")} className="sticky top-20" contentClassName="flex flex-col gap-4">
             {/* Plan Details */}
             <Card className="gap-2 bg-muted/50 p-4 shadow-none">
-              <p className="font-semibold">{plan.name} Plan</p>
+              <p className="font-semibold">{t("account:billing.checkout.planName", { plan: plan.name })}</p>
               <p className="text-sm text-muted-foreground">{plan.description}</p>
 
               {/* Plan Features Checklist */}
@@ -346,24 +348,24 @@ export default function CheckoutPage() {
                   );
                 })}
                 {plan.features.length > 3 && (
-                  <p className="text-muted-foreground ml-6">+ {plan.features.length - 3} more features</p>
+                  <p className="text-muted-foreground ml-6">{t("account:billing.plans.moreFeatures", { count: plan.features.length - 3 })}</p>
                 )}
               </div>
             </Card>
 
             {/* Pricing Breakdown */}
             <InfoList>
-              <InfoRow label={`Plan Price (${billingPeriod}):`} value={formatCurrency(totalAmount / 100)} />
+              <InfoRow label={t("account:billing.checkout.planPrice", { period: billingPeriod === "yearly" ? t("account:billing.shared.yearly") : t("account:billing.shared.monthly") })} value={formatCurrency(totalAmount / 100)} />
               {savings > 0 && (
-                <InfoRow label="Annual Savings:" value={`-${formatCurrency(savings / 100)}`} />
+                <InfoRow label={t("account:billing.checkout.annualSavings")} value={`-${formatCurrency(savings / 100)}`} />
               )}
-              <InfoRow label="Tax (10%):" value={formatCurrency(taxAmount / 100)} />
+              <InfoRow label={t("account:billing.checkout.tax")} value={formatCurrency(taxAmount / 100)} />
             </InfoList>
             <Separator />
 
             {/* Total */}
             <div className="flex items-center justify-between">
-              <span className="font-bold">Total:</span>
+              <span className="font-bold">{t("account:billing.checkout.total")}</span>
               <span className="text-2xl font-bold">
                 {formatCurrency(finalAmount / 100)}
               </span>
@@ -373,15 +375,15 @@ export default function CheckoutPage() {
             <div className="space-y-3 text-xs text-muted-foreground">
               <div className="flex items-start gap-2">
                 <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
-                <span>30-day money-back guarantee</span>
+                <span>{t("account:billing.checkout.guarantee")}</span>
               </div>
               <div className="flex items-start gap-2">
                 <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
-                <span>Cancel anytime, no questions asked</span>
+                <span>{t("account:billing.checkout.cancelAnytime")}</span>
               </div>
               <div className="flex items-start gap-2">
                 <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
-                <span>Instant access after payment</span>
+                <span>{t("account:billing.checkout.instantAccess")}</span>
               </div>
             </div>
           </SectionCard>

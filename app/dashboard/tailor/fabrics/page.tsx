@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { Trans, useTranslation } from "react-i18next"
 import { AlertTriangle, Layers, PackagePlus, Pencil, Plus, Scissors, Search, Trash2, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -26,6 +27,7 @@ import { StatusTabs } from "@/components/ui/status-tabs"
 import { PaginationControl } from "@/components/ui/pagination-control"
 import { bricolage, instrument } from "@/components/dashboard/fonts"
 import { apiError } from "@/components/tailor/order-ui"
+import { TAILOR_NS, colourLabel, fabricTypeLabel, patternLabel, type TailorKey } from "@/components/tailor/i18n"
 import { tailorApi, type TailorFabricOverview, type TailorFabricRow } from "@/lib/tailorApi"
 import vendorApi, { type VendorOverviewRow } from "@/lib/vendorApi"
 import { useCompanySettings } from "@/contexts/company-settings-context"
@@ -38,7 +40,7 @@ type Tab = "all" | "ok" | "low" | "out" | "inactive"
 const TYPES = ["Cotton", "Silk", "Linen", "Georgette", "Khadi", "Denim"]
 const PATTERNS = ["Plain", "Striped", "Checked", "Printed", "Embroidered", "Textured"]
 const COLOURS: [string, string][] = [["White", "#F4F1EA"], ["Beige", "#D9C7A4"], ["Maroon", "#7B1E2B"], ["Navy", "#1F2F5C"], ["Green", "#2F6B4F"], ["Black", "#1A1A1A"]]
-const UNITS: [string, string][] = [["m", "Metre (m)"], ["goj", "Goj"], ["gaj", "Gaj"]]
+const UNITS: [string, TailorKey][] = [["m", "tailor:fabrics.unitM"], ["goj", "tailor:fabrics.unitGoj"], ["gaj", "tailor:fabrics.unitGaj"]]
 
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100)
@@ -67,6 +69,7 @@ function csvCell(v: unknown) { const s = String(v ?? ""); return /[",\n]/.test(s
 
 export default function TailorFabricsPage() {
   const { formatCurrency } = useCompanySettings()
+  const { t } = useTranslation(TAILOR_NS)
   const { canWrite, canDelete } = useSaasAuth()
   const blocked = useModuleGuard("TailorFabrics")
   const mayWrite = canWrite("TailorFabrics")
@@ -114,11 +117,11 @@ export default function TailorFabricsPage() {
     try {
       setOv(await tailorApi.getFabricOverview(params(page, perPage)))
     } catch {
-      toast.error("Failed to load fabrics")
+      toast.error(t("tailor:fabrics.failedLoad"))
     } finally {
       setLoading(false)
     }
-  }, [params, page, perPage])
+  }, [params, page, perPage, t])
   useEffect(() => { load() }, [load])
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => { setForm((f) => ({ ...f, [k]: v })); setErr("") }
@@ -134,12 +137,12 @@ export default function TailorFabricsPage() {
 
   const save = async () => {
     const name = form.name.trim()
-    if (!name) { setErr("Fabric name is required."); return }
-    for (const [k, label] of [["stock", "Opening stock"], ["rop", "Low-stock alert"], ["buy", "Cost price"], ["sell", "Sell price"]] as const) {
-      if (form[k] !== "" && !(Number(form[k]) >= 0)) { setErr(`${label} must be a number, 0 or more.`); return }
+    if (!name) { setErr(t("tailor:fabrics.nameRequired")); return }
+    for (const [k, label] of [["stock", "tailor:fabrics.openingStock"], ["rop", "tailor:fabrics.lowStockAlert"], ["buy", "tailor:fabrics.costPrice"], ["sell", "tailor:fabrics.sellPrice"]] as const) {
+      if (form[k] !== "" && !(Number(form[k]) >= 0)) { setErr(t("tailor:fabrics.mustBeNumber", { field: t(label) })); return }
     }
     const buy = num(form.buy), sell = num(form.sell)
-    if (sell > 0 && sell < buy) { setErr("Sell price is below cost price."); return }
+    if (sell > 0 && sell < buy) { setErr(t("tailor:fabrics.sellBelowCost")); return }
     setSaving(true); setErr("")
     try {
       const body = {
@@ -149,11 +152,11 @@ export default function TailorFabricsPage() {
       }
       if (editing) await tailorApi.updateFabric(editing.id, body)
       else await tailorApi.createFabric(body)
-      toast.success(editing ? "Fabric updated" : "Fabric added")
+      toast.success(editing ? t("tailor:fabrics.updated") : t("tailor:fabrics.added"))
       startEdit(null)
       load()
     } catch (e: any) {
-      setErr(apiError(e, "Could not save the fabric."))
+      setErr(apiError(e, t("tailor:fabrics.couldNotSave")))
     } finally {
       setSaving(false)
     }
@@ -162,31 +165,31 @@ export default function TailorFabricsPage() {
   const doRestock = async () => {
     if (!restocking) return
     const qty = num(rQty)
-    if (qty <= 0) { setRErr("Enter metres greater than 0."); return }
+    if (qty <= 0) { setRErr(t("tailor:fabrics.enterQty")); return }
     setRSaving(true)
     try {
       await tailorApi.restockFabric(restocking.id, { quantity: qty, vendorId: rSup ? Number(rSup) : null })
-      toast.success(`Added ${fmt(qty)} ${restocking.unit} to ${restocking.name}`)
+      toast.success(t("tailor:fabrics.addedStock", { qty: fmt(qty), unit: restocking.unit, name: restocking.name }))
       setRestocking(null); setRQty(""); setRErr("")
       load()
     } catch (e: any) {
-      setRErr(apiError(e, "Could not add stock."))
+      setRErr(apiError(e, t("tailor:fabrics.couldNotAddStock")))
     } finally {
       setRSaving(false)
     }
   }
 
   const remove = async (r: TailorFabricRow) => {
-    if (r.ordersCount > 0) { toast.error(`"${r.name}" is used in ${r.ordersCount} tailor order(s) and cannot be deleted.`); return }
-    if (!window.confirm(`Delete fabric "${r.name}"?`)) return
+    if (r.ordersCount > 0) { toast.error(t("tailor:fabrics.usedInOrders", { name: r.name, count: r.ordersCount })); return }
+    if (!window.confirm(t("tailor:fabrics.deleteConfirm", { name: r.name }))) return
     try {
       await tailorApi.deleteFabric(r.id)
-      toast.success("Fabric deleted")
+      toast.success(t("tailor:fabrics.deleted"))
       if (editing?.id === r.id) startEdit(null)
       if (restocking?.id === r.id) setRestocking(null)
       load()
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || "Could not delete")
+      toast.error(e?.response?.data?.message || t("tailor:shared.couldNotDelete"))
     }
   }
 
@@ -198,15 +201,15 @@ export default function TailorFabricsPage() {
         rows.push(...r.data)
         if (rows.length >= r.total || r.data.length === 0) break
       }
-      if (!rows.length) { toast.error("Nothing to export"); return }
-      const head = ["Name", "Code", "Type", "Colour", "Pattern", "Stock", "Reorder at", "Unit", "Cost / unit", "Sell / unit", "Status", "Supplier"]
-      const lines = [head, ...rows.map((r) => [r.name, r.code ?? "", r.fabricType ?? "", r.color ?? "", r.pattern ?? "", r.stockQuantity, r.reorderLevel ?? 0, r.unit, r.purchasePrice, r.sellingPrice, r.status === "inactive" ? "Inactive" : "Active", r.vendorName ?? ""])]
+      if (!rows.length) { toast.error(t("common:extra.nothingToExport")); return }
+      const head = [t("tailor:fabrics.csvName"), t("tailor:fabrics.csvCode"), t("tailor:fabrics.csvType"), t("tailor:fabrics.csvColour"), t("tailor:fabrics.csvPattern"), t("tailor:fabrics.csvStock"), t("tailor:fabrics.csvReorder"), t("tailor:fabrics.csvUnit"), t("tailor:fabrics.csvCost"), t("tailor:fabrics.csvSell"), t("tailor:fabrics.csvStatus"), t("tailor:fabrics.csvSupplier")]
+      const lines = [head, ...rows.map((r) => [r.name, r.code ?? "", r.fabricType ?? "", r.color ?? "", r.pattern ?? "", r.stockQuantity, r.reorderLevel ?? 0, r.unit, r.purchasePrice, r.sellingPrice, r.status === "inactive" ? t("common:status.inactive") : t("common:status.active"), r.vendorName ?? ""])]
       const blob = new Blob([lines.map((l) => l.map(csvCell).join(",")).join("\n")], { type: "text/csv;charset=utf-8" })
       const a = document.createElement("a")
       a.href = URL.createObjectURL(blob); a.download = "fabrics.csv"; a.click()
       URL.revokeObjectURL(a.href)
     } catch {
-      toast.error("Export failed")
+      toast.error(t("tailor:shared.exportFailed"))
     }
   }
 
@@ -221,16 +224,16 @@ export default function TailorFabricsPage() {
   const counts = ov?.counts
   const hasFilter = !!(qD || fType !== "all" || fSup !== "all" || tab !== "all")
   const buyN = num(form.buy), sellN = num(form.sell)
-  const unitSuffix = st?.unit ? ` ${st.unit}` : " units"
+  const unitWord = st?.unit || t("tailor:fabrics.units")
 
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
       <PageHeader
-        title="Fabric inventory"
-        description="Fabric stock by metre, goj or gaj — cost, stock value and margin."
+        title={t("tailor:fabrics.title")}
+        description={t("tailor:fabrics.description")}
         actions={<>
-          <Button type="button" variant="outline" onClick={exportCsv}>Export</Button>
-          <Button asChild variant="outline"><Link href="/dashboard/vendors/purchase-orders"><Plus className="size-4" aria-hidden /> Order fabric</Link></Button>
+          <Button type="button" variant="outline" onClick={exportCsv}>{t("common:actions.export")}</Button>
+          <Button asChild variant="outline"><Link href="/dashboard/vendors/purchase-orders"><Plus className="size-4" aria-hidden /> {t("tailor:shared.orderFabric")}</Link></Button>
         </>}
       />
 
@@ -239,10 +242,10 @@ export default function TailorFabricsPage() {
       ) : (
         <div className="[&>div]:lg:grid-cols-4">
           <StatsCards stats={[
-            { label: "Fabrics", value: st.fabricsCount, icon: <Layers className="size-4" />, color: "blue", hint: `${st.inactiveCount} inactive · ${st.typesCount} type${st.typesCount === 1 ? "" : "s"}` },
-            { label: "Stock value", value: formatCurrency(st.stockValue), icon: <Wallet className="size-4" />, color: "green", hint: `${fmt(st.totalStock)}${unitSuffix} at cost` },
-            { label: "Low / out", value: st.lowCount, icon: <AlertTriangle className="size-4" />, color: st.lowCount ? "yellow" : "green", hint: st.lowCount ? st.lowNames.join(", ") : "All fabrics healthy" },
-            { label: "Used this month", value: `${fmt(st.usedThisMonth)}${st.unit ? ` ${st.unit}` : ""}`, icon: <Scissors className="size-4" />, color: "purple", hint: st.topFabric ? `Mostly ${st.topFabric}` : "No usage yet" },
+            { label: t("tailor:fabrics.statFabrics"), value: st.fabricsCount, icon: <Layers className="size-4" />, color: "blue", hint: t("tailor:fabrics.statFabricsHint", { inactive: st.inactiveCount, count: st.typesCount }) },
+            { label: t("tailor:fabrics.stockValue"), value: formatCurrency(st.stockValue), icon: <Wallet className="size-4" />, color: "green", hint: t("tailor:fabrics.atCost", { qty: fmt(st.totalStock), unit: unitWord }) },
+            { label: t("tailor:fabrics.lowOut"), value: st.lowCount, icon: <AlertTriangle className="size-4" />, color: st.lowCount ? "yellow" : "green", hint: st.lowCount ? st.lowNames.join(", ") : t("tailor:fabrics.allHealthy") },
+            { label: t("tailor:fabrics.usedThisMonth"), value: `${fmt(st.usedThisMonth)}${st.unit ? ` ${st.unit}` : ""}`, icon: <Scissors className="size-4" />, color: "purple", hint: st.topFabric ? t("tailor:fabrics.mostly", { name: st.topFabric }) : t("tailor:fabrics.noUsage") },
           ]} />
         </div>
       )}
@@ -251,23 +254,23 @@ export default function TailorFabricsPage() {
         <Card className="w-full min-w-0 flex-1 gap-0 py-0">
           <div className="px-4">
             <StatusTabs value={tab} onChange={(t) => { setTab(t as Tab); setPage(1) }} tabs={[
-              { value: "all", label: "All", count: counts?.all }, { value: "ok", label: "In stock", count: counts?.ok },
-              { value: "low", label: "Low", count: counts?.low }, { value: "out", label: "Out of stock", count: counts?.out },
-              { value: "inactive", label: "Inactive", count: counts?.inactive },
+              { value: "all", label: t("common:status.all"), count: counts?.all }, { value: "ok", label: t("common:extra.inStock"), count: counts?.ok },
+              { value: "low", label: t("tailor:fabrics.tabLow"), count: counts?.low }, { value: "out", label: t("common:extra.outOfStock"), count: counts?.out },
+              { value: "inactive", label: t("common:status.inactive"), count: counts?.inactive },
             ]} />
           </div>
           <FilterBar className="gap-2.5 p-4">
             <InputGroup className="min-w-[220px] flex-1">
               <InputGroupAddon><Search aria-hidden /></InputGroupAddon>
-              <InputGroupInput type="search" aria-label="Search fabrics" placeholder="Search fabric, type or colour…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
+              <InputGroupInput type="search" aria-label={t("tailor:fabrics.searchAria")} placeholder={t("tailor:fabrics.searchPlaceholder")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }} />
             </InputGroup>
             <Select value={fType} onValueChange={(v) => { setFType(v); setPage(1) }}>
-              <SelectTrigger aria-label="Type"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Type: All</SelectItem>{(ov?.types ?? []).map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:fields.type")}><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t("tailor:fabrics.typeAll")}</SelectItem>{(ov?.types ?? []).map((ty) => <SelectItem key={ty} value={ty}>{fabricTypeLabel(t, ty)}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={fSup} onValueChange={(v) => { setFSup(v); setPage(1) }}>
-              <SelectTrigger aria-label="Supplier"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Supplier: All</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger aria-label={t("common:extra.supplier")}><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t("tailor:fabrics.supplierAll")}</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
             </Select>
           </FilterBar>
 
@@ -275,23 +278,23 @@ export default function TailorFabricsPage() {
             <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fabric</TableHead><TableHead>Stock</TableHead>
-                  <TableHead>Cost / sell per unit</TableHead><TableHead>Margin</TableHead>
-                  <TableHead>Supplier</TableHead><TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("tailor:shared.fabric")}</TableHead><TableHead>{t("common:fields.stock")}</TableHead>
+                  <TableHead>{t("tailor:fabrics.colCostSell")}</TableHead><TableHead>{t("common:extra.margin")}</TableHead>
+                  <TableHead>{t("common:extra.supplier")}</TableHead><TableHead className="text-right">{t("common:fields.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && !ov ? [1, 2, 3, 4, 5].map((i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-11" /></TableCell></TableRow>) :
                   rows.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="whitespace-normal">
-                      <EmptyState icon={Layers} title="No fabrics found" className="p-4 md:p-6"
-                        description={hasFilter ? "No fabrics match the current filters." : "No fabrics yet. Add your first fabric using the form."} />
+                      <EmptyState icon={Layers} title={t("tailor:fabrics.noFabricsFound")} className="p-4 md:p-6"
+                        description={hasFilter ? t("tailor:fabrics.noMatch") : t("tailor:fabrics.noFabricsYet")} />
                     </TableCell></TableRow>
                   ) : rows.map((r) => {
                     const stock = r.stockQuantity, rop = r.reorderLevel ?? 0
                     const w = rop > 0 ? Math.min(100, Math.round((stock / (rop * 3)) * 100)) : stock > 0 ? 100 : 0
-                    const sub = [r.fabricType, r.color].filter(Boolean).join(" · ") || "—"
-                    const extra = (r.pattern && r.pattern !== "Plain" ? ` · ${r.pattern}` : "") + (r.code ? ` · ${r.code}` : "") + (r.status === "inactive" ? " · Inactive" : "")
+                    const sub = [r.fabricType ? fabricTypeLabel(t, r.fabricType) : "", r.color ? colourLabel(t, r.color) : ""].filter(Boolean).join(" · ") || "—"
+                    const extra = (r.pattern && r.pattern !== "Plain" ? ` · ${patternLabel(t, r.pattern)}` : "") + (r.code ? ` · ${r.code}` : "") + (r.status === "inactive" ? ` · ${t("common:status.inactive")}` : "")
                     return (
                       <TableRow key={r.id} data-state={editing?.id === r.id || restocking?.id === r.id ? "selected" : undefined}>
                         <TableCell>
@@ -302,10 +305,10 @@ export default function TailorFabricsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-baseline gap-2">
-                            <strong className={cn("tabular-nums", r.stockState === "out" && "text-destructive")}>{r.stockState === "out" ? "Out of stock" : `${fmt(stock)} ${r.unit}`}</strong>
-                            <span className="text-xs text-muted-foreground">min {fmt(rop)} {r.unit}</span>
+                            <strong className={cn("tabular-nums", r.stockState === "out" && "text-destructive")}>{r.stockState === "out" ? t("common:extra.outOfStock") : `${fmt(stock)} ${r.unit}`}</strong>
+                            <span className="text-xs text-muted-foreground">{t("tailor:fabrics.min", { qty: fmt(rop), unit: r.unit })}</span>
                           </div>
-                          <Progress value={w} aria-label={`${r.name} stock level`} className={cn("mt-1.5 h-1.5 w-28", barColor[r.stockState])} />
+                          <Progress value={w} aria-label={t("tailor:fabrics.stockLevel", { name: r.name })} className={cn("mt-1.5 h-1.5 w-28", barColor[r.stockState])} />
                         </TableCell>
                         <TableCell className="tabular-nums">{formatCurrency(r.purchasePrice)} / <strong>{r.sellingPrice ? formatCurrency(r.sellingPrice) : "—"}</strong></TableCell>
                         <TableCell>
@@ -314,9 +317,9 @@ export default function TailorFabricsPage() {
                         <TableCell>{r.vendorName ?? "—"}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
-                            {mayWrite && <WithTooltip content="Add stock"><Button type="button" variant="outline" size="icon" aria-label={`Add stock to ${r.name}`} onClick={() => startRestock(r)}><PackagePlus className="size-4" /></Button></WithTooltip>}
-                            {mayWrite && <WithTooltip content={`Edit ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>}
-                            {mayDelete && <WithTooltip content={`Delete ${r.name}`}><Button type="button" variant="outline" size="icon" aria-label={`Delete ${r.name}`} onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>}
+                            {mayWrite && <WithTooltip content={t("tailor:fabrics.addStock")}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:fabrics.addStockTo", { name: r.name })} onClick={() => startRestock(r)}><PackagePlus className="size-4" /></Button></WithTooltip>}
+                            {mayWrite && <WithTooltip content={t("tailor:shared.editName", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.editName", { name: r.name })} onClick={() => startEdit(r)}><Pencil className="size-4" /></Button></WithTooltip>}
+                            {mayDelete && <WithTooltip content={t("tailor:shared.deleteName", { name: r.name })}><Button type="button" variant="outline" size="icon" aria-label={t("tailor:shared.deleteName", { name: r.name })} onClick={() => remove(r)}><Trash2 className="size-4" /></Button></WithTooltip>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -333,91 +336,91 @@ export default function TailorFabricsPage() {
           )}
         </Card>
 
-        <aside aria-label="Fabric form" className="flex w-full shrink-0 flex-col gap-3.5 xl:w-[380px]">
+        <aside aria-label={t("tailor:fabrics.formAria")} className="flex w-full shrink-0 flex-col gap-3.5 xl:w-[380px]">
           {restocking && (
-            <SectionCard title={`Restock ${restocking.name}`} description={`Current stock ${fmt(restocking.stockQuantity)} ${restocking.unit}`} contentClassName="flex flex-col gap-3.5">
-              <FormField label={`Quantity to add (${restocking.unit})`} required htmlFor="restock-qty">
-                <Input id="restock-qty" type="number" min={0} step="any" value={rQty} onChange={(e) => { setRQty(e.target.value); setRErr("") }} placeholder="e.g. 25" autoFocus /></FormField>
-              <FormField label="Supplier (optional)" htmlFor="restock-supplier">
+            <SectionCard title={t("tailor:fabrics.restockTitle", { name: restocking.name })} description={t("tailor:fabrics.currentStock", { qty: fmt(restocking.stockQuantity), unit: restocking.unit })} contentClassName="flex flex-col gap-3.5">
+              <FormField label={t("tailor:fabrics.qtyToAdd", { unit: restocking.unit })} required htmlFor="restock-qty">
+                <Input id="restock-qty" type="number" min={0} step="any" value={rQty} onChange={(e) => { setRQty(e.target.value); setRErr("") }} placeholder={t("tailor:fabrics.qtyPlaceholder")} autoFocus /></FormField>
+              <FormField label={t("tailor:fabrics.supplierOptional")} htmlFor="restock-supplier">
                 <Select value={rSup || "__none"} onValueChange={(v) => setRSup(v === "__none" ? "" : v)}>
                   <SelectTrigger id="restock-supplier" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="__none">None</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectItem value="__none">{t("common:status.none")}</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
                 </Select></FormField>
               {rErr && <Alert variant="destructive"><AlertDescription>{rErr}</AlertDescription></Alert>}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { setRestocking(null); setRErr("") }}>Cancel</Button>
-                <Button type="button" disabled={rSaving} onClick={doRestock}>{rSaving ? "Adding…" : "Add stock"}</Button>
+                <Button type="button" variant="outline" onClick={() => { setRestocking(null); setRErr("") }}>{t("common:actions.cancel")}</Button>
+                <Button type="button" disabled={rSaving} onClick={doRestock}>{rSaving ? t("tailor:fabrics.adding") : t("tailor:fabrics.addStock")}</Button>
               </div>
             </SectionCard>
           )}
 
-          <SectionCard title={editing ? "Edit fabric" : "Add fabric"} contentClassName="flex flex-col gap-3.5">
+          <SectionCard title={editing ? t("tailor:fabrics.editFabric") : t("tailor:fabrics.addFabric")} contentClassName="flex flex-col gap-3.5">
             {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
-            <FormField label="Fabric name" required htmlFor="fabric-f1">
-              <Input id="fabric-f1" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Premium cotton" /></FormField>
+            <FormField label={t("tailor:fabrics.fabricName")} required htmlFor="fabric-f1">
+              <Input id="fabric-f1" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={t("tailor:fabrics.namePlaceholder")} /></FormField>
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label="Type" htmlFor="fabric-f2">
+              <FormField label={t("common:fields.type")} htmlFor="fabric-f2">
                 <Select value={form.type} onValueChange={(v) => set("type", v)}>
                   <SelectTrigger id="fabric-f2" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{typeOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  <SelectContent>{typeOptions.map((ty) => <SelectItem key={ty} value={ty}>{fabricTypeLabel(t, ty)}</SelectItem>)}</SelectContent>
                 </Select></FormField>
-              <FormField label="Pattern" htmlFor="fabric-f3">
+              <FormField label={t("tailor:fabrics.pattern")} htmlFor="fabric-f3">
                 <Select value={form.pattern} onValueChange={(v) => set("pattern", v)}>
                   <SelectTrigger id="fabric-f3" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{patternOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  <SelectContent>{patternOptions.map((pt) => <SelectItem key={pt} value={pt}>{patternLabel(t, pt)}</SelectItem>)}</SelectContent>
                 </Select></FormField>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label="Unit of measure" htmlFor="fabric-f4">
+              <FormField label={t("tailor:fabrics.unitOfMeasure")} htmlFor="fabric-f4">
                 <Select value={form.unit} onValueChange={(v) => set("unit", v)}>
                   <SelectTrigger id="fabric-f4" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map(([id, n]) => <SelectItem key={id} value={id}>{n}</SelectItem>)}</SelectContent>
+                  <SelectContent>{UNITS.map(([id, n]) => <SelectItem key={id} value={id}>{t(n)}</SelectItem>)}</SelectContent>
                 </Select></FormField>
-              <FormField label="Status" htmlFor="fabric-f5">
+              <FormField label={t("common:fields.status")} htmlFor="fabric-f5">
                 <Select value={form.status} onValueChange={(v) => set("status", v as "active" | "inactive")}>
                   <SelectTrigger id="fabric-f5" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="active">{t("common:status.active")}</SelectItem><SelectItem value="inactive">{t("common:status.inactive")}</SelectItem></SelectContent>
                 </Select></FormField>
             </div>
-            <FormField label="Colour" htmlFor="fabric-colour-name">
+            <FormField label={t("tailor:fabrics.colour")} htmlFor="fabric-colour-name">
               <div className="flex flex-wrap items-center gap-2">
-                <SwatchPicker size="sm" aria-label="Colour" value={COLOURS.some(([, c]) => c === form.hex) ? form.hex : undefined}
-                  options={COLOURS.map(([label, c]) => ({ value: c, label, color: c }))}
+                <SwatchPicker size="sm" aria-label={t("tailor:fabrics.colour")} value={COLOURS.some(([, c]) => c === form.hex) ? form.hex : undefined}
+                  options={COLOURS.map(([label, c]) => ({ value: c, label: colourLabel(t, label), color: c }))}
                   onValueChange={(c) => { const label = COLOURS.find(([, h]) => h === c)?.[0] ?? ""; set("color", label); set("hex", c) }} />
-                <Input id="fabric-colour-name" aria-label="Colour name" className="w-32 flex-1" value={form.color} placeholder="Colour name"
+                <Input id="fabric-colour-name" aria-label={t("tailor:fabrics.colourName")} className="w-32 flex-1" value={form.color} placeholder={t("tailor:fabrics.colourName")}
                   onChange={(e) => { const v = e.target.value; const m = COLOURS.find((c) => c[0].toLowerCase() === v.trim().toLowerCase()); setForm((f) => ({ ...f, color: m ? m[0] : v, hex: m ? m[1] : f.hex })); setErr("") }} />
               </div>
             </FormField>
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label="Code" htmlFor="fabric-f6">
-                <Input id="fabric-f6" value={form.code} onChange={(e) => set("code", e.target.value)} placeholder="e.g. FAB-001" /></FormField>
-              <FormField label={`Stock (${form.unit})`} htmlFor="fabric-f7">
+              <FormField label={t("tailor:fabrics.code")} htmlFor="fabric-f6">
+                <Input id="fabric-f6" value={form.code} onChange={(e) => set("code", e.target.value)} placeholder={t("tailor:fabrics.codePlaceholder")} /></FormField>
+              <FormField label={t("tailor:fabrics.stockUnit", { unit: form.unit })} htmlFor="fabric-f7">
                 <Input id="fabric-f7" type="number" min={0} step="any" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="0" /></FormField>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label={`Cost price / ${form.unit}`} htmlFor="fabric-f8">
+              <FormField label={t("tailor:fabrics.costPriceUnit", { unit: form.unit })} htmlFor="fabric-f8">
                 <Input id="fabric-f8" type="number" min={0} step="any" value={form.buy} onChange={(e) => set("buy", e.target.value)} placeholder="0.00" /></FormField>
-              <FormField label={`Sell price / ${form.unit}`} htmlFor="fabric-f9">
+              <FormField label={t("tailor:fabrics.sellPriceUnit", { unit: form.unit })} htmlFor="fabric-f9">
                 <Input id="fabric-f9" type="number" min={0} step="any" value={form.sell} onChange={(e) => set("sell", e.target.value)} placeholder="0.00" /></FormField>
             </div>
             <Card className="flex-row items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
-              <span>Profit per {form.unit} <strong className="text-foreground">{formatCurrency(sellN - buyN)}</strong></span>
-              <span>margin <strong className="text-foreground">{sellN ? `${Math.round(((sellN - buyN) / sellN) * 100)}%` : "—"}</strong></span>
+              <span><Trans t={t} i18nKey="tailor:fabrics.profitPer" values={{ unit: form.unit, amount: formatCurrency(sellN - buyN) }} components={{ b: <strong className="text-foreground" /> }} /></span>
+              <span><Trans t={t} i18nKey="tailor:fabrics.marginIs" values={{ pct: sellN ? `${Math.round(((sellN - buyN) / sellN) * 100)}%` : "—" }} components={{ b: <strong className="text-foreground" /> }} /></span>
             </Card>
             <div className="grid grid-cols-2 gap-2.5">
-              <FormField label={`Low-stock alert at (${form.unit})`} htmlFor="fabric-f10">
-                <Input id="fabric-f10" type="number" min={0} step="any" value={form.rop} onChange={(e) => set("rop", e.target.value)} placeholder="e.g. 10" /></FormField>
-              <FormField label="Supplier" htmlFor="fabric-f11">
+              <FormField label={t("tailor:fabrics.lowAlertAt", { unit: form.unit })} htmlFor="fabric-f10">
+                <Input id="fabric-f10" type="number" min={0} step="any" value={form.rop} onChange={(e) => set("rop", e.target.value)} placeholder={t("tailor:fabrics.ropPlaceholder")} /></FormField>
+              <FormField label={t("common:extra.supplier")} htmlFor="fabric-f11">
                 <Select value={form.vendorId || "__none"} onValueChange={(v) => set("vendorId", v === "__none" ? "" : v)}>
                   <SelectTrigger id="fabric-f11" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="__none">None</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+                  <SelectContent><SelectItem value="__none">{t("common:status.none")}</SelectItem>{vendors.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
                 </Select></FormField>
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => startEdit(null)}>Clear</Button>
+              <Button type="button" variant="outline" onClick={() => startEdit(null)}>{t("common:actions.clear")}</Button>
               {mayWrite && (
                 <Button type="button" disabled={saving} onClick={save}>
-                  {saving ? "Saving…" : editing ? "Save changes" : "Add fabric"}
+                  {saving ? t("common:actions.saving") : editing ? t("common:actions.saveChanges") : t("tailor:fabrics.addFabric")}
                 </Button>
               )}
             </div>
