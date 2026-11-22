@@ -519,6 +519,7 @@ const en = {
       delivered: "Delivered",
       failed: "Failed",
       returned: "Returned",
+      cancelled: "Booking cancelled",
     },
     nextStep: {
       picked_up: "Mark picked up",

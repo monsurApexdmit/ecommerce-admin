@@ -10,6 +10,7 @@ export const STATUS_LABEL: Record<ShipmentStatus, string> = {
   delivered: "Delivered",
   failed: "Failed",
   returned: "Returned",
+  cancelled: "Booking cancelled",
 }
 
 export const STATUS_STYLE: Record<ShipmentStatus, string> = {
@@ -20,6 +21,7 @@ export const STATUS_STYLE: Record<ShipmentStatus, string> = {
   delivered: "bg-dash-success-soft text-dash-success-fg",
   failed: "bg-dash-danger-soft text-dash-danger-fg",
   returned: "bg-dash-danger-soft text-dash-danger-fg",
+  cancelled: "bg-dash-danger-soft text-dash-danger-fg",
 }
 
 const FLOW: ShipmentStatus[] = ["pending", "picked_up", "in_transit", "out_for_delivery", "delivered"]
@@ -41,6 +43,7 @@ export const NEXT_STEP_LABEL: Partial<Record<ShipmentStatus, string>> = {
 /** Forward-only: later steps (and Failed) while active; Failed can only become Returned. */
 export function validNextStatuses(cur: ShipmentStatus): ShipmentStatus[] {
   if (cur === "failed") return ["returned"]
+  if (cur === "cancelled" || cur === "returned") return []
   const i = FLOW.indexOf(cur)
   if (i < 0 || cur === "delivered") return []
   return [...FLOW.slice(i + 1), "failed"]

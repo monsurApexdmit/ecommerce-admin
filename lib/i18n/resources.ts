@@ -16,6 +16,7 @@ import en_catalog from "./locales/en/catalog"
 import en_commerce from "./locales/en/commerce"
 import en_customers from "./locales/en/customers"
 import en_auth from "./locales/en/auth"
+import en_courier from "./locales/en/courier"
 import bn_common from "./locales/bn/common"
 import bn_nav from "./locales/bn/nav"
 import bn_dashboard from "./locales/bn/dashboard"
@@ -33,6 +34,7 @@ import bn_catalog from "./locales/bn/catalog"
 import bn_commerce from "./locales/bn/commerce"
 import bn_customers from "./locales/bn/customers"
 import bn_auth from "./locales/bn/auth"
+import bn_courier from "./locales/bn/courier"
 
 export const resources = {
   en: {
@@ -53,6 +55,7 @@ export const resources = {
     commerce: en_commerce,
     customers: en_customers,
     auth: en_auth,
+    courier: en_courier,
   },
   bn: {
     common: bn_common,
@@ -72,6 +75,7 @@ export const resources = {
     commerce: bn_commerce,
     customers: bn_customers,
     auth: bn_auth,
+    courier: bn_courier,
   },
 } as const
 

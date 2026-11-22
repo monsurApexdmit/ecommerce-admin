@@ -22,7 +22,7 @@ breadcrumbs, global search), `dashboard`, `pos`, `orders`, `products`, `ui` (sha
 (online store, settings, company), `account` (billing, team, staff, profile, notifications), `catalog`
 (collections, attributes, categories, brands, units, pages), `commerce` (coupons, marketing, reports,
 support, shipping/payment methods, international, checkout), `customers` (customers, expenses, dues),
-`auth` (login, sign-up, landing, platform, public tracking).
+`auth` (login, sign-up, landing, platform, public tracking), `courier` (Pathao / Steadfast integration: setup, booking, courier status).
 
 ## Rules
 

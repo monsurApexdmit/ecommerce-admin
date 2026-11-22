@@ -53,6 +53,7 @@ export default function MoreTab() {
         { icon: "people-outline",           label: "Customers", route: "/customers",        iconBg: "#f5f3ff", module: "Customers" },
         { icon: "storefront-outline",       label: "Vendors",   route: "/vendors",          iconBg: "#fef3c7", module: "Vendors" },
         { icon: "return-down-back-outline", label: "Returns",   route: "/returns",          iconBg: "#fce7f3", module: "Customer Returns" },
+        { icon: "bicycle-outline",          label: "Courier accounts", route: "/settings/couriers", iconBg: "#fee2e2", module: "Shipping Methods" },
       ],
     },
     {

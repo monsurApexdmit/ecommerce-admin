@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { getCompanyId } from './utils/apiInterceptor';
+import type { CourierBooking } from './courierApi';
 
 const API_URL = '/api/proxy';
 
@@ -50,7 +51,9 @@ export type ShipmentStatus =
   | 'out_for_delivery'
   | 'delivered'
   | 'failed'
-  | 'returned';
+  | 'returned'
+  /** Courier booking cancelled (courier shipments only) */
+  | 'cancelled';
 
 export interface TrackingEvent {
   id: number;
@@ -105,6 +108,8 @@ export interface ShipmentResponse {
   shippedAt?: string;
   deliveredAt?: string;
   trackingHistory?: TrackingEvent[];
+  /** Courier API booking (null for manual shipments) */
+  courierBooking?: CourierBooking | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -195,6 +200,9 @@ export const shipmentsApi = {
     days?: number;
     cod?: number;
     per_page?: number;
+    courierProvider?: string;
+    courierStatus?: string;
+    courierAccountId?: number;
   }): Promise<ShipmentListResponse> => {
     const response = await api.get('/shipments', { params });
     // Laravel returns paginated response: { success, message, data: { data: [...], total, per_page, current_page } }
