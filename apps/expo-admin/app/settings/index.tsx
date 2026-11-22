@@ -332,12 +332,23 @@ function PaymentSection({ summary }: { summary: PaymentMethodsSummary | null }) 
 
 function DeliverySection({ options }: { options: DeliveryOption[] | null }) {
   const { formatCurrency } = useCurrency();
+  const { canRead } = useAuth();
+  const canReadCouriers = canRead("Shipping Methods");
   const active = (options ?? []).filter((o) => o.isActive);
   const inactive = (options ?? []).filter((o) => !o.isActive);
   return (
     <View style={sStyles.section}>
       <SectionHeader icon="cube-outline" title="Delivery Options" />
       <Text style={sStyles.readOnlyNote}>Fixed-price delivery charges — manage them in the web admin (Settings → Shipping).</Text>
+      {canReadCouriers ? (
+        <MenuRow
+          icon="bicycle-outline"
+          label="Courier accounts"
+          desc="Pathao / Steadfast connection status and test"
+          onPress={() => router.push("/settings/couriers" as any)}
+          chevron
+        />
+      ) : null}
       {!options ? (
         <Text style={sStyles.emptyText}>Could not load delivery options.</Text>
       ) : options.length === 0 ? (

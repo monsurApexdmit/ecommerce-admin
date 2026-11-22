@@ -1,0 +1,18 @@
+{
+  // The Expo apps' native trees and node_modules are huge; watching them exhausts the OS file-watcher limit (ENOSPC)
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/objects/**": true,
+    "**/.next/**": true,
+    "**/apps/*/android/**": true,
+    "**/apps/*/ios/**": true,
+    "**/apps/*/.expo/**": true,
+    "**/apps/*/build/**": true,
+    "**/.gradle/**": true
+  },
+  "search.exclude": {
+    "**/apps/*/android/**": true,
+    "**/apps/*/ios/**": true,
+    "**/.next/**": true
+  }
+}

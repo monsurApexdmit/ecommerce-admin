@@ -3,6 +3,7 @@
  * Proxied through Next.js API route to avoid browser TLS issues with self-signed certs
  */
 
+import type { CourierBooking } from './courierApi';
 import axios from 'axios';
 import { getCompanyId } from './utils/apiInterceptor';
 
@@ -77,6 +78,8 @@ export interface SellShipment {
   status: string;
   estimatedDelivery?: string;
   courier?: string | null;
+  /** Courier API booking (null for manual shipments) — COURIER_API_CONTRACT.md */
+  courierBooking?: CourierBooking | null;
   zone?: string | null;
   codAmount?: number | null;
   shippingCost?: number;

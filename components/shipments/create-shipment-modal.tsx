@@ -27,6 +27,9 @@ import { ChoiceCard, ChoiceCardGroup } from "@/components/common/ChoiceCard"
 import { SegmentedControl } from "@/components/common/SegmentedControl"
 import { InfoList, InfoRow } from "@/components/common/InfoList"
 import { UserAvatar } from "@/components/common/UserAvatar"
+import { COURIER_NS } from "@/components/couriers/i18n"
+import { SendToCourierDialog } from "@/components/couriers/send-to-courier-dialog"
+import { useBookableCouriers } from "@/components/couriers/use-courier-accounts"
 
 const NS = ["inventory", "orders", "common"] as const
 type K = ParseKeys<typeof NS>
@@ -84,6 +87,7 @@ interface Props {
 
 export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCreated }: Props) {
   const { t, i18n } = useTranslation(NS)
+  const { t: tc } = useTranslation(COURIER_NS)
   const courierLabel = (name: string) => (COURIER_NAME_KEY[name] ? t(COURIER_NAME_KEY[name]) : name)
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
@@ -114,6 +118,11 @@ export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCr
   const [codOv, setCodOv] = useState<string | null>(null)
   const [payer, setPayer] = useState<"customer" | "us">("customer")
   const [addrOv, setAddrOv] = useState<string | null>(null)
+
+  // Connected courier APIs: a chosen Pathao / Steadfast can be booked through the API instead of typing a tracking number
+  const couriers = useBookableCouriers(open)
+  const [mode, setMode] = useState<"api" | "manual">("api")
+  const [bookOpen, setBookOpen] = useState(false)
 
   // Server-side search (debounced), no row cap
   useEffect(() => {
@@ -154,6 +163,8 @@ export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCr
   }, [open, methods.length])
 
   const order = orders.find((o) => o.id === orderId) ?? (picked?.id === orderId ? picked : null)
+  const apiAccount = couriers.accounts.find((a) => a.provider.toLowerCase() === courier.toLowerCase()) ?? null
+  const useApi = !!apiAccount && mode === "api"
   const due = order && order.paymentLabel !== "Paid" ? Number(order.dueAmount) || 0 : 0
   // The courier name is never overwritten by the rider field
   const carrierName = courier === "Other" ? customCarrier.trim() || "Other" : courier
@@ -202,11 +213,12 @@ export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCr
   const reset = () => {
     setOrderId(null); setOrderSearch(""); setCourier("Steadfast"); setCustomCarrier(""); setRider(""); setTracking(""); setPicked(null)
     pickPack("pouch"); setNote(""); setPrintLabel(true); setMarkPicked(true)
-    setSpeed("regular"); setFeeOv(null); setCodOv(null); setPayer("customer"); setPickup(isoDay(0)); setAddrOv(null)
+    setSpeed("regular"); setFeeOv(null); setCodOv(null); setPayer("customer"); setPickup(isoDay(0)); setAddrOv(null); setMode("api")
   }
 
   const submit = async () => {
     if (!order) return
+    if (useApi) { setBookOpen(true); return }
     if (!addr.trim()) {
       toast({ variant: "destructive", title: t("inventory:shipments.create.addressRequired"), description: t("inventory:shipments.create.addressRequiredDesc") })
       return
@@ -343,13 +355,18 @@ export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCr
                     icon={<UserAvatar shape="square" className="size-8" name={c.name} fallback={c.ini} />} />
                 ))}
               </ChoiceCardGroup>
-              {courier !== "Own rider" && courier !== "Other" && (
+              {apiAccount ? (
+                <ChoiceCardGroup value={mode} onValueChange={(v) => setMode(v as typeof mode)} aria-label={tc("courier:manual.mode")} className="grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <ChoiceCard value="api" className="p-3" title={tc("courier:manual.api", { courier })} description={tc("courier:manual.apiDesc", { courier })} />
+                  <ChoiceCard value="manual" className="p-3" title={tc("courier:manual.manual")} description={tc("courier:manual.manualDesc")} />
+                </ChoiceCardGroup>
+              ) : courier !== "Own rider" && courier !== "Other" && (
                 <Alert>
                   <Check aria-hidden />
                   <AlertDescription>{t("inventory:shipments.create.notConnected", { courier })}</AlertDescription>
                 </Alert>
               )}
-              <div className="grid grid-cols-2 gap-2.5">
+              {!useApi && <div className="grid grid-cols-2 gap-2.5">
                 <FormField label={t("inventory:shipments.create.tracking")} htmlFor="ship-tracking" className="min-w-0">
                   <Input id="ship-tracking" className="w-full" placeholder={t("inventory:shipments.create.trackingPh")} value={tracking} onChange={(e) => setTracking(e.target.value)} />
                 </FormField>
@@ -361,7 +378,7 @@ export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCr
                 <FormField label={t("inventory:shipments.create.rider")} htmlFor="ship-rider" className="min-w-0">
                   <Input id="ship-rider" className="w-full" placeholder={t("inventory:shipments.create.riderPh")} value={rider} onChange={(e) => setRider(e.target.value)} />
                 </FormField>
-              </div>
+              </div>}
               <ChoiceCardGroup value={activeSpeed.id} onValueChange={(v) => { setSpeed(v as typeof activeSpeed.id); setFeeOv(null); setCodOv(null) }} aria-label={t("inventory:shipments.create.speed")}
                 className="grid-cols-2 gap-2.5">
                 {speeds.map((s) => (
@@ -446,10 +463,29 @@ export function CreateShipmentModal({ open, onOpenChange, preselectOrderId, onCr
           <div className="ml-auto flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common:actions.cancel")}</Button>
             <Button type="button" onClick={submit} disabled={!order || saving}>
-              {saving ? t("inventory:shipments.create.creating") : t("orders:shipments.createShipment")}
+              {saving ? t("inventory:shipments.create.creating") : useApi ? tc("courier:manual.continue") : t("orders:shipments.createShipment")}
             </Button>
           </div>
         </DialogFooter>
+        <SendToCourierDialog
+          open={bookOpen}
+          onOpenChange={setBookOpen}
+          sellId={order?.sellId ?? null}
+          accountId={apiAccount?.id}
+          onBooked={(sh) => {
+            if (printLabel && order) {
+              const codAmt = Number(sh.courierBooking?.codAmount ?? 0)
+              printShippingLabel(sh as unknown as ShipmentResponse, {
+                cod: codAmt, formatCurrency,
+                order: { customerName: order.customerName, shippingFullName: order.customerName, shippingPhone: order.customerPhone ?? undefined,
+                  shippingAddressLine1: addr.trim() } as any,
+              })
+            }
+            reset()
+            onOpenChange(false)
+            onCreated()
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

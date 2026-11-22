@@ -25,11 +25,15 @@ import { printShippingLabel, printShippingLabels } from "@/lib/shipping-label"
 import { ShipmentDetailDialog, type StatusPayload } from "@/components/shipments/shipment-detail-dialog"
 import { codView, nextStep, validNextStatuses, type CodKind } from "@/components/shipments/shipment-utils"
 import { ORDERS_NS, type OrdersKey } from "@/components/sales/i18n"
+import { COURIER_NS } from "@/components/couriers/i18n"
+import { CopyButton, CourierStatusBadge, useCourierStatusLabel } from "@/components/couriers/courier-ui"
+import { COURIER_STATUSES, courierApi, courierError } from "@/lib/courierApi"
 import { localeTag } from "@/lib/i18n"
 import { useCompanySettings } from "@/contexts/company-settings-context"
 import { useModuleGuard } from "@/hooks/use-module-guard"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { PageHeader } from "@/components/common/PageHeader"
@@ -61,6 +65,7 @@ const STATUS_KEY: Record<ShipmentStatus, OrdersKey> = {
   delivered: "orders:shipments.status.delivered",
   failed: "orders:shipments.status.failed",
   returned: "orders:shipments.status.returned",
+  cancelled: "orders:shipments.status.cancelled",
 }
 
 /** Label keys of the one-click next step button. */
@@ -82,7 +87,7 @@ const COD_KEY: Partial<Record<CodKind, OrdersKey>> = {
 
 /** How many of the 4 progress segments are filled: Booked, Picked up, In transit, Delivered */
 const STEP: Record<ShipmentStatus, number> = {
-  pending: 1, picked_up: 2, in_transit: 3, out_for_delivery: 3, delivered: 4, failed: 3, returned: 3,
+  pending: 1, picked_up: 2, in_transit: 3, out_for_delivery: 3, delivered: 4, failed: 3, returned: 3, cancelled: 1,
 }
 
 
@@ -101,6 +106,8 @@ interface Stats {
 
 export default function ShipmentsPage() {
   const { t, i18n } = useTranslation(ORDERS_NS)
+  const { t: tc } = useTranslation(COURIER_NS)
+  const courierStatusLabel = useCourierStatusLabel()
   const tag = localeTag(i18n.language)
   const statusLabel = (st: ShipmentStatus) => (STATUS_KEY[st] ? t(STATUS_KEY[st]) : st)
   const codLabel = (kind: CodKind, fallback: string) => (COD_KEY[kind] ? t(COD_KEY[kind]) : fallback)
@@ -117,6 +124,7 @@ export default function ShipmentsPage() {
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
   const [courierFilter, setCourierFilter] = useState("all")
+  const [courierStatusFilter, setCourierStatusFilter] = useState("all")
   const [days, setDays] = useState("any")
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [exporting, setExporting] = useState(false)
@@ -147,6 +155,7 @@ export default function ShipmentsPage() {
       const status = TAB_STATUS[tab]
       if (status) params.status = status
       if (courierFilter !== "all") params.carrier = courierFilter
+      if (courierStatusFilter !== "all") params.courierStatus = courierStatusFilter
       if (days !== "any") params.days = Number(days)
       const [list, st] = await Promise.all([shipmentsApi.getAll(params), shipmentsApi.getStats()])
       setShipments(list.data ?? [])
@@ -170,14 +179,14 @@ export default function ShipmentsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, perPage, search, tab, courierFilter, days])
+  }, [page, perPage, search, tab, courierFilter, courierStatusFilter, days])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
   if (blocked) return blocked
 
-  const hasFilters = !!(search || courierFilter !== "all" || tab !== "all" || days !== "any")
-  const resetFilters = () => { setSearch(""); setCourierFilter("all"); setDays("any"); setTab("all"); setPage(1) }
+  const hasFilters = !!(search || courierFilter !== "all" || courierStatusFilter !== "all" || tab !== "all" || days !== "any")
+  const resetFilters = () => { setSearch(""); setCourierFilter("all"); setCourierStatusFilter("all"); setDays("any"); setTab("all"); setPage(1) }
   const changeTab = (t: string) => { setTab(t as Tab); setPage(1) }
 
   const openView = async (s: ShipmentResponse) => {
@@ -227,6 +236,28 @@ export default function ShipmentsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  /** Pull the latest status from the courier now */
+  const syncCourier = async (s: ShipmentResponse) => {
+    setSaving(true)
+    try {
+      const next = (await courierApi.sync(s.id)) as unknown as ShipmentResponse
+      if (viewing?.id === s.id) setViewing(await shipmentsApi.getById(s.id).then((r) => (r.data ?? r) as ShipmentResponse).catch(() => next))
+      toast({ title: tc("courier:panel.toast.synced"), description: courierStatusLabel(next.courierBooking?.status) })
+      fetchAll()
+    } catch (err) {
+      toast({ variant: "destructive", title: tc("courier:panel.toast.syncFailed"), description: courierError(err, t("orders:toast.tryAgain")) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Detail dialog: the courier panel changed the shipment (sync / cancel) */
+  const courierChanged = async (id: number) => {
+    const fresh = await shipmentsApi.getById(id).then((r) => (r.data ?? r) as ShipmentResponse).catch(() => null)
+    if (fresh) setViewing((v) => (v?.id === id ? fresh : v))
+    fetchAll()
   }
 
   const recordCod = async (s: ShipmentResponse) => {
@@ -376,6 +407,13 @@ export default function ShipmentsPage() {
               {COURIERS.filter((c) => c.name !== "Other").map((c) => <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Select value={courierStatusFilter} onValueChange={(v) => { setCourierStatusFilter(v); setPage(1) }}>
+            <SelectTrigger aria-label={tc("courier:filters.status")} className="w-[190px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{tc("courier:filters.statusAll")}</SelectItem>
+              {COURIER_STATUSES.map((cs) => <SelectItem key={cs} value={cs}>{courierStatusLabel(cs)}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={days} onValueChange={(v) => { setDays(v); setPage(1) }}>
             <SelectTrigger aria-label={t("common:fields.date")} className="w-[160px]"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -436,7 +474,7 @@ export default function ShipmentsPage() {
                     const cod = codView(s)
                     const nxt = nextStep(s.status)
                     const step = STEP[s.status] ?? 1
-                    const fail = s.status === "failed" || s.status === "returned"
+                    const fail = s.status === "failed" || s.status === "returned" || s.status === "cancelled"
                     const note = s.trackingHistory?.[0]?.description
                     return (
                       <TableRow key={s.id} data-state={selected.has(s.id) ? "selected" : undefined}>
@@ -444,7 +482,10 @@ export default function ShipmentsPage() {
                           <Checkbox aria-label={t("orders:shipments.selectRow", { id: s.trackingNumber || s.id })} checked={selected.has(s.id)} onCheckedChange={() => toggleOne(s.id)} />
                         </TableCell>
                         <TableCell>
-                          <div className="font-bold">{s.trackingNumber || t("orders:shipments.noTracking")}</div>
+                          <div className="flex items-center font-bold">
+                            {s.trackingNumber || t("orders:shipments.noTracking")}
+                            {s.courierBooking && s.trackingNumber && <CopyButton value={s.trackingNumber} label={tc("courier:panel.copyTracking")} />}
+                          </div>
                           <Link href="/dashboard/orders" className="text-xs text-primary hover:underline">#{s.sell?.invoiceNo ?? s.sellId}</Link>
                         </TableCell>
                         <TableCell>
@@ -456,7 +497,18 @@ export default function ShipmentsPage() {
                             <UserAvatar shape="square" className="size-7" name={c.name} fallback={c.ini} />
                             <span>
                               <span className="block font-semibold">{c.name}</span>
-                              <span className="text-xs text-muted-foreground">{[s.shippingMethod || t("orders:shipments.standard"), s.rider].filter(Boolean).join(" · ")}</span>
+                              {s.courierBooking ? (
+                                <span className="flex flex-wrap items-center gap-1">
+                                  <CourierStatusBadge courier={s.courierBooking} />
+                                  {s.courierBooking.syncError && (
+                                    <WithTooltip content={s.courierBooking.syncError}>
+                                      <Badge variant="destructive" tabIndex={0}>{tc("courier:panel.syncErrorShort")}</Badge>
+                                    </WithTooltip>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">{[s.shippingMethod || t("orders:shipments.standard"), s.rider].filter(Boolean).join(" · ")}</span>
+                              )}
                             </span>
                           </span>
                         </TableCell>
@@ -488,7 +540,7 @@ export default function ShipmentsPage() {
                         </TableCell>
                         <TableCell className="pr-4">
                           <div className="flex items-center justify-end gap-1">
-                            {nxt && (
+                            {nxt && !s.courierBooking && (
                               <Button type="button" size="sm" disabled={saving} onClick={() => doStatus(s, { status: nxt })}>
                                 {NEXT_STEP_KEY[nxt] ? t(NEXT_STEP_KEY[nxt]) : statusLabel(nxt)}
                               </Button>
@@ -500,6 +552,12 @@ export default function ShipmentsPage() {
                                 <Button type="button" variant="outline" size="icon" aria-label={t("common:actions.moreActions")}><MoreHorizontal className="size-4" /></Button>
                               </DropdownMenuTrigger></WithTooltip>
                               <DropdownMenuContent align="end">
+                                {s.courierBooking?.canSync && !s.courierBooking.isFinal && (
+                                  <DropdownMenuItem disabled={saving} onClick={() => syncCourier(s)}>{tc("courier:actions.refreshStatus")}</DropdownMenuItem>
+                                )}
+                                {s.courierBooking?.canCancel && (
+                                  <DropdownMenuItem onClick={() => openView(s)}>{tc("courier:panel.cancelAtCourier")}</DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => openView(s)}>{t("orders:shipments.updateStatus")}</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openView(s)}>{t("orders:shipments.viewHistory")}</DropdownMenuItem>
                               </DropdownMenuContent>
@@ -535,6 +593,7 @@ export default function ShipmentsPage() {
         onPrint={printLabel}
         onUpdateStatus={doStatus}
         onRecordCod={recordCod}
+        onCourierChanged={courierChanged}
       />
 
       <CreateShipmentModal open={createOpen} onOpenChange={setCreateOpen} preselectOrderId={preselectOrder} onCreated={fetchAll} />

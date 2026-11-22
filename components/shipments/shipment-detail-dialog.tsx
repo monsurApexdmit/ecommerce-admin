@@ -17,6 +17,7 @@ import { InfoList, InfoRow } from "@/components/common/InfoList"
 import { SectionTitle } from "@/components/common/SectionTitle"
 import { StatusBadge } from "@/components/common/StatusBadge"
 import type { ShipmentResponse, ShipmentStatus } from "@/lib/shipmentsApi"
+import { CourierShipmentPanel } from "@/components/couriers/courier-shipment-panel"
 import { cn } from "@/lib/utils"
 import {
   TIMELINE_STEPS, codView, shortDate, validNextStatuses, type CodKind,
@@ -34,6 +35,7 @@ const STATUS_KEY: Record<ShipmentStatus, K> = {
   delivered: "orders:shipments.status.delivered",
   failed: "orders:shipments.status.failed",
   returned: "orders:shipments.status.returned",
+  cancelled: "orders:shipments.status.cancelled",
 }
 /** Short step names under the progress timeline */
 const STEP_KEY: Partial<Record<ShipmentStatus, K>> = {
@@ -58,6 +60,8 @@ interface Props {
   /** Resolves true when the update went through */
   onUpdateStatus: (s: ShipmentResponse, p: StatusPayload) => Promise<boolean>
   onRecordCod: (s: ShipmentResponse) => void
+  /** The courier panel refreshed or cancelled the booking; reload this shipment */
+  onCourierChanged?: (shipmentId: number) => void
 }
 
 /** Package presets saved by CreateShipmentModal → label keys */
@@ -72,7 +76,7 @@ const Info = ({ label, children }: { label: string; children: React.ReactNode })
   <InfoRow layout="stacked" label={label} className="min-w-0">{children}</InfoRow>
 )
 
-export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, onPrint, onUpdateStatus, onRecordCod }: Props) {
+export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, onPrint, onUpdateStatus, onRecordCod, onCourierChanged }: Props) {
   const { t, i18n } = useTranslation(NS)
   const tag = localeTag(i18n.language)
   const statusLabel = (st: ShipmentStatus | string) => (st in STATUS_KEY ? t(STATUS_KEY[st as ShipmentStatus]) : st)
@@ -92,7 +96,7 @@ export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, 
 
   const s = shipment
   const cod = codView(s)
-  const fail = s.status === "failed" || s.status === "returned"
+  const fail = s.status === "failed" || s.status === "returned" || s.status === "cancelled"
   const nextOptions = validNextStatuses(s.status)
   const stepIdx = TIMELINE_STEPS.indexOf(s.status)
   // Failed shipments stalled after in-transit; show how far they got from history
@@ -156,6 +160,10 @@ export function ShipmentDetailDialog({ shipment, formatCurrency, busy, onClose, 
           <Info label={t("inventory:shipments.detail.pickupEta")}>{shortDate(s.pickupDate, tag)} → {s.status === "delivered" ? t("inventory:shipments.detail.deliveredOn", { date: shortDate(s.deliveredAt, tag) }) : shortDate(s.estimatedDelivery, tag)}</Info>
         </InfoList>
         {s.notes && <Card className="p-3 text-sm text-muted-foreground shadow-none">{s.notes}</Card>}
+
+        {s.courierBooking && (
+          <CourierShipmentPanel shipmentId={s.id} courier={s.courierBooking} autoLoadTracking onChanged={() => onCourierChanged?.(s.id)} />
+        )}
 
         {/* Actions */}
         <Card className="gap-3 p-3.5 shadow-none">

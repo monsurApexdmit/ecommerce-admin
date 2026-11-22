@@ -38,7 +38,7 @@ export function ShipmentStatusPill({ status }: { status: ShipmentStatus }) {
       ? "success"
       : status === "in_transit" || status === "out_for_delivery" || status === "picked_up"
         ? "warning"
-        : status === "failed" || status === "returned"
+        : status === "failed" || status === "returned" || status === "cancelled"
           ? "danger"
           : "neutral";
 

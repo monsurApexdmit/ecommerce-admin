@@ -39,6 +39,10 @@ import {
 import { FollowUpDialog, canFollowUp, followUpSummary } from "@/components/sales/order-follow-up"
 import { AD_SOURCE_FILTERS, AdSourceBadge, OrderFlagBadges, adSourceText, campaignHint, isAdSourceFilter } from "@/components/sales/ad-source"
 import { ORDERS_NS, channelLabel, methodLabel, orderStatusLabel, payLabel, type OrdersKey } from "@/components/sales/i18n"
+import { SendToCourierDialog, canSendToCourier } from "@/components/couriers/send-to-courier-dialog"
+import { BulkCourierDialog } from "@/components/couriers/bulk-courier-dialog"
+import { CourierStatusBadge, providerName } from "@/components/couriers/courier-ui"
+import { COURIER_NS } from "@/components/couriers/i18n"
 import { localeTag } from "@/lib/i18n"
 import { sellsApi, type SellResponse } from "@/lib/sellsApi"
 import { fetchSection } from "@/lib/dashboard/api"
@@ -112,6 +116,7 @@ const SHIPMENT_STATUS_KEY: Record<string, OrdersKey> = {
   delivered: "orders:shipments.status.delivered",
   failed: "orders:shipments.status.failed",
   returned: "orders:shipments.status.returned",
+  cancelled: "orders:shipments.status.cancelled",
 }
 
 const SOURCE_CHIP: Record<string, { label: OrdersKey; variant: "default" | "secondary" | "outline" }> = {
@@ -129,6 +134,7 @@ function ageOf(iso: string): { days: number; hours: number } {
 
 export default function OrdersPage() {
   const { t, i18n } = useTranslation(ORDERS_NS)
+  const { t: tc } = useTranslation(COURIER_NS)
   const tag = localeTag(i18n.language)
   const { formatCurrency, settings } = useCompanySettings()
   const { canRead, canDo } = useSaasAuth()
@@ -168,6 +174,8 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<SellResponse | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<SellResponse | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [courierTarget, setCourierTarget] = useState<number | null>(null)
+  const [bulkCourierOpen, setBulkCourierOpen] = useState(false)
 
   const latestFetch = useRef(0)
   const blocked = useModuleGuard("Orders")
@@ -618,6 +626,13 @@ export default function OrdersPage() {
                 </Button>
               </span>
             </WithTooltip>
+            <WithTooltip content={selectedOrders.some(canSendToCourier) ? undefined : t("orders:list.bulk.noneReady")}>
+              <span tabIndex={selectedOrders.some(canSendToCourier) ? undefined : 0}>
+                <Button type="button" variant="outline" size="sm" disabled={!selectedOrders.some(canSendToCourier)} onClick={() => setBulkCourierOpen(true)}>
+                  <Truck className="size-4" aria-hidden /> {tc("courier:actions.sendToCourier")}
+                </Button>
+              </span>
+            </WithTooltip>
             <Button type="button" variant="destructive" size="sm" onClick={() => cancelOrders(selectedOrders)}>
               {t("orders:list.bulk.cancelOrders")}
             </Button>
@@ -729,7 +744,17 @@ export default function OrdersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {shipment ? (
+                        {shipment?.courierBooking ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex flex-wrap items-center gap-1.5">
+                              <span className="text-sm font-medium">{providerName(shipment.courierBooking.provider)}</span>
+                              <CourierStatusBadge courier={shipment.courierBooking} />
+                            </span>
+                            <Link href="/dashboard/orders/shipments" className="font-mono text-xs text-primary underline-offset-4 hover:underline">
+                              {shipment.courierBooking.trackingCode || shipment.courierBooking.consignmentId || shipment.trackingNumber}
+                            </Link>
+                          </div>
+                        ) : shipment ? (
                           <div>
                             <Link href="/dashboard/orders/shipments" className="font-medium text-primary underline-offset-4 hover:underline">
                               {shipment.trackingNumber || shipment.carrier || t("orders:list.courier")}
@@ -764,6 +789,7 @@ export default function OrdersPage() {
                               <Button type="button" variant="outline" size="icon" aria-label={t("orders:list.moreFor", { invoice: o.invoiceNo })}><MoreHorizontal className="size-4" /></Button>
                             </DropdownMenuTrigger></WithTooltip>
                             <DropdownMenuContent align="end">
+                              {canSendToCourier(o) && <DropdownMenuItem onClick={() => setCourierTarget(o.id)}><Truck className="size-4" aria-hidden /> {tc("courier:actions.sendToCourier")}</DropdownMenuItem>}
                               {canShip && <DropdownMenuItem onClick={() => createShipment(o.id)}>{t("orders:list.createShipment")}</DropdownMenuItem>}
                               <DropdownMenuItem onClick={async () => printPackingSlips([await fullOrder(o)], i18n.language)}>{t("orders:list.printSlip")}</DropdownMenuItem>
                               <DropdownMenuSeparator />
@@ -798,6 +824,10 @@ export default function OrdersPage() {
       </Card>
 
       <SaleDetailDialog sale={selected} onClose={() => setSelected(null)} onPrint={printInvoice} onChanged={() => refresh()} onCreateShipment={(s) => createShipment(s.id)} />
+
+      <SendToCourierDialog open={courierTarget !== null} onOpenChange={(o) => !o && setCourierTarget(null)} sellId={courierTarget} onBooked={() => refresh()} />
+      <BulkCourierDialog open={bulkCourierOpen} onOpenChange={setBulkCourierOpen} orders={selectedOrders}
+        onDone={() => { setChecked(new Set()); refresh() }} />
 
       <FollowUpDialog order={followUpTarget} onClose={() => setFollowUpTarget(null)} onSaved={() => refresh()} />
 

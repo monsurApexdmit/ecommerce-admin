@@ -32,6 +32,16 @@ import type { CreateShipmentDraft, Order, Shipment, ShipmentStatus } from "@/typ
 import { ShipmentStatusPill } from "@/components/orders/OrderStatusPill";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
+import { COURIER_STATUS_FILTERS, CourierStatusBadge, courierStatusMeta } from "@/components/orders/CourierStatusBadge";
+import { CourierShipmentCard } from "@/components/orders/CourierShipmentCard";
+
+/** Courier filter (`courierProvider`): "" all, a provider, or "manual" = not booked through a courier API. */
+const COURIER_FILTERS: { value: string; label: string }[] = [
+  { value: "", label: "All couriers" },
+  { value: "pathao", label: "Pathao" },
+  { value: "steadfast", label: "Steadfast" },
+  { value: "manual", label: "Manual" },
+];
 
 const shipmentFlow: ShipmentStatus[] = [
   "pending",
@@ -41,6 +51,7 @@ const shipmentFlow: ShipmentStatus[] = [
   "delivered",
   "failed",
   "returned",
+  "cancelled",
 ];
 
 const STATUS_COLOR: Record<string, { bg: string; text: string; dot: string }> = {
@@ -51,6 +62,7 @@ const STATUS_COLOR: Record<string, { bg: string; text: string; dot: string }> = 
   delivered:        { bg: "#dcfce7", text: "#166534", dot: "#10b981" },
   failed:           { bg: "#fee2e2", text: "#991b1b", dot: "#ef4444" },
   returned:         { bg: "#f1f5f9", text: "#475569", dot: "#94a3b8" },
+  cancelled:        { bg: "#fee2e2", text: "#991b1b", dot: "#f87171" },
 };
 
 function statusDot(status: string) {
@@ -70,7 +82,7 @@ function codView(s: Shipment): { amount: number; kind: CodKind; label: string; c
     case "delivered_record_payment": kind = "delivered_unpaid"; break;
     case "returning": kind = "returning"; break;
     default:
-      if (amount <= 0) kind = "none";
+      if (amount <= 0 || s.status === "cancelled") kind = "none";
       else if (s.codCollected) kind = "collected";
       else if (s.status === "failed" || s.status === "returned") kind = "returning";
       else if (s.status === "delivered") kind = "delivered_unpaid";
@@ -112,6 +124,8 @@ export default function ShipmentsScreen() {
   const [refreshing, setRefreshing]     = useState(false);
   const [searchQuery, setSearchQuery]   = useState("");
   const [statusFilter, setStatusFilter] = useState<ShipmentStatus | "">("");
+  const [courierFilter, setCourierFilter] = useState("");
+  const [courierStatusFilter, setCourierStatusFilter] = useState("");
   const [page, setPage]                 = useState(1);
   const [hasNext, setHasNext]           = useState(false);
   const [loadingMore, setLoadingMore]   = useState(false);
@@ -129,14 +143,21 @@ export default function ShipmentsScreen() {
 
   const load = useCallback(async (nextPage: number, mode: "reset" | "append") => {
     const [listRes, statsRes] = await Promise.all([
-      getShipments({ page: nextPage, perPage: 20, search: searchQuery || undefined, status: statusFilter || undefined }),
+      getShipments({
+        page: nextPage,
+        perPage: 20,
+        search: searchQuery || undefined,
+        status: statusFilter || undefined,
+        courierProvider: courierFilter || undefined,
+        courierStatus: courierStatusFilter || undefined,
+      }),
       getShipmentStats(),
     ]);
     setShipments((current) => mode === "append" ? [...current, ...listRes.data] : listRes.data);
     setStats({ total: statsRes.total, pending: statsRes.pending, inTransit: statsRes.inTransit, delivered: statsRes.delivered, failed: statsRes.failed });
     setPage(listRes.page);
     setHasNext(listRes.page * listRes.perPage < listRes.total);
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, courierFilter, courierStatusFilter]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -270,14 +291,23 @@ export default function ShipmentsScreen() {
   };
 
   const searchActive = searchQuery.trim().length > 0;
-  const compactHeader = searchActive || statusFilter !== "";
+  const compactHeader = searchActive || statusFilter !== "" || courierFilter !== "";
+  const courierMode = courierFilter !== "" && courierFilter !== "manual";
   const statusOptions = useMemo(() => nextShipmentStatuses(selectedShipment?.status ?? "pending"), [selectedShipment?.status]);
+  // Server filters; the same checks run on the loaded rows in case an older API ignores a parameter.
   const visibleShipments = useMemo(
-    () => (statusFilter ? shipments.filter((item) => item.status === statusFilter) : shipments),
-    [shipments, statusFilter],
+    () =>
+      shipments.filter((item) => {
+        if (statusFilter && item.status !== statusFilter) return false;
+        if (courierFilter === "manual" && item.courier) return false;
+        if (courierMode && item.courier?.provider !== courierFilter) return false;
+        if (courierMode && courierStatusFilter && item.courier?.status !== courierStatusFilter) return false;
+        return true;
+      }),
+    [shipments, statusFilter, courierFilter, courierMode, courierStatusFilter],
   );
 
-  const { canRead } = useAuth();
+  const { canRead, canWrite } = useAuth();
   if (!canRead('Shipments')) return <AccessDenied />;
 
   const selCod = selectedShipment ? codView(selectedShipment) : null;
@@ -327,6 +357,40 @@ export default function ShipmentsScreen() {
       )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
+        {COURIER_FILTERS.map((f) => {
+          const active = f.value === courierFilter;
+          return (
+            <Pressable
+              key={f.label}
+              style={[s.tab, active && s.tabActive]}
+              onPress={() => { setCourierFilter(f.value); setCourierStatusFilter(""); if (f.value && f.value !== "manual") setStatusFilter(""); }}
+            >
+              <Ionicons
+                name={f.value === "manual" ? "create-outline" : f.value ? "bicycle-outline" : "apps-outline"}
+                size={12}
+                color={active ? colors.primaryDark : colors.muted}
+              />
+              <Text style={[s.tabText, active && s.tabTextActive, { textTransform: "none" }]}>{f.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {courierMode ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
+          {["", ...COURIER_STATUS_FILTERS].map((value) => {
+            const meta = value ? courierStatusMeta(value) : null;
+            const active = value === courierStatusFilter;
+            return (
+              <Pressable key={value || "all"} style={[s.tab, active && s.tabActive]} onPress={() => setCourierStatusFilter(value)}>
+                {meta ? <View style={[s.tabDot, { backgroundColor: meta.color }]} /> : null}
+                <Text style={[s.tabText, active && s.tabTextActive, { textTransform: "none" }]}>{meta ? meta.label : "Any status"}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabScroll} contentContainerStyle={s.tabRow}>
         {["", ...shipmentFlow].map((value) => {
           const label = value ? value.replace(/_/g, " ") : "All";
           const active = value === statusFilter;
@@ -339,6 +403,7 @@ export default function ShipmentsScreen() {
           );
         })}
       </ScrollView>
+      )}
     </>
   );
 
@@ -364,13 +429,20 @@ export default function ShipmentsScreen() {
                     <Ionicons name="cube-outline" size={18} color={dot} />
                   </View>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={s.tracking} numberOfLines={1}>{item.trackingNumber || "No tracking #"}</Text>
+                    <Text style={s.tracking} numberOfLines={1}>{item.courier?.trackingCode || item.trackingNumber || "No tracking #"}</Text>
                     <Text style={s.cardMeta} numberOfLines={1}>
                       #{item.sell?.invoiceNo ?? item.sellId} · {item.sell?.customerName ?? "Customer"}
                     </Text>
                   </View>
                   <ShipmentStatusPill status={item.status} />
                 </View>
+
+                {item.courier ? (
+                  <View style={s.cardMid}>
+                    <CourierStatusBadge courier={item.courier} />
+                    {item.courier.syncError ? <Ionicons name="alert-circle" size={14} color="#dc2626" /> : null}
+                  </View>
+                ) : null}
 
                 {/* Row 2: carrier + method */}
                 {(item.carrier || item.shippingMethod || item.rider) ? (
@@ -496,6 +568,22 @@ export default function ShipmentsScreen() {
                       {selectedShipment.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                     </Text>
                   </View>
+
+                  {selectedShipment.courier ? (
+                    <View style={s.infoCard}>
+                      <CourierShipmentCard
+                        compact
+                        shipmentId={selectedShipment.id}
+                        courier={selectedShipment.courier}
+                        invoiceNo={selectedShipment.sell?.invoiceNo}
+                        canManage={canWrite("Shipments")}
+                        onChanged={(updated) => {
+                          setSelectedShipment((cur) => (cur && cur.id === updated.id ? { ...cur, ...updated, sell: updated.sell ?? cur.sell } : cur));
+                          void load(1, "reset").catch(() => undefined);
+                        }}
+                      />
+                    </View>
+                  ) : null}
 
                   {/* Info cards */}
                   <View style={s.infoCard}>

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Expo apps (React Native + native android/ios trees) are not part of the web admin */
+@source not "../apps";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

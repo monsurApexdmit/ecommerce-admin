@@ -1,3 +1,5 @@
+import type { ShipmentCourier } from "./courier";
+
 export type OrderStatus = "Pending" | "Processing" | "Delivered" | "Cancelled";
 
 /** Social / ad channel an order came from (attribution), separate from `source` (pos|manual|storefront). */
@@ -103,6 +105,8 @@ export interface OrderShipmentLite {
   weight?: number;
   dimensions?: string;
   notes?: string;
+  /** Booked through a courier API (Pathao / Steadfast); null for manual shipments */
+  courier?: ShipmentCourier | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -233,7 +237,9 @@ export type ShipmentStatus =
   | "out_for_delivery"
   | "delivered"
   | "failed"
-  | "returned";
+  | "returned"
+  /** Courier parcel cancelled at the courier (final; the order can be booked again) */
+  | "cancelled";
 
 export interface TrackingEvent {
   id: number;
@@ -288,6 +294,8 @@ export interface Shipment {
   deliverySpeed?: "regular" | "express" | string | null;
   pickupDate?: string | null;
   trackingHistory?: TrackingEvent[];
+  /** Booked through a courier API (Pathao / Steadfast); null for manual shipments */
+  courier?: ShipmentCourier | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,6 +309,10 @@ export interface ShipmentListParams {
   search?: string;
   status?: string;
   carrier?: string;
+  /** Courier API provider: pathao | steadfast | manual (= not booked through a courier API) */
+  courierProvider?: string;
+  /** Normalized courier status (booked, in_transit, delivered, …); comma-separated for several */
+  courierStatus?: string;
 }
 
 export interface ShipmentListResult {

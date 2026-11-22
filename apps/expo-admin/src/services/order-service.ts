@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { normalizeShipmentCourier } from "@/lib/courier-normalize";
 import type {
   CreateShipmentDraft,
   FollowUpOutcome,
@@ -297,6 +298,7 @@ function normalizeSellShipment(item: SellShipmentResponse) {
     weight: item.weight,
     dimensions: item.dimensions,
     notes: item.notes,
+    courier: normalizeShipmentCourier(item),
     createdAt: item.createdAt ?? item.created_at ?? "",
     updatedAt: item.updatedAt ?? item.updated_at ?? "",
   };
@@ -411,7 +413,7 @@ function normalizeTrackingEvent(event: TrackingEventResponse): TrackingEvent {
   };
 }
 
-function normalizeShipment(item: ShipmentResponse): Shipment {
+export function normalizeShipment(item: ShipmentResponse): Shipment {
   return {
     id: item.id,
     sellId: item.sellId ?? item.sell_id ?? 0,
@@ -453,6 +455,7 @@ function normalizeShipment(item: ShipmentResponse): Shipment {
     deliverySpeed: item.deliverySpeed ?? null,
     pickupDate: item.pickupDate ?? null,
     trackingHistory: (item.trackingHistory ?? item.tracking_history ?? []).map(normalizeTrackingEvent),
+    courier: normalizeShipmentCourier(item),
     createdAt: item.createdAt ?? item.created_at ?? "",
     updatedAt: item.updatedAt ?? item.updated_at ?? "",
   };
@@ -609,6 +612,8 @@ export async function getShipments(params?: ShipmentListParams): Promise<Shipmen
       search: params?.search,
       status: params?.status,
       carrier: params?.carrier,
+      courierProvider: params?.courierProvider || undefined,
+      courierStatus: params?.courierStatus || undefined,
     },
   });
   const data = response.data?.data ?? {};
@@ -673,7 +678,7 @@ export async function recordShipmentCodPayment(id: number, data?: { paymentMetho
 export function nextShipmentStatuses(current: ShipmentStatus): ShipmentStatus[] {
   const flow: ShipmentStatus[] = ["pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
   if (current === "failed") return ["returned"];
-  if (current === "delivered" || current === "returned") return [];
+  if (current === "delivered" || current === "returned" || current === "cancelled") return [];
   const i = flow.indexOf(current);
   const ahead = flow.slice(Math.max(0, i + 1));
   return current === "pending" ? ahead : [...ahead, "failed"];

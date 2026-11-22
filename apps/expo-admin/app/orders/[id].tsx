@@ -41,6 +41,9 @@ import { ProductStatusPill } from "@/components/products/ProductStatusPill";
 import { useAuth } from "@/context/AuthContext";
 import { AccessDenied } from "@/components/AccessDenied";
 import { AdSourceBadge, OrderFlagBadge } from "@/components/orders/AdSourceBadge";
+import { SendToCourierSheet } from "@/components/orders/SendToCourierSheet";
+import { CourierShipmentCard } from "@/components/orders/CourierShipmentCard";
+import { isLiveCourierBooking } from "@/components/orders/CourierStatusBadge";
 
 function itemPrice(item: Order["items"][number]) {
   return Number(item.unitPrice ?? item.price ?? 0);
@@ -82,6 +85,7 @@ export default function OrderDetailScreen() {
   const [busy, setBusy] = useState(false);
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [courierOpen, setCourierOpen] = useState(false);
 
   const orderId = Number(params.id);
   const history = useFollowUps(Number.isFinite(orderId) ? orderId : null, historyKey);
@@ -95,9 +99,9 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const next = await getOrderById(orderId);
       setOrder(next);
       setNotes(next.notes ?? "");
@@ -154,6 +158,13 @@ export default function OrderDetailScreen() {
   const fu = followUpSummary(order);
   const phone = orderPhone(order);
   const itemsSubtotal = order.items.reduce((sum, item) => sum + itemTotal(item), 0);
+  const courierShipments = order.shipments.filter((sh) => sh.courier);
+  // A cancelled / returned parcel can be booked again; anything else is still with the courier (server answers 409).
+  const hasLiveCourier = courierShipments.some((sh) => isLiveCourierBooking(sh.courier));
+  // Pending or confirmed orders can be booked (booking confirms a pending order); cancelled / delivered cannot.
+  const openOrder = order.status === "Pending" || order.status === "Processing";
+  const canBookCourier = canWrite("Orders") && openOrder && !hasLiveCourier;
+  const showCourierCard = courierShipments.length > 0 || canBookCourier;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -371,6 +382,39 @@ export default function OrderDetailScreen() {
         )}
       </View>
 
+      {showCourierCard ? (
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Courier</Text>
+            {canBookCourier ? (
+              <Pressable style={styles.smallPrimary} onPress={() => setCourierOpen(true)}>
+                <Ionicons name="paper-plane-outline" size={14} color="#fff" />
+                <Text style={styles.smallPrimaryText}>{courierShipments.length ? "Book again" : "Send to courier"}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {courierShipments.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {order.status === "Pending"
+                ? "Not booked yet. Booking with Pathao or Steadfast also confirms this order."
+                : "Not booked yet. Send it to Pathao or Steadfast — the tracking code comes back automatically."}
+            </Text>
+          ) : (
+            courierShipments.map((sh) => (
+              <CourierShipmentCard
+                key={sh.id}
+                shipmentId={sh.id}
+                courier={sh.courier!}
+                invoiceNo={order.invoiceNo}
+                canManage={canWrite("Shipments")}
+                canTrack={canRead("Shipments")}
+                onChanged={() => void load(true)}
+              />
+            ))
+          )}
+        </View>
+      ) : null}
+
       {followable || (order.followUpCount ?? 0) > 0 ? (
         <View style={styles.card}>
           <View style={styles.sectionHeaderRow}>
@@ -460,6 +504,12 @@ export default function OrderDetailScreen() {
           setOrder((prev) => (prev ? { ...prev, ...updated, items: updated.items.length ? updated.items : prev.items } : updated));
           setHistoryKey((k) => k + 1);
         }}
+      />
+
+      <SendToCourierSheet
+        order={courierOpen ? order : null}
+        onClose={() => setCourierOpen(false)}
+        onBooked={() => void load(true)}
       />
     </SafeAreaView>
   );

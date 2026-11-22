@@ -24,7 +24,8 @@ import { SectionCard } from "@/components/common/SectionCard"
 import { FormField } from "@/components/common/FormField"
 import { EmptyState } from "@/components/common/EmptyState"
 import { UserAvatar } from "@/components/common/UserAvatar"
-import shippingMethodApi, { courierAccountApi, type CourierAccount, type ShippingMethod } from "@/lib/shippingMethodApi"
+import shippingMethodApi, { type ShippingMethod } from "@/lib/shippingMethodApi"
+import { CourierIntegrations } from "@/components/couriers/courier-integrations"
 import { settingsApi } from "@/lib/settingsApi"
 import { WithTooltip } from "@/components/common/WithTooltip"
 
@@ -40,12 +41,6 @@ const ICONS: { value: string; label: Key; Icon: typeof Package }[] = [
 ]
 const iconOf = (v: string | null) => (ICONS.find((o) => o.value === v) ?? ICONS[0]).Icon
 
-const COURIERS: [string, string, string][] = [
-  ["Pathao", "PT", "#B42318"],
-  ["Steadfast", "SF", "#0F766E"],
-  ["RedX", "RX", "#C2410C"],
-  ["Paperfly", "PF", "#1A2F99"],
-]
 // Stored as English values in settings; shown via PACKAGE_LABEL
 const PACKAGES = ["Small pouch", "Medium box", "Large box"]
 const PACKAGE_LABEL: Record<string, Key> = {
@@ -60,7 +55,6 @@ function Switch({ on, label, onClick, disabled }: { on: boolean; label: string; 
 
 type Form = { id: number | null; name: string; type: "delivery" | "pickup"; std: string; time: string; desc: string; sort: string; icon: string; active: boolean }
 type Opts = { freeOn: boolean; freeMin: string; weight: string; pkg: string }
-type CForm = { id: number | null; provider: string; accountId: string; apiKey: string; locked: boolean }
 
 export default function ShippingMethodsPage() {
   const { t } = useTranslation(NS)
@@ -69,16 +63,11 @@ export default function ShippingMethodsPage() {
   const { toast } = useToast()
 
   const [zones, setZones] = useState<ShippingMethod[]>([])
-  const [couriers, setCouriers] = useState<CourierAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<Form | null>(null)
   const [formErr, setFormErr] = useState("")
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<number | null>(null)
-
-  const [cform, setCform] = useState<CForm | null>(null)
-  const [cerr, setCerr] = useState("")
-  const [csaving, setCsaving] = useState(false)
 
   const [base, setBase] = useState<Opts>({ freeOn: false, freeMin: "2000", weight: "0.5", pkg: PACKAGES[0] })
   const [opts, setOpts] = useState<Opts>(base)
@@ -89,9 +78,8 @@ export default function ShippingMethodsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [list, accts, all] = await Promise.all([shippingMethodApi.getAll(), courierAccountApi.getAll(), settingsApi.getAll()])
+      const [list, all] = await Promise.all([shippingMethodApi.getAll(), settingsApi.getAll()])
       setZones([...list].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)))
-      setCouriers(accts)
       const sh = (all.data.shipping ?? {}) as any
       const threshold = Number((all.data.general as any)?.freeShippingThreshold ?? 0) || 0
       const DEFAULT_FREE_MIN = 2000
@@ -172,52 +160,6 @@ export default function ShippingMethodsPage() {
     finally { setBusyId(null) }
   }
 
-  // ---- couriers ---------------------------------------------------------
-  const newCourier = (provider = "Pathao") => { setCform({ id: null, provider, accountId: "", apiKey: "", locked: false }); setCerr("") }
-  const editCourier = (c: CourierAccount) => { setCform({ id: c.id, provider: c.provider, accountId: c.accountId ?? "", apiKey: "", locked: true }); setCerr("") }
-
-  const saveCourier = async () => {
-    if (!cform) return
-    const provider = cform.provider.trim()
-    if (!provider) return setCerr(t("commerce:shipping.validation.providerRequired"))
-    if (!cform.id && couriers.some((c) => c.provider.toLowerCase() === provider.toLowerCase())) return setCerr(t("commerce:shipping.validation.courierExists"))
-    setCsaving(true)
-    try {
-      if (cform.id) {
-        await courierAccountApi.update(cform.id, { accountId: cform.accountId.trim(), apiKey: cform.apiKey.trim() || undefined })
-        toast({ title: t("commerce:shipping.toast.courierUpdated"), description: provider })
-      } else {
-        await courierAccountApi.create({ provider, accountId: cform.accountId.trim() || undefined, apiKey: cform.apiKey.trim() || undefined, isActive: true })
-        toast({ title: t("commerce:shipping.toast.courierAdded"), description: provider })
-      }
-      setCform(null)
-      await load()
-    } catch (e: any) {
-      setCerr(e?.response?.data?.errors?.provider?.[0] || e?.response?.data?.message || t("commerce:shipping.validation.courierSaveFailed"))
-    } finally {
-      setCsaving(false)
-    }
-  }
-
-  const toggleCourier = async (c: CourierAccount) => {
-    setBusyId(-c.id)
-    try { await courierAccountApi.update(c.id, { isActive: !c.isActive }); await load() }
-    catch (e) { fail(t("commerce:shipping.toast.courierFailed"), e) }
-    finally { setBusyId(null) }
-  }
-
-  const removeCourier = async (c: CourierAccount) => {
-    if (!window.confirm(t("commerce:shipping.confirmRemoveCourier", { name: c.provider }))) return
-    setBusyId(-c.id)
-    try {
-      await courierAccountApi.delete(c.id)
-      toast({ title: t("commerce:shipping.toast.courierRemoved"), description: c.provider })
-      if (cform?.id === c.id) setCform(null)
-      await load()
-    } catch (e) { fail(t("commerce:shipping.toast.courierRemoveFailed"), e) }
-    finally { setBusyId(null) }
-  }
-
   // ---- options / packaging ---------------------------------------------
   const saveOpts = async () => {
     const min = Number(opts.freeMin), w = Number(opts.weight)
@@ -248,35 +190,6 @@ export default function ShippingMethodsPage() {
     time: [z.description, z.estimatedDays].filter(Boolean).join(" · ") || "—",
     price: fee(z, z.price),
   }))
-
-  const presetRows = COURIERS.map(([name, ini]) => ({ name, ini, acct: couriers.find((c) => c.provider.toLowerCase() === name.toLowerCase()) }))
-  const customRows = couriers.filter((c) => !COURIERS.some(([n]) => n.toLowerCase() === c.provider.toLowerCase()))
-
-  const CourierCard = ({ name, ini, acct }: { name: string; ini: string; acct?: CourierAccount }) => (
-    <Card className="gap-3 p-3 shadow-none">
-      <div className="flex items-center gap-3">
-        <UserAvatar shape="square" className="size-10" name={name} fallback={ini} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-bold">{name}</div>
-          <div className={cn("truncate text-xs", acct?.isActive ? "text-foreground" : "text-muted-foreground")}>
-            {acct ? (acct.isActive ? t("commerce:shipping.courier.enabled") : t("commerce:shipping.courier.off")) : t("commerce:shipping.courier.notSetUp")}
-            {acct?.accountId ? ` · ${acct.accountId}` : ""}{acct?.apiKey ? ` · ${t("commerce:shipping.courier.key", { key: acct.apiKey })}` : ""}
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {acct ? (
-          <>
-            <Button type="button" variant="outline" disabled={busyId === -acct.id} onClick={() => toggleCourier(acct)}>{acct.isActive ? t("commerce:shipping.courier.turnOff") : t("commerce:shipping.courier.turnOn")}</Button>
-            <WithTooltip content={t("commerce:shipping.courier.edit", { name })}><Button type="button" variant="outline" size="icon" aria-label={t("commerce:shipping.courier.edit", { name })} onClick={() => editCourier(acct)}><Pencil className="size-4" /></Button></WithTooltip>
-            <WithTooltip content={t("commerce:shipping.courier.remove", { name })}><Button type="button" variant="destructive" size="icon" aria-label={t("commerce:shipping.courier.remove", { name })} disabled={busyId === -acct.id} onClick={() => removeCourier(acct)}><Trash2 className="size-4" /></Button></WithTooltip>
-          </>
-        ) : (
-          <Button type="button" variant="outline" onClick={() => newCourier(name)}>{t("commerce:shipping.courier.setUp")}</Button>
-        )}
-      </div>
-    </Card>
-  )
 
   return (
     <div className={cn(bricolage.variable, instrument.variable, "font-dash-body flex flex-col gap-5 text-dash-ink")}>
@@ -425,45 +338,7 @@ export default function ShippingMethodsPage() {
             </div>
           </SectionCard>
 
-          <SectionCard
-            title={t("commerce:shipping.couriers.title")}
-            description={t("commerce:shipping.couriers.description")}
-            actions={<Button type="button" variant="outline" onClick={() => newCourier("")}><Plus className="size-4" /> {t("commerce:shipping.couriers.add")}</Button>}
-          >
-            {cform && (
-              <Card className="mb-3.5 gap-3 p-4 shadow-none">
-                <strong>{cform.id ? t("commerce:shipping.courier.edit", { name: cform.provider }) : t("commerce:shipping.couriers.addTitle")}</strong>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <FormField label={t("commerce:shipping.couriers.provider")} htmlFor="cr-provider">
-                    <Input id="cr-provider" className="w-full" list="courier-presets" value={cform.provider} disabled={cform.locked} placeholder="Pathao"
-                      onChange={(e) => { setCform({ ...cform, provider: e.target.value }); setCerr("") }} />
-                    <datalist id="courier-presets">{COURIERS.map(([n]) => <option key={n} value={n} />)}</datalist>
-                  </FormField>
-                  <FormField label={t("commerce:shipping.couriers.account")} htmlFor="cr-account">
-                    <Input id="cr-account" className="w-full" value={cform.accountId} onChange={(e) => setCform({ ...cform, accountId: e.target.value })} />
-                  </FormField>
-                  <FormField label={t("commerce:shipping.couriers.apiKey")} htmlFor="cr-key">
-                    <Input id="cr-key" className="w-full" type="password" autoComplete="off" value={cform.apiKey}
-                      placeholder={cform.id ? t("commerce:shipping.couriers.keepKey") : ""} onChange={(e) => setCform({ ...cform, apiKey: e.target.value })} />
-                  </FormField>
-                </div>
-                {cerr && <p className="text-sm font-medium text-destructive">{cerr}</p>}
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setCform(null)}>{t("common:actions.cancel")}</Button>
-                  <Button type="button" onClick={saveCourier} disabled={csaving}>{csaving ? t("common:actions.saving") : cform.id ? t("common:actions.saveChanges") : t("commerce:shipping.couriers.add")}</Button>
-                </div>
-              </Card>
-            )}
-
-            {loading ? (
-              <div className="grid gap-3 sm:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[100px]" />)}</div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {presetRows.map((r) => <CourierCard key={r.name} {...r} />)}
-                {customRows.map((c) => <CourierCard key={c.id} name={c.provider} ini={c.provider.slice(0, 2).toUpperCase()} acct={c} />)}
-              </div>
-            )}
-          </SectionCard>
+          <CourierIntegrations />
         </div>
 
         <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">

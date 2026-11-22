@@ -4,7 +4,7 @@ import { paymentApi } from "@/lib/paymentApi"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import Link from "next/link"
-import { AlertTriangle, Megaphone, MapPin, Pencil, Phone, Printer } from "lucide-react"
+import { AlertTriangle, Megaphone, MapPin, Pencil, Phone, Printer, Truck } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,6 +26,9 @@ import { useCompanySettings } from "@/contexts/company-settings-context"
 import { cn } from "@/lib/utils"
 import { localeTag } from "@/lib/i18n"
 import { ORDERS_NS, channelLabel, methodLabel, orderStatusLabel, payLabel, type OrdersKey } from "@/components/sales/i18n"
+import { SendToCourierDialog, canSendToCourier } from "@/components/couriers/send-to-courier-dialog"
+import { CourierShipmentPanel } from "@/components/couriers/courier-shipment-panel"
+import { COURIER_NS } from "@/components/couriers/i18n"
 
 /** Badge variant per payment label (Paid / Partial / Due). */
 export const SALE_PAY_VARIANT = {
@@ -92,8 +95,10 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
   const { formatCurrency } = useCompanySettings()
   const { toast } = useToast()
   const { t, i18n } = useTranslation(ORDERS_NS)
+  const { t: tc } = useTranslation(COURIER_NS)
   const tag = localeTag(i18n.language)
   const [sale, setSale] = useState<SellResponse | null>(saleProp)
+  const [courierOpen, setCourierOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [amount, setAmount] = useState("")
@@ -109,7 +114,10 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
   // History only for orders that show the Follow-ups section
   const followUps = useFollowUps(saleProp && (canFollowUp(saleProp) || (Number(saleProp.followUpCount) || 0) > 0) ? saleProp.id : null)
 
-  useEffect(() => { setSale(saleProp); setPayOpen(false); setEditOpen(false); setConfirm(null); setReason("") }, [saleProp])
+  useEffect(() => { setSale(saleProp); setPayOpen(false); setEditOpen(false); setConfirm(null); setReason(""); setCourierOpen(false) }, [saleProp])
+
+  /** Reload the order (after a courier booking / status refresh) */
+  const reload = (id: number) => sellsApi.getById(id).then((r) => apply(r.data)).catch(() => {})
 
   const openEdit = (s: SellResponse) => {
     setForm({
@@ -224,6 +232,9 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
           const status = saleDisplayStatus(sale)
           const cancelled = sale.status === "Cancelled"
           const shipment = sale.shipments?.[0]
+          // Live courier booking first, else the latest finished one
+          const booked = sale.shipments?.find((sh) => sh.courierBooking && !sh.courierBooking.isFinal)
+            ?? [...(sale.shipments ?? [])].reverse().find((sh) => sh.courierBooking)
           const courier = sale.courier || shipment?.courier || shipment?.carrier || sale.carrier || ""
           const tracking = shipment?.trackingNumber || sale.trackingNumber || ""
           const zone = sale.zoneName || shipment?.zone || ""
@@ -318,6 +329,10 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
                   </InfoList>
                 </Card>
               </div>
+
+              {booked?.courierBooking && (
+                <CourierShipmentPanel shipmentId={booked.id} courier={booked.courierBooking} onChanged={() => reload(sale.id)} />
+              )}
 
               {hasAttribution && (
                 <Card className="gap-2 p-4 text-sm">
@@ -491,6 +506,11 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
                     <Pencil className="size-4" aria-hidden /> {t("orders:detail.editDelivery")}
                   </Button>
                 )}
+                {canSendToCourier(sale) && (
+                  <Button type="button" variant="outline" disabled={busy} onClick={() => setCourierOpen(true)}>
+                    <Truck className="size-4" aria-hidden /> {tc("courier:actions.sendToCourier")}
+                  </Button>
+                )}
                 {onCreateShipment && !cancelled && sale.status !== "Delivered" && !shipment && (
                   <Button type="button" variant="outline" disabled={busy} onClick={() => onCreateShipment(sale)}>
                     {t("orders:detail.createShipment")}
@@ -515,6 +535,8 @@ export function SaleDetailDialog({ sale: saleProp, onClose, onPrint, onRecordPay
             </div>
           )
         })()}
+        <SendToCourierDialog open={courierOpen} onOpenChange={setCourierOpen} sellId={sale?.id ?? null}
+          onBooked={() => { if (sale) reload(sale.id) }} />
         <FollowUpDialog
           order={followUpOpen ? sale : null}
           onClose={() => setFollowUpOpen(false)}

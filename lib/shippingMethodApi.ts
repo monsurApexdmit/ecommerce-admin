@@ -88,22 +88,6 @@ export const shippingMethodApi = {
   },
 }
 
-export interface CourierAccount {
-  id: number
-  provider: string
-  accountId: string | null
-  apiKey: string | null
-  hasKey: boolean
-  isActive: boolean
-}
-
-export const courierAccountApi = {
-  getAll: async (): Promise<CourierAccount[]> => (await api.get('/courier-accounts')).data.data ?? [],
-  create: async (data: { provider: string; accountId?: string; apiKey?: string; isActive?: boolean }): Promise<CourierAccount> =>
-    (await api.post('/courier-accounts', data)).data.data,
-  update: async (id: number, data: { accountId?: string; apiKey?: string; isActive?: boolean }): Promise<CourierAccount> =>
-    (await api.put(`/courier-accounts/${id}`, data)).data.data,
-  delete: async (id: number): Promise<void> => { await api.delete(`/courier-accounts/${id}`) },
-}
+// Courier accounts moved to lib/courierApi.ts (courierAccountApi)
 
 export default shippingMethodApi

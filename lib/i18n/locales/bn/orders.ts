@@ -520,6 +520,7 @@ const bn: Messages<typeof en> = {
       delivered: "ডেলিভারি হয়েছে",
       failed: "ব্যর্থ",
       returned: "ফেরত এসেছে",
+      cancelled: "বুকিং বাতিল",
     },
     nextStep: {
       picked_up: "পিকআপ হয়েছে",
